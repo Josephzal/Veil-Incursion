@@ -1,26 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import RunEventChoiceCard from '../components/layout/RunEventChoiceCard';
 import TerminalOverlay from '../components/TerminalOverlay';
-import TacticalButton from '../components/TacticalButton';
+import RunActionRail from '../components/runField/RunActionRail';
+import FieldPlate from '../components/runField/FieldPlate';
 import BoonsBg from '../../assets/images/location images/boons.png';
-import { tierLabel, getBoundRequisitionDefinition } from '../data/boundRequisitions';
+import { getBoundRequisitionDefinition } from '../data/boundRequisitions';
 import { getBoundRequisitionLevel } from '../data/boundRequisitionProgression';
-import { getFactionAccent } from '../data/factions';
 import { useGameFlow } from '../context/GameFlowContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { HUB_BORDER_INSET } from '../constants/hubCta';
 import type { BoundRequisitionId } from '../types/boundRequisition';
-import { VEIL } from '../theme/veilTerminalTokens';
-
-const TERMINAL_ACCENT = VEIL.mint;
+import { RUN_FIELD } from '../theme/runFieldTokens';
 
 export default function BoundRequisitionScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -34,43 +31,27 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
   const { startScanning } = useGameFlow();
   const {
     isDesktop,
-    activeViewportWidth,
     fontScale,
     gap,
     scaleFont,
-    scaleSize,
     scaleSpacing,
-    deploymentStagingLaneWidth,
   } = useResponsiveLayout();
   const [selectedId, setSelectedId] = useState<BoundRequisitionId | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   const requisitionLevel = getBoundRequisitionLevel(account);
-  const cabalAccent = getFactionAccent(account.alignedFaction);
-
-  const reqCardWidth = isDesktop
-    ? (activeViewportWidth - (gap * 4)) / 3
-    : '100%';
-
-  const cardPadding = isDesktop ? scaleSpacing(24) : scaleSpacing(12);
+  const cardPadding = isDesktop ? scaleSpacing(14) : scaleSpacing(10);
   const canContinue = selectedId != null && !confirming && boundRequisitionOffers.length > 0;
 
-  const continueButtonStyle = useMemo(
-    () => [
-      styles.continueBtn,
-      { marginTop: scaleSpacing(48) },
-    ],
-    [scaleSpacing],
+  const headerSubtitle = useMemo(
+    () => `Rank ${account.operativeRank} · Tier ${requisitionLevel}`,
+    [account.operativeRank, requisitionLevel],
   );
 
-  const headerSubtitle = useMemo(() => {
-    const base = `RANK ${account.operativeRank} // TIER ${requisitionLevel} // SELECT ONE OFFER`;
-    if (account.craftedAugments.length === 0) return base;
-    const passives = account.craftedAugments
-      .map((id) => getBoundRequisitionDefinition(id).name)
-      .join(' // ');
-    return `${base} // FORGE PASSIVES: ${passives}`;
-  }, [account.craftedAugments, account.operativeRank, requisitionLevel]);
+  const forgePassives = useMemo(
+    () => account.craftedAugments.map((id) => getBoundRequisitionDefinition(id).name),
+    [account.craftedAugments],
+  );
 
   useEffect(() => {
     if (boundRequisitionOffers.length === 0) {
@@ -91,77 +72,78 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
           backgroundImage={BoonsBg}
-          backgroundScrimOpacity={0.75}
+          backgroundScrimOpacity={RUN_FIELD.environmentScrimDense}
           contentPadding={isDesktop ? scaleSpacing(16) : 8}
           overlay={<TerminalOverlay />}
         >
           <View style={styles.masterStage}>
             <RunEventNodeHeader
+              eyebrow="CABAL ISSUE"
               title="BOUND REQUISITION"
               subtitle={headerSubtitle}
               fontScale={fontScale}
+              showRunChrome
             />
 
-            <View style={styles.spreadStage}>
+            {forgePassives.length > 0 ? (
+              <FieldPlate density="wash" brackets={false} style={styles.forgeStrip} contentStyle={styles.forgeStripContent}>
+                <Text style={styles.forgeLabel}>FORGE PASSIVES</Text>
+                <Text style={styles.forgeValue} numberOfLines={1}>
+                  {forgePassives.join(' · ')}
+                </Text>
+              </FieldPlate>
+            ) : null}
+
+            <View style={styles.offerWorkspace}>
               <View
                 style={[
                   styles.spreadRow,
                   {
-                    gap,
-                    maxWidth: isDesktop ? activeViewportWidth : undefined,
+                    flexDirection: isDesktop ? 'row' : 'column',
+                    gap: Math.max(12, gap),
                   },
                 ]}
               >
                 {boundRequisitionOffers.map((offer) => {
                   const isMandate = offer.kind === 'CABAL_MANDATE';
-                  const tierText = isMandate ? 'CABAL MANDATE' : tierLabel(offer.tier);
-                  const cardAccent = isMandate && offer.cabal
-                    ? getFactionAccent(offer.cabal)
-                    : cabalAccent;
+                  const tierText = isMandate ? 'CABAL MANDATE' : `TIER ${offer.tier}`;
 
                   return (
-                    <RunEventChoiceCard
+                    <View
                       key={offer.id}
-                      tierTag={`[ ${tierText} ]`}
-                      name={offer.name.toUpperCase()}
-                      tagline={offer.tagline}
-                      effectSummary={offer.effectSummary}
-                      tradeoffSummary={offer.tradeoffSummary}
-                      cardWidth={reqCardWidth}
-                      cardPadding={cardPadding}
-                      isDesktop={isDesktop}
-                      isSelected={selectedId === offer.id}
-                      isDimmed={selectedId != null && selectedId !== offer.id}
-                      disabled={confirming}
-                      accentColor={cardAccent}
-                      borderColor={theme.borderColor}
-                      textColor={theme.primaryColor}
-                      mutedColor={theme.mutedColor}
-                      fontScale={fontScale}
-                      scaleFont={scaleFont}
-                      onPress={() => setSelectedId(offer.id)}
-                    />
+                      style={isDesktop ? styles.cardSlotDesktop : styles.cardSlotMobile}
+                    >
+                      <RunEventChoiceCard
+                        tierTag={`BOUND ISSUE // ${tierText}`}
+                        name={offer.name}
+                        tagline={offer.tagline}
+                        effectSummary={offer.effectSummary}
+                        tradeoffSummary={offer.tradeoffSummary}
+                        cardWidth="100%"
+                        cardPadding={cardPadding}
+                        isDesktop={isDesktop}
+                        isSelected={selectedId === offer.id}
+                        isDimmed={selectedId != null && selectedId !== offer.id}
+                        disabled={confirming}
+                        borderColor={theme.borderColor}
+                        textColor={theme.primaryColor}
+                        mutedColor={theme.mutedColor}
+                        fontScale={fontScale}
+                        scaleFont={scaleFont}
+                        onPress={() => setSelectedId(offer.id)}
+                      />
+                    </View>
                   );
                 })}
               </View>
             </View>
 
-            <View
-              style={[
-                styles.ctaRail,
-                isDesktop ? { maxWidth: deploymentStagingLaneWidth } : null,
-              ]}
-            >
-              <TacticalButton
-                label="[ LOCK REQUISITION ]"
-                active={canContinue}
-                onPress={handleContinue}
-                accentColor={TERMINAL_ACCENT}
-                mutedColor={theme.mutedColor}
-                variant="cta"
-                style={continueButtonStyle}
-              />
-            </View>
+            <RunActionRail
+              mode="screen"
+              primaryLabel="LOCK REQUISITION"
+              onPrimary={handleContinue}
+              primaryDisabled={!canContinue}
+            />
           </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>
@@ -174,33 +156,58 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    justifyContent: 'space-between',
+    gap: 12,
     alignItems: 'stretch',
   },
-  spreadStage: {
+  offerWorkspace: {
     flex: 1,
     width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
     minHeight: 0,
+    justifyContent: 'center',
   },
   spreadRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
+    width: '100%',
     alignItems: 'stretch',
-    width: '100%',
-  },
-  continueBtn: {
-    flexShrink: 0,
-  },
-  ctaRail: {
-    width: '100%',
-    alignItems: 'center',
-    alignSelf: 'center',
     justifyContent: 'center',
+    flexWrap: 'nowrap',
+    flex: 1,
+    maxHeight: 520,
+  },
+  cardSlotDesktop: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 360,
+    alignSelf: 'stretch',
+  },
+  cardSlotMobile: {
+    width: '100%',
+    flex: 1,
+  },
+  forgeStrip: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
     flexShrink: 0,
-    marginBottom: 8,
-    paddingHorizontal: HUB_BORDER_INSET,
+  },
+  forgeStripContent: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  forgeLabel: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.micro,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    color: RUN_FIELD.textSecondary,
+    flexShrink: 0,
+  },
+  forgeValue: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.secondary,
+    fontWeight: '600',
+    color: RUN_FIELD.text,
+    flexShrink: 1,
   },
 });

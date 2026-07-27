@@ -127,7 +127,7 @@ export default function CombatEnemyUnit({
             ]}
             numberOfLines={1}
           >
-            {unit.isAoeAffected ? '[ AOE ]' : '[ TARGET ]'}
+            {unit.isAoeAffected ? '[ AOE ]' : unit.isSlumped ? '[ EXECUTES ]' : '[ TARGET ]'}
           </Text>
         </View>
       ) : null}
@@ -176,10 +176,17 @@ export default function CombatEnemyUnit({
                           glow={portraitGlow}
                           intentShimmer={unit.intentShimmer ?? null}
                           isEnraged={unit.isEnraged === true}
+                          isSlumped={unit.isSlumped === true}
                         />
                         <TargetingBrackets
-                          active={showAbilityReticle}
-                          color={unit.isAoeAffected ? OTT.warningAmber : OTT.cyanSelect}
+                          active={showAbilityReticle || unit.isSlumped === true}
+                          color={
+                            unit.isSlumped
+                              ? OTT.terminalGreenMuted
+                              : unit.isAoeAffected
+                                ? OTT.warningAmber
+                                : OTT.cyanSelect
+                          }
                         />
                       </View>
                     </CombatSilhouetteShatterEffect>

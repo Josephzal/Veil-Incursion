@@ -1,6 +1,6 @@
 import { isEnemyFractured, recoverFromFracture } from './combatFractureEngine';
 import { resolveEffectiveEnemyIntent } from './enemyIntentUtils';
-import { aliveUnits, isUnitAlive } from './combatSquadEngine';
+import { aliveUnits, canUnitAct, isUnitAlive } from './combatSquadEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 
 export const THREAT_BUDGET_STANDARD = 2;
@@ -35,7 +35,7 @@ export function pickThreatBudgetActions(
   let remaining = budget;
 
   const candidates = aliveUnits(squad)
-    .filter((u) => !isEnemyFractured(u) && (u.enemyActionPoints ?? 1) > 0)
+    .filter((u) => canUnitAct(u) && !isEnemyFractured(u) && (u.enemyActionPoints ?? 1) > 0)
     .sort((a, b) => {
       const costDiff = unitThreatCost(b) - unitThreatCost(a);
       if (costDiff !== 0) return costDiff;

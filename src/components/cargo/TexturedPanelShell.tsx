@@ -3,8 +3,8 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import CargoGridBackdrop from './CargoGridBackdrop';
 import { viewShadow } from '../../utils/adaptiveStyles';
 
-const PANEL_BORDER = '#1e293b';
-const PANEL_BG = 'rgba(15, 23, 42, 0.85)';
+const PANEL_BORDER = 'rgba(129, 160, 150, 0.22)';
+const PANEL_BG = 'rgba(7, 14, 15, 0.82)';
 
 interface TexturedPanelShellProps {
   children: React.ReactNode;
@@ -27,8 +27,8 @@ export default function TexturedPanelShell({
         {
           borderColor: PANEL_BORDER,
           ...viewShadow({
-            color: '#020617',
-            opacity: 0.35,
+            color: 'rgb(5, 9, 10)',
+            opacity: 0.4,
             radius: 10,
             offset: { width: 0, height: 2 },
           }),
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    backgroundColor: 'rgba(231, 238, 234, 0.06)',
     zIndex: 1,
   },
   content: {

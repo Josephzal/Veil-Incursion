@@ -34,6 +34,8 @@ interface CombatEnemyPortraitSkiaProps {
   glow: EnemyPortraitGlow;
   intentShimmer?: EnemyIntentShimmer | null;
   isEnraged?: boolean;
+  /** Thrall Undying — desaturated body + occult core reveal. */
+  isSlumped?: boolean;
 }
 
 /** Portrait art with idle/attack crossfade synced to CombatEnemyAnchorMotion. */
@@ -46,6 +48,7 @@ export default function CombatEnemyPortraitSkia({
   glow,
   intentShimmer = null,
   isEnraged = false,
+  isSlumped = false,
 }: CombatEnemyPortraitSkiaProps): React.JSX.Element {
   const glowTint = glow !== 'none' ? GLOW_TINT[glow] : null;
   const glowScale = glow !== 'none' ? GLOW_SCALE[glow] : 1.05;
@@ -72,7 +75,13 @@ export default function CombatEnemyPortraitSkia({
           />
         </View>
       ) : null}
-      <View style={[styles.enemySpriteStack, styles.pointerLock]}>
+      <View
+        style={[
+          styles.enemySpriteStack,
+          styles.pointerLock,
+          isSlumped ? styles.slumpedSprite : null,
+        ]}
+      >
         <AnimatedEnemySprite
           idleSource={source}
           attackSource={resolvedAttackSource}
@@ -80,7 +89,7 @@ export default function CombatEnemyPortraitSkia({
           backlineDashSeq={backlineDashSeq}
           isBacklineDashing={isBacklineDashing}
           enableLocalMotion={false}
-          intentShimmer={intentShimmer}
+          intentShimmer={isSlumped ? null : intentShimmer}
           isEnraged={isEnraged}
           attackGlow={
             isAttackGlow
@@ -92,6 +101,11 @@ export default function CombatEnemyPortraitSkia({
               : null
           }
         />
+        {isSlumped ? (
+          <View style={styles.slumpCore} pointerEvents="none">
+            <View style={styles.slumpCoreInner} />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -116,8 +130,30 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     position: 'relative',
   },
+  slumpedSprite: {
+    opacity: 0.55,
+  },
+  slumpCore: {
+    position: 'absolute',
+    bottom: '38%',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: 'rgba(98, 230, 165, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(196, 90, 174, 0.22)',
+  },
+  slumpCoreInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#C45AAE',
+    opacity: 0.9,
+  },
   glowDuplicate: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },

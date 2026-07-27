@@ -1,163 +1,36 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import TacticalButton from '../TacticalButton';
-import { useCargoOverlay } from '../../context/CargoOverlayContext';
-import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
-import { useTerminal } from '../../context/TerminalContext';
-import { VEIL } from '../../theme/veilTerminalTokens';
-
-const STARK_WHITE = VEIL.text;
-const MUTED_SLATE = VEIL.textMuted;
-const HEADER_BORDER = VEIL.line;
+import type { StyleProp, ViewStyle } from 'react-native';
+import RunFieldHeader from '../runField/RunFieldHeader';
 
 export interface RunEventNodeHeaderProps {
   title: string;
   subtitle?: string;
-  fontScale: number;
-  /** Pin STATUS / CARGO controls to the bottom-right of the header strip. */
+  /** @deprecated Prefer eyebrow + contextLine via RunFieldHeader directly. */
+  fontScale?: number;
+  /** Pin STATUS / CARGO ghost utilities. */
   showRunChrome?: boolean;
+  eyebrow?: string;
+  style?: StyleProp<ViewStyle>;
 }
 
-function RunEventHeaderChrome(): React.JSX.Element | null {
-  const { theme } = useTerminal();
-  const cargo = useCargoOverlay();
-  const status = useRunStatusOverlay();
-
-  if (!cargo && !status) {
-    return null;
-  }
-
-  return (
-    <View style={styles.headerChromeRow}>
-      {status ? (
-        <TacticalButton
-          label="STATUS"
-          active={false}
-          onPress={status.openStatus}
-          accentColor={theme.statusColor}
-          mutedColor={theme.mutedColor}
-          variant="inline"
-          disabled={!status.statusEnabled}
-        />
-      ) : null}
-      {cargo ? (
-        <TacticalButton
-          label="CARGO"
-          active={false}
-          onPress={cargo.openCargo}
-          accentColor={theme.statusColor}
-          mutedColor={theme.mutedColor}
-          variant="inline"
-          disabled={!cargo.cargoEnabled}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-/** Upper-left run event title strip — matches evac / extraction screen styling. */
+/**
+ * In-run field header adapter — keeps existing call sites working.
+ * Scoped field styling; does not affect scanner ScanScreenHeader.
+ */
 export default function RunEventNodeHeader({
   title,
   subtitle,
-  fontScale,
   showRunChrome = false,
+  eyebrow = 'FIELD CONTACT',
+  style,
 }: RunEventNodeHeaderProps): React.JSX.Element {
-  const titleSize = 16 * fontScale;
-  const subtitleSize = 9 * fontScale;
-  const headerPadBottom = 14 * fontScale;
-  const headerMarginBottom = 18 * fontScale;
-
   return (
-    <View
-      style={[
-        styles.header,
-        {
-          borderBottomColor: HEADER_BORDER,
-          paddingBottom: headerPadBottom,
-          marginBottom: headerMarginBottom,
-        },
-      ]}
-    >
-      <View style={styles.headerRow}>
-        <View style={styles.headerCopy}>
-          <Text
-            style={[
-              styles.title,
-              {
-                color: STARK_WHITE,
-                fontSize: titleSize,
-                lineHeight: titleSize * 1.25,
-              },
-            ]}
-          >
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: MUTED_SLATE,
-                  fontSize: subtitleSize,
-                  lineHeight: subtitleSize * 1.4,
-                },
-              ]}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
-        {showRunChrome ? (
-          <View style={styles.headerChrome}>
-            <RunEventHeaderChrome />
-          </View>
-        ) : null}
-      </View>
-    </View>
+    <RunFieldHeader
+      eyebrow={eyebrow}
+      title={title}
+      contextLine={subtitle}
+      showUtilities={showRunChrome}
+      style={style}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    width: '100%',
-    borderBottomWidth: 1,
-    flexShrink: 0,
-    alignSelf: 'stretch',
-    zIndex: 3,
-  },
-  headerRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 6,
-    alignItems: 'flex-start',
-  },
-  headerChrome: {
-    flexShrink: 0,
-    alignSelf: 'flex-end',
-    zIndex: 4,
-  },
-  headerChromeRow: {
-    flexDirection: 'row',
-    gap: 6,
-    flexShrink: 0,
-  },
-  title: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 2,
-    textAlign: 'left',
-  },
-  subtitle: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    textAlign: 'left',
-  },
-});

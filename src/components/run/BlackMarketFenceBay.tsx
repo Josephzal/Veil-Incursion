@@ -1,12 +1,11 @@
 import React, { useRef } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { DOSSIER_FOREGROUND } from '../../constants/dossierSurface';
-import { VEIL } from '../../theme/veilTerminalTokens';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
-const FENCE_AMBER = '#E0B45A';
-const FENCE_BORDER = 'rgba(224, 180, 90, 0.55)';
-const FENCE_ACTIVE = 'rgba(224, 180, 90, 0.95)';
-const FENCE_PALE = '#FEF3C7';
+const FENCE_LABEL = RUN_FIELD.textSecondary;
+const FENCE_BORDER = RUN_FIELD.line;
+const FENCE_ACTIVE = RUN_FIELD.mintBorderHot;
+const FENCE_PALE = RUN_FIELD.mint;
 
 interface BlackMarketFenceBayProps {
   fontScale: number;
@@ -36,7 +35,7 @@ export default function BlackMarketFenceBay({
       style={[
         styles.bay,
         {
-          backgroundColor: dropActive ? 'rgba(224, 180, 90, 0.12)' : DOSSIER_FOREGROUND,
+          backgroundColor: dropActive ? RUN_FIELD.mintSoft : RUN_FIELD.panelWash,
           borderColor: dropActive ? FENCE_ACTIVE : FENCE_BORDER,
           minHeight: 64 * fontScale,
           paddingVertical: 12 * fontScale,
@@ -49,7 +48,7 @@ export default function BlackMarketFenceBay({
         style={[
           styles.label,
           {
-            color: dropActive ? FENCE_PALE : FENCE_AMBER,
+            color: dropActive ? FENCE_PALE : FENCE_LABEL,
             fontSize: labelSize,
             lineHeight: labelSize * 1.25,
           },
@@ -61,7 +60,7 @@ export default function BlackMarketFenceBay({
         style={[
           styles.subtext,
           {
-            color: dropActive ? 'rgba(254, 243, 199, 0.95)' : VEIL.textMuted,
+            color: dropActive ? RUN_FIELD.text : RUN_FIELD.textDim,
             fontSize: subtextSize,
             lineHeight: subtextSize * 1.35,
           },

@@ -228,6 +228,7 @@ import { normalizeSquad, spawnCombatSquad, squadFromSingleEnemy } from '../data/
 import {
   allUnitsDefeated,
   aliveUnits,
+  canUnitAct,
   getUnitById,
   isUnitAlive,
   nextDefaultTarget,
@@ -286,7 +287,7 @@ import {
   weaponArmorPierceLayers,
 } from '../data/weaponCombatEngine';
 import { createDefaultWeaponRuntime } from '../data/weaponRunState';
-import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
+import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction, tickThrallSlumpsAtPlayerTurnEnd } from '../data/combatLifecycleEngine';
 import {
   applyAshenBreathDebt,
   applyBindingWardToAlly,
@@ -1718,6 +1719,9 @@ export default function TacticalCombatHub({
           classImpactFxSeq: classImpactFxRef.current[unitId]?.seq ?? 0,
           classImpactFxKind: classImpactFxRef.current[unitId]?.kind,
           isEnraged: u.isEnraged ?? false,
+          isSlumped: u.isSlumped === true,
+          slumpTurnsRemaining: u.slumpTurnsRemaining ?? 0,
+          slumpGraceThisPlayerTurn: u.slumpGraceThisPlayerTurn === true,
           dissolveSeq: dissolveSeqRef.current[unitId] ?? 0,
           dissolveHidden: dissolvedHiddenRef.current.has(unitId),
         };
@@ -2664,6 +2668,11 @@ export default function TacticalCombatHub({
       godModeRef.current = true;
       applyGodModeResources();
     }
+    if (result.setSoulAnchorTo != null) {
+      const nextHp = Math.max(1, Math.min(result.setSoulAnchorTo, getEffectiveMaxSoulAnchor()));
+      operativeHpRef.current = nextHp;
+      setOperativeHp(nextHp);
+    }
     log(result.logLine);
     if (result.secondaryLogLine) log(`>> ${result.secondaryLogLine}`);
     playerApRef.current = Math.max(0, playerApRef.current - apCost);
@@ -3096,7 +3105,10 @@ export default function TacticalCombatHub({
       channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
       fractureGain?: number;
       targetId?: string;
-      abilityId?: AegisAbilityId;
+      abilityId?: string;
+      abilityTags?: readonly string[];
+      /** Defaults to !indirectDamage. */
+      isDirectDamage?: boolean;
       rollCrit?: boolean;
       echoHit?: boolean;
       /** Burn/bleed/DoT — skip operative attack pose; still flash the damaged unit. */
@@ -3873,9 +3885,20 @@ export default function TacticalCombatHub({
           ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
         log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${dropLootKind.toLowerCase()}.`);
       }
+      const abilityTags = options?.abilityTags?.length
+        ? options.abilityTags
+        : resolveOperativeAbilityTags(options?.abilityId ?? lastPlayerAbilityRef.current);
+      const isDirectDamage = options?.isDirectDamage ?? !options?.indirectDamage;
       const deathLifecycle = CombatLifecycleManager.runOnDeath(
         working,
-        { channel: options.channel, damage: dmg, source: source ?? undefined },
+        {
+          channel: options.channel,
+          damage: dmg,
+          source: source ?? undefined,
+          abilityId: options?.abilityId,
+          tags: abilityTags,
+          isDirectDamage,
+        },
         buildLifecycleContext(),
       );
       deathLifecycle.logLines.forEach((line) => log(line));
@@ -3883,6 +3906,14 @@ export default function TacticalCombatHub({
       applyLifecyclePlayerDelta(deathLifecycle.playerHpDelta);
       if (deathLifecycle.squad.length > 0) syncSquad(deathLifecycle.squad);
       working = getUnitById(squadRef.current, e.unitId) ?? working;
+
+      if (deathLifecycle.statusFloatLabel && deathLifecycle.statusFloatUnitId) {
+        statusFloatSeqRef.current[deathLifecycle.statusFloatUnitId] =
+          (statusFloatSeqRef.current[deathLifecycle.statusFloatUnitId] ?? 0) + 1;
+        lifecycleFloatLabelsRef.current[deathLifecycle.statusFloatUnitId] =
+          deathLifecycle.statusFloatLabel;
+        publishSquadUi(squadRef.current);
+      }
 
       if (deathLifecycle.enterSlump) {
         // Slump is not eradication — unit remains "alive" on a revive timer.
@@ -5518,6 +5549,22 @@ export default function TacticalCombatHub({
       else endEnemyTurn(true);
       return;
     }
+    // Slumped thralls never act; reanimated thralls consume one turn without attacking.
+    if (unit.isSlumped || !canUnitAct(unit)) {
+      enemyActionQueueRef.current.shift();
+      log(`>> ${unit.designation} SLUMPED — cannot act.`);
+      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+      else endEnemyTurn(true);
+      return;
+    }
+    if (unit.skipNextAction && unit.unitId) {
+      enemyActionQueueRef.current.shift();
+      patchUnit(unit.unitId, { skipNextAction: false });
+      log(`>> ${unit.designation} REANIMATED — recovering, action skipped.`);
+      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+      else endEnemyTurn(true);
+      return;
+    }
     focusedUnitIdRef.current = unit.unitId ?? null;
     focusEnemy(unit);
     if (unit.unitId) {
@@ -5834,6 +5881,31 @@ export default function TacticalCombatHub({
       scheduleCombatVictoryResolution();
       return;
     }
+
+    const slumpTick = tickThrallSlumpsAtPlayerTurnEnd(
+      squadRef.current,
+      sessionExtrasRef.current.fleshWarpUnitIds ?? {},
+    );
+    slumpTick.logLines.forEach((line) => log(line));
+    if (slumpTick.squad !== squadRef.current) syncSquad(slumpTick.squad);
+    if (slumpTick.statusFloatLabel && slumpTick.statusFloatUnitId) {
+      statusFloatSeqRef.current[slumpTick.statusFloatUnitId] =
+        (statusFloatSeqRef.current[slumpTick.statusFloatUnitId] ?? 0) + 1;
+      lifecycleFloatLabelsRef.current[slumpTick.statusFloatUnitId] = slumpTick.statusFloatLabel;
+      publishSquadUi(squadRef.current);
+    }
+    if (slumpTick.forceDissolveUnitIds.length) {
+      for (const deadId of slumpTick.forceDissolveUnitIds) {
+        const deadUnit = getUnitById(squadRef.current, deadId);
+        if (!deadUnit || isUnitAlive(deadUnit)) continue;
+        beginDissolveForUnit(deadId, deadUnit, deadUnit.currentHp);
+      }
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+    }
+
     recordPlayerDefendStreak(
       sessionExtrasRef.current,
       sessionExtrasRef.current.playerDefendedThisTurn,
@@ -7948,7 +8020,10 @@ export default function TacticalCombatHub({
     log(hits === 3
       ? `[EXECUTION SEVERANCE] >> Perfect [3/3] — ${dmg} damage.`
       : `[EXECUTION SEVERANCE] >> [${hits}/3] — ${dmg} damage.`);
-    const eradicated = hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE', { channel: 'TRUE' });
+    const eradicated = hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE', {
+      channel: 'TRUE',
+      abilityId: 'EVISCERATE',
+    });
     if (!eradicated) applyEviscerateAftermath();
     if (eradicated) return;
     cycleRef.current = 'TEXT_COMBAT';
@@ -8815,26 +8890,6 @@ export default function TacticalCombatHub({
         </>
       ) : null}
 
-      {cycleState === 'RESOLUTION' && resolutionOutcome === 'DEFEAT' && (
-        <View style={styles.resolutionOverlay}>
-          <View style={styles.resolution}>
-          <Text style={[styles.resTitle, { color: P.enemyHp }]}>
-            OPERATIVE SOUL DISCONNECTED
-          </Text>
-          <HapticPressable
-            onPress={() => {
-              Vibration.vibrate(12);
-              dismiss();
-            }}
-            style={[styles.resBtn, { borderColor: P.enemyHp }]}
-          >
-            <Text style={[styles.resBtnText, { color: P.enemyHp }]}>
-              [ INCURSION FAILED ]
-            </Text>
-          </HapticPressable>
-          </View>
-        </View>
-      )}
       {!useEnemyArenaChrome && cycleState === 'DEFEND_WARD' ? (
         <EnvoyWardOverlay
           visible
@@ -9115,15 +9170,4 @@ const styles = StyleSheet.create({
     ...abs,
     zIndex: 25,
   },
-  resolutionOverlay: {
-    ...abs,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    zIndex: 50,
-  },
-  resolution: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', paddingTop: 8, alignItems: 'center', width: '90%' },
-  resTitle: { fontFamily: MONO, fontSize: 12, fontWeight: 'bold', marginBottom: 8, letterSpacing: 0.5 },
-  resBtn: { borderWidth: 1, paddingVertical: 8, width: '80%', alignItems: 'center' },
-  resBtnText: { fontFamily: MONO, fontSize: 10, fontWeight: 'bold' },
 });

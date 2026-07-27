@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import RunActionRail from './runField/RunActionRail';
 import {
   canGraftClassAbility,
   getClassGraftDefinition,
 } from '../data/classGraftEngine';
 import { resolveClassAbilityCost } from '../data/classAbilityResolver';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 import type { ClassType } from '../types/game';
 import type {
   EnvoyAbilityGraftMap,
@@ -17,15 +19,10 @@ import type { AbilityGraftMap, VeilGraftId } from '../types/veilGraft';
 import type { EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import type { AegisLoadout } from '../types/aegisCombat';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
-import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = VEIL.mint;
-const GRAFT_SELECT_ACCENT = VEIL.occult;
-const MUTED_TEXT = VEIL.textMuted;
-const PANEL_BORDER = VEIL.line;
-const CARD_BG = VEIL.surface2;
-const CARD_BORDER = VEIL.lineFaint;
-const PANEL_BG = 'rgba(4, 5, 5, 0.88)';
+const WEB_NO_OUTLINE = Platform.OS === 'web'
+  ? ({ outlineStyle: 'none', outlineWidth: 0 } as object)
+  : null;
 
 type ClassLoadout = AegisLoadout | HexShotLoadout | EnvoyLoadout;
 type ClassGraftMap = AbilityGraftMap | HexShotAbilityGraftMap | EnvoyAbilityGraftMap;
@@ -47,6 +44,14 @@ interface ClassGraftUIProps {
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
+  /** Optional slot rendered inside the terminal frame below ability slots. */
+  footer?: React.ReactNode;
+  /** When set, renders an attached CANCEL / INJECT dialog footer inside the terminal. */
+  onInjectCancel?: () => void;
+  onInject?: () => void;
+  canInject?: boolean;
+  injectDisabled?: boolean;
+  cancelDisabled?: boolean;
 }
 
 export default function ClassGraftUI({
@@ -58,8 +63,14 @@ export default function ClassGraftUI({
   onSelectionChange,
   compact = false,
   borderColor: _borderColor,
-  primaryColor,
+  primaryColor: _primaryColor,
   mutedColor: _mutedColor,
+  footer,
+  onInjectCancel,
+  onInject,
+  canInject = false,
+  injectDisabled = false,
+  cancelDisabled = false,
 }: ClassGraftUIProps): React.JSX.Element {
   const { fontScale, scaleFont, scaleSpacing } = useResponsiveLayout();
   const [selectedGraftId, setSelectedGraftId] = useState<string | null>(null);
@@ -141,6 +152,19 @@ export default function ClassGraftUI({
     ? ({ borderStyle: 'dashed' as const })
     : ({ borderStyle: 'dashed' as const });
 
+  const showInjectFooter = onInjectCancel != null && onInject != null;
+  const resolvedFooter = footer ?? (showInjectFooter ? (
+    <RunActionRail
+      mode="dialog"
+      primaryLabel="INJECT GRAFT"
+      onPrimary={onInject}
+      primaryDisabled={!canInject || injectDisabled}
+      secondaryLabel="CANCEL"
+      onSecondary={onInjectCancel}
+      secondaryDisabled={cancelDisabled}
+    />
+  ) : null);
+
   return (
     <View
       style={[
@@ -148,7 +172,7 @@ export default function ClassGraftUI({
         {
           padding: panelPadding,
           marginTop: compact ? 0 : scaleSpacing(24),
-          borderColor: PANEL_BORDER,
+          borderColor: RUN_FIELD.line,
         },
       ]}
     >
@@ -157,7 +181,7 @@ export default function ClassGraftUI({
           style={[
             styles.headerPrefix,
             {
-              color: TERMINAL_ACCENT,
+              color: RUN_FIELD.mint,
               fontSize: headerSize,
               lineHeight: headerSize * 1.3,
             },
@@ -169,7 +193,7 @@ export default function ClassGraftUI({
           style={[
             styles.headerResidue,
             {
-              color: GRAFT_SELECT_ACCENT,
+              color: RUN_FIELD.text,
               fontSize: residueSize,
               lineHeight: residueSize * 1.25,
             },
@@ -183,7 +207,7 @@ export default function ClassGraftUI({
         style={[
           styles.subheader,
           {
-            color: MUTED_TEXT,
+            color: RUN_FIELD.textSecondary,
             fontSize: subheaderSize,
             lineHeight: subheaderSize * 1.45,
             marginTop: scaleSpacing(compact ? 4 : 8),
@@ -209,12 +233,13 @@ export default function ClassGraftUI({
                 styles.offerCard,
                 {
                   padding: cardPadding,
-                  borderColor: selected ? GRAFT_SELECT_ACCENT : CARD_BORDER,
-                  backgroundColor: selected ? 'rgba(6, 182, 212, 0.1)' : CARD_BG,
+                  borderColor: selected ? RUN_FIELD.mintBorder : RUN_FIELD.line,
+                  backgroundColor: selected ? RUN_FIELD.mintSoft : RUN_FIELD.panelLight,
                   opacity: !affordable ? 0.35 : dimmed ? 0.4 : state.pressed ? 0.88 : 1,
                   transform: selected ? [{ scale: 1.02 }] : undefined,
                 },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
+                WEB_NO_OUTLINE,
               ]}
             >
               <View style={styles.offerTitleRow}>
@@ -222,7 +247,7 @@ export default function ClassGraftUI({
                   style={[
                     styles.offerTitle,
                     {
-                      color: selected ? GRAFT_SELECT_ACCENT : primaryColor,
+                      color: selected ? RUN_FIELD.mint : RUN_FIELD.text,
                       fontSize: cardTitleSize,
                       lineHeight: cardTitleSize * 1.25,
                     },
@@ -234,7 +259,7 @@ export default function ClassGraftUI({
                   style={[
                     styles.offerCost,
                     {
-                      color: selected ? GRAFT_SELECT_ACCENT : primaryColor,
+                      color: selected ? RUN_FIELD.mint : RUN_FIELD.textSecondary,
                       fontSize: cardTitleSize,
                       lineHeight: cardTitleSize * 1.25,
                     },
@@ -247,7 +272,7 @@ export default function ClassGraftUI({
                 style={[
                   styles.offerBody,
                   {
-                    color: MUTED_TEXT,
+                    color: RUN_FIELD.textSecondary,
                     fontSize: cardBodySize,
                     lineHeight: cardBodySize * 1.4,
                     marginTop: scaleSpacing(compact ? 4 : 6),
@@ -266,7 +291,7 @@ export default function ClassGraftUI({
         style={[
           styles.abilitySection,
           {
-            borderTopColor: CARD_BORDER,
+            borderTopColor: RUN_FIELD.line,
             paddingTop: scaleSpacing(compact ? 12 : 24),
             marginTop: scaleSpacing(compact ? 8 : 12),
           },
@@ -293,8 +318,8 @@ export default function ClassGraftUI({
               && canSelect;
 
             const slotAccent = slotSelected
-              ? GRAFT_SELECT_ACCENT
-              : existing?.accentColor ?? PANEL_BORDER;
+              ? RUN_FIELD.mintBorder
+              : existing?.accentColor ?? RUN_FIELD.line;
 
             return (
               <HapticPressable
@@ -308,14 +333,14 @@ export default function ClassGraftUI({
                     width: '48%',
                     minHeight: slotMinHeight,
                     borderColor: slotAccent,
-                    borderWidth: slotSelected ? 2 : 2,
+                    borderWidth: slotSelected ? 2 : 1,
                     paddingVertical: compact ? 6 : 10,
                     paddingHorizontal: compact ? 6 : 8,
                     backgroundColor: slotSelected
-                      ? 'rgba(6, 182, 212, 0.12)'
+                      ? RUN_FIELD.mintSoft
                       : existing
                         ? `${existing.accentColor}14`
-                        : 'rgba(0, 0, 0, 0.5)',
+                        : RUN_FIELD.panelWash,
                     opacity: !graftable
                       ? 0.45
                       : dimmed
@@ -327,6 +352,7 @@ export default function ClassGraftUI({
                           : 0.7,
                   },
                   terminalHoverStyle(readPressableHover(state), state.pressed),
+                  WEB_NO_OUTLINE,
                 ]}
               >
                 <Text
@@ -334,8 +360,8 @@ export default function ClassGraftUI({
                     styles.abilityLabel,
                     {
                       color: slotSelected
-                        ? GRAFT_SELECT_ACCENT
-                        : existing?.accentColor ?? (graftable ? primaryColor : MUTED_TEXT),
+                        ? RUN_FIELD.mint
+                        : existing?.accentColor ?? (graftable ? RUN_FIELD.text : RUN_FIELD.textDim),
                       fontSize: abilityLabelSize,
                       lineHeight: abilityLabelSize * 1.3,
                     },
@@ -345,7 +371,7 @@ export default function ClassGraftUI({
                   {label}
                 </Text>
                 {!graftable ? (
-                  <Text style={[styles.slotTag, { color: MUTED_TEXT, fontSize: tagSize }]}>
+                  <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
                     ANCHOR LOCK
                   </Text>
                 ) : existing ? (
@@ -353,11 +379,11 @@ export default function ClassGraftUI({
                     {existing.name.toUpperCase()}
                   </Text>
                 ) : slotSelected ? (
-                  <Text style={[styles.slotTag, { color: GRAFT_SELECT_ACCENT, fontSize: tagSize }]}>
+                  <Text style={[styles.slotTag, { color: RUN_FIELD.mint, fontSize: tagSize }]}>
                     PATCH READY
                   </Text>
                 ) : (
-                  <Text style={[styles.slotTag, { color: MUTED_TEXT, fontSize: tagSize }]}>
+                  <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
                     UNGRAFTED
                   </Text>
                 )}
@@ -366,6 +392,21 @@ export default function ClassGraftUI({
           })}
         </View>
       </View>
+
+      {resolvedFooter ? (
+        <View
+          style={[
+            styles.footerSection,
+            {
+              borderTopColor: RUN_FIELD.line,
+              marginTop: scaleSpacing(compact ? 10 : 16),
+              paddingTop: scaleSpacing(compact ? 4 : 8),
+            },
+          ]}
+        >
+          {resolvedFooter}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -373,9 +414,16 @@ export default function ClassGraftUI({
 const styles = StyleSheet.create({
   panel: {
     width: '100%',
-    backgroundColor: PANEL_BG,
+    backgroundColor: RUN_FIELD.panelStrong,
     borderWidth: 1,
     gap: 0,
+    flex: 1,
+    minHeight: 0,
+  },
+  footerSection: {
+    width: '100%',
+    borderTopWidth: 1,
+    flexShrink: 0,
   },
   headerRow: {
     flexDirection: 'row',

@@ -383,6 +383,8 @@ export default function CombatScreen(): React.JSX.Element {
   }, [effectiveSquadUi.units, nodeType]);
 
   const showVictoryBanner = resolutionPanel?.outcome === 'VICTORY';
+  const showDefeatBanner = resolutionPanel?.outcome === 'DEFEAT';
+  const resolutionActive = showVictoryBanner || showDefeatBanner;
 
   const victoryPresentation = useMemo(() => {
     if (!showVictoryBanner || !resolutionPanel) return null;
@@ -439,6 +441,27 @@ export default function CombatScreen(): React.JSX.Element {
     runState.pendingEnemy?.isBoss,
     showVictoryBanner,
   ]);
+
+  const defeatPresentation = useMemo(() => {
+    if (!showDefeatBanner || !resolutionPanel) return null;
+    return {
+      heading: 'OPERATIVE SOUL DISCONNECTED',
+      continueLabel: 'INCURSION FAILED',
+      subtitle: 'Soul anchor severed. Veil sync lost.',
+      eyebrow: 'COMBAT RECORD // FAILED',
+      summary: [
+        {
+          value: String(resolutionPanel.hostilesDefeated),
+          label: resolutionPanel.hostilesDefeated === 1 ? 'HOSTILE' : 'HOSTILES',
+        },
+        {
+          value: String(resolutionPanel.playerTurns),
+          label: resolutionPanel.playerTurns === 1 ? 'TURN' : 'TURNS',
+        },
+      ],
+      objectiveLine: resolutionPanel.objectiveCallout,
+    };
+  }, [resolutionPanel, showDefeatBanner]);
 
   const enemySquadPanel = (
     <CombatEnemyGrid
@@ -822,7 +845,13 @@ export default function CombatScreen(): React.JSX.Element {
                     scrimColor={arenaBackgroundScrimColor}
                   />
 
-                  <View style={styles.arenaForeground} pointerEvents="box-none">
+                  <View
+                    style={[
+                      styles.arenaForeground,
+                      resolutionActive ? styles.arenaForegroundDimmed : null,
+                    ]}
+                    pointerEvents={resolutionActive ? 'none' : 'box-none'}
+                  >
                     <CombatHudAtmosphereOverlay />
                     <CombatTopDockFade />
 
@@ -873,7 +902,7 @@ export default function CombatScreen(): React.JSX.Element {
                 </View>
 
                 <CombatTacticalDashboard
-                  resolutionDimmed={showVictoryBanner}
+                  resolutionDimmed={resolutionActive}
                   operativeStatus={(
                     operativeTelemetry ? (
                       <CombatOperativeHud
@@ -971,6 +1000,19 @@ export default function CombatScreen(): React.JSX.Element {
                   />
                 ) : null}
 
+                {showDefeatBanner && defeatPresentation ? (
+                  <CombatResolutionBanner
+                    outcome="DEFEAT"
+                    heading={defeatPresentation.heading}
+                    subtitle={defeatPresentation.subtitle}
+                    eyebrow={defeatPresentation.eyebrow}
+                    summary={defeatPresentation.summary}
+                    objectiveLine={defeatPresentation.objectiveLine}
+                    continueLabel={defeatPresentation.continueLabel}
+                    onDismiss={handleResolutionDismiss}
+                  />
+                ) : null}
+
                 <CombatMinigameOverlayHost />
               </CombatJuiceHost>
 
@@ -1017,5 +1059,8 @@ const styles = StyleSheet.create({
   arenaForeground: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
+  },
+  arenaForegroundDimmed: {
+    opacity: 0.28,
   },
 });

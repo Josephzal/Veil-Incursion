@@ -598,7 +598,7 @@ export default function ScanningScreen(): React.JSX.Element {
         canEngage={canEngage}
         accent={accent}
         mutedColor={theme.mutedColor}
-        engageLabel="[ BREACH ]"
+        engageLabel="BREACH"
         onEngage={handleEngage}
         sonarPrompt={showSonarPrompt || showRelaySpikePrompt || showNullLensPrompt ? (
           <View style={{ gap: 6, paddingHorizontal: 26 }}>

@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
-import TacticalButton from './TacticalButton';
+import FieldPlate from './runField/FieldPlate';
+import RunActionRail from './runField/RunActionRail';
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode, CheckStatus } from '../types/game';
 import TensionMechanicHost from './narrative/tension/TensionMechanicHost';
 import NarrativeOutcomePanel from './narrative/NarrativeOutcomePanel';
@@ -14,18 +15,16 @@ import type { NarrativeOutcomeSummary } from '../data/narrative/narrativeOutcome
 import {
   NARRATIVE_CHOICE_PADDING_H,
   NARRATIVE_CHOICE_PADDING_V,
-  NARRATIVE_TERMINAL_BODY_MIN_HEIGHT,
   NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
-import DossierCardShell from './hub/DossierCardShell';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useRun } from '../context/RunContext';
-import { VEIL } from '../theme/veilTerminalTokens';
+import { RUN_FIELD } from '../theme/runFieldTokens';
+import { readPressableHover } from '../utils/terminalHoverStyle';
 
-const TERMINAL_ACCENT = VEIL.mint;
-const DANGER_ACCENT = VEIL.blood;
-const LOCK_ICON_COLOR = '#ff453a';
+const TERMINAL_ACCENT = RUN_FIELD.mint;
+const DANGER_ACCENT = RUN_FIELD.danger;
+const LOCK_ICON_COLOR = RUN_FIELD.danger;
 
 type ModulePhase = 'SCENARIO' | 'TENSION' | 'OUTCOME';
 
@@ -105,7 +104,6 @@ function ResolverButton({
   option,
   selected,
   onPress,
-  borderColor,
   mutedColor,
   primaryColor,
   showLockIcon = false,
@@ -115,66 +113,90 @@ function ResolverButton({
   subtextFontSize,
   subtextLineHeight,
   lockIconSize,
-}: ResolverButtonProps): React.JSX.Element {
+}: Omit<ResolverButtonProps, 'borderColor'> & { borderColor?: string }): React.JSX.Element {
   const locked = option.locked === true;
   return (
     <HapticPressable
       onPress={onPress}
       disabled={locked}
-      style={({ pressed }) => [
-        styles.choiceBtn,
-        { minHeight, paddingVertical: NARRATIVE_CHOICE_PADDING_V, paddingHorizontal: NARRATIVE_CHOICE_PADDING_H },
-        selected && !locked && styles.choiceBtnSelected,
-        locked && styles.choiceBtnLocked,
-        {
-          borderColor: selected && !locked ? TERMINAL_ACCENT : borderColor,
-          opacity: locked ? 0.5 : pressed ? 0.75 : 1,
-        },
-      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled: locked }}
+      style={(state) => {
+        const hovered = !locked && (readPressableHover(state) || state.pressed);
+        return [
+          { opacity: locked ? 0.72 : 1 },
+          hovered && !selected ? { transform: [{ translateY: -1 }] } : null,
+        ];
+      }}
     >
-      <View style={styles.choiceLabelRow}>
-        {locked && showLockIcon ? (
-          <Text
-            style={[styles.lockIcon, { color: LOCK_ICON_COLOR, fontSize: lockIconSize, lineHeight: lockIconSize + 2 }]}
-            accessibilityLabel="Locked"
+      {(state) => {
+        const hovered = !locked && !selected && (readPressableHover(state) || state.pressed);
+        const plateState = locked
+          ? 'locked'
+          : selected
+            ? 'selected'
+            : hovered
+              ? 'hover'
+              : 'idle';
+        return (
+          <FieldPlate
+            density="wash"
+            tone="mint"
+            state={plateState}
+            brackets={false}
+            contentStyle={{
+              minHeight,
+              paddingVertical: NARRATIVE_CHOICE_PADDING_V + 4,
+              paddingHorizontal: NARRATIVE_CHOICE_PADDING_H + 4,
+              gap: 4,
+            }}
           >
-            🔒
-          </Text>
-        ) : null}
-        <Text
-          style={[
-            styles.choiceLabel,
-            {
-              color: selected && !locked ? TERMINAL_ACCENT : primaryColor,
-              fontSize: labelFontSize,
-              lineHeight: labelLineHeight,
-            },
-            locked && styles.choiceLabelLocked,
-          ]}
-        >
-          {option.label}
-        </Text>
-      </View>
-      <Text
-        style={[
-          styles.choiceReq,
-          {
-            color: locked ? '#64748b' : mutedColor,
-            fontSize: subtextFontSize,
-            lineHeight: subtextLineHeight,
-          },
-        ]}
-      >
-        {locked && option.lockReason ? option.lockReason : `REQ: ${option.requirement}`}
-      </Text>
-      {option.effectPreview ? (
-        <ChoiceEffectPreview
-          preview={option.effectPreview}
-          mutedColor={mutedColor}
-          fontSize={subtextFontSize}
-          lineHeight={subtextLineHeight}
-        />
-      ) : null}
+            <View style={styles.choiceLabelRow}>
+              {locked && showLockIcon ? (
+                <Text
+                  style={[styles.lockIcon, { color: LOCK_ICON_COLOR, fontSize: lockIconSize, lineHeight: lockIconSize + 2 }]}
+                  accessibilityLabel="Locked"
+                >
+                  🔒
+                </Text>
+              ) : null}
+              <Text
+                style={[
+                  styles.choiceLabel,
+                  {
+                    color: selected || hovered ? TERMINAL_ACCENT : primaryColor,
+                    fontSize: labelFontSize,
+                    lineHeight: labelLineHeight,
+                  },
+                  locked && styles.choiceLabelLocked,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.choiceReq,
+                {
+                  color: locked ? RUN_FIELD.textDim : mutedColor,
+                  fontSize: subtextFontSize,
+                  lineHeight: subtextLineHeight,
+                },
+              ]}
+            >
+              {locked && option.lockReason ? option.lockReason : `REQ: ${option.requirement}`}
+            </Text>
+            {option.effectPreview ? (
+              <ChoiceEffectPreview
+                preview={option.effectPreview}
+                mutedColor={mutedColor}
+                fontSize={subtextFontSize}
+                lineHeight={subtextLineHeight}
+              />
+            ) : null}
+          </FieldPlate>
+        );
+      }}
     </HapticPressable>
   );
 }
@@ -212,7 +234,6 @@ export default function ProceduralNarrativeModule({
     choiceMinHeight: isDesktop ? scaleSize(64) : scaleSize(48),
     choiceGap: isDesktop ? scaleSpacing(12) : scaleSpacing(6),
     lockIconSize: scaleSize(20),
-    bodyMinHeight: scaleSize(NARRATIVE_TERMINAL_BODY_MIN_HEIGHT),
   }), [isDesktop, scaleFont, scaleSize, scaleSpacing]);
 
   const optionDVariant = getOptionDVariant(node.choiceD);
@@ -226,11 +247,6 @@ export default function ProceduralNarrativeModule({
   const selectedOption = choices.find((entry) => entry.key === selectedChoice)?.option;
   const tensionMechanicLabel = formatTensionMechanicLabel(node.proceduralMeta?.tensionMechanic);
   const canConfirm = selectedChoice != null && selectedOption?.locked !== true;
-
-  const confirmButtonStyle = useMemo(
-    () => [styles.confirmButton],
-    [],
-  );
 
   const showOutcome = (
     choice: NarrativeChoiceKey,
@@ -287,21 +303,6 @@ export default function ProceduralNarrativeModule({
     finishWithResult('A', node.choiceA.failureText, 'FAILURE');
   };
 
-  const confirmLabel = (() => {
-    if (!selectedChoice) return '[ CONFIRM ]';
-    if (selectedChoice === 'A') {
-      return node.proceduralMeta?.tensionMechanic
-        ? '[ ENGAGE TENSION PROTOCOL ]'
-        : '[ CONFIRM SECURE ]';
-    }
-    if (selectedChoice === 'D') {
-      if (optionDVariant === 'Retreat') return '[ CONFIRM ABORT — RETURN TO MAP ]';
-      return '[ CONFIRM BRUTE FORCE ]';
-    }
-    if (selectedChoice === 'B') return '[ CONFIRM CABAL BYPASS ]';
-    if (selectedChoice === 'C') return '[ CONFIRM ITEM BYPASS ]';
-    return '[ CONFIRM CHOICE ]';
-  })();
   const confirmAccent = selectedChoice === 'D' && optionDVariant === 'Retreat'
     ? DANGER_ACCENT
     : TERMINAL_ACCENT;
@@ -341,95 +342,75 @@ export default function ProceduralNarrativeModule({
   }
 
   return (
-    <DossierCardShell
-      fillHeight
-      padding={NARRATIVE_UNIFIED_PANEL_PADDING}
+    <FieldPlate
+      density="light"
+      brackets
       style={styles.scenarioShell}
-      contentStyle={styles.scenarioContent}
+      contentStyle={[styles.scenarioContent, { padding: NARRATIVE_UNIFIED_PANEL_PADDING }]}
     >
-      <View
-        style={[
-          styles.contentStage,
-          { minHeight: typography.bodyMinHeight, marginBottom: scaleSpacing(12) },
-        ]}
-      >
-        {phase === 'SCENARIO' ? (
-          <View style={[styles.resolverBlock, { gap: typography.choiceGap }]}>
+      <View style={[styles.resolverBlock, { gap: typography.choiceGap, marginBottom: scaleSpacing(12) }]}>
+        <Text
+          style={[
+            styles.resolverHeader,
+            {
+              color: mutedColor,
+              fontSize: typography.resolverHeaderSize,
+              lineHeight: typography.resolverHeaderLineHeight,
+            },
+          ]}
+        >
+          [ DYNAMIC RESOLVERS ]
+        </Text>
+        <View style={[styles.choiceCol, { gap: typography.choiceGap }]}>
+          {choices.map(({ key, option, showLockIcon }) => (
+            <ResolverButton
+              key={key}
+              option={option}
+              selected={selectedChoice === key}
+              onPress={() => {
+                if (!option.locked) setSelectedChoice(key);
+              }}
+              borderColor={borderColor}
+              mutedColor={mutedColor}
+              primaryColor={primaryColor}
+              showLockIcon={showLockIcon}
+              minHeight={typography.choiceMinHeight}
+              labelFontSize={typography.choiceLabelSize}
+              labelLineHeight={typography.choiceLabelLineHeight}
+              subtextFontSize={typography.choiceSubtextSize}
+              subtextLineHeight={typography.choiceSubtextLineHeight}
+              lockIconSize={typography.lockIconSize}
+            />
+          ))}
+        </View>
+        <View style={styles.optionDHintSlot}>
+          {selectedChoice === 'D' && optionDVariant ? (
             <Text
               style={[
-                styles.resolverHeader,
+                styles.optionDHint,
                 {
                   color: mutedColor,
-                  fontSize: typography.resolverHeaderSize,
-                  lineHeight: typography.resolverHeaderLineHeight,
+                  fontSize: typography.hintSize,
+                  lineHeight: typography.hintLineHeight,
                 },
               ]}
             >
-              [ DYNAMIC RESOLVERS ]
+              {optionDVariant === 'Retreat'
+                ? '>> RETREAT — aborts encounter and routes back to the ley-line grid.'
+                : '>> BRUTE FORCE — accepts guaranteed cost without tension protocol.'}
             </Text>
-            <View style={[styles.choiceCol, { gap: typography.choiceGap }]}>
-              {choices.map(({ key, option, showLockIcon }) => (
-                <ResolverButton
-                  key={key}
-                  option={option}
-                  selected={selectedChoice === key}
-                  onPress={() => {
-                    if (!option.locked) setSelectedChoice(key);
-                  }}
-                  borderColor={borderColor}
-                  mutedColor={mutedColor}
-                  primaryColor={primaryColor}
-                  showLockIcon={showLockIcon}
-                  minHeight={typography.choiceMinHeight}
-                  labelFontSize={typography.choiceLabelSize}
-                  labelLineHeight={typography.choiceLabelLineHeight}
-                  subtextFontSize={typography.choiceSubtextSize}
-                  subtextLineHeight={typography.choiceSubtextLineHeight}
-                  lockIconSize={typography.lockIconSize}
-                />
-              ))}
-            </View>
-            <View style={styles.optionDHintSlot}>
-              {selectedChoice === 'D' && optionDVariant ? (
-                <Text
-                  style={[
-                    styles.optionDHint,
-                    {
-                      color: mutedColor,
-                      fontSize: typography.hintSize,
-                      lineHeight: typography.hintLineHeight,
-                    },
-                  ]}
-                >
-                  {optionDVariant === 'Retreat'
-                    ? '>> RETREAT — aborts encounter and routes back to the ley-line grid.'
-                    : '>> BRUTE FORCE — accepts guaranteed cost without tension protocol.'}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
 
-      <View style={styles.footerSlot}>
-        {phase === 'SCENARIO' ? (
-          <TacticalButton
-            label={confirmLabel}
-            active={canConfirm}
-            disabled={!canConfirm}
-            onPress={handleConfirm}
-            accentColor={confirmAccent}
-            mutedColor={mutedColor}
-            variant="cta"
-            style={confirmButtonStyle}
-            labelSize={scaleFont(9)}
-            labelLineHeight={scaleFont(12)}
-          />
-        ) : (
-          <View style={[styles.footerSpacer, { minHeight: scaleSize(48) }]} pointerEvents="none" />
-        )}
-      </View>
-    </DossierCardShell>
+      <RunActionRail
+        mode="panel"
+        primaryLabel="RESOLVE EVENT"
+        onPrimary={canConfirm ? handleConfirm : undefined}
+        primaryDisabled={!canConfirm}
+        primaryDanger={confirmAccent === DANGER_ACCENT}
+      />
+    </FieldPlate>
   );
 }
 
@@ -440,39 +421,14 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   scenarioShell: {
-    flex: 1,
     width: '100%',
-    minHeight: 0,
+    alignSelf: 'flex-start',
   },
   scenarioContent: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  contentStage: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
-  },
-  footerSlot: {
-    flexShrink: 0,
-    width: '100%',
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  confirmButton: {
-    width: '100%',
-    maxWidth: '100%',
-    alignSelf: 'stretch',
-    minWidth: 0,
-  },
-  footerSpacer: {
     width: '100%',
   },
   resolverBlock: {
-    flex: 1,
     width: '100%',
-    minHeight: 0,
   },
   tensionArea: {
     flex: 1,
@@ -493,14 +449,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
     width: '100%',
-    backgroundColor: DOSSIER_ROW_BG,
+    backgroundColor: RUN_FIELD.panelWash,
     justifyContent: 'center',
   },
   choiceBtnSelected: {
-    backgroundColor: DOSSIER_CTA_BG,
+    backgroundColor: RUN_FIELD.mintSoft,
   },
   choiceBtnLocked: {
-    backgroundColor: DOSSIER_ROW_BG,
+    backgroundColor: RUN_FIELD.panelWash,
   },
   mandateBtn: {
     borderWidth: 1,

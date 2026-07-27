@@ -9,6 +9,19 @@ import {
 } from './combatSquadEngine';
 import { isFragileArchetype } from './enemyCombatConfig';
 import { getAlphaMechanic } from './enemyAlphaConfig';
+import {
+  isThrallRosterId,
+  resolveThrallLethalBlow,
+  thrallDeathLogLine,
+  thrallReanimateLogLine,
+  thrallRevivePatch,
+  thrallSlumpEnterPatch,
+  thrallTrueDeathPatch,
+  THRALL_DEFAULT_REVIVE_HP_PERCENT,
+  THRALL_EXECUTE_FLOAT,
+  THRALL_REANIMATE_FLOAT,
+  THRALL_SLUMP_FLOAT,
+} from './thrallLifecycleEngine';
 import type {
   CombatLifecycleContext,
   DeathHandler,
@@ -114,49 +127,91 @@ const spatialGlitchTurnStart: TurnStartHandler = (enemy, ctx) => {
   };
 };
 
+/**
+ * Legacy no-op — Thrall Slump now ticks at player turn end
+ * (@see tickThrallSlumpsAtPlayerTurnEnd).
+ */
 const thrallSlumpTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if ((enemy.rosterId !== 'thrall' && enemy.rosterId !== 'remembering-thrall') || !enemy.unitId) {
+  if (!isThrallRosterId(enemy.rosterId) || !enemy.unitId) {
     return { ...EMPTY_TURN, squad: ctx.squad };
   }
-  if (!enemy.isSlumped) return { squad: ctx.squad, logLines: [] };
-  const remaining = (enemy.slumpTurnsRemaining ?? 0) - 1;
-  if (remaining > 0) {
-    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { slumpTurnsRemaining: remaining });
-    return {
-      squad,
-      logLines: [`>> ${enemy.designation} SLUMPED — revival in ${remaining} turn(s).`],
-    };
-  }
-  if (ctx.extras.fleshWarpUnitIds[enemy.unitId]) {
-    // Seal denies revival — clear slump so the unit is truly dead (not forever-alive at 0 HP).
-    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
-      isSlumped: false,
-      slumpTurnsRemaining: 0,
-      currentHp: 0,
-    });
-    return {
-      squad,
-      logLines: [
-        `>> ${enemy.designation} REVIVAL BLOCKED — flesh-warp seal.`,
-        `>> ${enemy.designation} TRUE DEATH.`,
-      ],
-      forceDissolveUnitIds: [enemy.unitId],
-    };
-  }
-  const reviveHpPercent = getAlphaMechanic(enemy, 'reviveHpPercent', 0.5);
-  const revivedHp = Math.floor(enemy.maxHp * reviveHpPercent);
-  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
-    isSlumped: false,
-    slumpTurnsRemaining: 0,
-    currentHp: revivedHp,
-  });
-  return {
-    squad,
-    logLines: [`>> ${enemy.designation} REVIVES — ${revivedHp} HP.`],
-    statusFloatLabel: `+${revivedHp} HP`,
-    statusFloatUnitId: enemy.unitId,
-  };
+  return { squad: ctx.squad, logLines: [] };
 };
+
+/**
+ * Advance Slump timers at the end of the player's turn.
+ * Guarantees one full player turn after the turn of entry (grace flag).
+ */
+export function tickThrallSlumpsAtPlayerTurnEnd(
+  squad: EnemyCombatProfile[],
+  fleshWarpUnitIds: Record<string, boolean | undefined>,
+): {
+  squad: EnemyCombatProfile[];
+  logLines: string[];
+  forceDissolveUnitIds: string[];
+  reanimatedUnitIds: string[];
+  statusFloatLabel?: string;
+  statusFloatUnitId?: string;
+} {
+  const logLines: string[] = [];
+  const forceDissolveUnitIds: string[] = [];
+  const reanimatedUnitIds: string[] = [];
+  let statusFloatLabel: string | undefined;
+  let statusFloatUnitId: string | undefined;
+  let next = squad;
+
+  for (const unit of squad) {
+    if (!isThrallRosterId(unit.rosterId) || !unit.unitId || !unit.isSlumped) continue;
+
+    if (unit.slumpGraceThisPlayerTurn) {
+      next = patchUnitInSquad(next, unit.unitId, { slumpGraceThisPlayerTurn: false });
+      logLines.push(
+        `>> ${unit.designation} SLUMPED — execute before the end of your next turn.`,
+      );
+      continue;
+    }
+
+    const remaining = (unit.slumpTurnsRemaining ?? 0) - 1;
+    if (remaining > 0) {
+      next = patchUnitInSquad(next, unit.unitId, { slumpTurnsRemaining: remaining });
+      logLines.push(
+        `>> ${unit.designation} SLUMPED — revival in ${remaining} turn(s).`,
+      );
+      continue;
+    }
+
+    if (fleshWarpUnitIds[unit.unitId]) {
+      next = patchUnitInSquad(next, unit.unitId, thrallTrueDeathPatch());
+      logLines.push(
+        `>> ${unit.designation} REVIVAL BLOCKED — flesh-warp seal.`,
+        `>> ${unit.designation} TRUE DEATH.`,
+      );
+      forceDissolveUnitIds.push(unit.unitId);
+      continue;
+    }
+
+    const reviveHpPercent = getAlphaMechanic(
+      unit,
+      'reviveHpPercent',
+      THRALL_DEFAULT_REVIVE_HP_PERCENT,
+    );
+    const revive = thrallRevivePatch(unit.maxHp, reviveHpPercent);
+    next = patchUnitInSquad(next, unit.unitId, revive);
+    logLines.push(thrallReanimateLogLine(unit.designation, revive.currentHp));
+    reanimatedUnitIds.push(unit.unitId);
+    statusFloatLabel = THRALL_REANIMATE_FLOAT;
+    statusFloatUnitId = unit.unitId;
+  }
+
+  return {
+    squad: next,
+    logLines,
+    forceDissolveUnitIds,
+    reanimatedUnitIds,
+    statusFloatLabel,
+    statusFloatUnitId,
+  };
+}
 
 const golemVentTurnStart: TurnStartHandler = (enemy, ctx) => {
   if ((enemy.rosterId !== 'golem' && enemy.rosterId !== 'blood-rusted-golem') || !enemy.unitId) {
@@ -543,41 +598,50 @@ const spallDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
 };
 
 const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
-  if ((enemy.rosterId !== 'thrall' && enemy.rosterId !== 'remembering-thrall') || !enemy.unitId) {
+  if (!isThrallRosterId(enemy.rosterId) || !enemy.unitId) {
     return { ...EMPTY_DEATH, squad: ctx.squad };
   }
-  const isHeavy = killingBlow.damage >= 25
-    || killingBlow.source === 'EVISCERATE'
-    || killingBlow.source === 'RUIN'
-    || killingBlow.source === 'GRAVE_BIND';
-  // Flesh-warp already denies revival — never enter a soft-lock slump.
-  if (ctx.extras.fleshWarpUnitIds[enemy.unitId] || isHeavy) {
-    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
-      isSlumped: false,
-      slumpTurnsRemaining: 0,
-      currentHp: 0,
-    });
+
+  const fleshWarped = Boolean(ctx.extras.fleshWarpUnitIds[enemy.unitId]);
+  const outcome = resolveThrallLethalBlow(
+    enemy,
+    {
+      damage: killingBlow.damage,
+      tags: killingBlow.tags,
+      isDirectDamage: killingBlow.isDirectDamage,
+    },
+    { fleshWarped },
+  );
+
+  // Indirect damage against an already-slumped thrall — leave state untouched.
+  if (outcome.kind === 'ENTER_SLUMP' && enemy.isSlumped) {
+    return { squad: ctx.squad, logLines: [] };
+  }
+
+  if (outcome.kind === 'TRUE_DEATH') {
+    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, thrallTrueDeathPatch());
     return {
       squad,
-      logLines: [
-        ctx.extras.fleshWarpUnitIds[enemy.unitId]
-          ? `>> ${enemy.designation} TRUE DEATH — flesh-warp seal denies slump.`
-          : `>> ${enemy.designation} TRUE DEATH — heavy blow confirmed.`,
-      ],
+      logLines: [thrallDeathLogLine(enemy.designation, outcome)],
       ashTokenSlot: enemy.gridSlot,
+      statusFloatLabel: outcome.reason === 'EXECUTE' ? THRALL_EXECUTE_FLOAT : undefined,
+      statusFloatUnitId: outcome.reason === 'EXECUTE' ? enemy.unitId : undefined,
     };
   }
-  const slumpTurns = getAlphaMechanic(enemy, 'reviveTurns', 2);
-  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
-    isSlumped: true,
-    slumpTurnsRemaining: slumpTurns,
-    currentHp: 0,
-  });
+
+  // Entering Slump must never reset / extend an existing timer.
+  if (enemy.isSlumped) {
+    return { squad: ctx.squad, logLines: [] };
+  }
+
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, thrallSlumpEnterPatch());
   return {
     squad,
-    logLines: [`>> ${enemy.designation} SLUMPS — requires heavy strike to finish.`],
+    logLines: [thrallDeathLogLine(enemy.designation, outcome)],
     delayDissolve: true,
     enterSlump: true,
+    statusFloatLabel: THRALL_SLUMP_FLOAT,
+    statusFloatUnitId: enemy.unitId,
   };
 };
 
@@ -771,6 +835,8 @@ export const CombatLifecycleManager = {
     let ashTokenSlot: DeathLifecycleResult['ashTokenSlot'];
     let playerHpDelta: number | undefined;
     let enterSlump = false;
+    let statusFloatLabel: string | undefined;
+    let statusFloatUnitId: string | undefined;
 
     for (const handler of DEATH_HANDLERS) {
       const result = handler(enemy, killingBlow, { ...ctx, squad, extras });
@@ -784,6 +850,10 @@ export const CombatLifecycleManager = {
         playerHpDelta = (playerHpDelta ?? 0) + result.playerHpDelta;
       }
       if (result.enterSlump) enterSlump = true;
+      if (result.statusFloatLabel) {
+        statusFloatLabel = result.statusFloatLabel;
+        statusFloatUnitId = result.statusFloatUnitId;
+      }
     }
 
     return {
@@ -795,6 +865,8 @@ export const CombatLifecycleManager = {
       extras: extras !== ctx.extras ? extras : undefined,
       playerHpDelta,
       enterSlump,
+      statusFloatLabel,
+      statusFloatUnitId,
     };
   },
 };
@@ -817,6 +889,8 @@ export function initRosterLifecycleDefaults(
     rosterAbilityCooldown: profile.rosterAbilityCooldown ?? 0,
     isSlumped: profile.isSlumped ?? false,
     slumpTurnsRemaining: profile.slumpTurnsRemaining ?? 0,
+    slumpGraceThisPlayerTurn: profile.slumpGraceThisPlayerTurn ?? false,
+    skipNextAction: profile.skipNextAction ?? false,
     heatCharge: profile.heatCharge ?? 0,
     resonanceStack: profile.resonanceStack ?? 0,
     spotterLockedOn: profile.spotterLockedOn ?? false,

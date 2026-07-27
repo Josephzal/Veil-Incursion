@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
-import DossierCardShell from '../hub/DossierCardShell';
+import FieldPlate from '../runField/FieldPlate';
 import { NARRATIVE_BODY_LINE_HEIGHT, NARRATIVE_UNIFIED_PANEL_PADDING } from '../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { VEIL } from '../../theme/veilTerminalTokens';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
 interface NarrativeFlavorPanelProps {
   flavorText: string;
@@ -11,34 +11,44 @@ interface NarrativeFlavorPanelProps {
   mutedColor?: string;
 }
 
-const MUTED_WHITE = '#F8FAFC';
+/** Strips DevTest-only preamble (e.g. "DEV SANDBOX — ...") from player-facing flavor text. */
+function sanitizeFlavorText(text: string): string {
+  const withoutLeadingSandbox = text.replace(/^\s*(?:>>\s*)?DEV SANDBOX\b[^.]*\.\s*/i, '');
+  return withoutLeadingSandbox
+    .split('\n')
+    .filter((line) => !/^\s*(?:>>\s*)?DEV SANDBOX\b/i.test(line.trim()))
+    .join('\n')
+    .trim();
+}
 
 /**
- * Left-column field report — dossier panel over narrative art.
+ * Field-report plate — a medium, translucent card over the narrative art.
+ * Never opaque enough to fully hide the environment behind it.
  */
 export default function NarrativeFlavorPanel({
   flavorText,
-  primaryColor = MUTED_WHITE,
-  mutedColor = VEIL.textMuted,
+  primaryColor = RUN_FIELD.text,
+  mutedColor = RUN_FIELD.textSecondary,
 }: NarrativeFlavorPanelProps): React.JSX.Element {
   const { scaleFont, scaleSpacing, fontScale } = useResponsiveLayout();
-  const panelPadding = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING);
+  const panelPadding = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING * 0.6);
+  const displayText = useMemo(() => sanitizeFlavorText(flavorText), [flavorText]);
 
   return (
-    <DossierCardShell
-      fillHeight
-      padding={panelPadding}
+    <FieldPlate
+      density="light"
+      brackets={false}
       style={styles.panelShell}
-      contentStyle={styles.panelContent}
+      contentStyle={[styles.panelContent, { padding: panelPadding }]}
     >
       <Text
         style={[
           styles.panelLabel,
           {
             color: mutedColor,
-            fontSize: 9 * fontScale,
-            lineHeight: 13 * fontScale,
-            marginBottom: scaleSpacing(12),
+            fontSize: 10 * fontScale,
+            lineHeight: 14 * fontScale,
+            marginBottom: scaleSpacing(10),
           },
         ]}
       >
@@ -55,15 +65,15 @@ export default function NarrativeFlavorPanel({
             styles.flavorText,
             {
               color: primaryColor,
-              fontSize: scaleFont(11),
+              fontSize: scaleFont(12),
               lineHeight: scaleFont(NARRATIVE_BODY_LINE_HEIGHT),
             },
           ]}
         >
-          {flavorText}
+          {displayText}
         </Text>
       </ScrollView>
-    </DossierCardShell>
+    </FieldPlate>
   );
 }
 
@@ -79,9 +89,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   panelLabel: {
-    fontFamily: 'monospace',
-    letterSpacing: 1,
+    fontFamily: RUN_FIELD.mono,
+    letterSpacing: 1.6,
     fontWeight: '700',
+    textTransform: 'uppercase',
     flexShrink: 0,
   },
   scroll: {
@@ -94,7 +105,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   flavorText: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     letterSpacing: 0.25,
   },
 });

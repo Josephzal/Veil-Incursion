@@ -9,15 +9,19 @@ import {
 } from 'react-native';
 import HubPrimaryCta from '../hub/HubPrimaryCta';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 import { pulseHubButton } from '../../utils/hubButtonHaptics';
 
-const PANEL_BG = '#080C0E';
-const PANEL_BORDER = 'rgba(98, 230, 165, 0.34)';
-const BACKDROP = 'rgba(2, 5, 7, 0.76)';
-const TEXT_PRIMARY = '#E3ECE8';
-const TEXT_SECONDARY = '#82918C';
-const MINT = OTT.terminalGreen;
-const OCCULT = '#C45AAE';
+const PANEL_BG = RUN_FIELD.panelStrong;
+const PANEL_BORDER_VICTORY = RUN_FIELD.mintBorder;
+const PANEL_BORDER_DEFEAT = RUN_FIELD.dangerBorder;
+const BACKDROP_VICTORY = `rgba(5, 9, 10, ${RUN_FIELD.environmentScrimDense})`;
+const BACKDROP_DEFEAT = 'rgba(8, 3, 5, 0.86)';
+const TEXT_PRIMARY = RUN_FIELD.text;
+const TEXT_SECONDARY = RUN_FIELD.textSecondary;
+const MINT = RUN_FIELD.mint;
+const OCCULT = RUN_FIELD.occult;
+const DANGER = RUN_FIELD.danger;
 const CTA_REVEAL_MS = 520;
 const CTA_GUARD_MS = 280;
 
@@ -199,7 +203,10 @@ export default function CombatResolutionBanner({
     <View style={styles.wrap} pointerEvents="auto" accessibilityViewIsModal>
       <Animated.View
         pointerEvents="none"
-        style={[styles.backdrop, { opacity: backdropOpacity }]}
+        style={[
+          styles.backdrop,
+          { opacity: backdropOpacity, backgroundColor: isVictory ? BACKDROP_VICTORY : BACKDROP_DEFEAT },
+        ]}
       />
 
       <Animated.View
@@ -211,12 +218,46 @@ export default function CombatResolutionBanner({
           },
         ]}
       >
-        <View style={styles.panel}>
-          <View style={[styles.corner, styles.cornerTL]} pointerEvents="none" />
-          <View style={[styles.corner, styles.cornerTR]} pointerEvents="none" />
-          <View style={[styles.corner, styles.cornerBL]} pointerEvents="none" />
-          <View style={[styles.corner, styles.cornerBR]} pointerEvents="none" />
+        <View
+          style={[
+            styles.panel,
+            { borderColor: isVictory ? PANEL_BORDER_VICTORY : PANEL_BORDER_DEFEAT },
+          ]}
+        >
+          <View
+            style={[
+              styles.corner,
+              styles.cornerTL,
+              { borderColor: isVictory ? MINT : DANGER },
+            ]}
+            pointerEvents="none"
+          />
+          <View
+            style={[
+              styles.corner,
+              styles.cornerTR,
+              { borderColor: isVictory ? MINT : DANGER },
+            ]}
+            pointerEvents="none"
+          />
+          <View
+            style={[
+              styles.corner,
+              styles.cornerBL,
+              { borderColor: isVictory ? 'rgba(99, 226, 177, 0.35)' : 'rgba(205, 76, 90, 0.4)' },
+            ]}
+            pointerEvents="none"
+          />
+          <View
+            style={[
+              styles.corner,
+              styles.cornerBR,
+              { borderColor: isVictory ? 'rgba(99, 226, 177, 0.35)' : 'rgba(205, 76, 90, 0.4)' },
+            ]}
+            pointerEvents="none"
+          />
           <View style={styles.innerEdge} pointerEvents="none" />
+          {!isVictory ? <View style={styles.dangerHaze} pointerEvents="none" /> : null}
           <View style={styles.scanlines} pointerEvents="none" />
 
           <Animated.View
@@ -226,13 +267,24 @@ export default function CombatResolutionBanner({
               {
                 opacity: occultPulse.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0, 0.14],
+                  outputRange: [0, isVictory ? 0.14 : 0.1],
                 }),
+                borderColor: isVictory ? OCCULT : DANGER,
+                backgroundColor: isVictory
+                  ? RUN_FIELD.occultSoft
+                  : RUN_FIELD.dangerSoft,
               },
             ]}
           />
 
-          <Text style={styles.eyebrow}>{eyebrow}</Text>
+          <Text
+            style={[
+              styles.eyebrow,
+              { color: isVictory ? 'rgba(99, 226, 177, 0.62)' : 'rgba(205, 76, 90, 0.78)' },
+            ]}
+          >
+            {eyebrow}
+          </Text>
 
           <View style={styles.headingBlock}>
             <Animated.Text
@@ -253,6 +305,7 @@ export default function CombatResolutionBanner({
                 styles.headingGlitch,
                 {
                   opacity: glitchOpacity,
+                  color: isVictory ? OCCULT : DANGER,
                 },
               ]}
             >
@@ -264,7 +317,17 @@ export default function CombatResolutionBanner({
             {subtitle}
           </Animated.Text>
 
-          <Animated.View style={[styles.occultDivider, { opacity: summaryOpacity }]} />
+          <Animated.View
+            style={[
+              styles.occultDivider,
+              {
+                opacity: summaryOpacity,
+                backgroundColor: isVictory
+                  ? 'rgba(196, 90, 174, 0.45)'
+                  : 'rgba(205, 76, 90, 0.55)',
+              },
+            ]}
+          />
 
           {visibleSummary.length > 0 ? (
             <Animated.View style={[styles.summaryRow, { opacity: summaryOpacity }]}>
@@ -276,6 +339,7 @@ export default function CombatResolutionBanner({
                       style={[
                         styles.summaryValue,
                         stat.accent ? styles.summaryValueAccent : null,
+                        !isVictory ? styles.summaryValueDefeat : null,
                       ]}
                     >
                       {padStat(stat.value)}
@@ -288,7 +352,17 @@ export default function CombatResolutionBanner({
           ) : null}
 
           {objectiveLine ? (
-            <Animated.Text style={[styles.objectiveLine, { opacity: summaryOpacity }]}>
+            <Animated.Text
+              style={[
+                styles.objectiveLine,
+                {
+                  opacity: summaryOpacity,
+                  color: isVictory
+                    ? 'rgba(196, 90, 174, 0.85)'
+                    : 'rgba(205, 76, 90, 0.85)',
+                },
+              ]}
+            >
               {objectiveLine}
             </Animated.Text>
           ) : null}
@@ -298,7 +372,7 @@ export default function CombatResolutionBanner({
               label={continueLabel}
               onPress={ctaEnabled ? handleDismiss : undefined}
               disabled={!ctaEnabled}
-              variant="classic"
+              variant={isVictory ? 'glow' : 'danger'}
               accessibilityLabel={continueLabel}
               minHeight={50}
               style={styles.cta}
@@ -315,11 +389,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 50,
+    zIndex: 60,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: BACKDROP,
   },
   panelShell: {
     width: '92%',
@@ -333,13 +406,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     backgroundColor: PANEL_BG,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
   },
   corner: {
     position: 'absolute',
-    width: 12,
-    height: 12,
-    borderColor: 'rgba(98, 230, 165, 0.72)',
+    width: RUN_FIELD.bracket.size + 2,
+    height: RUN_FIELD.bracket.size + 2,
   },
   cornerTL: { top: 6, left: 6, borderTopWidth: 1.5, borderLeftWidth: 1.5 },
   cornerTR: { top: 6, right: 6, borderTopWidth: 1.5, borderRightWidth: 1.5 },
@@ -349,11 +420,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     margin: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(227, 236, 232, 0.06)',
+    borderColor: RUN_FIELD.innerHighlight,
+  },
+  dangerHaze: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: RUN_FIELD.dangerSoft,
+    opacity: 0.55,
   },
   scanlines: {
     ...StyleSheet.absoluteFill,
-    opacity: 0.5,
+    opacity: 0.45,
     backgroundColor: OTT.scanline,
   },
   occultGlyph: {
@@ -363,16 +439,14 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 1,
-    borderColor: OCCULT,
-    backgroundColor: 'rgba(196, 90, 174, 0.08)',
   },
   eyebrow: {
-    fontFamily: OTT.mono,
-    fontSize: 11,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.eyebrow,
     letterSpacing: 2.4,
-    color: 'rgba(98, 230, 165, 0.62)',
     textAlign: 'center',
     marginBottom: 14,
+    fontWeight: '700',
   },
   headingBlock: {
     position: 'relative',
@@ -380,7 +454,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   heading: {
-    fontFamily: OTT.mono,
+    fontFamily: RUN_FIELD.mono,
     fontSize: 26,
     fontWeight: '700',
     letterSpacing: 1.6,
@@ -390,21 +464,20 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
   },
   headingDefeat: {
-    color: OTT.soulRed,
+    color: DANGER,
   },
   headingGlitch: {
     ...StyleSheet.absoluteFill,
-    fontFamily: OTT.mono,
+    fontFamily: RUN_FIELD.mono,
     fontSize: 26,
     fontWeight: '700',
     letterSpacing: 1.6,
     textAlign: 'center',
-    color: OCCULT,
     transform: [{ translateX: 2 }, { translateY: -1 }],
   },
   subtitle: {
-    fontFamily: OTT.mono,
-    fontSize: 14,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.secondary,
     letterSpacing: 0.4,
     color: TEXT_SECONDARY,
     textAlign: 'center',
@@ -413,7 +486,6 @@ const styles = StyleSheet.create({
   occultDivider: {
     width: 48,
     height: 1,
-    backgroundColor: 'rgba(196, 90, 174, 0.45)',
     marginBottom: 18,
   },
   summaryRow: {
@@ -435,7 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(130, 145, 140, 0.45)',
   },
   summaryValue: {
-    fontFamily: OTT.mono,
+    fontFamily: RUN_FIELD.mono,
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 1,
@@ -444,18 +516,20 @@ const styles = StyleSheet.create({
   summaryValueAccent: {
     color: MINT,
   },
+  summaryValueDefeat: {
+    color: TEXT_PRIMARY,
+  },
   summaryLabel: {
-    fontFamily: OTT.mono,
-    fontSize: 10,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.micro,
     letterSpacing: 1.6,
     color: TEXT_SECONDARY,
     textAlign: 'center',
   },
   objectiveLine: {
-    fontFamily: OTT.mono,
+    fontFamily: RUN_FIELD.mono,
     fontSize: 11,
     letterSpacing: 1.8,
-    color: 'rgba(196, 90, 174, 0.85)',
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 4,
@@ -466,7 +540,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   cta: {
-    width: 260,
+    width: 280,
     maxWidth: '100%',
     alignSelf: 'center',
   },

@@ -153,7 +153,12 @@ export interface EnemyCombatProfile {
   spawnArchetype?: 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY' | 'ARTILLERY';
   /** Thrall — fleshy resilience slump state. */
   isSlumped?: boolean;
+  /** Player-turn ends remaining until reanimation (after grace). */
   slumpTurnsRemaining?: number;
+  /** Entered Slump during the current player turn — skip tick at this turn's end. */
+  slumpGraceThisPlayerTurn?: boolean;
+  /** After reanimation — consume next action without attacking. */
+  skipNextAction?: boolean;
   /** Golem venting core heat accumulator. */
   heatCharge?: number;
   /** Resonance Caster stacking damage buff count. */

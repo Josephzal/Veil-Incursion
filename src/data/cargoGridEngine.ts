@@ -34,7 +34,7 @@ export function resetCargoInstanceCounter(): void {
   instanceCounter = 0;
 }
 
-/** Run-start cargo with God Mode + Spectral Salt locked to grid slots (0,0) and (0,1). */
+/** Run-start cargo with God Mode, Spectral Salt, and Bitch Potion locked to starter grid slots. */
 export function createStarterCargoRunState(): CargoRunState {
   return applyIncursionStarterCargo(createDefaultCargoRunState());
 }
@@ -42,6 +42,7 @@ export function createStarterCargoRunState(): CargoRunState {
 const INCURSION_STARTER_CARGO: ReadonlyArray<{ itemId: CargoItemId; row: number; col: number }> = [
   { itemId: 'god-mode', row: 0, col: 0 },
   { itemId: 'spectral-salt', row: 0, col: 1 },
+  { itemId: 'bitch-potion', row: 0, col: 2 },
 ];
 
 function stripCatalogItemsFromCargo(cargo: CargoRunState, itemIds: readonly CargoItemId[]): CargoRunState {
@@ -94,7 +95,7 @@ export function placeCatalogItemAtCell(
   };
 }
 
-/** Ensures God Mode and Spectral Salt occupy the first two cargo grid cells at run start. */
+/** Ensures God Mode, Spectral Salt, and Bitch Potion occupy starter cargo grid cells. */
 export function applyIncursionStarterCargo(cargo: CargoRunState): CargoRunState {
   const starterIds = INCURSION_STARTER_CARGO.map((entry) => entry.itemId);
   let working = stripCatalogItemsFromCargo(cargo, starterIds);
@@ -851,6 +852,8 @@ export function combatConsumableDescription(itemId: CargoItemId): string {
       return 'Blinds frontline hostiles for 2 turns (−30% accuracy).';
     case 'god_mode':
       return 'Overclocks operative systems — every attack deals 1000 true damage (armor bypass, guaranteed hit), resources locked at max. Free deploy.';
+    case 'set_hp_to_one':
+      return 'Reduces Soul Anchor integrity to 1. Free deploy.';
     default:
       return 'Field deployment protocols pending operative clearance.';
   }

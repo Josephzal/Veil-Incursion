@@ -333,6 +333,10 @@ export interface CombatGridUnitSnapshot {
   dissolveHidden?: boolean;
   /** Persistent enrage latch — drives crimson overlay. */
   isEnraged?: boolean;
+  /** Thrall Undying — slumped awaiting execute. */
+  isSlumped?: boolean;
+  slumpTurnsRemaining?: number;
+  slumpGraceThisPlayerTurn?: boolean;
 }
 
 const STATUS_TAG_ORDER: CombatUnitTag[] = [
@@ -358,12 +362,22 @@ export type EnemyStatusUnitFields = Pick<
   | 'veilRotStacks'
   | 'kineticArmor'
   | 'occultWards'
+  | 'isSlumped'
+  | 'slumpTurnsRemaining'
 >;
 
 /** Human-readable hostile status labels for the intel panel. */
 export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
   const labels: string[] = [];
   const tags = new Set(unit.combatTags ?? []);
+
+  if (unit.isSlumped) {
+    labels.push('SLUMPED');
+    labels.push('Any direct attack executes');
+    labels.push('Heavy attacks bypass Slump');
+    labels.push('Revives at 40% HP if ignored');
+    return labels;
+  }
 
   const ka = unit.kineticArmor ?? 0;
   const ow = unit.occultWards ?? 0;

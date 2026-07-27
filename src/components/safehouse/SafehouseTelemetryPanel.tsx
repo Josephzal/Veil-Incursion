@@ -49,7 +49,12 @@ export default function SafehouseTelemetryPanel({
   const sectionTitle = 8 * fontScale;
 
   return (
-    <SafehouseTexturedPanel flex={isDesktop ? 1 : undefined} padding={pad} contentStyle={styles.content}>
+    <SafehouseTexturedPanel
+      flex={isDesktop ? 0.72 : undefined}
+      style={isDesktop ? styles.sidePanel : undefined}
+      padding={pad}
+      contentStyle={styles.content}
+    >
       <View style={styles.telemetrySection}>
         <Text style={[styles.sectionLabel, { fontSize: sectionTitle, color: MUTED_SLATE, letterSpacing: 1.5 }]}>
           [ SECTOR TELEMETRY ]
@@ -212,5 +217,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     flexShrink: 1,
     minHeight: 0,
+  },
+  sidePanel: {
+    maxWidth: 280,
+    minWidth: 200,
+    flexGrow: 0,
+    flexShrink: 1,
   },
 });

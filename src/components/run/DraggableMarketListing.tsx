@@ -3,21 +3,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import type { BlackMarketCargoListing } from '../../data/blackMarket';
-import { DOSSIER_FOREGROUND, SELECT_ACCENT_GLOW } from '../../constants/dossierSurface';
 import HubCargoIconBox from '../safehouse/HubCargoIconBox';
+import FieldPlate from '../runField/FieldPlate';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { VEIL } from '../../theme/veilTerminalTokens';
-import { viewShadow } from '../../utils/adaptiveStyles';
-
-const STARK_WHITE = VEIL.text;
-const MUTED_SLATE = VEIL.textMuted;
 
 interface DraggableMarketListingProps {
   listing: BlackMarketCargoListing;
   price: number;
   fontScale: number;
-  borderColor?: string;
   markedShelf?: boolean;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
@@ -28,7 +24,6 @@ export default function DraggableMarketListing({
   listing,
   price,
   fontScale,
-  borderColor = VEIL.lineStrong,
   markedShelf = false,
   onDragStart,
   onDragMove,
@@ -55,47 +50,38 @@ export default function DraggableMarketListing({
 
   return (
     <GestureDetector gesture={dragGesture}>
-      <View
-        style={[
-          styles.row,
-          {
-            borderColor,
-            minHeight: Math.max(56, 60 * fontScale),
-          },
-          viewShadow({
-            color: VEIL.mint,
-            opacity: 0.12,
-            radius: 8,
-            offset: { width: 0, height: 0 },
-          }),
-        ]}
+      <FieldPlate
+        density="light"
+        tone="mint"
+        brackets={false}
+        style={styles.row}
+        contentStyle={[styles.rowContent, { minHeight: Math.max(56, 60 * fontScale) }]}
       >
-        <View style={[styles.mintTick, { backgroundColor: VEIL.mint }]} />
         <View style={[styles.copy, { gap: 3 * fontScale, paddingVertical: 9 * fontScale }]}>
           <Text
             style={[
               styles.name,
               {
-                color: STARK_WHITE,
+                color: RUN_FIELD.text,
                 fontSize: nameSize,
                 lineHeight: nameSize * 1.25,
               },
             ]}
             numberOfLines={1}
           >
-            {listing.name.toUpperCase()}
+            {listing.name}
           </Text>
           <Text
             style={[
               styles.effect,
               {
-                color: VEIL.mint,
+                color: RUN_FIELD.mint,
                 fontSize: metaSize,
                 lineHeight: metaSize * 1.2,
               },
             ]}
           >
-            {isRunItem ? 'RUN ITEM // DRAG TO CARGO DECK' : 'CONTRABAND // DRAG TO CARGO GRID'}
+            {isRunItem ? 'Run item · drag to cargo deck' : 'Contraband · drag to cargo grid'}
           </Text>
           {markedShelf ? (
             <Text
@@ -115,7 +101,7 @@ export default function DraggableMarketListing({
             style={[
               styles.effect,
               {
-                color: MUTED_SLATE,
+                color: RUN_FIELD.textSecondary,
                 fontSize: metaSize,
                 lineHeight: metaSize * 1.35,
               },
@@ -128,7 +114,7 @@ export default function DraggableMarketListing({
             style={[
               styles.price,
               {
-                color: VEIL.mintBright,
+                color: RUN_FIELD.mint,
                 fontSize: metaSize,
                 lineHeight: metaSize * 1.2,
               },
@@ -144,7 +130,7 @@ export default function DraggableMarketListing({
             iconSize={iconSize}
           />
         </View>
-      </View>
+      </FieldPlate>
     </GestureDetector>
   );
 }
@@ -152,23 +138,16 @@ export default function DraggableMarketListing({
 const styles = StyleSheet.create({
   row: {
     width: '100%',
+  },
+  rowContent: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderWidth: 1,
-    backgroundColor: DOSSIER_FOREGROUND,
-    overflow: 'hidden',
-  },
-  mintTick: {
-    width: 2,
-    alignSelf: 'stretch',
-    opacity: 0.85,
   },
   copy: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
     paddingHorizontal: 10,
-    backgroundColor: SELECT_ACCENT_GLOW,
   },
   iconRail: {
     alignItems: 'center',
@@ -176,20 +155,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: VEIL.line,
+    borderLeftColor: RUN_FIELD.line,
   },
   name: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
   effect: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     letterSpacing: 0.35,
     fontWeight: '600',
   },
   price: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     fontWeight: '800',
     letterSpacing: 0.45,
   },

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Platform } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import TerminalResultsLayout from '../components/layout/TerminalResultsLayout';
 import CargoRoutingPanel from '../components/debrief/CargoRoutingPanel';
@@ -63,6 +63,7 @@ import {
 import { maxPinnedGoalSlots } from '../data/pinnedGoalEngine';
 import { SELECT_ACCENT } from '../constants/dossierSurface';
 import { VEIL } from '../theme/veilTerminalTokens';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 
 const TERMINAL_ACCENT = VEIL.mint;
 const FAILURE_ACCENT = VEIL.blood;
@@ -1214,7 +1215,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
             {currentStep === 'REWARDS' ? (
               <>
                 <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>FINAL REWARDS</Text>
-                <Text style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}>
+                <Text style={[styles.stat, { color: theme.mutedColor, fontSize: RUN_FIELD.type.micro }]}>
                   PROGRESSION NEVER BLOCKS EXIT — RETURN ANYTIME
                 </Text>
                 {progressionTheater ? (
@@ -1405,7 +1406,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     <View style={styles.sectionGap} />
                     <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN TELEMETRY</Text>
                     {formatRunBalanceTelemetryReport(balanceTelemetry).split('\n').slice(1).map((line) => (
-                      <Text key={line} style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}>
+                      <Text key={line} style={[styles.stat, { color: theme.mutedColor, fontSize: RUN_FIELD.type.micro }]}>
                         {line.toUpperCase()}
                       </Text>
                     ))}
@@ -1414,7 +1415,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     {formatBalanceDashboard(account.careerBalanceHistory).split('\n').slice(1).map((line) => (
                       <Text
                         key={`dash-${line}`}
-                        style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}
+                        style={[styles.stat, { color: theme.mutedColor, fontSize: RUN_FIELD.type.micro }]}
                       >
                         {line.toUpperCase()}
                       </Text>
@@ -1448,69 +1449,109 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
 
 const styles = StyleSheet.create({
   title: {
-    fontFamily: 'monospace',
-    fontSize: 20,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.display,
     fontWeight: '700',
     letterSpacing: 2,
     textAlign: 'center',
     marginBottom: 8,
+    ...Platform.select({
+      web: {
+        fontSize: `clamp(26px, 1.6vw, 32px)`,
+        lineHeight: `${Math.round(32 * 1.1)}px`,
+      } as object,
+      default: {
+        fontSize: 28,
+        lineHeight: 30,
+      },
+    }),
   },
   subtitle: {
-    fontFamily: 'monospace',
-    fontSize: 11,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.secondary,
     letterSpacing: 1,
     textAlign: 'center',
     marginBottom: 12,
+    lineHeight: RUN_FIELD.type.secondary * 1.35,
   },
   body: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 17,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.body,
+    lineHeight: RUN_FIELD.type.body * 1.4,
     textAlign: 'center',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(14px, 0.85vw, 16px)',
+      } as object,
+      default: {},
+    }),
   },
   stepBanner: {
-    fontFamily: 'monospace',
-    fontSize: 10,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.section,
     letterSpacing: 1,
     textAlign: 'center',
     marginTop: 12,
+    lineHeight: RUN_FIELD.type.section * 1.3,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(16px, 0.95vw, 18px)',
+      } as object,
+      default: {},
+    }),
   },
   completeBanner: {
-    fontFamily: 'monospace',
-    fontSize: 12,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.section,
     fontWeight: '700',
     letterSpacing: 1.5,
     textAlign: 'center',
     marginTop: 16,
+    lineHeight: RUN_FIELD.type.section * 1.3,
   },
   statsBox: {
     borderWidth: 1,
     padding: 16,
-    gap: 4,
+    gap: 6,
     backgroundColor: 'rgba(10, 11, 15, 0.88)',
   },
   sectionLabel: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 1,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.eyebrow,
+    letterSpacing: 1.2,
     marginBottom: 2,
+    textTransform: 'uppercase',
   },
   sectionGap: {
     height: 10,
   },
   resourceBlock: {
-    gap: 2,
+    gap: 4,
     marginTop: 4,
   },
   stat: {
-    fontFamily: 'monospace',
-    fontSize: 11,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.body,
+    lineHeight: RUN_FIELD.type.body * 1.35,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(14px, 0.85vw, 16px)',
+      } as object,
+      default: {},
+    }),
   },
   statAccent: {
-    fontFamily: 'monospace',
-    fontSize: 11,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.metric,
     fontWeight: '700',
     marginTop: 4,
+    lineHeight: RUN_FIELD.type.metric * 1.3,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(15px, 0.9vw, 17px)',
+      } as object,
+      default: {},
+    }),
   },
   pinButton: {
     borderWidth: 1,
@@ -1520,8 +1561,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   pinButtonLabel: {
-    fontFamily: 'monospace',
-    fontSize: 9,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.eyebrow,
     letterSpacing: 1,
     fontWeight: '700',
   },
@@ -1529,11 +1570,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 8,
   },
   buttonLabel: {
-    fontFamily: 'monospace',
-    fontSize: 12,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.button,
     fontWeight: '700',
     letterSpacing: 1.2,
   },

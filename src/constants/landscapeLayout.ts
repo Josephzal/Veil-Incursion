@@ -9,9 +9,11 @@ export const LANDSCAPE_MIN_ASPECT_FOR_SPLIT = 1.35;
 
 export const LANDSCAPE_PRIMARY_SPLIT_RATIO = 0.62;
 export const LANDSCAPE_WELCOME_PRIMARY_RATIO = 0.55;
-export const META_RESULTS_PRIMARY_RATIO = 0.52;
-export const META_RESULTS_CARD_MAX_WIDTH = 520;
-export const META_RESULTS_CARD_MAX_WIDTH_WIDE = 620;
+export const META_RESULTS_PRIMARY_RATIO = 0.38;
+export const META_RESULTS_CARD_MAX_WIDTH = 900;
+export const META_RESULTS_CARD_MAX_WIDTH_WIDE = 1120;
+/** Horizontal margin reserved when clamping meta-result cards to viewport (×2 for both sides). */
+export const META_RESULTS_CARD_VIEWPORT_MARGIN = 64;
 export const LANDSCAPE_PANEL_GAP = 8;
 export const LANDSCAPE_PANEL_PADDING = 10;
 

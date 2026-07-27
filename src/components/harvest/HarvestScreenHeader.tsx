@@ -1,13 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
-import {
-  SCANNER_BORDER_QUIET,
-  SCANNER_HEADER_BG,
-  SCANNER_PHOSPHOR,
-  SCANNER_TEXT_PRIMARY,
-  SCANNER_TEXT_SECONDARY,
-} from '../scanner/vectorScannerShared';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
 interface HarvestScreenHeaderProps {
   title?: string;
@@ -20,6 +14,7 @@ interface HarvestScreenHeaderProps {
 
 /**
  * Page header for Resource Harvest — RESOURCE HARVEST is the only display title.
+ * Field-scoped styling (RUN_FIELD) — no scanner token imports.
  * Height stays tall enough for full glyph boxes (no clipped title).
  */
 export default function HarvestScreenHeader({
@@ -78,6 +73,7 @@ export default function HarvestScreenHeader({
           ) : null}
         </View>
       </View>
+      <View style={styles.baseline} />
     </View>
   );
 }
@@ -90,9 +86,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     marginBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: SCANNER_BORDER_QUIET,
-    backgroundColor: SCANNER_HEADER_BG,
+    backgroundColor: RUN_FIELD.panelWash,
     flexShrink: 0,
     justifyContent: 'center',
     overflow: 'visible',
@@ -110,8 +104,8 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   eyebrow: {
-    color: SCANNER_TEXT_SECONDARY,
-    fontWeight: '600',
+    color: 'rgba(99, 226, 177, 0.62)',
+    fontWeight: '700',
     ...Platform.select({
       web: {
         fontSize: 'clamp(11px, 0.7vw, 12px)',
@@ -123,7 +117,7 @@ const styles = StyleSheet.create({
     }),
   },
   title: {
-    color: SCANNER_TEXT_PRIMARY,
+    color: RUN_FIELD.text,
     fontWeight: '800',
     textTransform: 'uppercase',
     ...Platform.select({
@@ -147,11 +141,11 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: SCANNER_PHOSPHOR,
+    backgroundColor: RUN_FIELD.mint,
     opacity: 0.85,
   },
   liveLine: {
-    color: SCANNER_TEXT_SECONDARY,
+    color: RUN_FIELD.textSecondary,
     fontWeight: '600',
     textTransform: 'uppercase',
     flexShrink: 1,
@@ -172,7 +166,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   metaLabel: {
-    color: SCANNER_TEXT_SECONDARY,
+    color: RUN_FIELD.textSecondary,
     fontWeight: '600',
     ...Platform.select({
       web: {
@@ -183,5 +177,11 @@ const styles = StyleSheet.create({
         lineHeight: 16,
       },
     }),
+  },
+  baseline: {
+    height: StyleSheet.hairlineWidth,
+    width: '100%',
+    backgroundColor: RUN_FIELD.line,
+    marginTop: 10,
   },
 });

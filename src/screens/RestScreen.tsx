@@ -1,9 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Modal, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import SanctuaryBg from '../../assets/images/location images/sanctuary.png';
 import ClassGraftUI, { type GraftInjectSelection } from '../components/ClassGraftUI';
-import TacticalButton from '../components/TacticalButton';
 import TerminalOverlay from '../components/TerminalOverlay';
 import { canAffordAnySanctuaryGraft, getMinimumClassGraftCost } from '../data/classGraftEngine';
 import { useRun } from '../context/RunContext';
@@ -14,22 +13,15 @@ import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
-import DossierCardShell from '../components/hub/DossierCardShell';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
-import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
+import FieldPlate from '../components/runField/FieldPlate';
+import RunActionRail from '../components/runField/RunActionRail';
+import HubPrimaryCta from '../components/hub/HubPrimaryCta';
+import { RUN_FIELD, type RunFieldTone } from '../theme/runFieldTokens';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
-import { VEIL } from '../theme/veilTerminalTokens';
-
-const TERMINAL_ACCENT = VEIL.mint;
-const MUTED_STAT = VEIL.textMuted;
-const HEAL_GREEN = VEIL.mintBright;
-const GRAFT_PURPLE = VEIL.occultPale;
-const CANCEL_ACCENT = VEIL.blood;
-const CHOICE_BORDER = VEIL.line;
+import { readPressableHover } from '../utils/terminalHoverStyle';
 
 type SanctuaryChoice = 'ATTUNE' | 'GRAFT' | null;
 
-const GRAFT_INJECT_ACCENT = VEIL.occult;
 const CONTENT_MAX_WIDTH = 540;
 const GRAFT_CONTENT_MAX_WIDTH = 720;
 
@@ -39,9 +31,7 @@ interface SanctuaryChoiceBlockProps {
   selected: boolean;
   dimmed: boolean;
   locked: boolean;
-  accentColor: string;
-  secondaryColor: string;
-  primaryColor: string;
+  tone: RunFieldTone;
   primaryFontSize: number;
   secondaryFontSize: number;
   paddingVertical: number;
@@ -56,9 +46,7 @@ function SanctuaryChoiceBlock({
   selected,
   dimmed,
   locked,
-  accentColor,
-  secondaryColor,
-  primaryColor,
+  tone,
   primaryFontSize,
   secondaryFontSize,
   paddingVertical,
@@ -66,55 +54,138 @@ function SanctuaryChoiceBlock({
   onPress,
   disabled,
 }: SanctuaryChoiceBlockProps): React.JSX.Element {
-  const borderColor = selected ? accentColor : CHOICE_BORDER;
-  const labelColor = locked
-    ? MUTED_STAT
-    : selected
-      ? accentColor
-      : primaryColor;
-
   return (
     <HapticPressable
       onPress={onPress}
       disabled={disabled}
-      style={(state) => [
-        styles.choiceBtn,
-        {
-          paddingVertical,
-          paddingHorizontal,
-          borderColor,
-          borderWidth: 2,
-          backgroundColor: selected ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
-          opacity: dimmed ? 0.35 : locked ? 0.4 : state.pressed ? 0.85 : 1,
-        },
-        !selected ? terminalHoverStyle(readPressableHover(state), state.pressed) : null,
-      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      style={(state) => {
+        const hovered = readPressableHover(state) || state.pressed;
+        return [
+          { opacity: dimmed && !selected ? 0.62 : 1 },
+          !selected && hovered && !disabled && !locked ? styles.choiceHoverLift : null,
+        ];
+      }}
     >
-      <Text
-        style={[
-          styles.choicePrimary,
-          {
-            color: labelColor,
-            fontSize: primaryFontSize,
-            lineHeight: primaryFontSize * 1.25,
-          },
-        ]}
-      >
-        {primaryLabel}
-      </Text>
-      <Text
-        style={[
-          styles.choiceSecondary,
-          {
-            color: locked ? MUTED_STAT : secondaryColor,
-            fontSize: secondaryFontSize,
-            lineHeight: secondaryFontSize * 1.35,
-          },
-        ]}
-      >
-        {secondaryLabel}
-      </Text>
+      {(state) => {
+        const hovered = !disabled && !locked && !selected
+          && (readPressableHover(state) || state.pressed);
+        const plateState = locked
+          ? 'locked'
+          : selected
+            ? 'selected'
+            : hovered
+              ? 'hover'
+              : 'idle';
+        const titleColor = selected || hovered ? RUN_FIELD.mint : RUN_FIELD.text;
+        return (
+          <FieldPlate
+            density="standard"
+            tone={tone === 'occult' ? 'occult' : 'mint'}
+            state={plateState}
+            brackets={false}
+            showSelectedMark={selected}
+            contentStyle={[styles.choiceContent, { paddingVertical, paddingHorizontal }]}
+          >
+            <Text
+              style={[
+                styles.choicePrimary,
+                {
+                  color: titleColor,
+                  fontSize: primaryFontSize,
+                  lineHeight: Math.round(primaryFontSize * 1.25),
+                },
+              ]}
+            >
+              {primaryLabel}
+            </Text>
+            <Text
+              style={[
+                styles.choiceSecondary,
+                {
+                  color: locked ? RUN_FIELD.danger : RUN_FIELD.textSecondary,
+                  fontSize: secondaryFontSize,
+                  lineHeight: Math.round(secondaryFontSize * 1.35),
+                },
+              ]}
+            >
+              {secondaryLabel}
+            </Text>
+            {selected ? (
+              <Text style={styles.selectedMark}>SELECTED</Text>
+            ) : null}
+          </FieldPlate>
+        );
+      }}
     </HapticPressable>
+  );
+}
+
+function AttuneHealOverlay({
+  visible,
+  fromHp,
+  toHp,
+  maxHp,
+  onContinue,
+}: {
+  visible: boolean;
+  fromHp: number;
+  toHp: number;
+  maxHp: number;
+  onContinue: () => void;
+}): React.JSX.Element | null {
+  const progress = useRef(new Animated.Value(0)).current;
+  const [fillPct, setFillPct] = useState(fromHp / Math.max(1, maxHp));
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    progress.setValue(0);
+    setReady(false);
+    const start = fromHp / Math.max(1, maxHp);
+    const end = toHp / Math.max(1, maxHp);
+    setFillPct(start);
+    const listener = progress.addListener(({ value }) => {
+      setFillPct(start + (end - start) * value);
+    });
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 1100,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) setReady(true);
+    });
+    return () => {
+      progress.removeListener(listener);
+    };
+  }, [fromHp, maxHp, progress, toHp, visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={ready ? onContinue : undefined}>
+      <View style={styles.attuneModalRoot}>
+        <FieldPlate density="strong" brackets tone="mint" style={styles.attuneModalPlate} contentStyle={styles.attuneModalContent}>
+          <Text style={styles.attuneModalEyebrow}>SOUL ANCHOR // ATTUNE</Text>
+          <Text style={styles.attuneModalTitle}>INTEGRITY RESTORED</Text>
+          <Text style={styles.attuneModalMeta}>
+            {`${fromHp} → ${toHp} / ${maxHp}`}
+          </Text>
+          <View style={styles.attuneBarTrack}>
+            <View style={[styles.attuneBarFill, { width: `${Math.round(fillPct * 100)}%` }]} />
+          </View>
+          <HubPrimaryCta
+            label="CONTINUE"
+            onPress={ready ? onContinue : undefined}
+            disabled={!ready}
+            variant="glow"
+            minHeight={48}
+            style={styles.attuneContinue}
+          />
+        </FieldPlate>
+      </View>
+    </Modal>
   );
 }
 
@@ -147,6 +218,10 @@ export default function RestScreen(): React.JSX.Element {
   const [graftTerminalOpen, setGraftTerminalOpen] = useState(false);
   const [graftComplete, setGraftComplete] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [attuneOverlay, setAttuneOverlay] = useState<{
+    fromHp: number;
+    toHp: number;
+  } | null>(null);
 
   const activeClass = activeIncursion.activeClass ?? 'AEGIS';
   const residueBalance = getVeilResidueBalance();
@@ -195,22 +270,36 @@ export default function RestScreen(): React.JSX.Element {
   const columnGap = scaleSpacing(graftTerminalOpen ? 8 : 12);
 
   const narrativeSize = scaleFont(graftTerminalOpen ? 10 : 11);
-  const statSize = scaleFont(9);
   const choicePrimarySize = 11 * fontScale * 1.2;
   const choiceSecondarySize = scaleFont(10);
 
+  const attuneHealAmount = Math.max(1, Math.floor(runState.maxSoulAnchor * 0.3));
+  const attuneResultHp = Math.min(
+    runState.maxSoulAnchor,
+    runState.soulAnchorIntegrity + attuneHealAmount,
+  );
+
   const handleSelectAttune = () => {
-    if (confirmed || corruptedSanctuaryPending) return;
+    if (confirmed || corruptedSanctuaryPending || attuneOverlay) return;
+    const fromHp = runState.soulAnchorIntegrity;
+    const toHp = Math.min(
+      runState.maxSoulAnchor,
+      fromHp + Math.max(1, Math.floor(runState.maxSoulAnchor * 0.3)),
+    );
     setSelectedChoice('ATTUNE');
     setGraftTerminalOpen(false);
     setGraftComplete(false);
+    setConfirmed(true);
+    applySanctuaryAttune();
+    setAttuneOverlay({ fromHp, toHp });
   };
 
   const handleSelectGraft = () => {
     if (confirmed || !graftAffordable || corruptedSanctuaryPending) return;
     setSelectedChoice('GRAFT');
-    setGraftTerminalOpen(true);
+    setGraftComplete(false);
     setGraftSelection({ graftId: null, abilityId: null, canInject: false });
+    setGraftTerminalOpen(true);
     openSanctuaryGraftTerminal();
   };
 
@@ -239,89 +328,43 @@ export default function RestScreen(): React.JSX.Element {
     setGraftSelection({ graftId: null, abilityId: null, canInject: false });
   };
 
-  const canContinue = selectedChoice === 'ATTUNE'
-    || (selectedChoice === 'GRAFT' && graftComplete);
+  const handleAttuneContinue = () => {
+    setAttuneOverlay(null);
+    completeCurrentNode('Soul anchor stabilized.');
+  };
 
-  const continueEnabled = (graftTerminalOpen ? graftComplete : canContinue) && !confirmed;
-
-  const handleContinue = () => {
-    if (!continueEnabled) return;
+  const handleLeaveSanctuary = () => {
+    if (confirmed || attuneOverlay) return;
     setConfirmed(true);
-    if (selectedChoice === 'ATTUNE') {
-      applySanctuaryAttune();
+    if (selectedChoice === 'GRAFT' && graftComplete) {
+      setTimeout(() => completeCurrentNode('Class graft mutation secured.'), 400);
+      return;
     }
-    const msg = selectedChoice === 'ATTUNE'
-      ? 'Soul anchor stabilized.'
-      : 'Class graft mutation secured.';
-    setTimeout(() => completeCurrentNode(msg), 1200);
+    setTimeout(() => completeCurrentNode('Sanctuary passed — continuing descent.'), 400);
   };
 
   const graftTerminalLabel = activeClass === 'HEX_SHOT'
-    ? '[ ACCESS HEX-SHOT GRAFT TERMINAL ]'
+    ? 'ACCESS HEX-SHOT GRAFT'
     : activeClass === 'ENVOY'
-      ? '[ ACCESS ENVOY GRAFT TERMINAL ]'
-      : '[ ACCESS VEIL-GRAFT TERMINAL ]';
-
-  const showInjectButton = graftTerminalOpen && !graftComplete;
-  const actionLabel = showInjectButton ? '[ INJECT GRAFT ]' : '[ CONTINUE ]';
-  const actionEnabled = showInjectButton
-    ? graftSelection.canInject && !confirmed
-    : continueEnabled;
-  const actionAccent = showInjectButton && graftSelection.canInject
-    ? GRAFT_INJECT_ACCENT
-    : TERMINAL_ACCENT;
-
-  const handleAction = () => {
-    if (showInjectButton) {
-      handleInjectGraft();
-      return;
-    }
-    handleContinue();
-  };
-
-  const continueButtonStyle = useCallback(
-    () => [
-      styles.continueBtn,
-      {
-        width: showInjectButton ? undefined : '100%' as const,
-        flex: showInjectButton ? 1 : undefined,
-        alignSelf: 'stretch' as const,
-        minHeight: choicePaddingVertical * 2 + scaleFont(14),
-      },
-    ],
-    [choicePaddingVertical, scaleFont, showInjectButton],
-  );
-
-  const cancelButtonStyle = useCallback(
-    () => [
-      styles.continueBtn,
-      {
-        flex: 1,
-        alignSelf: 'stretch' as const,
-        minHeight: choicePaddingVertical * 2 + scaleFont(14),
-      },
-    ],
-    [choicePaddingVertical, scaleFont],
-  );
+      ? 'ACCESS ENVOY GRAFT'
+      : 'ACCESS VEIL-GRAFT';
 
   const leftPanelContent = (
     <>
-      <DossierCardShell
-        padding={telemetryPadding}
-        style={styles.telemetryShell}
-        contentStyle={[
-          styles.telemetryContent,
-          { gap: graftTerminalOpen ? 0 : 12, flexShrink: graftTerminalOpen ? 1 : 0 },
-        ]}
-      >
-        {!graftTerminalOpen ? (
+      {!graftTerminalOpen ? (
+        <FieldPlate
+          density="light"
+          brackets
+          style={styles.telemetryShell}
+          contentStyle={[styles.telemetryContent, { padding: telemetryPadding }]}
+        >
           <Text
             style={[
               styles.narrativeText,
               {
-                color: theme.primaryColor,
+                color: RUN_FIELD.text,
                 fontSize: narrativeSize,
-                lineHeight: narrativeSize * 1.55,
+                lineHeight: Math.round(narrativeSize * 1.55),
               },
             ]}
           >
@@ -329,65 +372,26 @@ export default function RestScreen(): React.JSX.Element {
               ? (activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId === 'NO_EXIT_SANCTUARY'
                 ? 'This Deep Veil chapel was not built for you. Resolve the twisted choice modal — standard attune/graft is offline.'
                 : 'This sanctuary is corrupted. Resolve the twisted choice modal — standard attune/graft is offline until the conduit answers or you leave.')
-              : 'Stabilizing ley-energy hums through the anchor chapel. A brief respite from the void. Choose attunement or graft mutation.'}
+              : 'Ley energy hums through the anchor chapel. A brief respite. Choose attunement or graft mutation.'}
           </Text>
-        ) : null}
-        <View style={[styles.statsGrid, isDesktop ? styles.statsGridDesktop : null]}>
-          <Text
-            style={[
-              styles.statLine,
-              {
-                color: MUTED_STAT,
-                fontSize: statSize,
-                lineHeight: statSize * 1.45,
-              },
-            ]}
-          >
-            {`SOUL ANCHOR: ${runState.soulAnchorIntegrity}/${runState.maxSoulAnchor}`}
-          </Text>
-          <Text
-            style={[
-              styles.statLine,
-              {
-                color: MUTED_STAT,
-                fontSize: statSize,
-                lineHeight: statSize * 1.45,
-              },
-            ]}
-          >
-            {`VEIL RESIDUE: ${residueBalance}`}
-          </Text>
-          <Text
-            style={[
-              styles.statLine,
-              {
-                color: MUTED_STAT,
-                fontSize: statSize,
-                lineHeight: statSize * 1.45,
-              },
-            ]}
-          >
-          </Text>
-        </View>
-      </DossierCardShell>
+        </FieldPlate>
+      ) : null}
 
       {!graftTerminalOpen ? (
         <View style={[styles.choiceCol, { gap: choiceGap }]}>
           <SanctuaryChoiceBlock
-            primaryLabel="[ ATTUNE ]"
+            primaryLabel="ATTUNE"
             secondaryLabel={corruptedSanctuaryPending ? 'OFFLINE — twisted conduit' : 'Restore 30% of Maximum Health'}
             selected={selectedChoice === 'ATTUNE'}
             dimmed={selectedChoice === 'GRAFT' || (confirmed && selectedChoice !== 'ATTUNE') || corruptedSanctuaryPending}
             locked={corruptedSanctuaryPending}
-            accentColor={TERMINAL_ACCENT}
-            secondaryColor={HEAL_GREEN}
-            primaryColor={theme.primaryColor}
+            tone="mint"
             primaryFontSize={choicePrimarySize}
             secondaryFontSize={choiceSecondarySize}
             paddingVertical={choicePaddingVertical}
             paddingHorizontal={choicePaddingHorizontal}
             onPress={handleSelectAttune}
-            disabled={confirmed || selectedChoice === 'GRAFT' || corruptedSanctuaryPending}
+            disabled={confirmed || corruptedSanctuaryPending}
           />
 
           <SanctuaryChoiceBlock
@@ -402,18 +406,18 @@ export default function RestScreen(): React.JSX.Element {
             selected={selectedChoice === 'GRAFT'}
             dimmed={selectedChoice === 'ATTUNE' || (confirmed && selectedChoice !== 'GRAFT') || corruptedSanctuaryPending}
             locked={!graftAffordable || corruptedSanctuaryPending}
-            accentColor={GRAFT_PURPLE}
-            secondaryColor={GRAFT_PURPLE}
-            primaryColor={theme.primaryColor}
+            tone="occult"
             primaryFontSize={choicePrimarySize}
             secondaryFontSize={choiceSecondarySize}
             paddingVertical={choicePaddingVertical}
             paddingHorizontal={choicePaddingHorizontal}
             onPress={handleSelectGraft}
-            disabled={confirmed || selectedChoice === 'ATTUNE' || !graftAffordable || corruptedSanctuaryPending}
+            disabled={confirmed || !graftAffordable || corruptedSanctuaryPending}
           />
         </View>
-      ) : (
+      ) : null}
+
+      {graftTerminalOpen ? (
         <View style={styles.graftHost}>
           <ClassGraftUI
             activeClass={activeClass}
@@ -426,92 +430,90 @@ export default function RestScreen(): React.JSX.Element {
             borderColor={theme.borderColor}
             primaryColor={theme.primaryColor}
             mutedColor={theme.mutedColor}
+            onInjectCancel={graftComplete ? undefined : handleCancelGraft}
+            onInject={graftComplete ? undefined : handleInjectGraft}
+            canInject={graftSelection.canInject}
+            injectDisabled={confirmed}
+            cancelDisabled={confirmed}
           />
         </View>
-      )}
+      ) : null}
     </>
-  );
-
-  const actionColumn = (
-    <View style={[styles.actionCol, { gap: scaleSpacing(12) }]}>
-      {showInjectButton ? (
-        <>
-          <TacticalButton
-            label="[ CANCEL ]"
-            active
-            onPress={handleCancelGraft}
-            accentColor={CANCEL_ACCENT}
-            mutedColor={theme.mutedColor}
-            variant="cta"
-            disabled={confirmed}
-            style={cancelButtonStyle}
-          />
-          <TacticalButton
-            label={actionLabel}
-            active={actionEnabled}
-            onPress={handleAction}
-            accentColor={actionAccent}
-            mutedColor={theme.mutedColor}
-            variant="cta"
-            disabled={!actionEnabled}
-            style={continueButtonStyle}
-          />
-        </>
-      ) : (
-        <TacticalButton
-          label={actionLabel}
-          active={actionEnabled}
-          onPress={handleAction}
-          accentColor={actionAccent}
-          mutedColor={theme.mutedColor}
-          variant="cta"
-          disabled={!actionEnabled}
-          style={continueButtonStyle}
-        />
-      )}
-    </View>
   );
 
   return (
     <IncursionShell>
-      <IncursionRunLayout hideRunChrome={!graftTerminalOpen} style={{ backgroundColor: theme.backgroundColor }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventImmersiveBackdrop
           backgroundImage={SanctuaryBg}
           contentPadding={contentPadding}
           overlay={<TerminalOverlay />}
         >
-          {!graftTerminalOpen ? (
-            <RunEventNodeHeader
-              title={headerCopy.title}
-              subtitle={headerCopy.subtitle}
-              fontScale={fontScale}
-              showRunChrome
-            />
-          ) : null}
+          <View style={styles.stage}>
+            {!graftTerminalOpen ? (
+              <RunEventNodeHeader
+                title={headerCopy.title}
+                subtitle={headerCopy.subtitle}
+                fontScale={fontScale}
+                showRunChrome
+              />
+            ) : (
+              <RunEventNodeHeader
+                eyebrow="VEIL-GRAFT TERMINAL"
+                title={graftTerminalLabel}
+                subtitle={`${residueBalance} residue available`}
+                fontScale={fontScale}
+                showRunChrome
+              />
+            )}
 
-          <View style={styles.bodyStage}>
-            <View
-              style={[
-                styles.contentColumn,
-                {
-                  maxWidth: contentMaxWidth,
-                  gap: columnGap,
-                  flex: 1,
-                  minHeight: 0,
-                },
-              ]}
-            >
-              {leftPanelContent}
-              {actionColumn}
+            <View style={styles.bodyStage}>
+              <View
+                style={[
+                  styles.contentColumn,
+                  {
+                    maxWidth: contentMaxWidth,
+                    gap: columnGap,
+                    flex: 1,
+                    minHeight: 0,
+                  },
+                ]}
+              >
+                {leftPanelContent}
+              </View>
             </View>
+
+            {!confirmed && !attuneOverlay ? (
+              <View style={styles.leaveRail}>
+                <RunActionRail
+                  mode="screen"
+                  primaryLabel="LEAVE SANCTUARY"
+                  onPrimary={handleLeaveSanctuary}
+                  primaryDisabled={confirmed}
+                />
+              </View>
+            ) : null}
           </View>
         </RunEventImmersiveBackdrop>
       </IncursionRunLayout>
+
+      <AttuneHealOverlay
+        visible={attuneOverlay != null}
+        fromHp={attuneOverlay?.fromHp ?? runState.soulAnchorIntegrity}
+        toHp={attuneOverlay?.toHp ?? attuneResultHp}
+        maxHp={runState.maxSoulAnchor}
+        onContinue={handleAttuneContinue}
+      />
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
+  stage: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
   bodyStage: {
     flex: 1,
     width: '100%',
@@ -521,6 +523,11 @@ const styles = StyleSheet.create({
   contentColumn: {
     width: '100%',
     alignSelf: 'center',
+  },
+  leaveRail: {
+    width: '100%',
+    flexShrink: 0,
+    marginTop: 8,
   },
   graftHost: {
     flex: 1,
@@ -534,48 +541,91 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   narrativeText: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     letterSpacing: 0.25,
-  },
-  statsGrid: {
-    gap: 8,
-  },
-  statsGridDesktop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statLine: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.8,
-    fontWeight: '600',
   },
   choiceCol: {
     width: '100%',
+    gap: 12,
   },
-  choiceBtn: {
+  choiceHoverLift: {
+    transform: [{ translateY: -1 }],
+  },
+  choiceContent: {
     width: '100%',
-    justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
   },
   choicePrimary: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     fontWeight: '800',
     letterSpacing: 0.6,
     textAlign: 'center',
   },
   choiceSecondary: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-  continueBtn: {
-    width: '100%',
+  selectedMark: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.6,
+    color: RUN_FIELD.mint,
     marginTop: 4,
   },
-  actionCol: {
+  attuneModalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 9, 10, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  attuneModalPlate: {
     width: '100%',
-    flexShrink: 0,
+    maxWidth: 420,
+  },
+  attuneModalContent: {
+    padding: 22,
+    gap: 12,
+    alignItems: 'stretch',
+  },
+  attuneModalEyebrow: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.eyebrow,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: 'rgba(99, 226, 177, 0.7)',
+  },
+  attuneModalTitle: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.title,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: RUN_FIELD.text,
+  },
+  attuneModalMeta: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.secondary,
+    fontWeight: '600',
+    color: RUN_FIELD.textSecondary,
+  },
+  attuneBarTrack: {
+    height: 14,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: RUN_FIELD.mintBorder,
+    backgroundColor: 'rgba(5, 9, 10, 0.55)',
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  attuneBarFill: {
+    height: '100%',
+    backgroundColor: RUN_FIELD.mint,
+  },
+  attuneContinue: {
+    alignSelf: 'stretch',
+    marginTop: 8,
   },
 });

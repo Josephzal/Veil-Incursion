@@ -27,7 +27,11 @@ export type AbilityTag =
   | 'GUARD_BREAK'
   | 'BLOCK'
   | 'BLIND'
-  | 'SILENCE';
+  | 'SILENCE'
+  /** Finisher / heavy strikes — bypass Thrall Slump on lethal. */
+  | 'HEAVY'
+  | 'EXECUTE'
+  | 'FINISHER';
 
 /** Hub stash resources required to permanently unlock an ability. Empty = no cost. */
 export type AbilityUnlockCost = Partial<Record<ResourceItemId, number>>;

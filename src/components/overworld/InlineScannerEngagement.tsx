@@ -4,13 +4,8 @@ import ScannerBreachButton from '../scanner/ScannerBreachButton';
 import SignalMetadataLedger, { type LedgerRow } from '../scanner/SignalMetadataLedger';
 import SignalClassification from '../scanner/SignalClassification';
 import BreachAction from '../scanner/BreachAction';
-import TerminalText from '../TerminalText';
-import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { VEIL } from '../../theme/veilTerminalTokens';
-import {
-  SCANNER_TEXT_PRIMARY,
-  SCANNER_TEXT_SECONDARY,
-} from '../scanner/vectorScannerShared';
+import FieldSectionHeader from '../runField/FieldSectionHeader';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
 export interface InlineScannerEngagementProps {
   headline?: string;
@@ -157,8 +152,6 @@ export default function InlineScannerEngagement({
   engageLabel = '[ ENGAGE ]',
   sonarPrompt,
 }: InlineScannerEngagementProps): React.JSX.Element {
-  const { fontScale } = useResponsiveLayout();
-
   const dossier = useMemo(
     () => buildDossierFromLines(
       spectralLines,
@@ -177,11 +170,9 @@ export default function InlineScannerEngagement({
       : signalDecrypted
         ? 'SIGNAL DECRYPTED // SELECT CONTACT TO BREACH'
         : 'SWEEP ACTIVE // AWAITING VECTOR LOCK';
-    const titleSize = Math.min(34, Math.max(28, 18 * fontScale));
     const eyebrow = dossier.idle
       ? 'SIGNAL DOSSIER // VECTOR UNKNOWN'
       : 'SIGNAL DOSSIER // LOCKED VECTOR';
-    // Prefer vector id for the hero title — classification stays in SignalClassification.
     const titlePrimary = dossier.idle
       ? 'NO VECTOR'
       : dossier.resolved
@@ -198,28 +189,26 @@ export default function InlineScannerEngagement({
     return (
       <View style={styles.dockRoot}>
         <View style={styles.dossierHeader}>
-          <View style={styles.headerRow}>
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow} numberOfLines={1}>
-              {eyebrow}
-            </TerminalText>
-          </View>
-          <TerminalText
-            size={titleSize}
-            letterSpacing={0.35}
-            style={dossier.idle || !dossier.resolved ? styles.dossierTitleIdle : styles.dossierTitle}
+          <FieldSectionHeader label={eyebrow} />
+          <Text
+            style={[
+              styles.dossierTitle,
+              dossier.idle || !dossier.resolved ? styles.dossierTitleIdle : null,
+            ]}
             numberOfLines={1}
           >
             {titlePrimary}
-          </TerminalText>
+          </Text>
           {titleSecondary ? (
-            <TerminalText
-              size={titleSize}
-              letterSpacing={0.35}
-              style={dossier.idle ? styles.dossierTitleIdle : styles.dossierTitle}
+            <Text
+              style={[
+                styles.dossierTitle,
+                dossier.idle ? styles.dossierTitleIdle : null,
+              ]}
               numberOfLines={1}
             >
               {titleSecondary}
-            </TerminalText>
+            </Text>
           ) : null}
         </View>
 
@@ -230,18 +219,18 @@ export default function InlineScannerEngagement({
           nestedScrollEnabled
         >
           {headline ? (
-            <TerminalText size={6.5} letterSpacing={0.7} style={styles.feedHeadline} numberOfLines={1}>
+            <Text style={styles.feedHeadline} numberOfLines={2}>
               {headline}
-            </TerminalText>
+            </Text>
           ) : null}
 
           {dossier.resolved && dossier.classification ? (
             <SignalClassification value={dossier.classification} />
           ) : null}
 
+          <FieldSectionHeader label="Signal metadata" meta={dossier.resolved ? 'Decrypted' : 'Partial lock'} />
           <SignalMetadataLedger rows={dossier.ledgerRows} />
 
-          {/* Intentional negative space — dossier is information, not a second instrument. */}
           <View style={styles.negativeSpace} />
         </ScrollView>
 
@@ -250,7 +239,7 @@ export default function InlineScannerEngagement({
         <View style={styles.footer}>
           <BreachAction
             enabled={canEngage}
-            label={engageLabel === '[ ENGAGE ]' ? '[ BREACH ]' : engageLabel}
+            label={engageLabel.replace(/[[\]]/g, '').trim() || 'BREACH'}
             readinessLine={readinessLine}
             mutedColor={mutedColor}
             onPress={onEngage}
@@ -297,8 +286,8 @@ const styles = StyleSheet.create({
   panel: { width: 200 },
   readoutShell: {
     borderWidth: 1,
-    borderColor: 'rgba(98, 205, 181, 0.28)',
-    backgroundColor: VEIL.bgSoft,
+    borderColor: RUN_FIELD.line,
+    backgroundColor: RUN_FIELD.panel,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 5,
@@ -333,39 +322,30 @@ const styles = StyleSheet.create({
   dossierHeader: {
     position: 'relative',
     zIndex: 1,
-    paddingTop: 24,
-    paddingBottom: 10,
-    paddingHorizontal: 26,
+    paddingTop: 18,
+    paddingBottom: 12,
+    paddingHorizontal: 22,
+    gap: 8,
     flexShrink: 0,
+  },
+  dossierTitle: {
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.section,
+    lineHeight: RUN_FIELD.type.section * 1.1,
+    fontWeight: '700',
+    letterSpacing: 0.35,
+    textTransform: 'uppercase',
+    color: RUN_FIELD.text,
     ...Platform.select({
       web: {
-        backgroundImage: 'linear-gradient(180deg, rgba(197, 208, 205, 0.035) 0%, transparent 100%)',
+        fontSize: 'clamp(15px, 0.95vw, 18px)',
       } as object,
       default: {},
     }),
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 10,
-  },
-  dossierEyebrow: {
-    color: SCANNER_TEXT_SECONDARY,
-    fontWeight: '700',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  dossierTitle: {
-    color: SCANNER_TEXT_PRIMARY,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
   dossierTitleIdle: {
-    color: VEIL.textMuted,
+    color: RUN_FIELD.textSecondary,
     fontWeight: '700',
-    textTransform: 'uppercase',
   },
   dossierScroll: {
     flex: 1,
@@ -374,12 +354,16 @@ const styles = StyleSheet.create({
   },
   dossierScrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 26,
-    paddingTop: 2,
+    paddingHorizontal: 22,
+    paddingTop: 10,
     paddingBottom: 8,
   },
   feedHeadline: {
-    color: VEIL.textMuted,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.secondary,
+    lineHeight: RUN_FIELD.type.secondary * 1.35,
+    letterSpacing: 0.4,
+    color: RUN_FIELD.textSecondary,
     marginBottom: 8,
   },
   negativeSpace: {
@@ -389,7 +373,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     zIndex: 1,
-    paddingHorizontal: 26,
+    paddingHorizontal: 22,
     paddingBottom: 18,
     flexShrink: 0,
   },

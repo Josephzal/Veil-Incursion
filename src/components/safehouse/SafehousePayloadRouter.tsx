@@ -67,7 +67,8 @@ export default function SafehousePayloadRouter({
 
   return (
     <SafehouseTexturedPanel
-      flex={isDesktop ? 1 : undefined}
+      flex={isDesktop ? 0.72 : undefined}
+      style={isDesktop ? styles.sidePanel : undefined}
       padding={pad}
       contentStyle={[styles.content, { gap: sectionGap }]}
     >
@@ -147,5 +148,11 @@ const styles = StyleSheet.create({
   },
   anchorBtn: {
     width: '100%',
+  },
+  sidePanel: {
+    maxWidth: 300,
+    minWidth: 210,
+    flexGrow: 0,
+    flexShrink: 1,
   },
 });

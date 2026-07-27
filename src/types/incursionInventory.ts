@@ -36,6 +36,8 @@ export interface IncursionConsumableUseResult {
   /** Spall-Weave — deal this damage to attacker when vest breaks. */
   spallShrapnelDamage?: number;
   enableGodMode?: boolean;
+  /** Force Soul Anchor integrity to this absolute value (combat + run state). */
+  setSoulAnchorTo?: number;
   apCost?: number;
   /** Temporary HP shield points (CombatSessionExtras.playerShield). */
   grantTemporaryShield?: number;

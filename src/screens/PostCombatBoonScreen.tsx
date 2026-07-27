@@ -7,9 +7,8 @@ import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import RunEventChoiceCard from '../components/layout/RunEventChoiceCard';
 import TerminalOverlay from '../components/TerminalOverlay';
-import TacticalButton from '../components/TacticalButton';
+import RunActionRail from '../components/runField/RunActionRail';
 import ClassBoonSwapOverlay from '../components/ClassBoonSwapOverlay';
-import { getFactionAccent } from '../data/factions';
 import { useGameFlow } from '../context/GameFlowContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
@@ -17,10 +16,10 @@ import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { HUB_BORDER_INSET } from '../constants/hubCta';
 import type { ClassType } from '../types/game';
 import { MAX_LEY_MUTATIONS } from '../types/overworldFeatures';
 import { VEIL } from '../theme/veilTerminalTokens';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 
 const TERMINAL_ACCENT = VEIL.mint;
 
@@ -47,13 +46,10 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
   const { finalizeRunDeath } = useRunDeathFinalizer();
   const {
     isDesktop,
-    activeViewportWidth,
     fontScale,
     gap,
     scaleFont,
-    scaleSize,
     scaleSpacing,
-    deploymentStagingLaneWidth,
   } = useResponsiveLayout();
 
   const selectingRef = useRef(false);
@@ -70,25 +66,13 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
       ? activeIncursion.envoyBoons
       : activeIncursion.leyLineMutations;
 
-  const cabalAccent = getFactionAccent(account.alignedFaction);
-  const boonCardWidth = isDesktop
-    ? (activeViewportWidth - (gap * 4)) / 3
-    : '100%';
-  const cardPadding = isDesktop ? scaleSpacing(24) : scaleSpacing(12);
+  const cardPadding = isDesktop ? scaleSpacing(14) : scaleSpacing(10);
   const canContinue = selectedBoonId != null && !selectingRef.current && postCombatMutationChoices.length > 0;
-
-  const continueButtonStyle = useMemo(
-    () => [
-      styles.continueBtn,
-      { marginTop: scaleSpacing(48) },
-    ],
-    [scaleSpacing],
-  );
 
   const headerSubtitle = useMemo(() => {
     const ownedCount = ownedClassBoons.length;
     const cap = MAX_LEY_MUTATIONS;
-    return `ELITE NODE CLEARED // SELECT ONE OFFER // LOADOUT ${ownedCount}/${cap}`;
+    return `Elite node cleared · Loadout ${ownedCount}/${cap}`;
   }, [ownedClassBoons.length]);
 
   const advanceAfterBoon = useCallback((message: string) => {
@@ -158,68 +142,63 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
           backgroundImage={BoonsBg}
-          backgroundScrimOpacity={0.75}
+          backgroundScrimOpacity={RUN_FIELD.environmentScrimDense}
           contentPadding={isDesktop ? scaleSpacing(16) : 8}
           overlay={<TerminalOverlay />}
         >
           <View style={styles.masterStage}>
             <RunEventNodeHeader
+              eyebrow="VEIL RESPONSE"
               title={HEADER_TITLE[activeClass]}
               subtitle={headerSubtitle}
               fontScale={fontScale}
             />
 
-            <View style={styles.spreadStage}>
+            <View style={styles.offerWorkspace}>
               <View
                 style={[
                   styles.spreadRow,
                   {
-                    gap,
-                    maxWidth: isDesktop ? activeViewportWidth : undefined,
+                    flexDirection: isDesktop ? 'row' : 'column',
+                    gap: Math.max(12, gap),
                   },
                 ]}
               >
                 {postCombatMutationChoices.map((offer) => (
-                  <RunEventChoiceCard
+                  <View
                     key={offer.id}
-                    tierTag={`[ ${offer.tierLabel ?? offer.tier} ]`}
-                    name={offer.name.toUpperCase()}
-                    tagline={offer.effect}
-                    effectSummary={offer.description}
-                    cardWidth={boonCardWidth}
-                    cardPadding={cardPadding}
-                    isDesktop={isDesktop}
-                    isSelected={selectedBoonId === offer.id}
-                    isDimmed={selectedBoonId != null && selectedBoonId !== offer.id}
-                    disabled={selectingRef.current}
-                    accentColor={cabalAccent}
-                    borderColor={theme.borderColor}
-                    textColor={theme.primaryColor}
-                    mutedColor={theme.mutedColor}
-                    fontScale={fontScale}
-                    scaleFont={scaleFont}
-                    onPress={() => setSelectedBoonId(offer.id)}
-                  />
+                    style={isDesktop ? styles.cardSlotDesktop : styles.cardSlotMobile}
+                  >
+                    <RunEventChoiceCard
+                      tierTag={`VEIL BOON // ${String(offer.tierLabel ?? offer.tier).toUpperCase()}`}
+                      name={offer.name}
+                      tagline={offer.effect}
+                      effectSummary={offer.description}
+                      cardWidth="100%"
+                      cardPadding={cardPadding}
+                      isDesktop={isDesktop}
+                      isSelected={selectedBoonId === offer.id}
+                      isDimmed={selectedBoonId != null && selectedBoonId !== offer.id}
+                      disabled={selectingRef.current}
+                      borderColor={theme.borderColor}
+                      textColor={theme.primaryColor}
+                      mutedColor={theme.mutedColor}
+                      fontScale={fontScale}
+                      scaleFont={scaleFont}
+                      onPress={() => setSelectedBoonId(offer.id)}
+                      occult
+                    />
+                  </View>
                 ))}
               </View>
             </View>
 
-            <View
-              style={[
-                styles.ctaRail,
-                isDesktop ? { maxWidth: deploymentStagingLaneWidth } : null,
-              ]}
-            >
-              <TacticalButton
-                label="[ SECURE BOON ]"
-                active={canContinue}
-                onPress={handleContinue}
-                accentColor={TERMINAL_ACCENT}
-                mutedColor={theme.mutedColor}
-                variant="cta"
-                style={continueButtonStyle}
-              />
-            </View>
+            <RunActionRail
+              mode="screen"
+              primaryLabel="SECURE BOON"
+              onPrimary={handleContinue}
+              primaryDisabled={!canContinue}
+            />
           </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>
@@ -243,33 +222,31 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    justifyContent: 'space-between',
+    gap: 12,
     alignItems: 'stretch',
   },
-  spreadStage: {
+  offerWorkspace: {
     flex: 1,
     width: '100%',
     justifyContent: 'center',
-    alignItems: 'center',
     minHeight: 0,
   },
   spreadRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
+    width: '100%',
     alignItems: 'stretch',
-    width: '100%',
-  },
-  continueBtn: {
-    flexShrink: 0,
-  },
-  ctaRail: {
-    width: '100%',
-    alignItems: 'center',
-    alignSelf: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-    marginBottom: 8,
-    paddingHorizontal: HUB_BORDER_INSET,
+    flexWrap: 'nowrap',
+    flex: 1,
+    maxHeight: 520,
+  },
+  cardSlotDesktop: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 360,
+    alignSelf: 'stretch',
+  },
+  cardSlotMobile: {
+    width: '100%',
+    flex: 1,
   },
 });

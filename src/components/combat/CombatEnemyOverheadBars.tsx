@@ -21,6 +21,9 @@ interface CombatEnemyOverheadBarsProps {
     | 'occultWards'
     | 'isFractured'
     | 'isAlpha'
+    | 'isSlumped'
+    | 'slumpTurnsRemaining'
+    | 'slumpGraceThisPlayerTurn'
   >;
   intentGlyph?: ArenaIntentGlyph | null;
 }
@@ -28,11 +31,13 @@ interface CombatEnemyOverheadBarsProps {
 /**
  * Concept nameplate — designation + HP readout above a thin red rail,
  * with intent glyph stacked above the vitals.
+ * Slumped thralls replace the HP rail with an execute prompt + revival meter.
  */
 export default function CombatEnemyOverheadBars({
   unit,
   intentGlyph = null,
 }: CombatEnemyOverheadBarsProps): React.JSX.Element {
+  const slumped = unit.isSlumped === true;
   const hpRatio = unit.maxHp > 0 ? unit.currentHp / unit.maxHp : 1;
   const fractureMax = unit.fractureMax ?? 100;
   const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;
@@ -46,45 +51,87 @@ export default function CombatEnemyOverheadBars({
       }),
     [unit.kineticArmor, unit.occultWards, unit.isFractured],
   );
-  const nameColor = unit.isAlpha ? '#ff8a8a' : OTT.textPrimary;
+  const nameColor = slumped
+    ? '#C45AAE'
+    : unit.isAlpha
+      ? '#ff8a8a'
+      : OTT.textPrimary;
+
+  const revivalSegments = slumped
+    ? (unit.slumpGraceThisPlayerTurn ? 2 : Math.max(1, unit.slumpTurnsRemaining ?? 1))
+    : 0;
+  const revivalFill = slumped
+    ? (unit.slumpGraceThisPlayerTurn
+      ? 1
+      : Math.max(0, Math.min(1, (unit.slumpTurnsRemaining ?? 0) / 1)))
+    : 0;
 
   return (
     <View style={styles.root}>
-      {intentGlyph ? (
+      {intentGlyph && !slumped ? (
         <View style={styles.intentRow} pointerEvents="none">
           <CombatArenaIntentGlyph glyph={intentGlyph} compact />
         </View>
       ) : null}
-      <View style={styles.plate}>
+      <View style={[styles.plate, slumped ? styles.plateSlumped : null]}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, { color: nameColor }]} numberOfLines={1}>
             {unit.designation.toUpperCase()}
           </Text>
-          <Text style={styles.hpNum} numberOfLines={1}>
-            {`${unit.currentHp}/${unit.maxHp}`}
-          </Text>
-        </View>
-        <View style={styles.hpTrack}>
-          <View style={[styles.hpFill, { width: `${Math.max(0, Math.min(1, hpRatio)) * 100}%` }]} />
-        </View>
-        {fractureRatio > 0.02 ? (
-          <View style={styles.fractureTrack}>
-            <View
-              style={[
-                styles.fractureFill,
-                { width: `${Math.max(0, Math.min(1, fractureRatio)) * 100}%` },
-              ]}
-            />
-          </View>
-        ) : null}
-        <View style={styles.metaRow}>
-          <CombatArenaDefensePips defense={defense} />
-          {rotStacks > 0 ? (
-            <Text style={styles.rotBadge} numberOfLines={1}>
-              {`ROT ${rotStacks}`}
+          {slumped ? (
+            <Text style={styles.slumpBadge} numberOfLines={1}>SLUMPED</Text>
+          ) : (
+            <Text style={styles.hpNum} numberOfLines={1}>
+              {`${unit.currentHp}/${unit.maxHp}`}
             </Text>
-          ) : null}
+          )}
         </View>
+        {slumped ? (
+          <>
+            <Text style={styles.executeHint} numberOfLines={1}>
+              STRIKE AGAIN TO EXECUTE
+            </Text>
+            <View style={styles.revivalTrack}>
+              <View
+                style={[
+                  styles.revivalFill,
+                  { width: `${Math.max(0.12, revivalFill) * 100}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.revivalLabel} numberOfLines={1}>
+              {unit.slumpGraceThisPlayerTurn
+                ? 'REVIVAL AFTER NEXT FULL TURN'
+                : revivalSegments <= 1
+                  ? 'REVIVAL IMMINENT'
+                  : `REVIVAL IN ${revivalSegments} TURN(S)`}
+            </Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.hpTrack}>
+              <View style={[styles.hpFill, { width: `${Math.max(0, Math.min(1, hpRatio)) * 100}%` }]} />
+            </View>
+            {fractureRatio > 0.02 ? (
+              <View style={styles.fractureTrack}>
+                <View
+                  style={[
+                    styles.fractureFill,
+                    { width: `${Math.max(0, Math.min(1, fractureRatio)) * 100}%` },
+                  ]}
+                />
+              </View>
+            ) : null}
+            <View style={styles.metaRow}>
+              <CombatArenaDefensePips defense={defense} />
+              {rotStacks > 0 ? (
+                <Text style={styles.rotBadge} numberOfLines={1}>
+                  {`ROT ${rotStacks}`}
+                </Text>
+              ) : null}
+            </View>
+          </>
+        )}
       </View>
     </View>
   );
@@ -107,6 +154,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     gap: 2,
   },
+  plateSlumped: {
+    borderColor: 'rgba(196, 90, 174, 0.55)',
+    backgroundColor: 'rgba(12, 4, 14, 0.72)',
+  },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -126,6 +177,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
     color: OTT.soulRed,
+  },
+  slumpBadge: {
+    fontFamily: OTT.mono,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: '#C45AAE',
+  },
+  executeHint: {
+    fontFamily: OTT.mono,
+    fontSize: COMBAT_HUD_TYPE.micro,
+    fontWeight: '700',
+    letterSpacing: 0.45,
+    color: OTT.terminalGreenMuted,
+  },
+  revivalTrack: {
+    height: 3,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    overflow: 'hidden',
+  },
+  revivalFill: {
+    height: '100%',
+    backgroundColor: '#C45AAE',
+  },
+  revivalLabel: {
+    fontFamily: OTT.mono,
+    fontSize: COMBAT_HUD_TYPE.micro,
+    fontWeight: '600',
+    letterSpacing: 0.35,
+    color: 'rgba(196, 90, 174, 0.85)',
   },
   hpTrack: {
     height: 3,

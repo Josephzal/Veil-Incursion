@@ -21,7 +21,7 @@ export default function CombatTacticalDashboard({
 }: CombatTacticalDashboardProps): React.JSX.Element {
   return (
     <View
-      style={styles.dashboard}
+      style={[styles.dashboard, resolutionDimmed ? styles.dashboardDimmed : null]}
       pointerEvents={resolutionDimmed ? 'none' : 'box-none'}
     >
       {resolutionDimmed ? null : <CombatConsoleDockFade />}
@@ -54,6 +54,9 @@ const styles = StyleSheet.create({
     zIndex: 28,
     overflow: 'hidden',
     backgroundColor: 'transparent',
+  },
+  dashboardDimmed: {
+    opacity: 0.28,
   },
   row: {
     flex: 1,

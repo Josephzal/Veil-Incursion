@@ -6463,6 +6463,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         result.enableGodMode = true;
         logLine = '>> GOD MODE — Operative overclocked. Every attack: 1000 true damage, armor bypass, guaranteed hit.';
         break;
+      case 'set_hp_to_one':
+        result.setSoulAnchorTo = 1;
+        logLine = '>> BITCH POTION — Soul Anchor collapsed to 1.';
+        break;
       default:
         return null;
     }
@@ -6486,6 +6490,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           soulAnchorIntegrity: prev.maxSoulAnchor,
           currentStamina: prev.maxStamina,
+        };
+        runStateRef.current = next;
+        return next;
+      });
+    }
+
+    if (def.combatEffect === 'set_hp_to_one') {
+      setRunState((prev) => {
+        const next = {
+          ...prev,
+          soulAnchorIntegrity: 1,
         };
         runStateRef.current = next;
         return next;

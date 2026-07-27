@@ -1,12 +1,9 @@
 import React, { useMemo } from 'react';
 import {
-  Modal,
   StyleSheet,
-  Text,
   useWindowDimensions,
-  View,
 } from 'react-native';
-import HapticPressable from './HapticPressable';
+import RunOverlay from './runField/RunOverlay';
 import CargoGridBoard from './CargoGridBoard';
 import CargoCreditsHud from './CargoCreditsHud';
 import CargoPressurePanel from './CargoPressurePanel';
@@ -23,12 +20,11 @@ import { countCargoItemInstances } from '../data/cargoGridEngine';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
-import { VEIL } from '../theme/veilTerminalTokens';
-import { viewShadow } from '../utils/adaptiveStyles';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
-/** Combat cargo modal — matches occult-terminal mint chrome. */
-const COMBAT_CARGO_ACCENT = VEIL.mint;
+const TERMINAL_ACCENT = RUN_FIELD.mint;
+/** Combat cargo modal — matches the run-field chrome language. */
+const COMBAT_CARGO_ACCENT = RUN_FIELD.mint;
 
 interface CargoGridOverlayProps {
   visible: boolean;
@@ -127,169 +123,88 @@ export default function CargoGridOverlay({
   const panelAccent = combatMode ? COMBAT_CARGO_ACCENT : accentColor;
 
   return (
-    <Modal
+    <RunOverlay
       visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalRoot}>
-        <HapticPressable
-          style={styles.backdrop}
-          onPress={onClose}
-          accessibilityLabel="Close cargo overlay"
+      title={combatMode ? 'COMBAT CARGO' : 'CARGO MANIFEST'}
+      contextLine={combatMode ? 'Field consumables · select then use' : 'Run payload · rearrange or discard'}
+      onClose={onClose}
+      combatMode={combatMode}
+      accentColor={panelAccent}
+      width={panelWidth}
+      maxWidth={screenWidth - 12}
+      contentPadding={panelPadding}
+      headerAccessory={!combatMode && runCredits != null ? (
+        <CargoCreditsHud
+          credits={runCredits}
+          accentColor={panelAccent}
         />
+      ) : undefined}
+      bodyStyle={styles.body}
+      closeAccessibilityLabel="Close cargo manifest"
+    >
+      <CargoPressurePanel
+        cargo={cargo}
+        specialCargoStacks={specialCargoStacks}
+        accentColor={panelAccent}
+        mutedColor={theme.mutedColor}
+      />
 
-        <View style={styles.panelHost} pointerEvents="box-none">
-          <View
-            style={[
-              styles.panel,
-              combatMode ? styles.panelCombat : null,
-              {
-                borderColor: panelAccent,
-                width: panelWidth,
-                maxWidth: screenWidth - 12,
-                paddingHorizontal: panelPadding,
-                paddingBottom: panelPadding,
-              },
-              combatMode
-                ? viewShadow({
-                  color: panelAccent,
-                  opacity: 0.42,
-                  radius: 16,
-                  offset: { width: 0, height: 0 },
-                })
-                : null,
-            ]}
-          >
-            <View style={styles.panelHeader}>
-              <CargoCreditsHud
-                credits={runCredits ?? 0}
-                accentColor={panelAccent}
-              />
-              <HapticPressable
-                onPress={onClose}
-                style={({ pressed }) => [
-                  styles.closeX,
-                  { borderColor: panelAccent, opacity: pressed ? 0.7 : 1 },
-                ]}
-                hitSlop={8}
-              >
-                <Text style={[styles.closeXText, { color: panelAccent }]}>✕</Text>
-              </HapticPressable>
-            </View>
-
-            <CargoPressurePanel
-              cargo={cargo}
-              specialCargoStacks={specialCargoStacks}
-              accentColor={panelAccent}
-              mutedColor={theme.mutedColor}
-            />
-
-            <CargoGridBoard
-              cargo={cargo}
-              theme={theme}
-              accentColor={panelAccent}
-              onRelocateItem={onRelocateItem}
-              onReplaceItem={onReplaceItem}
-              onDiscardItem={onDiscardItem}
-              runCredits={runCredits}
-              playerActionPoints={playerActionPoints}
-              showCreditsHud={false}
-              scannerMode={scannerMode}
-              combatMode={combatMode}
-              combatConsumablesEnabled={combatConsumablesEnabled}
-              overlayCompact={combatMode}
-              overlayCombatSplit={combatMode}
-              contentWidth={contentWidth}
-              minimal
-              cellSize={cellSize}
-              onUseAmpoule={onUseAmpoule ? () => {
-                const ok = onUseAmpoule();
-                if (ok) dismissAfterUse();
-                return ok;
-              } : undefined}
-              onUseResonanceBribe={onUseResonanceBribe ? () => {
-                const ok = onUseResonanceBribe();
-                if (ok) dismissAfterUse();
-                return ok;
-              } : undefined}
-              onUseDeadDrop={onUseDeadDrop ? () => {
-                const ok = onUseDeadDrop();
-                if (ok) dismissAfterUse();
-                return ok;
-              } : undefined}
-              showDeadDropFieldTool={showDeadDropFieldTool}
-              onUseAshSeal={onUseAshSeal ? () => {
-                const ok = onUseAshSeal();
-                if (ok) dismissAfterUse();
-                return ok;
-              } : undefined}
-              onUseContainmentFoam={onUseContainmentFoam ? () => {
-                const ok = onUseContainmentFoam();
-                if (ok) dismissAfterUse();
-                return ok;
-              } : undefined}
-              onUseCombatConsumable={onUseCombatConsumable ? (itemId) => {
-                const ok = onUseCombatConsumable(itemId);
-                if (ok) dismissAfterUse();
-                return ok;
-              } : undefined}
-            />
-          </View>
-        </View>
-      </View>
-    </Modal>
+      <CargoGridBoard
+        cargo={cargo}
+        theme={theme}
+        accentColor={panelAccent}
+        onRelocateItem={onRelocateItem}
+        onReplaceItem={onReplaceItem}
+        onDiscardItem={onDiscardItem}
+        runCredits={runCredits}
+        playerActionPoints={playerActionPoints}
+        showCreditsHud={false}
+        scannerMode={scannerMode}
+        combatMode={combatMode}
+        combatConsumablesEnabled={combatConsumablesEnabled}
+        overlayCompact={combatMode}
+        overlayCombatSplit={combatMode}
+        contentWidth={contentWidth}
+        minimal
+        cellSize={cellSize}
+        onUseAmpoule={onUseAmpoule ? () => {
+          const ok = onUseAmpoule();
+          if (ok) dismissAfterUse();
+          return ok;
+        } : undefined}
+        onUseResonanceBribe={onUseResonanceBribe ? () => {
+          const ok = onUseResonanceBribe();
+          if (ok) dismissAfterUse();
+          return ok;
+        } : undefined}
+        onUseDeadDrop={onUseDeadDrop ? () => {
+          const ok = onUseDeadDrop();
+          if (ok) dismissAfterUse();
+          return ok;
+        } : undefined}
+        showDeadDropFieldTool={showDeadDropFieldTool}
+        onUseAshSeal={onUseAshSeal ? () => {
+          const ok = onUseAshSeal();
+          if (ok) dismissAfterUse();
+          return ok;
+        } : undefined}
+        onUseContainmentFoam={onUseContainmentFoam ? () => {
+          const ok = onUseContainmentFoam();
+          if (ok) dismissAfterUse();
+          return ok;
+        } : undefined}
+        onUseCombatConsumable={onUseCombatConsumable ? (itemId) => {
+          const ok = onUseCombatConsumable(itemId);
+          if (ok) dismissAfterUse();
+          return ok;
+        } : undefined}
+      />
+    </RunOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.86)',
-  },
-  panelHost: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  panel: {
-    borderWidth: 2,
-    backgroundColor: '#050608',
-    paddingBottom: CARGO_OVERLAY_PANEL_PADDING,
+  body: {
     gap: 8,
-  },
-  panelCombat: {
-    borderWidth: 1.5,
-    backgroundColor: 'rgba(5, 8, 8, 0.96)',
-  },
-  panelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 36,
-    paddingTop: 8,
-    paddingBottom: 4,
-    flexShrink: 0,
-  },
-  closeX: {
-    width: 28,
-    height: 28,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0a0b0f',
-    marginLeft: 8,
-  },
-  closeXText: {
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 16,
   },
 });

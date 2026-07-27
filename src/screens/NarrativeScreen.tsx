@@ -142,7 +142,6 @@ export default function NarrativeScreen(): React.JSX.Element {
         <RunEventImmersiveBackdrop
           backgroundImage={backgroundImage}
           contentPadding={16 * fontScale}
-          scrimOpacity={0}
           overlay={<TerminalOverlay />}
         >
           <View style={styles.masterShell}>

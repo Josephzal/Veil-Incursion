@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import SafehouseBg from '../../assets/images/location images/safehouse.png';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
-import TacticalButton from '../components/TacticalButton';
+import RunActionRail from '../components/runField/RunActionRail';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 import SafehouseTelemetryPanel from '../components/safehouse/SafehouseTelemetryPanel';
 import SafehouseBenchPanel, {
   type BenchArsenalEntry,
@@ -70,12 +71,10 @@ export default function SafehouseScreen(): React.JSX.Element {
   } = usePlayerAccount();
   const { startScanning } = useGameFlow();
   const { exitToDevTestHub } = useDevSandboxExit();
-  const { isDesktop, fontScale, gap, screenHeight } = useResponsiveLayout();
+  const { isDesktop, fontScale, gap } = useResponsiveLayout();
 
   const activeCabal = getFactionAccent(activeIncursion.alignedFaction ?? account.alignedFaction);
   const horizontalPad = 24 * fontScale;
-  const panelMinHeight = Math.max(520 * fontScale, screenHeight * 0.58);
-  const descentReserve = 128 * fontScale;
 
   const [statusLine, setStatusLine] = useState('>> CABAL CHECKPOINT ONLINE — AWAITING OPERATIVE INPUT.');
   const [loadoutDraft, setLoadoutDraft] = useState<AegisAbilityId[]>([...activeIncursion.aegisLoadout]);
@@ -335,14 +334,16 @@ export default function SafehouseScreen(): React.JSX.Element {
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: '#09090b' }}>
         <RunEventImmersiveBackdrop
           backgroundImage={SafehouseBg}
-          scrimOpacity={0.85}
+          scrimOpacity={RUN_FIELD.environmentScrim}
           contentPadding={isDesktop ? 16 * fontScale : 8}
         >
           <View style={styles.stage}>
             <RunEventNodeHeader
-              title="CABAL SAFEHOUSE"
-              subtitle={`DEPTH ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
+              eyebrow="CABAL SAFEHOUSE // CHECKPOINT"
+              title={DISTRICT_NAMES[nextDistrict].toUpperCase()}
+              subtitle={`Depth ${activeIncursion.currentDistrict - 1} secured`}
               fontScale={fontScale}
+              showRunChrome
             />
 
             <View
@@ -351,9 +352,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                 {
                   flexDirection: isDesktop ? 'row' : 'column',
                   paddingHorizontal: horizontalPad,
-                  paddingBottom: descentReserve,
                   gap,
-                  minHeight: panelMinHeight,
                 },
               ]}
             >
@@ -371,7 +370,6 @@ export default function SafehouseScreen(): React.JSX.Element {
               />
 
               <SafehouseBenchPanel
-                activeCabal={activeCabal}
                 fontScale={fontScale}
                 gap={gap}
                 isDesktop={isDesktop}
@@ -395,43 +393,11 @@ export default function SafehouseScreen(): React.JSX.Element {
               />
             </View>
 
-            <View
-              style={[
-                styles.floatingDescentWrap,
-                {
-                  bottom: 16 * fontScale,
-                  paddingHorizontal: horizontalPad,
-                },
-              ]}
-            >
-              <TacticalButton
-                label="[ INITIATE DESCENT ]"
-                active
-                onPress={handleUnseal}
-                accentColor={activeCabal}
-                mutedColor="#94A3B8"
-                variant="cta"
-                style={[
-                  styles.unsealBtn,
-                  {
-                    borderColor: activeCabal,
-                    borderLeftColor: activeCabal,
-                    borderRightColor: activeCabal,
-                    backgroundColor: 'rgba(9, 9, 11, 0.95)',
-                  },
-                  Platform.select({
-                    web: { boxShadow: `0 8px 32px rgba(0, 0, 0, 0.65), 0 0 24px ${activeCabal}33` },
-                    default: {
-                      elevation: 12,
-                      shadowColor: '#000',
-                      shadowOpacity: 0.55,
-                      shadowRadius: 16,
-                      shadowOffset: { width: 0, height: 6 },
-                    },
-                  }),
-                ]}
-                labelSize={12 * fontScale}
-                labelLineHeight={15 * fontScale}
+            <View style={[styles.descentRail, { paddingHorizontal: horizontalPad }]}>
+              <RunActionRail
+                mode="screen"
+                primaryLabel="INITIATE DESCENT"
+                onPrimary={handleUnseal}
               />
             </View>
           </View>
@@ -446,6 +412,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
+    justifyContent: 'space-between',
   },
   masterRow: {
     flex: 1,
@@ -454,17 +421,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'stretch',
   },
-  floatingDescentWrap: {
-    position: 'absolute',
-    alignSelf: 'center',
+  descentRail: {
     width: '100%',
-    maxWidth: 600,
-    zIndex: 10,
-  },
-  unsealBtn: {
-    width: '100%',
-    borderWidth: 1,
-    borderLeftWidth: 4,
-    borderRightWidth: 4,
+    flexShrink: 0,
+    paddingBottom: 12,
+    paddingTop: 10,
+    zIndex: 6,
   },
 });

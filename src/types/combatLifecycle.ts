@@ -26,6 +26,15 @@ export interface KillingBlowData {
   channel: DamageChannel;
   damage: number;
   source?: string;
+  /** Ability id when known — prefer tags over source strings. */
+  abilityId?: string;
+  /** Combat ability tags (HEAVY / EXECUTE / FINISHER / …). */
+  tags?: readonly string[];
+  /**
+   * Direct player (or ally) strike. Defaults to true when omitted.
+   * DoT / environmental / passive damage should pass false so it cannot execute Slump.
+   */
+  isDirectDamage?: boolean;
 }
 
 export interface CombatLifecycleContext {
@@ -45,6 +54,8 @@ export interface TurnStartLifecycleResult {
   playerStaminaDelta?: number;
   /** Units that reached true death during turn-start (must dissolve / check victory). */
   forceDissolveUnitIds?: string[];
+  /** Units that reanimated — UI float / VFX. */
+  reanimatedUnitIds?: string[];
 }
 
 export interface HitTakenLifecycleResult {
@@ -75,6 +86,9 @@ export interface DeathLifecycleResult {
   playerHpDelta?: number;
   /** Thrall slump — keep unit on grid instead of dissolving. */
   enterSlump?: boolean;
+  /** Floating combat text for slump / execute. */
+  statusFloatLabel?: string;
+  statusFloatUnitId?: string;
 }
 
 export type TurnStartHandler = (

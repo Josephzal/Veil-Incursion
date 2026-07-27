@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import HapticPressable from './HapticPressable';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -528,7 +529,7 @@ function ContainmentSlot({
   combatConsumablesEnabled,
   selectedCombatItemId,
   selectCombatItem,
-  accentColor = '#00ff33',
+  accentColor = RUN_FIELD.mint,
   onInspectHover,
   onInspectLeave,
   groundPresence = false,
@@ -665,7 +666,7 @@ function ContainmentSlot({
 export default function CargoGridBoard({
   cargo,
   theme,
-  accentColor = '#00ff33',
+  accentColor = RUN_FIELD.mint,
   onRelocateItem,
   onReplaceItem,
   onContinue,
@@ -1524,14 +1525,16 @@ export default function CargoGridBoard({
           <Text
             style={[
               styles.combatDetailTitle,
-              { color: selectedCombatItemId ? accentColor : theme.mutedColor },
+              selectedCombatItemId
+                ? { color: accentColor }
+                : [styles.combatDetailTitleIdle, { color: theme.mutedColor }],
             ]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             {selectedCombatItemId
               ? CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()
-              : 'AWAITING SELECTION'}
+              : 'Tap an item to inspect'}
           </Text>
         </View>
 
@@ -1566,37 +1569,39 @@ export default function CargoGridBoard({
           </Text>
         </View>
 
-        <HapticPressable
-          disabled={!combatUseEnabled}
-          onPress={() => {
-            if (!selectedCombatItemId || !combatUseEnabled) return;
-            pulseCargoItemUse();
-            const ok = onUseCombatConsumable(selectedCombatItemId);
-            if (ok) setSelectedCombatItemId(null);
-          }}
-          style={({ pressed }) => [
-            styles.ampouleBtn,
-            styles.deployBtn,
-            {
-              borderColor: combatUseEnabled ? accentColor : '#1a2e22',
-              opacity: combatUseEnabled && pressed
-                ? 0.75
-                : combatUseEnabled
-                  ? 1
-                  : 0.45,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.ampouleBtnText,
-              { color: combatUseEnabled ? accentColor : '#2a4032' },
+        <View style={styles.combatDetailFooter}>
+          <HapticPressable
+            disabled={!combatUseEnabled}
+            onPress={() => {
+              if (!selectedCombatItemId || !combatUseEnabled) return;
+              pulseCargoItemUse();
+              const ok = onUseCombatConsumable(selectedCombatItemId);
+              if (ok) setSelectedCombatItemId(null);
+            }}
+            style={({ pressed }) => [
+              styles.ampouleBtn,
+              styles.deployBtn,
+              {
+                borderColor: combatUseEnabled ? accentColor : 'rgba(99, 226, 177, 0.22)',
+                opacity: combatUseEnabled && pressed
+                  ? 0.75
+                  : combatUseEnabled
+                    ? 1
+                    : 0.45,
+              },
             ]}
-            numberOfLines={1}
           >
-            [ USE ITEM ]
-          </Text>
-        </HapticPressable>
+            <Text
+              style={[
+                styles.ampouleBtnText,
+                { color: combatUseEnabled ? accentColor : 'rgba(99, 226, 177, 0.35)' },
+              ]}
+              numberOfLines={1}
+            >
+              [ USE ITEM ]
+            </Text>
+          </HapticPressable>
+        </View>
       </View>
     </View>
   ) : null;
@@ -1988,11 +1993,6 @@ export default function CargoGridBoard({
               isDesktop ? { flex: HARVEST_DESKTOP_CENTER_FLEX } : null,
             ]}
           >
-            <View pointerEvents="none" style={styles.workspaceCornerTL} />
-            <View pointerEvents="none" style={styles.workspaceCornerTR} />
-            <View pointerEvents="none" style={styles.workspaceCornerBL} />
-            <View pointerEvents="none" style={styles.workspaceCornerBR} />
-
             <View
               ref={containmentLootAreaRef}
               onLayout={handleContainmentLootAreaLayout}
@@ -2012,10 +2012,6 @@ export default function CargoGridBoard({
                 </View>
               ) : null}
             </View>
-
-            <View style={styles.workspaceStatusStrip}>
-              {workspaceStatusStrip}
-            </View>
           </View>
 
           <View
@@ -2030,6 +2026,10 @@ export default function CargoGridBoard({
               { padding: harvestPanelPadding },
             ]}
           >
+            <View pointerEvents="none" style={styles.cargoConsoleCornerTL} />
+            <View pointerEvents="none" style={styles.cargoConsoleCornerTR} />
+            <View pointerEvents="none" style={styles.cargoConsoleCornerBL} />
+            <View pointerEvents="none" style={styles.cargoConsoleCornerBR} />
             {resolvedRightPaneHeader}
             <View
               style={styles.harvestCargoMatSlot}
@@ -2165,7 +2165,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateRows: 'minmax(0, 1fr) auto',
+        gridTemplateRows: 'minmax(0, 1fr)',
         backgroundImage: `linear-gradient(180deg, ${HARVEST_CONTAINMENT_SCRIM_TOP} 0%, ${HARVEST_CONTAINMENT_BG} 28%, ${HARVEST_CONTAINMENT_SCRIM_BOTTOM} 100%)`,
       } as object,
       default: {
@@ -2175,47 +2175,59 @@ const styles = StyleSheet.create({
     }),
   },
   workspaceCornerTL: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    width: 18,
-    height: 18,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: HARVEST_CONTAINMENT_BORDER,
-    zIndex: 5,
+    display: 'none',
   },
   workspaceCornerTR: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderTopWidth: 1,
-    borderRightWidth: 1,
-    borderColor: HARVEST_CONTAINMENT_BORDER,
-    zIndex: 5,
+    display: 'none',
   },
   workspaceCornerBL: {
-    position: 'absolute',
-    bottom: HARVEST_STATUS_STRIP_HEIGHT + 8,
-    left: 8,
-    width: 18,
-    height: 18,
-    borderBottomWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: HARVEST_CONTAINMENT_BORDER,
-    zIndex: 5,
+    display: 'none',
   },
   workspaceCornerBR: {
+    display: 'none',
+  },
+  cargoConsoleCornerTL: {
     position: 'absolute',
-    bottom: HARVEST_STATUS_STRIP_HEIGHT + 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderColor: HARVEST_CONTAINMENT_BORDER,
+    top: 6,
+    left: 6,
+    width: RUN_FIELD.bracket.size,
+    height: RUN_FIELD.bracket.size,
+    borderTopWidth: RUN_FIELD.bracket.stroke,
+    borderLeftWidth: RUN_FIELD.bracket.stroke,
+    borderColor: 'rgba(99, 226, 177, 0.28)',
+    zIndex: 5,
+  },
+  cargoConsoleCornerTR: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: RUN_FIELD.bracket.size,
+    height: RUN_FIELD.bracket.size,
+    borderTopWidth: RUN_FIELD.bracket.stroke,
+    borderRightWidth: RUN_FIELD.bracket.stroke,
+    borderColor: 'rgba(99, 226, 177, 0.28)',
+    zIndex: 5,
+  },
+  cargoConsoleCornerBL: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    width: RUN_FIELD.bracket.size,
+    height: RUN_FIELD.bracket.size,
+    borderBottomWidth: RUN_FIELD.bracket.stroke,
+    borderLeftWidth: RUN_FIELD.bracket.stroke,
+    borderColor: 'rgba(99, 226, 177, 0.28)',
+    zIndex: 5,
+  },
+  cargoConsoleCornerBR: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: RUN_FIELD.bracket.size,
+    height: RUN_FIELD.bracket.size,
+    borderBottomWidth: RUN_FIELD.bracket.stroke,
+    borderRightWidth: RUN_FIELD.bracket.stroke,
+    borderColor: 'rgba(99, 226, 177, 0.28)',
     zIndex: 5,
   },
   containmentLootArea: {
@@ -2236,24 +2248,10 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   workspaceStatusStrip: {
-    height: HARVEST_STATUS_STRIP_HEIGHT,
-    minHeight: HARVEST_STATUS_STRIP_HEIGHT,
-    maxHeight: HARVEST_STATUS_STRIP_HEIGHT,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: HARVEST_CONTAINMENT_BORDER,
-    backgroundColor: HARVEST_STATUS_STRIP_BG,
-    flexShrink: 0,
-    zIndex: 3,
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(4px)',
-        WebkitBackdropFilter: 'blur(4px)',
-      } as object,
-      default: {},
-    }),
+    display: 'none',
   },
   harvestCargoConsole: {
+    position: 'relative',
     flexShrink: 0,
     minHeight: 0,
     alignSelf: 'stretch',
@@ -2530,6 +2528,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
     textAlign: 'center',
   },
+  combatDetailTitleIdle: {
+    fontSize: COMBAT_HUD_TYPE.title - 3,
+    fontWeight: '500',
+    letterSpacing: 0.4,
+    textTransform: 'none',
+    opacity: 0.65,
+  },
   combatDetailBodySlot: {
     height: COMBAT_DETAIL_BODY_HEIGHT,
     justifyContent: 'center',
@@ -2558,6 +2563,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.55,
     textAlign: 'center',
     fontWeight: '600',
+  },
+  combatDetailFooter: {
+    width: '100%',
+    flexShrink: 0,
+    paddingTop: 8,
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: RUN_FIELD.line,
   },
   deployBtn: {
     marginTop: 0,

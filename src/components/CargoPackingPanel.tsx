@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import HapticPressable from './HapticPressable';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import HarvestExtractorPanel from './harvest/HarvestExtractorPanel';
+import HubPrimaryCta from './hub/HubPrimaryCta';
 import TerminalText from './TerminalText';
 import CargoGridBackdrop from './cargo/CargoGridBackdrop';
 import {
@@ -33,11 +33,6 @@ import CargoGridBoard, {
 } from './CargoGridBoard';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
-import {
-  getInteractiveButtonStyle,
-  getInteractiveButtonTextStyle,
-} from '../styles/hubTerminalUi';
-import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import { pulseHubButton } from '../utils/hubButtonHaptics';
 import { SCANNER_PHOSPHOR } from './scanner/vectorScannerShared';
 import { resolveHarvestCargoReadout } from '../utils/harvestCargoReadout';
@@ -177,43 +172,12 @@ export default function CargoPackingPanel({
   const unstowedCount = cargo.containment.length;
   const fieldCleared = unstowedCount === 0;
   const [selectedCargoInstanceId, setSelectedCargoInstanceId] = useState<string | null>(null);
-  const continueScanX = useRef(new Animated.Value(-1)).current;
-  const continueScanOpacity = useRef(new Animated.Value(0)).current;
-  const priorClearedRef = useRef(fieldCleared);
 
   useEffect(() => {
     if (!cargo.grid.placed.some((item) => item.instanceId === selectedCargoInstanceId)) {
       setSelectedCargoInstanceId(null);
     }
   }, [cargo.grid.placed, selectedCargoInstanceId]);
-
-  useEffect(() => {
-    if (fieldCleared && !priorClearedRef.current) {
-      continueScanX.setValue(-0.2);
-      continueScanOpacity.setValue(0.7);
-      Animated.parallel([
-        Animated.timing(continueScanX, {
-          toValue: 1.2,
-          duration: 520,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.sequence([
-          Animated.timing(continueScanOpacity, {
-            toValue: 0.85,
-            duration: 120,
-            useNativeDriver: true,
-          }),
-          Animated.timing(continueScanOpacity, {
-            toValue: 0,
-            duration: 320,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-    }
-    priorClearedRef.current = fieldCleared;
-  }, [continueScanOpacity, continueScanX, fieldCleared]);
 
   const selectedPlaced = useMemo(
     () => cargo.grid.placed.find((item) => item.instanceId === selectedCargoInstanceId) ?? null,
@@ -226,68 +190,22 @@ export default function CargoPackingPanel({
 
   const harvestCargoHeader = !hidePackHeader ? (
     <View style={styles.harvestDeckHeader}>
-      <TerminalText size={7 * fontScale} letterSpacing={1} style={styles.harvestDeckEyebrow}>
-        RUN STORAGE // 12 SLOT DECK
-      </TerminalText>
       <TerminalText size={16 * fontScale} letterSpacing={0.55} style={styles.harvestDeckTitle}>
         {packHeaderLabel}
       </TerminalText>
       <View style={styles.metricsRow}>
-        <View style={styles.metricCell}>
-          <TerminalText size={7 * fontScale} letterSpacing={0.95} style={styles.metricLabel}>
-            OCCUPANCY
-          </TerminalText>
-          <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={styles.metricValue}>
-            {`${occupancyPct}%`}
-          </TerminalText>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={[styles.metricCell, styles.metricCellCenter]}>
-          <TerminalText size={7 * fontScale} letterSpacing={0.95} style={styles.metricLabel}>
-            SLOTS
-          </TerminalText>
-          <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={styles.metricValue}>
-            {`${slotsUsed} / 12`}
-          </TerminalText>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={[styles.metricCell, styles.metricCellEnd]}>
-          <TerminalText size={7 * fontScale} letterSpacing={0.95} style={styles.metricLabel}>
-            VALUE
-          </TerminalText>
-          <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={[styles.metricValue, styles.metricValueEnd]}>
-            {`${cargoValue} CR`}
-          </TerminalText>
-        </View>
+        <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={styles.metricValue}>
+          {`${slotsUsed} / 12 SLOTS`}
+        </TerminalText>
+        <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={[styles.metricValue, styles.metricValueEnd]}>
+          {`${cargoValue} CR`}
+        </TerminalText>
       </View>
       <View style={styles.metricsRule} />
     </View>
   ) : null;
 
-  const workspaceStatusStrip = harvestTriPane ? (
-    <View style={styles.statusStripRow}>
-      <View style={styles.statusField}>
-        <TerminalText size={6.5 * fontScale} letterSpacing={0.95} style={styles.statusLabel}>UNSTOWED</TerminalText>
-        <TerminalText size={8 * fontScale} letterSpacing={0.5} style={styles.statusValue}>
-          {`${unstowedCount} MATERIAL${unstowedCount === 1 ? '' : 'S'}`}
-        </TerminalText>
-      </View>
-      <View style={styles.statusDivider} />
-      <View style={styles.statusField}>
-        <TerminalText size={6.5 * fontScale} letterSpacing={0.95} style={styles.statusLabel}>RESIDUE</TerminalText>
-        <TerminalText size={8 * fontScale} letterSpacing={0.5} style={styles.statusValue}>
-          {`${String(residueLooseCount).padStart(2, '0')} SIGNALS`}
-        </TerminalText>
-      </View>
-      <View style={styles.statusDivider} />
-      <View style={styles.statusField}>
-        <TerminalText size={6.5 * fontScale} letterSpacing={0.95} style={styles.statusLabel}>FIELD STATE</TerminalText>
-        <TerminalText size={8 * fontScale} letterSpacing={0.5} style={[styles.statusValue, styles.statusValueStable]}>
-          STABLE
-        </TerminalText>
-      </View>
-    </View>
-  ) : null;
+  const workspaceStatusStrip = null;
 
   const cargoReadout = harvestTriPane ? (
     <View
@@ -383,41 +301,17 @@ export default function CargoPackingPanel({
 
   const cargoConsoleFooter = harvestTriPane && onContinue && !hideContinueButton ? (
     <View style={styles.continueBlock}>
-      <View style={styles.continueBtnShell}>
-        <HapticPressable
-          onPress={() => {
-            pulseHubButton();
-            onContinue();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={continueLabel}
-          style={(state) => [
-            styles.continueBtn,
-            fieldCleared && residueLooseCount === 0 ? styles.continueBtnReady : null,
-            terminalHoverStyle(readPressableHover(state), state.pressed),
-            Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null,
-          ]}
-        >
-          <TerminalText size={8.5} letterSpacing={1.1} style={styles.continueBtnText}>
-            {continueLabel}
-          </TerminalText>
-        </HapticPressable>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.continueScan,
-            {
-              opacity: continueScanOpacity,
-              transform: [{
-                translateX: continueScanX.interpolate({
-                  inputRange: [-0.2, 1.2],
-                  outputRange: [-40, 420],
-                }),
-              }],
-            },
-          ]}
-        />
-      </View>
+      <HubPrimaryCta
+        label={continueLabel}
+        onPress={() => {
+          pulseHubButton();
+          onContinue();
+        }}
+        variant="glow"
+        accessibilityLabel={continueLabel}
+        minHeight={HARVEST_CONTINUE_BUTTON_HEIGHT}
+        style={styles.continueBtnShell}
+      />
     </View>
   ) : undefined;
 
@@ -509,18 +403,14 @@ export default function CargoPackingPanel({
         )}
 
         {harvestLayout && onContinue && !hideContinueButton ? (
-          <HapticPressable
+          <HubPrimaryCta
+            label={continueLabel}
             onPress={onContinue}
-            style={({ pressed }) => [
-              getInteractiveButtonStyle(accent, { pressed, size: 'md' }),
-              styles.legacyContinueBtn,
-              pressed ? { opacity: 0.85 } : null,
-            ]}
-          >
-            <Text style={[getInteractiveButtonTextStyle('md'), styles.legacyContinueBtnText, { color: accent }]}>
-              {continueLabel}
-            </Text>
-          </HapticPressable>
+            variant="glow"
+            accessibilityLabel={continueLabel}
+            minHeight={HARVEST_CONTINUE_BUTTON_HEIGHT}
+            style={styles.legacyContinueBtn}
+          />
         ) : null}
       </View>
     </View>
@@ -700,21 +590,10 @@ const styles = StyleSheet.create({
     gap: 0,
     flexShrink: 0,
   },
-  harvestDeckEyebrow: {
-    color: HARVEST_MUTED_SLATE,
-    fontWeight: '600',
-    marginBottom: 12,
-    ...Platform.select({
-      web: {
-        fontSize: 'clamp(12px, 0.75vw, 13px)',
-      } as object,
-      default: {},
-    }),
-  },
   harvestDeckTitle: {
     color: HARVEST_TEXT_PRIMARY,
     fontWeight: '700',
-    marginBottom: 22,
+    marginBottom: 10,
     ...Platform.select({
       web: {
         fontSize: 'clamp(28px, 1.7vw, 32px)',
@@ -725,30 +604,10 @@ const styles = StyleSheet.create({
   },
   metricsRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     width: '100%',
     marginBottom: 8,
-  },
-  metricCell: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  metricCellCenter: {
-    alignItems: 'center',
-  },
-  metricCellEnd: {
-    alignItems: 'flex-end',
-  },
-  metricLabel: {
-    color: HARVEST_MUTED_SLATE,
-    fontWeight: '600',
-    ...Platform.select({
-      web: {
-        fontSize: 'clamp(12px, 0.75vw, 13px)',
-      } as object,
-      default: {},
-    }),
   },
   metricValue: {
     color: HARVEST_TEXT_PRIMARY,
@@ -756,20 +615,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     ...Platform.select({
       web: {
-        fontSize: 'clamp(21px, 1.25vw, 24px)',
+        fontSize: 'clamp(18px, 1.1vw, 20px)',
       } as object,
       default: {},
     }),
   },
   metricValueEnd: {
     textAlign: 'right',
-  },
-  metricDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-    marginHorizontal: 12,
-    marginVertical: 2,
-    backgroundColor: 'rgba(108, 156, 143, 0.22)',
   },
   metricsRule: {
     width: '100%',

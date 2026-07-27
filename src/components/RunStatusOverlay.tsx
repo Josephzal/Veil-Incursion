@@ -1,28 +1,32 @@
 import React, { useMemo } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from './HapticPressable';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import RunOverlay from './runField/RunOverlay';
+import FieldPlate from './runField/FieldPlate';
+import FieldMetricStrip from './runField/FieldMetricStrip';
+import type { FieldMetricItem } from './runField/FieldMetricStrip';
+import { RUN_FIELD, type RunFieldTone } from '../theme/runFieldTokens';
 import { useRun } from '../context/RunContext';
 import type { TerminalTheme } from '../types/theme';
 import {
   RUN_STATUS_CATEGORY_LABELS,
-  buildOperativeVitalsLine,
   buildRunStatusSnapshot,
   groupRunStatusEntries,
 } from '../utils/runStatusSnapshot';
-import type { RunStatusCategory } from '../utils/runStatusSnapshot';
+import type { RunStatusCategory, RunStatusEntry } from '../utils/runStatusSnapshot';
 import { RESONANCE_SYSTEM_ACTIVE } from '../data/featureFlags';
-import { VEIL } from '../theme/veilTerminalTokens';
-import { viewShadow } from '../utils/adaptiveStyles';
 
-import {
-  COMBAT_POPUP_BODY_FONT,
-  COMBAT_POPUP_SCALE,
-} from '../constants/combatOverlayTypography';
-
-const TERMINAL_ACCENT = '#00ff33';
 const CATEGORY_ORDER: RunStatusCategory[] = RESONANCE_SYSTEM_ACTIVE
   ? ['SECTOR', 'BOON', 'HAZARD', 'MACRO', 'ENVIRONMENT', 'RESONANCE']
   : ['SECTOR', 'BOON', 'HAZARD', 'MACRO', 'ENVIRONMENT'];
+
+const CATEGORY_TONE: Record<RunStatusCategory, RunFieldTone> = {
+  SECTOR: 'neutral',
+  BOON: 'mint',
+  HAZARD: 'danger',
+  MACRO: 'neutral',
+  ENVIRONMENT: 'occult',
+  RESONANCE: 'occult',
+};
 
 interface RunStatusOverlayProps {
   visible: boolean;
@@ -32,168 +36,194 @@ interface RunStatusOverlayProps {
   combatMode?: boolean;
 }
 
+function resourcePercent(current: number, max: number): number {
+  if (max <= 0) return 0;
+  return Math.round((current / max) * 100);
+}
+
+function CategoryBlock({
+  category,
+  entries,
+  bodyFont,
+  bodyLine,
+  labelFont,
+  labelLine,
+  columnStyle,
+}: {
+  category: RunStatusCategory;
+  entries: RunStatusEntry[];
+  bodyFont: number;
+  bodyLine: number;
+  labelFont: number;
+  labelLine: number;
+  columnStyle: object;
+}): React.JSX.Element {
+  return (
+    <FieldPlate
+      density="wash"
+      tone={CATEGORY_TONE[category]}
+      brackets={false}
+      style={[styles.categoryPlate, columnStyle]}
+      contentStyle={styles.categoryContent}
+    >
+      <Text
+        style={[
+          styles.categoryLabel,
+          { fontSize: labelFont, lineHeight: labelLine },
+        ]}
+      >
+        {RUN_STATUS_CATEGORY_LABELS[category].toUpperCase()}
+      </Text>
+      {entries.map((entry) => (
+        <View key={entry.id} style={styles.entry}>
+          <Text
+            style={[
+              styles.entryLabel,
+              { fontSize: bodyFont, lineHeight: bodyLine },
+            ]}
+          >
+            {entry.label}
+          </Text>
+          <Text
+            style={[
+              styles.entryDescription,
+              { fontSize: bodyFont - 1, lineHeight: bodyLine - 1 },
+            ]}
+          >
+            {entry.description}
+          </Text>
+        </View>
+      ))}
+    </FieldPlate>
+  );
+}
+
 export default function RunStatusOverlay({
   visible,
-  theme,
-  accentColor = TERMINAL_ACCENT,
+  theme: _theme,
+  accentColor = RUN_FIELD.mint,
   onClose,
   combatMode = false,
 }: RunStatusOverlayProps): React.JSX.Element {
   const { runState, activeIncursion } = useRun();
 
-  const vitalsLine = useMemo(
-    () => buildOperativeVitalsLine(runState, activeIncursion),
-    [runState, activeIncursion],
-  );
+  const vitals = useMemo<FieldMetricItem[]>(() => {
+    const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
+    const depth = activeIncursion.currentDepth ?? 1;
+    return [
+      { label: 'Health', value: `${healthPct}%`, accent: healthPct > 40, danger: healthPct <= 40 },
+      { label: 'Depth', value: `${depth}` },
+    ];
+  }, [activeIncursion.currentDepth, runState.maxSoulAnchor, runState.soulAnchorIntegrity]);
 
-  const grouped = useMemo(() => {
+  const categories = useMemo(() => {
     const entries = buildRunStatusSnapshot(activeIncursion);
-    return groupRunStatusEntries(entries);
+    const grouped = groupRunStatusEntries(entries);
+    return CATEGORY_ORDER
+      .map((category) => ({ category, entries: grouped[category] }))
+      .filter((block) => block.entries.length > 0);
   }, [activeIncursion]);
 
-  const hasAny = CATEGORY_ORDER.some((cat) => grouped[cat].length > 0);
-  const popupScale = combatMode ? COMBAT_POPUP_SCALE : 1;
-  const bodyFont = combatMode ? COMBAT_POPUP_BODY_FONT : 8;
-  const bodyLineHeight = bodyFont + 4;
-  const panelMaxWidth = Math.round(420 * popupScale);
-  const panelPadding = Math.round(14 * popupScale);
-  const panelAccent = combatMode ? VEIL.mint : accentColor;
+  const bodyFont = combatMode ? RUN_FIELD.type.body : RUN_FIELD.type.secondary;
+  const bodyLine = bodyFont + 5;
+  const labelFont = RUN_FIELD.type.eyebrow;
+  const labelLine = labelFont + 4;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <HapticPressable style={styles.backdropTap} onPress={onClose} />
-        <HapticPressable
-          style={[
-            styles.panel,
-            combatMode ? styles.panelCombat : null,
-            {
-              borderColor: panelAccent,
-              maxWidth: panelMaxWidth,
-              padding: panelPadding,
-            },
-            combatMode
-              ? viewShadow({
-                color: panelAccent,
-                opacity: 0.42,
-                radius: 16,
-                offset: { width: 0, height: 0 },
-              })
-              : null,
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-            OPERATIVE STATUS // RUN MANIFEST
+    <RunOverlay
+      visible={visible}
+      title="OPERATIVE DOSSIER"
+      onClose={onClose}
+      combatMode={combatMode}
+      accentColor={accentColor}
+      maxWidth={combatMode ? 560 : 480}
+      bodyStyle={styles.body}
+    >
+      <FieldMetricStrip items={vitals} style={styles.vitalsStrip} />
+
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {categories.length === 0 ? (
+          <Text style={[styles.emptyState, { fontSize: bodyFont, lineHeight: bodyLine }]}>
+            No active buffs, debuffs, or boons. Sector conditions nominal.
           </Text>
-
-          <View style={[styles.vitalsBlock, { borderColor: panelAccent }]}>
-            <Text style={[styles.bodyText, { color: theme.mutedColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-              OPERATIVE VITALS
-            </Text>
-            <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-              {vitalsLine}
-            </Text>
+        ) : (
+          <View style={styles.categoryGrid}>
+            {categories.map(({ category, entries }) => (
+              <CategoryBlock
+                key={category}
+                category={category}
+                entries={entries}
+                bodyFont={bodyFont}
+                bodyLine={bodyLine}
+                labelFont={labelFont}
+                labelLine={labelLine}
+                columnStyle={styles.categoryColumn}
+              />
+            ))}
           </View>
-
-          <ScrollView
-            style={[styles.scroll, combatMode ? { maxHeight: Math.round(320 * COMBAT_POPUP_SCALE) } : null]}
-            showsVerticalScrollIndicator={false}
-          >
-            {!hasAny ? (
-              <Text style={[styles.bodyText, { color: theme.mutedColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-                No active buffs, debuffs, or boons. Sector conditions nominal.
-              </Text>
-            ) : (
-              CATEGORY_ORDER.map((category) => {
-                const items = grouped[category];
-                if (items.length === 0) return null;
-                return (
-                  <View key={category} style={styles.section}>
-                    <Text style={[styles.bodyText, { color: theme.mutedColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-                      {RUN_STATUS_CATEGORY_LABELS[category].toUpperCase()}
-                    </Text>
-                    {items.map((entry) => (
-                      <View key={entry.id} style={[styles.entry, combatMode ? { borderLeftColor: panelAccent } : null]}>
-                        <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-                          {entry.label}
-                        </Text>
-                        <Text style={[styles.bodyText, { color: theme.textColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-                          {entry.description}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })
-            )}
-          </ScrollView>
-
-          <HapticPressable onPress={onClose} style={[styles.closeBtn, { borderColor: panelAccent }]}>
-            <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
-              [ DISMISS ]
-            </Text>
-          </HapticPressable>
-        </HapticPressable>
-      </View>
-    </Modal>
+        )}
+      </ScrollView>
+    </RunOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.82)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 0,
+  body: {
+    gap: 12,
   },
-  backdropTap: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  panel: {
-    width: '92%',
-    maxHeight: '78%',
-    backgroundColor: '#0a0b0f',
-    borderWidth: 1,
-    zIndex: 2,
-  },
-  panelCombat: {
-    backgroundColor: 'rgba(5, 8, 8, 0.96)',
-    borderWidth: 1.5,
-  },
-  bodyText: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  vitalsBlock: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginVertical: 8,
-    gap: 4,
+  vitalsStrip: {
+    flexShrink: 0,
   },
   scroll: {
     flexGrow: 0,
-    maxHeight: 320,
+    maxHeight: 380,
   },
-  section: {
-    marginBottom: 12,
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  categoryColumn: {
+    flexGrow: 1,
+    flexBasis: 200,
+    minWidth: 200,
+  },
+  categoryPlate: {
+    marginBottom: 0,
+  },
+  categoryContent: {
+    padding: 10,
+    gap: 8,
+  },
+  categoryLabel: {
+    fontFamily: RUN_FIELD.mono,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    color: RUN_FIELD.textSecondary,
   },
   entry: {
-    marginBottom: 8,
-    paddingLeft: 4,
-    borderLeftWidth: 2,
-    borderLeftColor: '#1a2a1a',
+    gap: 2,
   },
-  closeBtn: {
-    marginTop: 10,
-    alignSelf: 'center',
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
+  entryLabel: {
+    fontFamily: RUN_FIELD.mono,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    color: RUN_FIELD.text,
+  },
+  entryDescription: {
+    fontFamily: RUN_FIELD.mono,
+    fontWeight: '500',
+    letterSpacing: 0.15,
+    color: RUN_FIELD.textSecondary,
+  },
+  emptyState: {
+    fontFamily: RUN_FIELD.mono,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    color: RUN_FIELD.textSecondary,
+    paddingVertical: 8,
   },
 });

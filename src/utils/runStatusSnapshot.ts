@@ -234,7 +234,7 @@ function sectorEntry(family: MacroBiomeFamily | null): RunStatusEntry | null {
   return {
     id: 'sector-macro-biome',
     label: MACRO_BIOME_DISPLAY[family],
-    description: 'Current macro biome rotation for procedural narrative and sector flavor.',
+    description: 'Active sector biome shaping encounter flavor and vector pressure.',
     category: 'SECTOR',
   };
 }

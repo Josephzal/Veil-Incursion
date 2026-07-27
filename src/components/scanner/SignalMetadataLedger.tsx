@@ -1,8 +1,6 @@
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import TerminalText from '../TerminalText';
-import { VEIL } from '../../theme/veilTerminalTokens';
-import { SCANNER_TEXT_PRIMARY, SCANNER_TEXT_SECONDARY } from './vectorScannerShared';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
 export interface LedgerRow {
   label: string;
@@ -15,7 +13,7 @@ interface SignalMetadataLedgerProps {
 }
 
 /**
- * Compact metadata ledger — tabular labels/values, subtle row rules only.
+ * Compact metadata ledger — tabular labels/values aligned to field dossier grid.
  */
 export default function SignalMetadataLedger({
   rows,
@@ -30,17 +28,15 @@ export default function SignalMetadataLedger({
             key={`${row.label}-${row.value}`}
             style={[styles.row, index < rows.length - 1 && styles.rowDivider]}
           >
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.label} numberOfLines={2}>
+            <Text style={styles.label} numberOfLines={2}>
               {row.label}
-            </TerminalText>
-            <TerminalText
-              size={9}
-              lineHeight={14}
+            </Text>
+            <Text
               style={styles.value}
               numberOfLines={row.label === 'SCANNER STATE' ? 4 : 3}
             >
               {row.value}
-            </TerminalText>
+            </Text>
           </View>
         ))}
       </View>
@@ -52,7 +48,7 @@ const styles = StyleSheet.create({
   section: {
     width: '100%',
     flexShrink: 0,
-    marginTop: 2,
+    marginTop: 4,
     marginBottom: 8,
   },
   ledger: {
@@ -60,33 +56,49 @@ const styles = StyleSheet.create({
   },
   row: {
     minWidth: 0,
-    paddingVertical: 11,
+    paddingVertical: 10,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(108px, 34%) minmax(0, 1fr)',
-        columnGap: 12,
+        gridTemplateColumns: 'minmax(112px, 36%) minmax(0, 1fr)',
+        columnGap: 14,
         alignItems: 'start',
       } as object,
       default: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 12,
+        gap: 14,
       },
     }),
   },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: VEIL.lineFaint,
+    borderBottomColor: RUN_FIELD.line,
   },
   label: {
-    color: SCANNER_TEXT_SECONDARY,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.eyebrow,
     fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: RUN_FIELD.textSecondary,
     paddingTop: 1,
+    ...Platform.select({
+      web: {
+        maxWidth: '100%',
+      } as object,
+      default: {
+        width: '36%',
+        flexShrink: 0,
+      },
+    }),
   },
   value: {
-    color: SCANNER_TEXT_PRIMARY,
+    fontFamily: RUN_FIELD.mono,
+    fontSize: RUN_FIELD.type.secondary,
+    lineHeight: RUN_FIELD.type.secondary * 1.4,
     fontWeight: '600',
+    color: RUN_FIELD.text,
     minWidth: 0,
     flexShrink: 1,
     textTransform: 'uppercase',
@@ -95,7 +107,9 @@ const styles = StyleSheet.create({
         overflowWrap: 'anywhere',
         whiteSpace: 'normal',
       } as object,
-      default: {},
+      default: {
+        flex: 1,
+      },
     }),
   },
 });

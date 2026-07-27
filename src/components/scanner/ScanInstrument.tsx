@@ -7,9 +7,9 @@ import {
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
 import {
   SCANNER_BORDER_QUIET,
-  SCANNER_DOSSIER_SURFACE,
   SCANNER_INSTRUMENT_SURFACE,
 } from './vectorScannerShared';
+import FieldPlate from '../runField/FieldPlate';
 
 interface ScanInstrumentProps {
   scanner: React.ReactNode;
@@ -33,7 +33,14 @@ export default function ScanInstrument({
       <View style={[styles.shell, styles.shellStacked, style]}>
         <View style={styles.scannerStacked}>{scanner}</View>
         <View style={styles.stackRule} />
-        <View style={styles.dossierStacked}>{dossier}</View>
+        <FieldPlate
+          density="standard"
+          brackets
+          style={styles.dossierStacked}
+          contentStyle={styles.dossierPlateContent}
+        >
+          {dossier}
+        </FieldPlate>
       </View>
     );
   }
@@ -42,7 +49,14 @@ export default function ScanInstrument({
     <View style={[styles.shell, styles.shellHorizontal, style]}>
       <View style={styles.scannerField}>{scanner}</View>
       <View style={styles.divider} />
-      <View style={styles.dossierBlade}>{dossier}</View>
+      <FieldPlate
+        density="standard"
+        brackets
+        style={styles.dossierBlade}
+        contentStyle={styles.dossierPlateContent}
+      >
+        {dossier}
+      </FieldPlate>
     </View>
   );
 }
@@ -77,18 +91,22 @@ const styles = StyleSheet.create({
   dossierBlade: {
     flexShrink: 0,
     minHeight: 0,
-    backgroundColor: SCANNER_DOSSIER_SURFACE,
+    borderWidth: 0,
     ...Platform.select({
       web: {
         width: `clamp(${DESKTOP_SCANNER_DOSSIER_MIN}px, 22vw, ${DESKTOP_SCANNER_DOSSIER_MAX}px)`,
         maxWidth: DESKTOP_SCANNER_DOSSIER_MAX,
-        backgroundImage: `linear-gradient(180deg, #0A100F 0%, ${SCANNER_DOSSIER_SURFACE} 48%, #050908 100%)`,
       } as object,
       default: {
         width: 400,
         maxWidth: '42%',
       },
     }),
+  },
+  dossierPlateContent: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
   },
   scannerStacked: {
     flex: 1,
@@ -102,6 +120,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minHeight: 160,
     maxHeight: '38%',
-    backgroundColor: SCANNER_DOSSIER_SURFACE,
+    borderWidth: 0,
   },
 });

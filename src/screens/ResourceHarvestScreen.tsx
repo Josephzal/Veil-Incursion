@@ -6,7 +6,8 @@ import ResourceHarvestBg from '../../assets/images/location images/resource_harv
 import CargoPackingPanel from '../components/CargoPackingPanel';
 import CargoLootPickupOverlay from '../components/CargoLootPickupOverlay';
 import ResidueParticle from '../components/harvest/ResidueParticle';
-import HarvestScreenHeader from '../components/harvest/HarvestScreenHeader';
+import RunFieldHeader from '../components/runField/RunFieldHeader';
+import RunActionRail from '../components/runField/RunActionRail';
 import HapticPressable from '../components/HapticPressable';
 import TerminalText from '../components/TerminalText';
 import { hasFieldRunItem } from '../data/runItemFieldEngine';
@@ -16,6 +17,7 @@ import VeilVacuumCanisterStack, {
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { getFactionAccent } from '../data/factions';
 import { resolveVeilResidueCanisterFillPercent } from '../data/veilResidueRunEngine';
@@ -389,7 +391,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: 'transparent' }}>
         <RunEventImmersiveBackdrop
           backgroundImage={ResourceHarvestBg}
-          scrimOpacity={0.09}
+          scrimOpacity={RUN_FIELD.environmentScrimLight}
           contentPadding={masterPadding}
           contentStyle={[styles.harvestBody, { paddingTop: verticalPadding, paddingBottom: verticalPadding }]}
           overlay={(
@@ -407,10 +409,11 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
           )}
         >
           <View style={[styles.masterContainment, { gap: layoutGap }]}>
-            <HarvestScreenHeader
-              statusLine={`CONTAINMENT STABLE // ${sectorLabel}`}
-              depthLabel={depthLabel}
-              fontScale={fontScale}
+            <RunFieldHeader
+              eyebrow="FIELD RECOVERY"
+              title="RESOURCE HARVEST"
+              contextLine={`Containment stable · ${sectorLabel} · ${depthLabel}`}
+              showUtilities
             />
             {showSplitterPrompt ? (
               <HapticPressable
@@ -444,6 +447,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 showCreditsHud={false}
                 onContinue={handlePackingContinue}
                 continueLabel={continueLabel}
+                hideContinueButton
                 onHarvestFloorMeasured={handleHarvestFloorMeasured}
                 fixedExternalSlotCount={fixedExternalSlotCount}
                 resolveContainmentSlotIndex={resolveContainmentSlotIndex}
@@ -467,6 +471,11 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 )}
               />
             </View>
+            <RunActionRail
+              mode="screen"
+              primaryLabel={continueLabel}
+              onPrimary={handlePackingContinue}
+            />
           </View>
         </RunEventImmersiveBackdrop>
       </IncursionRunLayout>

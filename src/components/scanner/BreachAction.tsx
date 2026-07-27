@@ -34,7 +34,7 @@ function usePrefersReducedMotion(): boolean {
  */
 export default function BreachAction({
   enabled,
-  label = '[ BREACH ]',
+  label = 'BREACH',
   readinessLine,
   mutedColor,
   onPress,

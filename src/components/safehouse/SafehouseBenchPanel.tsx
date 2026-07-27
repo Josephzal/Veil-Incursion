@@ -8,13 +8,13 @@ import { viewShadow } from '../../utils/adaptiveStyles';
 import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../../utils/hiddenScrollbarStyle';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
 
-import { VEIL } from '../../theme/veilTerminalTokens';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
-const STARK_WHITE = VEIL.text;
-const MUTED_SLATE = VEIL.textMuted;
-const CARD_BORDER = VEIL.line;
-const CARD_BG = VEIL.surfaceRaised;
-const SLOT_BG = VEIL.surface2;
+const STARK_WHITE = RUN_FIELD.text;
+const MUTED_SLATE = RUN_FIELD.textSecondary;
+const CARD_BORDER = RUN_FIELD.line;
+const CARD_BG = RUN_FIELD.panel;
+const SLOT_BG = RUN_FIELD.panelLight;
 
 export interface BenchSlotView {
   slotIndex: number;
@@ -34,7 +34,6 @@ export interface BenchArsenalEntry {
 }
 
 interface SafehouseBenchPanelProps {
-  activeCabal: string;
   fontScale: number;
   gap: number;
   isDesktop: boolean;
@@ -51,7 +50,6 @@ type WindowRect = { pageX: number; pageY: number; width: number; height: number 
 
 function DraggableArsenalCard({
   entry,
-  activeCabal,
   fontScale,
   onDragStart,
   onDragMove,
@@ -59,7 +57,6 @@ function DraggableArsenalCard({
   onTap,
 }: {
   entry: BenchArsenalEntry;
-  activeCabal: string;
   fontScale: number;
   onDragStart: (abilityId: string) => void;
   onDragMove: (abilityId: string, x: number, y: number) => void;
@@ -88,14 +85,14 @@ function DraggableArsenalCard({
       style={({ pressed }) => [
         styles.arsenalCard,
         {
-          borderColor: assigned ? activeCabal : CARD_BORDER,
+          borderColor: assigned ? RUN_FIELD.mintBorderHot : CARD_BORDER,
           backgroundColor: CARD_BG,
           opacity: entry.unlocked ? pressed ? 0.82 : 1 : 0.55,
           padding: 10 * fontScale,
           minHeight: 72 * fontScale,
         },
         assigned ? viewShadow({
-          color: activeCabal,
+          color: RUN_FIELD.mint,
           opacity: 0.35,
           radius: 8,
           offset: { width: 0, height: 0 },
@@ -106,9 +103,9 @@ function DraggableArsenalCard({
         style={[
           styles.cardTitle,
           {
-            color: assigned ? activeCabal : STARK_WHITE,
-            fontSize: 8 * fontScale,
-            lineHeight: 10 * fontScale,
+            color: assigned ? RUN_FIELD.mint : STARK_WHITE,
+            fontSize: RUN_FIELD.type.secondary,
+            lineHeight: RUN_FIELD.type.secondary * 1.25,
           },
         ]}
         numberOfLines={2}
@@ -116,18 +113,18 @@ function DraggableArsenalCard({
         {entry.label}
       </Text>
       {!entry.unlocked && entry.unlockHint ? (
-        <Text style={[styles.cardMeta, { fontSize: 6 * fontScale, color: '#f87171' }]}>
+        <Text style={[styles.cardMeta, { fontSize: RUN_FIELD.type.micro, color: '#f87171' }]}>
           {entry.unlockHint}
         </Text>
       ) : null}
       <Text
-        style={[styles.cardMeta, { fontSize: 6 * fontScale, color: MUTED_SLATE }]}
-        numberOfLines={2}
+        style={[styles.cardMeta, { fontSize: RUN_FIELD.type.body, lineHeight: RUN_FIELD.type.body * 1.35, color: MUTED_SLATE }]}
+        numberOfLines={3}
       >
         {entry.description}
       </Text>
       {assigned ? (
-        <Text style={[styles.equippedTag, { fontSize: 6 * fontScale, color: activeCabal }]}>
+        <Text style={[styles.equippedTag, { fontSize: RUN_FIELD.type.micro, color: RUN_FIELD.mint }]}>
           {`EQUIPPED // S${entry.assignedSlot! + 1}`}
         </Text>
       ) : null}
@@ -146,7 +143,6 @@ function DraggableArsenalCard({
 }
 
 export default function SafehouseBenchPanel({
-  activeCabal,
   fontScale,
   gap,
   isDesktop,
@@ -211,7 +207,15 @@ export default function SafehouseBenchPanel({
   const slotGap = 12 * fontScale;
 
   return (
-    <View style={[styles.root, { marginHorizontal: 16 * fontScale, gap, flex: isDesktop ? 1.35 : 1 }]}>
+    <View style={[
+      styles.root,
+      {
+        marginHorizontal: 16 * fontScale,
+        gap,
+        flex: isDesktop ? 1.85 : 1,
+        paddingTop: 18 * fontScale,
+      },
+    ]}>
       <Text style={[styles.header, { fontSize: 8 * fontScale, color: MUTED_SLATE, letterSpacing: 1.5 }]}>
         [ THE BENCH ]
       </Text>
@@ -226,12 +230,12 @@ export default function SafehouseBenchPanel({
               style={[
                 styles.deckSlot,
                 {
-                  borderColor: activeCabal,
+                  borderColor: isSelected ? RUN_FIELD.mintBorderHot : CARD_BORDER,
                   backgroundColor: SLOT_BG,
                   opacity: slot.anchor ? 0.92 : 1,
                 },
                 isSelected ? viewShadow({
-                  color: activeCabal,
+                  color: RUN_FIELD.mint,
                   opacity: 0.75,
                   radius: 14,
                   offset: { width: 0, height: 0 },
@@ -250,7 +254,7 @@ export default function SafehouseBenchPanel({
                   style={[
                     styles.slotLabel,
                     {
-                      color: isSelected ? activeCabal : STARK_WHITE,
+                      color: isSelected ? RUN_FIELD.mint : STARK_WHITE,
                       fontSize: 7 * fontScale,
                       lineHeight: 9 * fontScale,
                     },
@@ -279,7 +283,6 @@ export default function SafehouseBenchPanel({
           <View key={entry.abilityId} style={styles.arsenalCell}>
             <DraggableArsenalCard
               entry={entry}
-              activeCabal={activeCabal}
               fontScale={fontScale}
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
@@ -298,8 +301,8 @@ export default function SafehouseBenchPanel({
 
       {dragGhost ? (
         <View style={styles.dragGhost} pointerEvents="none">
-          <View style={[styles.dragGhostCard, { borderColor: activeCabal, backgroundColor: SLOT_BG }]}>
-            <Text style={[styles.cardTitle, { color: activeCabal, fontSize: 8 * fontScale }]}>
+          <View style={[styles.dragGhostCard, { borderColor: RUN_FIELD.mintBorderHot, backgroundColor: SLOT_BG }]}>
+            <Text style={[styles.cardTitle, { color: RUN_FIELD.mint, fontSize: 8 * fontScale }]}>
               {dragGhost.label}
             </Text>
           </View>

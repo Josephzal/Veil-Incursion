@@ -26,3 +26,13 @@ export const NARRATIVE_TERMINAL_BODY_MIN_HEIGHT = 380;
 export const NARRATIVE_UNIFIED_PANEL_BG = 'rgba(9, 9, 11, 0.9)';
 export const NARRATIVE_UNIFIED_PANEL_BORDER = '#1e293b';
 export const NARRATIVE_UNIFIED_PANEL_PADDING = 32;
+
+/**
+ * Asymmetrical desktop split — environment-first layout.
+ * Field-report plate takes the narrower lower-left share; resolver stack
+ * takes the wider right share. Both lanes top-align and size to content
+ * instead of stretching to fill the row.
+ */
+export const NARRATIVE_FIELD_LANE_RATIO = 0.42;
+/** Field-report plate caps here and scrolls internally — never a forced full-height slab. */
+export const NARRATIVE_FIELD_PLATE_MAX_HEIGHT = 420;

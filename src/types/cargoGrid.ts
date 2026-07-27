@@ -21,6 +21,7 @@ export type CargoCombatEffect =
   | 'sanguine_coagulant'
   | 'veil_ash_grenade'
   | 'god_mode'
+  | 'set_hp_to_one'
   | 'unimplemented';
 
 import type { ResourceItemId } from './resourceItem';
@@ -69,7 +70,8 @@ export type LegacyCargoItemId =
   | 'smoke-ampoule'
   | 'null-key'
   | 'hazmat-shielding'
-  | 'god-mode';
+  | 'god-mode'
+  | 'bitch-potion';
 
 export type CargoItemId = LegacyCargoItemId | ResourceItemId;
 
@@ -651,6 +653,18 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT', 'DEBUG'],
     usableInCombat: true,
     combatEffect: 'god_mode',
+    apCost: 0,
+  },
+  'bitch-potion': {
+    id: 'bitch-potion',
+    name: 'Bitch Potion',
+    width: 1,
+    height: 1,
+    baseValue: 0,
+    resonanceWeight: 0,
+    tags: ['CONSUMABLE', 'COMBAT', 'DEBUG'],
+    usableInCombat: true,
+    combatEffect: 'set_hp_to_one',
     apCost: 0,
   },
   'smoke-ampoule': {

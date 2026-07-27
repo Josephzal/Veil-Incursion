@@ -1,22 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Animated,
   ImageBackground,
   LayoutChangeEvent,
-  Platform,
   StyleSheet,
   Text,
   View,
-  type ViewStyle,
 } from 'react-native';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ExtractionBg from '../../assets/images/location images/extraction.png';
 import HapticPressable from '../components/HapticPressable';
 import CargoPackingPanel from '../components/CargoPackingPanel';
-import DossierCardShell from '../components/hub/DossierCardShell';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
+import FieldPlate from '../components/runField/FieldPlate';
+import FieldMetricStrip from '../components/runField/FieldMetricStrip';
+import FieldSectionHeader from '../components/runField/FieldSectionHeader';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -24,21 +23,16 @@ import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
-import { hubCtaButtonStyle } from '../constants/hubCta';
 import {
   resolveImmersiveContentPadding,
   resolveImmersiveFooterInset,
   resolveImmersiveHorizontalInset,
 } from '../constants/immersiveLayout';
-import { HUB_CARGO_MAT_INSET } from '../constants/cargoGridVisual';
+import { HUB_CARGO_MAT_INSET, resolveHubCargoMatShellMetrics } from '../constants/cargoGridVisual';
+import { cargoGridFrameDimensions } from '../components/CargoGridBoard';
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
 } from '../types/sectorPacing';
-import { formatCargoRoutingExtractionReviewLine } from '../data/cargoRoutingIntelEngine';
-import {
-  countSpecialCargoHeldInRun,
-  resolveCargoRoutingContextFromIncursion,
-} from '../data/postRunCargoRoutingRunState';
 import {
   computeBaseSectorExtractionPayout,
   isKeepsakeStampedExtractionNode,
@@ -54,18 +48,13 @@ import {
   resolveHubMatAwareLoadoutCellSize,
 } from '../utils/cargoGridLayout';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 
-const MUTED_SLATE = '#94A3B8';
-const STARK_WHITE = '#F8FAFC';
-const EXTRACT_CYAN = '#06B6D4';
-const DESCENT_ORANGE = '#EA580C';
-const DESCENT_CRIMSON = '#991B1B';
+const MUTED_SLATE = RUN_FIELD.textSecondary;
+const STARK_WHITE = RUN_FIELD.text;
+const EXTRACT_MINT = RUN_FIELD.mint;
+const DESCENT_DANGER = RUN_FIELD.danger;
 const MASTER_MAX_WIDTH = 1100;
-
-const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
-  web: { boxShadow: 'none' },
-  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
 
 function resolveSecondaryTelemetry(
   activeClass: ClassType,
@@ -82,229 +71,85 @@ function resolveSecondaryTelemetry(
   }
 }
 
-interface TelemetryRowProps {
-  label: string;
-  value: string;
-  labelSize: number;
-  valueSize: number;
-}
-
-function TelemetryRow({ label, value, labelSize, valueSize }: TelemetryRowProps): React.JSX.Element {
-  return (
-    <View style={styles.telemetryRow}>
-      <Text
-        style={[
-          styles.telemetryLabel,
-          { color: MUTED_SLATE, fontSize: labelSize, lineHeight: labelSize * 1.4 },
-        ]}
-      >
-        {label}
-      </Text>
-      <Text
-        style={[
-          styles.telemetryValue,
-          {
-            color: STARK_WHITE,
-            fontSize: valueSize,
-            lineHeight: valueSize * 1.3,
-            minWidth: valueSize * 4.5,
-          },
-        ]}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-interface AnomalousMassReadoutProps {
-  massPct: number;
-  fontScale: number;
-}
-
-function AnomalousMassReadout({ massPct, fontScale }: AnomalousMassReadoutProps): React.JSX.Element {
-  const pulse = useRef(new Animated.Value(0.35)).current;
-  const fillWidth = `${Math.max(4, Math.round(massPct * 100))}%`;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.85, duration: 1400, useNativeDriver: false }),
-        Animated.timing(pulse, { toValue: 0.35, duration: 1400, useNativeDriver: false }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
-  const labelSize = 8 * fontScale;
-  const hashSize = 7 * fontScale;
-  const hashSeed = Math.round(massPct * 9973).toString(16).toUpperCase().padStart(6, '0');
-
-  return (
-    <View style={[styles.massFooter, { gap: 8 * fontScale, paddingTop: 12 * fontScale }]}>
-      <Text
-        style={[
-          styles.sectionLabel,
-          { color: MUTED_SLATE, fontSize: labelSize, lineHeight: labelSize * 1.4 },
-        ]}
-      >
-        [ ANOMALOUS MASS DETECTED ]
-      </Text>
-      <View style={styles.massTrack}>
-        <Animated.View
-          style={[
-            styles.massFill,
-            {
-              width: fillWidth as `${number}%`,
-              opacity: pulse,
-            },
-          ]}
-        />
-      </View>
-      <Text
-        style={[
-          styles.massHash,
-          { color: MUTED_SLATE, fontSize: hashSize, lineHeight: hashSize * 1.45 },
-        ]}
-      >
-        {`SIG // ${hashSeed} // MASS INDEX ${(massPct * 10).toFixed(1)}v`}
-      </Text>
-    </View>
-  );
-}
-
-interface ThreatForecastProps {
-  activeCabal: string;
-  fontScale: number;
-}
-
-function ThreatForecast({ activeCabal, fontScale }: ThreatForecastProps): React.JSX.Element {
-  const headerSize = 8 * fontScale;
-  const bodySize = 8 * fontScale;
-
-  return (
-    <View style={[styles.threatBlock, { gap: 8 * fontScale, paddingHorizontal: 4 * fontScale }]}>
-      <Text
-        style={[
-          styles.threatHeader,
-          {
-            color: activeCabal,
-            fontSize: headerSize,
-            lineHeight: headerSize * 1.45,
-          },
-        ]}
-      >
-        {'>> SUB-GRID TELEMETRY WARNING'}
-      </Text>
-      <Text
-        style={[
-          styles.threatBody,
-          {
-            color: MUTED_SLATE,
-            fontSize: bodySize,
-            lineHeight: bodySize * 1.55,
-          },
-        ]}
-      >
-        Descent protocol bypasses localized safe-zones. Anomaly density will increase by 45%.
-        Operative assumes all risk.
-      </Text>
-    </View>
-  );
-}
-
-interface EvacUltimatumButtonProps {
+interface EvacDecisionCardProps {
   primaryLabel: string;
-  subtext: string;
   variant: 'extract' | 'descent';
   onPress: () => void;
-  scaleSize: (value: number) => number;
-  scaleSpacing: (value: number) => number;
   primarySize: number;
-  subtextSize: number;
   hazardPatternId: string;
 }
 
-function EvacUltimatumButton({
+function EvacDecisionCard({
   primaryLabel,
-  subtext,
   variant,
   onPress,
-  scaleSize,
-  scaleSpacing,
   primarySize,
-  subtextSize,
   hazardPatternId,
-}: EvacUltimatumButtonProps): React.JSX.Element {
+}: EvacDecisionCardProps): React.JSX.Element {
   const isExtract = variant === 'extract';
-  const borderColor = isExtract ? EXTRACT_CYAN : DESCENT_CRIMSON;
-  const backgroundColor = isExtract ? 'rgba(6, 182, 212, 0.1)' : 'rgba(153, 27, 27, 0.1)';
-  const primaryColor = isExtract ? STARK_WHITE : DESCENT_ORANGE;
-
-  const buttonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
-      hubCtaButtonStyle(borderColor, scaleSize, scaleSpacing, false),
-      FLAT_CTA_OVERRIDE,
-      {
-        borderColor,
-        backgroundColor,
-        borderLeftWidth: isExtract ? 4 : 1,
-        gap: 6 * (primarySize / 11),
-        opacity: state.pressed ? 0.88 : 1,
-        overflow: 'hidden' as const,
-        position: 'relative' as const,
-      },
-      terminalHoverStyle(readPressableHover(state), state.pressed),
-    ],
-    [backgroundColor, borderColor, isExtract, primarySize, scaleSize, scaleSpacing],
-  );
+  const tone = isExtract ? 'mint' : 'danger';
 
   return (
-    <HapticPressable onPress={onPress} style={buttonStyle}>
-      {!isExtract ? (
-        <View pointerEvents="none" style={styles.hazardStripeLayer}>
-          <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-            <Defs>
-              <Pattern
-                id={hazardPatternId}
-                width={10}
-                height={10}
-                patternUnits="userSpaceOnUse"
-                patternTransform="rotate(45)"
-              >
-                <Rect width={5} height={10} fill="rgba(153, 27, 27, 0.05)" />
-                <Rect x={5} width={5} height={10} fill="transparent" />
-              </Pattern>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${hazardPatternId})`} />
-          </Svg>
-        </View>
-      ) : null}
-      <Text
-        style={[
-          styles.ultimatumPrimary,
-          {
-            color: primaryColor,
-            fontSize: primarySize,
-            lineHeight: primarySize * 1.25,
-          },
-        ]}
-      >
-        {primaryLabel}
-      </Text>
-      <Text
-        style={[
-          styles.ultimatumSubtext,
-          {
-            color: MUTED_SLATE,
-            fontSize: subtextSize,
-            lineHeight: subtextSize * 1.45,
-          },
-        ]}
-      >
-        {subtext}
-      </Text>
+    <HapticPressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={primaryLabel}
+      style={(state) => [
+        styles.decisionCard,
+        {
+          opacity: state.pressed ? 0.9 : 1,
+        },
+        terminalHoverStyle(readPressableHover(state), state.pressed),
+      ]}
+    >
+      {(state) => {
+        const hovered = readPressableHover(state) || state.pressed;
+        const titleColor = hovered
+          ? (isExtract ? EXTRACT_MINT : DESCENT_DANGER)
+          : STARK_WHITE;
+        return (
+          <FieldPlate
+            density="standard"
+            tone={tone}
+            state={hovered ? (isExtract ? 'hover' : 'danger') : 'idle'}
+            brackets={false}
+            style={styles.decisionPlate}
+            contentStyle={styles.decisionContent}
+          >
+            {!isExtract ? (
+              <View pointerEvents="none" style={styles.hazardStripeLayer}>
+                <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                  <Defs>
+                    <Pattern
+                      id={hazardPatternId}
+                      width={10}
+                      height={10}
+                      patternUnits="userSpaceOnUse"
+                      patternTransform="rotate(45)"
+                    >
+                      <Rect width={5} height={10} fill="rgba(205, 76, 90, 0.05)" />
+                      <Rect x={5} width={5} height={10} fill="transparent" />
+                    </Pattern>
+                  </Defs>
+                  <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${hazardPatternId})`} />
+                </Svg>
+              </View>
+            ) : null}
+            <Text
+              style={[
+                styles.ultimatumPrimary,
+                {
+                  color: titleColor,
+                  fontSize: primarySize,
+                  lineHeight: Math.round(primarySize * 1.25),
+                },
+              ]}
+            >
+              {primaryLabel}
+            </Text>
+          </FieldPlate>
+        );
+      }}
     </HapticPressable>
   );
 }
@@ -323,7 +168,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
   const { finalizeSectorExtraction } = useDescentNavigator();
   const { exitToDevTestHub } = useDevSandboxExit();
   const insets = useSafeAreaInsets();
-  const { isDesktop, activeViewportWidth, fontScale, scaleSize, scaleSpacing } = useResponsiveLayout();
+  const { isDesktop, activeViewportWidth, fontScale, scaleSpacing } = useResponsiveLayout();
   const [cargoDeckSize, setCargoDeckSize] = useState({ width: 0, height: 0 });
   const hazardPatternId = useMemo(
     () => `evac-hazard-${Math.random().toString(36).slice(2, 9)}`,
@@ -340,27 +185,6 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
   );
 
   const showDescent = reviewKind !== 'EMERGENCY_RECALL';
-
-  const extractSubtext = useMemo(() => {
-    if (reviewKind === 'EMERGENCY_RECALL') {
-      return `Emergency bleed — ${EMERGENCY_EXTRACT_CARGO_BLEED_PCT}% cargo lost. End incursion now.`;
-    }
-    const routingContext = resolveCargoRoutingContextFromIncursion(activeIncursion);
-    const specialCargoLine = routingContext
-      ? formatCargoRoutingExtractionReviewLine(countSpecialCargoHeldInRun(
-        activeIncursion.cargo,
-        activeIncursion.runBankedSnapshot,
-        activeIncursion.activeContract,
-        routingContext,
-      ))
-      : null;
-    if (reviewKind === 'MASTER_LINK') {
-      const base = 'Prime conduit — anchor payload to Cabal HQ. Guaranteed severance.';
-      return specialCargoLine ? `${base} ${specialCargoLine}` : base;
-    }
-    const base = 'Anchor payload to Cabal HQ. Sever the Veil tether.';
-    return specialCargoLine ? `${base} ${specialCargoLine}` : base;
-  }, [activeIncursion, reviewKind]);
 
   const evacHeaderSubtitle = useMemo(() => {
     if (reviewKind === 'SAFE_ANCHOR' && anchorIndex != null) {
@@ -410,12 +234,25 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     [cargoDeckSize.height, cargoDeckSize.width, scaleSpacing],
   );
 
+  const cargoPreviewDimensions = useMemo(() => {
+    if (cargoCellSize <= 0) return null;
+    const frame = cargoGridFrameDimensions(cargoCellSize);
+    const mat = resolveHubCargoMatShellMetrics(
+      frame.frameWidth,
+      frame.frameHeight,
+      scaleSpacing,
+      HUB_CARGO_MAT_INSET,
+    );
+    return { width: mat.width, height: mat.height };
+  }, [cargoCellSize, scaleSpacing]);
+
   const noopRelocate = useCallback(() => false, []);
 
   const cargoMassPct = useMemo(
     () => calculateGridOccupancy(activeIncursion.cargo),
     [activeIncursion.cargo],
   );
+  const cargoIsEmpty = activeIncursion.cargo.grid.placed.length === 0;
 
   const stampedPayoutPreview = useMemo(() => {
     if (!isKeepsakeStampedExtractionNode(activeIncursion)) return null;
@@ -450,9 +287,31 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     startScanning();
   };
 
+  const operativeMetrics = useMemo(() => {
+    const metrics: { label: string; value: string; accent?: boolean; danger?: boolean }[] = [
+      {
+        label: 'HP',
+        value: `${runState.soulAnchorIntegrity}/${runState.maxSoulAnchor}`,
+      },
+      {
+        label: secondaryTelemetry.label,
+        value: secondaryTelemetry.value,
+      },
+    ];
+    if (stampedPayoutPreview != null) {
+      metrics.push({ label: 'STAMPED', value: `${stampedPayoutPreview} CR` });
+    }
+    metrics.push({
+      label: 'MASS',
+      value: `${Math.round(cargoMassPct * 100)}%`,
+      danger: cargoMassPct > 0.7,
+    });
+    return metrics;
+  }, [cargoMassPct, runState.maxSoulAnchor, runState.soulAnchorIntegrity, secondaryTelemetry, stampedPayoutPreview]);
+
   return (
     <IncursionShell>
-      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <ImageBackground
           source={ExtractionBg}
           style={styles.background}
@@ -471,9 +330,11 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
               ]}
             >
               <RunEventNodeHeader
-                title="EVAC VECTOR SECURED"
-                subtitle={evacHeaderSubtitle}
+                eyebrow="SECURED VECTOR"
+                title="EVAC REVIEW"
+                subtitle={evacHeaderSubtitle ?? 'Choose extraction or deeper descent.'}
                 fontScale={fontScale}
+                showRunChrome
               />
 
               <View
@@ -481,69 +342,40 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                   styles.masterContainer,
                   {
                     maxWidth: masterMaxWidth,
-                    flexDirection: isDesktop ? 'row' : 'column',
                     gap: s.masterGap,
-                    alignItems: 'stretch',
                   },
                 ]}
               >
-                <DossierCardShell
-                  fillHeight
-                  padding={24 * fontScale}
-                  accentColor={activeCabal}
-                  style={styles.evacPanel}
-                  contentStyle={{ gap: s.panelGap, justifyContent: 'space-between' }}
-                >
-                  <View style={{ gap: 10 * fontScale }}>
-                    <Text
-                      style={[
-                        styles.sectionLabel,
-                        {
-                          color: MUTED_SLATE,
-                          fontSize: s.sectionLabel,
-                          lineHeight: s.sectionLabel * 1.4,
-                        },
-                      ]}
-                    >
-                      TELEMETRY // OPERATIVE STANDING
-                    </Text>
-                    <TelemetryRow
-                      label="CURRENT HP"
-                      value={`${runState.soulAnchorIntegrity}/${runState.maxSoulAnchor}`}
-                      labelSize={s.telemetryLabel}
-                      valueSize={s.telemetryValue}
-                    />
-                    <TelemetryRow
-                      label={secondaryTelemetry.label}
-                      value={secondaryTelemetry.value}
-                      labelSize={s.telemetryLabel}
-                      valueSize={s.telemetryValue}
-                    />
-                    {stampedPayoutPreview != null ? (
-                      <TelemetryRow
-                        label="STAMPED PAYOUT"
-                        value={`${stampedPayoutPreview} CR`}
-                        labelSize={s.telemetryLabel}
-                        valueSize={s.telemetryValue}
-                      />
-                    ) : null}
-                  </View>
+                <FieldMetricStrip items={operativeMetrics} />
 
-                  <View style={styles.cargoDeckSection}>
-                    <Text
-                      style={[
-                        styles.sectionLabel,
-                        {
-                          color: MUTED_SLATE,
-                          fontSize: s.sectionLabel,
-                          lineHeight: s.sectionLabel * 1.4,
-                        },
-                      ]}
-                    >
-                      CARGO DECK // AT RISK
+                <FieldPlate
+                  density="light"
+                  brackets
+                  style={styles.cargoSummaryPlate}
+                  contentStyle={styles.cargoSummaryContent}
+                >
+                  <FieldSectionHeader
+                    label="Cargo at risk"
+                    meta={cargoIsEmpty ? 'Deck clear' : `${Math.round(cargoMassPct * 100)}% occupancy`}
+                  />
+                  {cargoIsEmpty ? (
+                    <Text style={[styles.cargoEmptyText, { fontSize: s.telemetryLabel }]}>
+                      No cargo held — nothing at risk on extract.
                     </Text>
+                  ) : (
                     <View style={styles.cargoPreviewMeasure} onLayout={handleCargoDeckLayout}>
-                      <View pointerEvents="none" style={styles.cargoPreviewHost}>
+                      <View
+                        pointerEvents="none"
+                        style={[
+                          styles.cargoPreviewHost,
+                          cargoPreviewDimensions
+                            ? {
+                              width: cargoPreviewDimensions.width,
+                              height: cargoPreviewDimensions.height,
+                            }
+                            : null,
+                        ]}
+                      >
                         <CargoPackingPanel
                           cargo={activeIncursion.cargo}
                           theme={theme}
@@ -558,69 +390,43 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                         />
                       </View>
                     </View>
-                  </View>
+                  )}
+                </FieldPlate>
 
-                  <AnomalousMassReadout massPct={cargoMassPct} fontScale={fontScale} />
-                </DossierCardShell>
+                {showDescent ? (
+                  <Text style={[styles.threatBody, { fontSize: s.ultimatumSubtext, color: MUTED_SLATE }]}>
+                    Descent bypasses localized safe-zones. Anomaly density rises ~45%. Operative retains health and payload.
+                  </Text>
+                ) : null}
 
-                <DossierCardShell
-                  fillHeight
-                  padding={24 * fontScale}
-                  accentColor={activeCabal}
-                  style={styles.evacPanel}
-                  contentStyle={styles.rightPanelBody}
+                <View style={styles.bottomActionSpacer} />
+
+                <View
+                  style={[
+                    styles.decisionRow,
+                    {
+                      flexDirection: isDesktop ? 'row' : 'column',
+                      gap: s.panelGap,
+                    },
+                  ]}
                 >
-                    <View style={[styles.rightTopBlock, { gap: 10 * fontScale }]}>
-                      <Text
-                        style={[
-                          styles.sectionLabel,
-                          {
-                            color: MUTED_SLATE,
-                            fontSize: s.sectionLabel,
-                            lineHeight: s.sectionLabel * 1.4,
-                          },
-                        ]}
-                      >
-                        [ DIRECTIVE UPLINK ]
-                      </Text>
-
-                      <EvacUltimatumButton
-                        primaryLabel="[ INITIATE EXTRACTION ]"
-                        subtext={extractSubtext}
-                        variant="extract"
-                        onPress={handleExtract}
-                        scaleSize={scaleSize}
-                        scaleSpacing={scaleSpacing}
-                        primarySize={s.ultimatumPrimary}
-                        subtextSize={s.ultimatumSubtext}
-                        hazardPatternId={hazardPatternId}
-                      />
-                    </View>
-
-                    {showDescent ? (
-                      <View style={styles.threatCenter}>
-                        <ThreatForecast activeCabal={activeCabal} fontScale={fontScale} />
-                      </View>
-                    ) : (
-                      <View style={styles.threatSpacer} />
-                    )}
-
-                    {showDescent ? (
-                      <View style={styles.descendBlock}>
-                        <EvacUltimatumButton
-                          primaryLabel="[ DESCEND: SUB-GRID ]"
-                          subtext="Retain current health and payload. Increase threat constraints."
-                          variant="descent"
-                          onPress={handleDescend}
-                          scaleSize={scaleSize}
-                          scaleSpacing={scaleSpacing}
-                          primarySize={s.ultimatumPrimary}
-                          subtextSize={s.ultimatumSubtext}
-                          hazardPatternId={hazardPatternId}
-                        />
-                      </View>
-                    ) : null}
-                </DossierCardShell>
+                  {showDescent ? (
+                    <EvacDecisionCard
+                      primaryLabel="CONTINUE DESCENT"
+                      variant="descent"
+                      onPress={handleDescend}
+                      primarySize={s.ultimatumPrimary}
+                      hazardPatternId={`${hazardPatternId}-d`}
+                    />
+                  ) : null}
+                  <EvacDecisionCard
+                    primaryLabel="INITIATE EXTRACTION"
+                    variant="extract"
+                    onPress={handleExtract}
+                    primarySize={s.ultimatumPrimary}
+                    hazardPatternId={hazardPatternId}
+                  />
+                </View>
               </View>
             </View>
           </View>
@@ -637,7 +443,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(9, 9, 11, 0.75)',
+    backgroundColor: `rgba(5, 9, 10, ${RUN_FIELD.environmentScrim})`,
     minHeight: 0,
   },
   contentShell: {
@@ -645,148 +451,84 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
   },
-  globalHeader: {
-    width: '100%',
-    borderBottomWidth: 1,
-    gap: 6,
-    flexShrink: 0,
-  },
-  globalHeaderTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  globalHeaderMeta: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.8,
-  },
   masterContainer: {
     flex: 1,
     width: '100%',
     alignSelf: 'center',
     minHeight: 0,
     alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    paddingTop: 12,
   },
-  evacPanel: {
+  bottomActionSpacer: {
     flex: 1,
-    minHeight: 0,
+    minHeight: 12,
   },
-  rightPanelBody: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'space-between',
-  },
-  rightTopBlock: {
+  cargoSummaryPlate: {
     flexShrink: 0,
-  },
-  threatSpacer: {
-    flex: 1,
+    minWidth: 0,
     minHeight: 0,
   },
-  threatCenter: {
-    flex: 1,
+  cargoSummaryContent: {
+    padding: 14,
+    gap: 10,
     minHeight: 0,
-    justifyContent: 'center',
-    alignItems: 'stretch',
-    paddingVertical: 16,
   },
-  threatBlock: {
+  decisionRow: {
     width: '100%',
+    flexShrink: 0,
+    alignItems: 'stretch',
   },
-  threatHeader: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.6,
+  decisionCard: {
+    flex: 1,
+    minWidth: 0,
+  },
+  decisionPlate: {
+    minHeight: 56,
+  },
+  decisionContent: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
   },
   threatBody: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     fontWeight: '600',
     letterSpacing: 0.35,
-  },
-  descendBlock: {
+    textAlign: 'center',
+    paddingHorizontal: 8,
     flexShrink: 0,
-    marginTop: 'auto',
-  },
-  sectionLabel: {
-    fontFamily: 'monospace',
-    letterSpacing: 1.5,
-    fontWeight: '700',
-  },
-  telemetryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  telemetryLabel: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    flex: 1,
-  },
-  telemetryValue: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    textAlign: 'right',
-  },
-  massFooter: {
-    flexShrink: 0,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(51, 65, 85, 0.65)',
-  },
-  massTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(51, 65, 85, 0.55)',
-    overflow: 'hidden',
-  },
-  massFill: {
-    height: '100%',
-    backgroundColor: EXTRACT_CYAN,
-    borderRadius: 2,
-  },
-  massHash: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.8,
   },
   hazardStripeLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 0,
   },
-  cargoDeckSection: {
-    flex: 1,
-    minHeight: 0,
-    gap: 10,
-  },
   cargoPreviewMeasure: {
-    flex: 1,
+    minWidth: 0,
     minHeight: 0,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   cargoPreviewHost: {
-    width: '100%',
+    minWidth: 0,
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cargoEmptyText: {
+    fontFamily: RUN_FIELD.mono,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    color: MUTED_SLATE,
+  },
   ultimatumPrimary: {
-    fontFamily: 'monospace',
+    fontFamily: RUN_FIELD.mono,
     fontWeight: '800',
     letterSpacing: 1,
     textAlign: 'center',
-    zIndex: 1,
-  },
-  ultimatumSubtext: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.45,
-    textAlign: 'center',
-    paddingHorizontal: 8,
     zIndex: 1,
   },
 });

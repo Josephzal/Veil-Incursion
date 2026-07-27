@@ -3,12 +3,16 @@ import { ADJACENT_SLOTS, ALL_GRID_SLOTS, FRONTLINE_SLOTS, laneForSlot } from '..
 import type { EnemyCombatProfile } from '../types/run';
 
 export function isUnitAlive(unit: EnemyCombatProfile): boolean {
-  // Slumped thralls count as alive only while a revive timer remains.
-  // Expired / blocked slumps must not soft-lock combat at 0 HP.
-  if (unit.isSlumped) {
-    return (unit.slumpTurnsRemaining ?? 0) > 0;
-  }
+  // Slumped thralls remain combatants until executed or they reanimate.
+  if (unit.isSlumped) return true;
   return unit.currentHp > 0;
+}
+
+/** Whether a living unit may be queued / take an enemy action this phase. */
+export function canUnitAct(unit: EnemyCombatProfile): boolean {
+  if (!isUnitAlive(unit)) return false;
+  if (unit.isSlumped) return false;
+  return true;
 }
 
 /** Arena grid visibility — alive/slumped units stay mounted; dead units only during dissolve VFX. */

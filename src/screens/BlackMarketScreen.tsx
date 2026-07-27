@@ -26,7 +26,6 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { DOSSIER_CTA_BG, SELECT_ACCENT_GLOW } from '../constants/dossierSurface';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
@@ -34,7 +33,8 @@ import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import RunIncursionCargoPanel from '../components/run/RunIncursionCargoPanel';
 import DraggableMarketListing from '../components/run/DraggableMarketListing';
 import BlackMarketFenceBay from '../components/run/BlackMarketFenceBay';
-import DossierCardShell from '../components/hub/DossierCardShell';
+import FieldPlate from '../components/runField/FieldPlate';
+import RunActionRail, { RunActionRailSummary } from '../components/runField/RunActionRail';
 import type { CargoDragSource } from '../components/CargoGridBoard';
 import type { CargoItemId } from '../types/cargoGrid';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -46,12 +46,11 @@ import {
 } from '../utils/cargoGridLayout';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../utils/hiddenScrollbarStyle';
-import { VEIL } from '../theme/veilTerminalTokens';
-import { viewShadow } from '../utils/adaptiveStyles';
+import { RUN_FIELD } from '../theme/runFieldTokens';
 
-const MUTED_SLATE = VEIL.textMuted;
-const PHOSPHOR_GREEN = VEIL.mint;
-const MANIFEST_ACTIVE_BG = DOSSIER_CTA_BG;
+const MUTED_SLATE = RUN_FIELD.textSecondary;
+const PHOSPHOR_GREEN = RUN_FIELD.mint;
+const MANIFEST_ACTIVE_BG = RUN_FIELD.mintSoft;
 
 const SPLIT_MAX_WIDTH = 1200;
 const DROP_PADDING = 12;
@@ -351,30 +350,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
     completeCurrentNode('Contraband cache visit concluded.');
   };
 
-  const panelGlow = useMemo(
-    () => viewShadow({
-      color: PHOSPHOR_GREEN,
-      opacity: 0.28,
-      radius: 14,
-      offset: { width: 0, height: 0 },
-    }),
-    [],
-  );
-
-  const continueControl = (
-    <View style={[styles.continueColumn, !isDesktop ? styles.continueColumnMobile : null]}>
-      <HubPrimaryCta
-        label="[ CONTINUE INCURSION ]"
-        onPress={leaving ? undefined : handleLeave}
-        disabled={leaving}
-        variant="classic"
-        accessibilityLabel="Continue incursion"
-        minHeight={42}
-        size={7.5}
-        style={[styles.continueBtn, !isDesktop ? styles.continueBtnMobile : null]}
-      />
-    </View>
-  );
+  const remainingCredits = activeIncursion.runCredits - bindTotalCost;
 
   return (
     <IncursionShell>
@@ -382,7 +358,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
         <RunEventImmersiveBackdrop
           backgroundImage={BlackMarketBg}
           contentPadding={16 * fontScale}
-          scrimOpacity={0}
+          scrimOpacity={RUN_FIELD.environmentScrimLight}
           overlay={<TerminalOverlay />}
         >
           <View ref={rootRef} style={styles.masterShell}>
@@ -398,19 +374,18 @@ export default function BlackMarketScreen(): React.JSX.Element {
                 style={[
                   styles.splitWrap,
                   {
-                    flexDirection: isDesktop ? 'row' : 'column-reverse',
+                    flexDirection: isDesktop ? 'row' : 'column',
                     gap,
                     maxWidth: splitMaxWidth,
                   },
                 ]}
               >
-                {!isDesktop ? continueControl : null}
-                <DossierCardShell
-                  fillHeight
-                  padding={s.panelPad}
-                  accentColor={PHOSPHOR_GREEN}
-                  style={[styles.marketPanel, panelGlow]}
-                  contentStyle={[styles.panelContent, { gap: s.actionGap }]}
+                <FieldPlate
+                  density="standard"
+                  tone="neutral"
+                  brackets={false}
+                  style={styles.marketPanel}
+                  contentStyle={[styles.panelContent, { gap: s.actionGap, padding: s.panelPad }]}
                 >
                   <View style={styles.panelEyebrow}>
                     <Text style={[styles.panelEyebrowText, { color: PHOSPHOR_GREEN, fontSize: s.dossierMeta }]}>
@@ -418,7 +393,13 @@ export default function BlackMarketScreen(): React.JSX.Element {
                     </Text>
                   </View>
 
-                  <View style={[styles.creditsReadout, { backgroundColor: SELECT_ACCENT_GLOW }]}>
+                  <FieldPlate
+                    density="wash"
+                    tone="neutral"
+                    brackets={false}
+                    style={styles.creditsReadout}
+                    contentStyle={styles.creditsReadoutContent}
+                  >
                     <Text style={sectionLabelStyle}>
                       RUN CREDITS
                     </Text>
@@ -448,7 +429,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                         {`−${blackMarketDiscountPct}% CACHE TARIFF`}
                       </Text>
                     ) : null}
-                  </View>
+                  </FieldPlate>
 
                   <View
                     ref={manifestRef}
@@ -490,7 +471,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
                               || brokerMarked
                             }
                             fontScale={fontScale}
-                            borderColor={VEIL.lineStrong}
                             onDragStart={handleMarketDragStart}
                             onDragMove={handleMarketDragMove}
                             onDragEnd={handleMarketDragEnd}
@@ -505,7 +485,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                         onPress={() => {
                           useBrokerFlashcard();
                         }}
-                        variant="classic"
+                        variant="glow"
                         accessibilityLabel="Broker flashcard reroll stock"
                         minHeight={42}
                         size={7.5}
@@ -520,37 +500,47 @@ export default function BlackMarketScreen(): React.JSX.Element {
                     ) : null}
                   </View>
 
-                  <HubPrimaryCta
-                    label={hasStagedPurchases ? `[ PURCHASE — ${bindTotalCost} CR ]` : '[ PURCHASE ]'}
-                    onPress={canBind ? handleBind : undefined}
-                    disabled={!canBind}
-                    variant="classic"
-                    accessibilityLabel="Purchase staged cargo"
-                    minHeight={46}
-                    size={8}
-                    style={styles.panelCta}
-                  />
-
                   {canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime) ? (
                     <HubPrimaryCta
                       label="[ NULL LEDGER CREDIT ]"
                       onPress={canCreditBind ? handleCreditBind : undefined}
                       disabled={!canCreditBind}
-                      variant="classic"
+                      variant="glow"
                       accessibilityLabel="Null ledger credit"
                       minHeight={42}
                       size={7.5}
                       style={styles.panelCta}
                     />
                   ) : null}
-                </DossierCardShell>
 
-                <DossierCardShell
-                  fillHeight
-                  padding={s.panelPad}
-                  accentColor={PHOSPHOR_GREEN}
-                  style={[styles.cargoPanel, panelGlow]}
-                  contentStyle={[styles.panelContent, { gap: s.actionGap }]}
+                  <View style={styles.purchaseFooter}>
+                    {hasStagedPurchases ? (
+                      <RunActionRailSummary
+                        lines={[
+                          { label: 'STAGED', value: String(stagedPurchases.length) },
+                          { label: 'COST', value: `${bindTotalCost} CR` },
+                          { label: 'REMAINING', value: `${remainingCredits} CR`, danger: remainingCredits < 0 },
+                        ]}
+                      />
+                    ) : null}
+                    <HubPrimaryCta
+                      label={hasStagedPurchases ? `PURCHASE — ${bindTotalCost} CR` : 'PURCHASE'}
+                      onPress={canBind ? handleBind : undefined}
+                      disabled={!canBind}
+                      variant="glow"
+                      accessibilityLabel="Purchase staged cargo"
+                      minHeight={48}
+                      style={styles.purchaseCta}
+                    />
+                  </View>
+                </FieldPlate>
+
+                <FieldPlate
+                  density="standard"
+                  tone="neutral"
+                  brackets
+                  style={styles.cargoPanel}
+                  contentStyle={[styles.panelContent, { gap: s.actionGap, padding: s.panelPad }]}
                 >
                   <View
                     ref={cargoPanelRef}
@@ -583,11 +573,16 @@ export default function BlackMarketScreen(): React.JSX.Element {
                       fenceMetricsRef.current = rect;
                     }}
                   />
-                </DossierCardShell>
-
-                {isDesktop ? continueControl : null}
+                </FieldPlate>
               </View>
             </View>
+
+            <RunActionRail
+              mode="screen"
+              primaryLabel="CONTINUE INCURSION"
+              onPrimary={handleLeave}
+              primaryDisabled={leaving}
+            />
 
             {dragGhost ? (
               <View style={styles.dragGhostLayer} pointerEvents="none">
@@ -648,38 +643,27 @@ const styles = StyleSheet.create({
     minWidth: 0,
     justifyContent: 'flex-start',
   },
-  continueColumn: {
-    justifyContent: 'flex-end',
-    alignItems: 'stretch',
-    flexShrink: 0,
-    alignSelf: 'stretch',
-    minWidth: 168,
-    maxWidth: 200,
-  },
-  continueColumnMobile: {
-    minWidth: 0,
-    maxWidth: '100%',
-    width: '100%',
-    alignItems: 'flex-end',
-  },
   panelCta: {
     alignSelf: 'stretch',
     width: '100%',
   },
-  continueBtn: {
-    alignSelf: 'stretch',
-    width: '100%',
-  },
-  continueBtnMobile: {
-    width: undefined,
-    alignSelf: 'flex-end',
-    minWidth: 168,
-    maxWidth: 220,
-  },
   cargoDeckBlock: {
     flex: 1,
     minHeight: 0,
+    minWidth: 0,
     gap: 8,
+  },
+  purchaseFooter: {
+    flexShrink: 0,
+    width: '100%',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 8,
+  },
+  purchaseCta: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 300,
   },
   panelEyebrow: {
     flexShrink: 0,
@@ -717,9 +701,9 @@ const styles = StyleSheet.create({
   },
   creditsReadout: {
     flexShrink: 0,
+  },
+  creditsReadoutContent: {
     gap: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(98, 205, 181, 0.35)',
     paddingHorizontal: 10,
     paddingVertical: 8,
   },

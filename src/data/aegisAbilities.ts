@@ -156,7 +156,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     staminaCost: 0,
     requiresFullAbyssal: true,
     description: 'Ultimate at 100% Reserve — 0 AP. Flush Reserve. 3-slice true damage. Sunder armor on survivors.',
-    tags: ['ULTIMATE', 'TRUE_DAMAGE', 'MELEE', 'DEBUFF'],
+    tags: ['ULTIMATE', 'TRUE_DAMAGE', 'MELEE', 'DEBUFF', 'EXECUTE', 'FINISHER'],
     unlockCost: { 'anomalous-core': 1, 'ossified-ley-knot': 1 },
   },
   DEVASTATE: {
@@ -167,7 +167,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     requiredBrands: 3,
     brandsConsumed: 3,
     description: 'Requires 3 Brands — detonates 100% of target fracture as True damage.',
-    tags: ['KINETIC', 'MELEE', 'TRUE_DAMAGE', 'CONTROL', 'FRACTURE'],
+    tags: ['KINETIC', 'MELEE', 'TRUE_DAMAGE', 'CONTROL', 'FRACTURE', 'EXECUTE'],
     unlockCost: { 'ley-slag': 18 },
   },
   ABYSSAL_FAULT: {

@@ -13,9 +13,10 @@ import {
   resolveImmersiveFooterInset,
   resolveImmersiveHorizontalInset,
 } from '../../constants/immersiveLayout';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
-/** Matches ExtractionReviewScreen scrim — background art stays visible. */
-export const RUN_EVENT_IMMERSIVE_SCRIM = 'rgba(9, 9, 11, 0.75)';
+/** Preferred field scrim — environment stays readable (~40–55%). */
+export const RUN_EVENT_IMMERSIVE_SCRIM = `rgba(5, 9, 10, ${RUN_FIELD.environmentScrim})`;
 
 interface RunEventImmersiveBackdropProps {
   backgroundImage: ImageSourcePropType;
@@ -33,7 +34,7 @@ export default function RunEventImmersiveBackdrop({
   contentPadding = 16,
   contentStyle,
   overlay,
-  scrimOpacity = 0.75,
+  scrimOpacity = RUN_FIELD.environmentScrim,
 }: RunEventImmersiveBackdropProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const horizontal = resolveImmersiveHorizontalInset(insets.left, insets.right);
@@ -44,21 +45,30 @@ export default function RunEventImmersiveBackdrop({
   );
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      {...({ [RUN_FIELD.scopeAttr]: RUN_FIELD.scopeValue } as object)}
+    >
       <Image
         source={backgroundImage}
         style={styles.backgroundImage}
         resizeMode="cover"
       />
+      {/* Localized vignette — not a uniform black crush */}
       <View
         style={[
           styles.scrim,
-          { backgroundColor: `rgba(9, 9, 11, ${scrimOpacity})` },
+          { backgroundColor: `rgba(5, 9, 10, ${scrimOpacity})` },
         ]}
         pointerEvents="none"
-      >
-        {overlay}
-      </View>
+      />
+      <View style={styles.topWash} pointerEvents="none" />
+      <View style={styles.bottomWash} pointerEvents="none" />
+      {overlay ? (
+        <View style={styles.overlayHost} pointerEvents="box-none">
+          {overlay}
+        </View>
+      ) : null}
       <View
         style={[
           styles.contentShell,
@@ -82,6 +92,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
+    backgroundColor: RUN_FIELD.black,
   },
   backgroundImage: {
     ...StyleSheet.absoluteFill,
@@ -90,6 +101,26 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFill,
+  },
+  topWash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '22%',
+    backgroundColor: 'rgba(5, 9, 10, 0.35)',
+  },
+  bottomWash: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '28%',
+    backgroundColor: 'rgba(5, 9, 10, 0.45)',
+  },
+  overlayHost: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
   },
   contentShell: {
     flex: 1,

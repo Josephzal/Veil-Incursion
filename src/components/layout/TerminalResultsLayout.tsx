@@ -1,9 +1,10 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   LANDSCAPE_PANEL_PADDING,
   META_RESULTS_CARD_MAX_WIDTH,
   META_RESULTS_CARD_MAX_WIDTH_WIDE,
+  META_RESULTS_CARD_VIEWPORT_MARGIN,
   META_RESULTS_PRIMARY_RATIO,
 } from '../../constants/landscapeLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
@@ -21,6 +22,24 @@ interface TerminalResultsLayoutProps {
   accentBorderColor?: string;
 }
 
+function resolveCardWidthStyle(breakpoint: 'compact' | 'standard' | 'wide'): ViewStyle {
+  const tokenMax = breakpoint === 'wide'
+    ? META_RESULTS_CARD_MAX_WIDTH_WIDE
+    : META_RESULTS_CARD_MAX_WIDTH;
+
+  if (Platform.OS === 'web') {
+    return {
+      width: '100%',
+      maxWidth: `min(${tokenMax}px, calc(100vw - ${META_RESULTS_CARD_VIEWPORT_MARGIN}px))`,
+    } as unknown as ViewStyle;
+  }
+
+  return {
+    width: '100%',
+    maxWidth: tokenMax,
+  };
+}
+
 /**
  * Centered meta-screen layout for Game Over / Run Complete.
  * Wide: narrative | summary+footer side-by-side inside a centered card.
@@ -34,14 +53,20 @@ export default function TerminalResultsLayout({
   accentBorderColor = VEIL.line,
 }: TerminalResultsLayoutProps): React.JSX.Element {
   const { useHorizontalSplit, breakpoint } = useLandscapeMetrics();
-  const cardMaxWidth = breakpoint === 'wide'
-    ? META_RESULTS_CARD_MAX_WIDTH_WIDE
-    : META_RESULTS_CARD_MAX_WIDTH;
+  const cardWidthStyle = resolveCardWidthStyle(breakpoint);
 
   const summaryColumn = (
     <View style={styles.summaryColumn}>
-      {summary}
-      {footer}
+      <ScrollView
+        style={styles.summaryScroll}
+        contentContainerStyle={styles.summaryScrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
+        {summary}
+      </ScrollView>
+      <View style={styles.footerSlot}>{footer}</View>
     </View>
   );
 
@@ -59,10 +84,36 @@ export default function TerminalResultsLayout({
   ) : (
     <View style={styles.stacked}>
       {narrative}
-      {summary}
+      <ScrollView
+        style={styles.compactSummaryScroll}
+        contentContainerStyle={styles.compactSummaryScrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {summary}
+      </ScrollView>
       {footer}
     </View>
   );
+
+  if (useHorizontalSplit) {
+    return (
+      <View style={[styles.root, style]}>
+        <View style={styles.desktopWorkspace}>
+          <View
+            style={[
+              styles.card,
+              styles.cardDesktop,
+              cardWidthStyle,
+              { borderColor: accentBorderColor },
+            ]}
+          >
+            {body}
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, style]}>
@@ -75,10 +126,8 @@ export default function TerminalResultsLayout({
         <View
           style={[
             styles.card,
-            {
-              maxWidth: cardMaxWidth,
-              borderColor: accentBorderColor,
-            },
+            cardWidthStyle,
+            { borderColor: accentBorderColor },
           ]}
         >
           {body}
@@ -92,6 +141,13 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     minHeight: 0,
+  },
+  desktopWorkspace: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: LANDSCAPE_PANEL_PADDING,
   },
   scroll: {
     flex: 1,
@@ -108,23 +164,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(5, 6, 8, 0.94)',
     padding: 20,
   },
+  cardDesktop: {
+    flex: 1,
+    maxHeight: '94%',
+    minHeight: 0,
+    minWidth: 0,
+  },
   split: {
+    flex: 1,
     minHeight: 0,
   },
   splitPane: {
     minHeight: 0,
-    justifyContent: 'center',
   },
   narrativeColumn: {
     flex: 1,
     justifyContent: 'center',
-    paddingRight: 4,
+    paddingRight: 8,
+    minHeight: 0,
   },
   summaryColumn: {
     flex: 1,
-    justifyContent: 'center',
-    gap: 16,
-    paddingLeft: 4,
+    minHeight: 0,
+    gap: 12,
+    paddingLeft: 8,
+  },
+  summaryScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  summaryScrollContent: {
+    flexGrow: 1,
+    gap: 4,
+    paddingBottom: 4,
+  },
+  footerSlot: {
+    flexShrink: 0,
+  },
+  compactSummaryScroll: {
+    maxHeight: 360,
+    flexGrow: 0,
+  },
+  compactSummaryScrollContent: {
+    gap: 4,
   },
   stacked: {
     gap: 16,
