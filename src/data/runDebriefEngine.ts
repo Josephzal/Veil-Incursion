@@ -162,6 +162,11 @@ export interface OperationDebriefPayload {
   aftermathInput: RunAftermathInput | null;
   /** Breach Grade frozen for this run (Phase 1D). */
   breachGrade: import('../types/progression').BreachGradeId;
+  /**
+   * True after debrief-time settlement (routing, aftermath, progression) has run.
+   * Rerenders / remounts must not re-apply awards when this is set.
+   */
+  settlementComplete?: boolean;
 }
 
 export function computeRunOperationContribution(

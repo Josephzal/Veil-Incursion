@@ -210,10 +210,10 @@ export default function SafehouseBenchPanel({
     <View style={[
       styles.root,
       {
-        marginHorizontal: 16 * fontScale,
+        marginHorizontal: 12 * fontScale,
         gap,
-        flex: isDesktop ? 1.85 : 1,
-        paddingTop: 18 * fontScale,
+        flex: isDesktop ? 1.45 : 1,
+        paddingTop: 14 * fontScale,
       },
     ]}>
       <Text style={[styles.header, { fontSize: 8 * fontScale, color: MUTED_SLATE, letterSpacing: 1.5 }]}>

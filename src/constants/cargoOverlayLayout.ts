@@ -1,4 +1,4 @@
-import { CARGO_CELL_GAP, CARGO_CELL_SIZE } from './cargoGridLayout';
+import { CARGO_CELL_GAP, CARGO_GRID_FRAME_WIDTH, INCURSION_CARGO_CELL_SIZE } from './cargoGridLayout';
 import { COMBAT_POPUP_SCALE } from './combatOverlayTypography';
 import { HARVEST_EXTERNAL_BAY_HEIGHT, HARVEST_EXTERNAL_BAY_MARGIN_TOP } from './harvestLayout';
 import { resolveImmersiveFooterInset } from './immersiveLayout';
@@ -12,8 +12,8 @@ export const CARGO_OVERLAY_COMBAT_DETAIL_HEIGHT = 168;
 export const CARGO_OVERLAY_SCANNER_BUTTON_HEIGHT = 32;
 export const CARGO_OVERLAY_BOARD_GAP = 12;
 export const CARGO_OVERLAY_MIN_CELL_SIZE = 36;
-/** Combat cargo modal may exceed the standard grid cell size. */
-export const COMBAT_OVERLAY_MAX_CELL_SIZE = Math.round(CARGO_CELL_SIZE * COMBAT_POPUP_SCALE);
+/** Combat / encounter cargo overlays match the in-run black-market grid size. */
+export const COMBAT_OVERLAY_MAX_CELL_SIZE = INCURSION_CARGO_CELL_SIZE;
 
 /** Horizontal split inside the combat cargo modal content area. */
 export const COMBAT_OVERLAY_GRID_SHARE = 0.65;
@@ -71,7 +71,7 @@ export function resolveCombatOverlayCellSize(
   }
 
   return Math.min(
-    COMBAT_OVERLAY_MAX_CELL_SIZE,
+    INCURSION_CARGO_CELL_SIZE,
     Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, Math.min(heightCell, maxByWidth)),
   );
 }
@@ -106,7 +106,7 @@ export function resolveCargoOverlayCellSize(
   const heightCell = Math.floor(
     (availableHeight - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS,
   );
-  return Math.min(CARGO_CELL_SIZE, Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, heightCell));
+  return Math.min(INCURSION_CARGO_CELL_SIZE, Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, heightCell));
 }
 
 export function cargoOverlayFrameWidth(cellSize: number): number {

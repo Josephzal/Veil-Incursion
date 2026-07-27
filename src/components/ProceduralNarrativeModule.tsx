@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import FieldPlate from './runField/FieldPlate';
-import RunActionRail from './runField/RunActionRail';
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode, CheckStatus } from '../types/game';
 import TensionMechanicHost from './narrative/tension/TensionMechanicHost';
 import NarrativeOutcomePanel from './narrative/NarrativeOutcomePanel';
@@ -18,12 +17,10 @@ import {
   NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { useRun } from '../context/RunContext';
 import { RUN_FIELD } from '../theme/runFieldTokens';
 import { readPressableHover } from '../utils/terminalHoverStyle';
 
 const TERMINAL_ACCENT = RUN_FIELD.mint;
-const DANGER_ACCENT = RUN_FIELD.danger;
 const LOCK_ICON_COLOR = RUN_FIELD.danger;
 
 type ModulePhase = 'SCENARIO' | 'TENSION' | 'OUTCOME';
@@ -72,6 +69,13 @@ function getOptionDVariant(choiceD?: NarrativeChoiceOption): OptionDVariant | nu
   return 'BruteForce';
 }
 
+/** Screen-level CONFIRM rail state — parent owns bottom-right placement. */
+export interface NarrativeConfirmRailState {
+  canConfirm: boolean;
+  primaryDanger: boolean;
+  onConfirm: () => void;
+}
+
 interface ProceduralNarrativeModuleProps {
   node: NarrativeEventNode;
   onResolve: (
@@ -79,6 +83,8 @@ interface ProceduralNarrativeModuleProps {
     status?: CheckStatus,
     options?: { tensionBonusCredits?: number },
   ) => void;
+  /** Reports SCENARIO confirm controls for the screen action rail; null when not applicable. */
+  onConfirmRailChange?: (state: NarrativeConfirmRailState | null) => void;
   borderColor?: string;
   mutedColor?: string;
   primaryColor?: string;
@@ -204,6 +210,7 @@ function ResolverButton({
 export default function ProceduralNarrativeModule({
   node,
   onResolve,
+  onConfirmRailChange,
   borderColor = '#334155',
   mutedColor = '#94a3b8',
   primaryColor = '#f8fafc',
@@ -214,7 +221,6 @@ export default function ProceduralNarrativeModule({
     scaleSize,
     scaleSpacing,
   } = useResponsiveLayout();
-  const { activeIncursion } = useRun();
 
   const [phase, setPhase] = useState<ModulePhase>('SCENARIO');
   const [selectedChoice, setSelectedChoice] = useState<NarrativeChoiceKey | null>(null);
@@ -267,7 +273,16 @@ export default function ProceduralNarrativeModule({
     onResolve(pendingResolve.choice, pendingResolve.status, pendingResolve.options);
   };
 
-  const handleConfirm = () => {
+  const finishWithResult = useCallback((
+    choice: NarrativeChoiceKey,
+    _resultText: string,
+    status: CheckStatus = 'SUCCESS',
+    options?: { tensionBonusCredits?: number },
+  ) => {
+    showOutcome(choice, status, options);
+  }, [node]);
+
+  const handleConfirm = useCallback(() => {
     if (!selectedChoice || !selectedOption) return;
     if (selectedOption.locked) return;
 
@@ -282,16 +297,7 @@ export default function ProceduralNarrativeModule({
     }
 
     finishWithResult(selectedChoice, selectedOption.successText);
-  };
-
-  const finishWithResult = (
-    choice: NarrativeChoiceKey,
-    _resultText: string,
-    status: CheckStatus = 'SUCCESS',
-    options?: { tensionBonusCredits?: number },
-  ) => {
-    showOutcome(choice, status, options);
-  };
+  }, [selectedChoice, selectedOption, node, finishWithResult]);
 
   const handleTensionSuccess = (result?: { bonusCredits?: number }) => {
     finishWithResult('A', node.choiceA.successText, 'SUCCESS', {
@@ -303,9 +309,24 @@ export default function ProceduralNarrativeModule({
     finishWithResult('A', node.choiceA.failureText, 'FAILURE');
   };
 
-  const confirmAccent = selectedChoice === 'D' && optionDVariant === 'Retreat'
-    ? DANGER_ACCENT
-    : TERMINAL_ACCENT;
+  const primaryDanger = selectedChoice === 'D' && optionDVariant === 'Retreat';
+
+  useEffect(() => {
+    if (!onConfirmRailChange) return;
+    if (phase !== 'SCENARIO') {
+      onConfirmRailChange(null);
+      return;
+    }
+    onConfirmRailChange({
+      canConfirm,
+      primaryDanger,
+      onConfirm: handleConfirm,
+    });
+  }, [onConfirmRailChange, phase, canConfirm, primaryDanger, handleConfirm]);
+
+  useEffect(() => () => {
+    onConfirmRailChange?.(null);
+  }, [onConfirmRailChange]);
 
   if (phase === 'TENSION') {
     return (
@@ -402,14 +423,6 @@ export default function ProceduralNarrativeModule({
           ) : null}
         </View>
       </View>
-
-      <RunActionRail
-        mode="panel"
-        primaryLabel="RESOLVE EVENT"
-        onPrimary={canConfirm ? handleConfirm : undefined}
-        primaryDisabled={!canConfirm}
-        primaryDanger={confirmAccent === DANGER_ACCENT}
-      />
     </FieldPlate>
   );
 }

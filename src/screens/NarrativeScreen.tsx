@@ -1,12 +1,15 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import NarrativeStepperModule from '../components/NarrativeStepperModule';
-import ProceduralNarrativeModule from '../components/ProceduralNarrativeModule';
+import ProceduralNarrativeModule, {
+  type NarrativeConfirmRailState,
+} from '../components/ProceduralNarrativeModule';
 import NarrativeArtTerminalFrame from '../components/narrative/NarrativeArtTerminalFrame';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import TerminalOverlay from '../components/TerminalOverlay';
+import RunActionRail from '../components/runField/RunActionRail';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -36,6 +39,11 @@ export default function NarrativeScreen(): React.JSX.Element {
   const { exitToDevTestHub } = useDevSandboxExit();
   const { fontScale } = useResponsiveLayout();
   const resolvingRef = useRef(false);
+  const [confirmRail, setConfirmRail] = useState<NarrativeConfirmRailState | null>(null);
+
+  const handleConfirmRailChange = useCallback((state: NarrativeConfirmRailState | null) => {
+    setConfirmRail(state);
+  }, []);
 
   const node = getCurrentNarrativeNode();
   const vectorNode = getSelectedVectorNode();
@@ -162,6 +170,7 @@ export default function NarrativeScreen(): React.JSX.Element {
                   <ProceduralNarrativeModule
                     node={node}
                     onResolve={handleProceduralResolve}
+                    onConfirmRailChange={handleConfirmRailChange}
                     borderColor={theme.borderColor}
                     mutedColor={theme.mutedColor}
                     primaryColor={theme.primaryColor}
@@ -177,6 +186,16 @@ export default function NarrativeScreen(): React.JSX.Element {
                 )}
               </NarrativeArtTerminalFrame>
             </View>
+
+            {confirmRail ? (
+              <RunActionRail
+                mode="screen"
+                primaryLabel="CONFIRM"
+                onPrimary={confirmRail.onConfirm}
+                primaryDisabled={!confirmRail.canConfirm}
+                primaryDanger={confirmRail.primaryDanger}
+              />
+            ) : null}
           </View>
         </RunEventImmersiveBackdrop>
       </IncursionRunLayout>

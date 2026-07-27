@@ -41,7 +41,7 @@ import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 import {
   pointInWindowRect,
   resolveCargoGridCellFromWindow,
-  HUB_CARGO_INCURSION_CELL_TARGET,
+  INCURSION_CARGO_CELL_SIZE,
   type CargoGridWindowMetrics,
 } from '../utils/cargoGridLayout';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
@@ -87,7 +87,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const [dragGhost, setDragGhost] = useState<{ itemId: CargoItemId; x: number; y: number } | null>(null);
   const [manifestDropActive, setManifestDropActive] = useState(false);
   const [fenceDropActive, setFenceDropActive] = useState(false);
-  const [hubCellSize, setHubCellSize] = useState(HUB_CARGO_INCURSION_CELL_TARGET);
+  const [hubCellSize, setHubCellSize] = useState(INCURSION_CARGO_CELL_SIZE);
 
   const gridMetricsRef = useRef<CargoGridWindowMetrics | null>(null);
   const cargoPanelMetricsRef = useRef<WindowRect | null>(null);

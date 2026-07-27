@@ -43,14 +43,14 @@ export default function SafehouseTelemetryPanel({
   onBenchRestore,
   onStatus,
 }: SafehouseTelemetryPanelProps): React.JSX.Element {
-  const pad = 24 * fontScale;
+  const pad = 16 * fontScale;
   const labelSize = 7 * fontScale;
   const valueSize = 10 * fontScale;
   const sectionTitle = 8 * fontScale;
 
   return (
     <SafehouseTexturedPanel
-      flex={isDesktop ? 0.72 : undefined}
+      flex={isDesktop ? 0.62 : undefined}
       style={isDesktop ? styles.sidePanel : undefined}
       padding={pad}
       contentStyle={styles.content}
@@ -219,8 +219,8 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   sidePanel: {
-    maxWidth: 280,
-    minWidth: 200,
+    maxWidth: 240,
+    minWidth: 180,
     flexGrow: 0,
     flexShrink: 1,
   },

@@ -4,7 +4,30 @@ import {
   HUB_CARGO_MAT_INSET,
   resolveHubCargoMatShellMetrics,
 } from '../constants/cargoGridVisual';
+import {
+  HUB_CARGO_CELL_SCALE,
+  HUB_CARGO_DEFAULT_TARGET,
+  HUB_CARGO_EXTRACTION_CELL_MAX,
+  HUB_CARGO_EXTRACTION_CELL_TARGET_BASE,
+  HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE,
+  HUB_CARGO_INCURSION_CELL_MAX,
+  HUB_CARGO_INCURSION_CELL_TARGET,
+  INCURSION_CARGO_CELL_SIZE,
+  scaleHubCargoCellSize,
+} from '../constants/cargoGridLayout';
 import { getGridMetrics } from './layoutGrid';
+
+export {
+  HUB_CARGO_CELL_SCALE,
+  HUB_CARGO_DEFAULT_TARGET,
+  HUB_CARGO_EXTRACTION_CELL_MAX,
+  HUB_CARGO_EXTRACTION_CELL_TARGET_BASE,
+  HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE,
+  HUB_CARGO_INCURSION_CELL_MAX,
+  HUB_CARGO_INCURSION_CELL_TARGET,
+  INCURSION_CARGO_CELL_SIZE,
+  scaleHubCargoCellSize,
+};
 
 export interface CargoGridWindowMetrics {
   pageX: number;
@@ -68,19 +91,18 @@ export function resolveHubStashIconSquareSize(iconSize: number): number {
   return iconSize + 16;
 }
 
-/** Hub cargo grids (loadout, extraction, black market) render 20% larger than legacy baseline. */
-export const HUB_CARGO_CELL_SCALE = 1.2;
-
-export function scaleHubCargoCellSize(base: number): number {
-  return Math.round(base * HUB_CARGO_CELL_SCALE);
+/** Fit to available area without exceeding the canonical in-run cell size. */
+export function resolveUniformIncursionCargoCellSize(
+  areaWidth: number,
+  areaHeight: number,
+): number {
+  return resolveHubLoadoutCellSize(
+    areaWidth,
+    areaHeight,
+    INCURSION_CARGO_CELL_SIZE,
+    INCURSION_CARGO_CELL_SIZE,
+  );
 }
-
-export const HUB_CARGO_DEFAULT_TARGET = scaleHubCargoCellSize(44);
-export const HUB_CARGO_INCURSION_CELL_TARGET = scaleHubCargoCellSize(52);
-export const HUB_CARGO_INCURSION_CELL_MAX = scaleHubCargoCellSize(72);
-export const HUB_CARGO_EXTRACTION_CELL_MAX = scaleHubCargoCellSize(96);
-export const HUB_CARGO_EXTRACTION_CELL_TARGET_BASE = scaleHubCargoCellSize(52);
-export const HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE = scaleHubCargoCellSize(58);
 
 /** Fit cargo grid cells to the available pane — prefers target size when it fits. */
 export function resolveHubLoadoutCellSize(

@@ -5,9 +5,8 @@ import { useTerminal } from '../../context/TerminalContext';
 import { useRun } from '../../context/RunContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import {
-  resolveHubLoadoutCellSize,
-  HUB_CARGO_INCURSION_CELL_MAX,
-  HUB_CARGO_INCURSION_CELL_TARGET,
+  resolveUniformIncursionCargoCellSize,
+  INCURSION_CARGO_CELL_SIZE,
 } from '../../utils/cargoGridLayout';
 
 interface RunIncursionCargoPanelProps {
@@ -49,12 +48,9 @@ export default function RunIncursionCargoPanel({
   const [cargoAreaSize, setCargoAreaSize] = useState({ width: 0, height: 0 });
 
   const cellSize = useMemo(
-    () => resolveHubLoadoutCellSize(
-      cargoAreaSize.width,
-      cargoAreaSize.height,
-      HUB_CARGO_INCURSION_CELL_TARGET,
-      HUB_CARGO_INCURSION_CELL_MAX,
-    ),
+    () => (cargoAreaSize.width > 0 && cargoAreaSize.height > 0
+      ? resolveUniformIncursionCargoCellSize(cargoAreaSize.width, cargoAreaSize.height)
+      : INCURSION_CARGO_CELL_SIZE),
     [cargoAreaSize.height, cargoAreaSize.width],
   );
 

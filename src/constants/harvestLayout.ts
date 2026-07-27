@@ -1,4 +1,9 @@
-import { CARGO_CELL_GAP, CARGO_CELL_SIZE, CARGO_GRID_FRAME_WIDTH } from './cargoGridLayout';
+import {
+  CARGO_CELL_GAP,
+  CARGO_CELL_SIZE,
+  CARGO_GRID_FRAME_WIDTH,
+  INCURSION_CARGO_CELL_SIZE,
+} from './cargoGridLayout';
 import { LANDSCAPE_PANEL_PADDING } from './landscapeLayout';
 import {
   resolveImmersiveContentPadding,
@@ -73,7 +78,7 @@ export const HARVEST_CARGO_BACKING_PADDING = 4;
 /** Padding below the containment slot row inside the external bay. */
 export const HARVEST_EXTERNAL_BAY_EXTRA = 28;
 /** Fixed vertical footprint for the harvest containment row (margin + slot height). */
-export const HARVEST_EXTERNAL_BAY_HEIGHT = CARGO_CELL_SIZE + HARVEST_EXTERNAL_BAY_EXTRA;
+export const HARVEST_EXTERNAL_BAY_HEIGHT = INCURSION_CARGO_CELL_SIZE + HARVEST_EXTERNAL_BAY_EXTRA;
 export const HARVEST_HEADER_RESERVE = 36;
 export const HARVEST_BOARD_COLUMN_GAP = 6;
 export const HARVEST_MIN_CELL_SIZE = 34;
@@ -128,7 +133,7 @@ export function resolveHarvestCellSize(
   // Grid rows plus one external containment strip share the same cell size.
   const computed = Math.floor(numerator / (CARGO_GRID_ROWS + 1));
 
-  return Math.min(CARGO_CELL_SIZE, Math.max(HARVEST_MIN_CELL_SIZE, computed));
+  return Math.min(INCURSION_CARGO_CELL_SIZE, Math.max(HARVEST_MIN_CELL_SIZE, computed));
 }
 
 export function resolveHarvestTriPaneCellSize(
@@ -145,16 +150,16 @@ export function resolveHarvestTriPaneCellSize(
     - HARVEST_CARGO_BACKING_PADDING * 2
     - 2;
   const widthCell = Math.floor(
-    (rightPaneInnerWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS,
+    (rightPaneInnerWidth - (CARGO_GRID_COLS - 1) * HARVEST_CELL_GAP) / CARGO_GRID_COLS,
   );
 
-  const rowGaps = (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
+  const rowGaps = (CARGO_GRID_ROWS - 1) * HARVEST_CELL_GAP;
   const heightAvailable =
     screenHeight - framePaddingTop - framePaddingBottom - headerReserve - 8;
   const heightCell = Math.floor((heightAvailable - rowGaps) / CARGO_GRID_ROWS);
 
   return Math.min(
-    CARGO_CELL_SIZE,
+    INCURSION_CARGO_CELL_SIZE,
     Math.max(HARVEST_MIN_CELL_SIZE, Math.min(widthCell, heightCell)),
   );
 }

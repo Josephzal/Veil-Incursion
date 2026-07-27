@@ -1,16 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import CargoPackingPanel from '../CargoPackingPanel';
 import TacticalButton from '../TacticalButton';
 import SafehouseTexturedPanel from './SafehouseTexturedPanel';
+import { cargoGridFrameDimensions } from '../CargoGridBoard';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../../data/cargoGridEngine';
-import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import {
-  HUB_CARGO_INCURSION_CELL_MAX,
-  HUB_CARGO_INCURSION_CELL_TARGET,
-  resolveHubMatAwareLoadoutCellSize,
-} from '../../utils/cargoGridLayout';
-import { HUB_CARGO_MAT_INSET } from '../../constants/cargoGridVisual';
+import { INCURSION_CARGO_CELL_SIZE } from '../../utils/cargoGridLayout';
 import type { CargoRunState } from '../../types/cargoGrid';
 import type { TerminalTheme } from '../../types/theme';
 
@@ -42,33 +37,31 @@ export default function SafehousePayloadRouter({
   onRelocateItem,
   onBankCargo,
 }: SafehousePayloadRouterProps): React.JSX.Element {
-  const { scaleSpacing } = useResponsiveLayout();
-  const pad = 24 * fontScale;
-  const sectionGap = 12 * fontScale;
-  const [gridAreaSize, setGridAreaSize] = useState({ width: 0, height: 0 });
+  const pad = 18 * fontScale;
+  const sectionGap = 10 * fontScale;
   const extractedMass = useMemo(() => formatExtractedMass(cargo), [cargo]);
 
-  const hubCellSize = useMemo(
-    () => resolveHubMatAwareLoadoutCellSize(
-      gridAreaSize.width,
-      gridAreaSize.height,
-      scaleSpacing,
-      HUB_CARGO_INCURSION_CELL_TARGET,
-      HUB_CARGO_INCURSION_CELL_MAX,
-      HUB_CARGO_MAT_INSET,
-    ),
-    [gridAreaSize.height, gridAreaSize.width, scaleSpacing],
-  );
-
-  const handleGridAreaLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setGridAreaSize({ width, height });
-  }, []);
+  const panelMetrics = useMemo(() => {
+    const frame = cargoGridFrameDimensions(INCURSION_CARGO_CELL_SIZE);
+    const contentWidth = frame.frameWidth;
+    const minPanelWidth = Math.ceil(contentWidth + pad * 2);
+    return {
+      cellSize: INCURSION_CARGO_CELL_SIZE,
+      minPanelWidth,
+      preferredPanelWidth: Math.max(minPanelWidth, Math.round(340 * fontScale)),
+    };
+  }, [fontScale, pad]);
 
   return (
     <SafehouseTexturedPanel
-      flex={isDesktop ? 0.72 : undefined}
-      style={isDesktop ? styles.sidePanel : undefined}
+      flex={isDesktop ? 1.15 : undefined}
+      style={isDesktop ? [
+        styles.sidePanel,
+        {
+          minWidth: panelMetrics.minPanelWidth,
+          maxWidth: panelMetrics.preferredPanelWidth,
+        },
+      ] : undefined}
       padding={pad}
       contentStyle={[styles.content, { gap: sectionGap }]}
     >
@@ -81,7 +74,7 @@ export default function SafehousePayloadRouter({
         </Text>
       </View>
 
-      <View style={styles.gridHost} onLayout={handleGridAreaLayout}>
+      <View style={styles.gridHost}>
         <CargoPackingPanel
           cargo={cargo}
           theme={theme}
@@ -90,9 +83,7 @@ export default function SafehousePayloadRouter({
           hideContinueButton
           hidePackHeader
           embedded
-          compactCellSize={hubCellSize}
-          cargoBackdrop
-          hubCargoMatInset={HUB_CARGO_MAT_INSET}
+          compactCellSize={panelMetrics.cellSize}
         />
       </View>
 
@@ -135,12 +126,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   gridHost: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 0,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   anchorFooter: {
     flexShrink: 0,
@@ -150,9 +140,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   sidePanel: {
-    maxWidth: 300,
-    minWidth: 210,
     flexGrow: 0,
-    flexShrink: 1,
+    flexShrink: 0,
   },
 });
