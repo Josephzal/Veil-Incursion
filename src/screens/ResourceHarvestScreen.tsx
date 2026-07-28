@@ -84,6 +84,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   const [canisterCoordinates, setCanisterCoordinates] = useState<{ x: number; y: number } | null>(null);
   const [lootFloor, setLootFloor] = useState<HarvestFloorBounds | null>(null);
   const [residueSpawnGeneration, setResidueSpawnGeneration] = useState(0);
+  const [residueHarvestComplete, setResidueHarvestComplete] = useState(false);
+  const [sessionSawResidue, setSessionSawResidue] = useState(false);
+  const autoVacuumArmedRef = useRef(false);
   const lootPoolRef = useRef<ResidueParticleData[]>([]);
   const containmentSlotAssignmentRef = useRef<Map<string, number>>(new Map());
   const nextContainmentSlotRef = useRef(0);
@@ -259,7 +262,10 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
     const centerPromise = canisterRef.current?.measureCanisterCenter() ?? Promise.resolve(null);
     centerPromise.then((targetCenter) => {
-      if (!targetCenter) return;
+      if (!targetCenter) {
+        autoVacuumArmedRef.current = false;
+        return;
+      }
 
       overlayRef.current?.measureInWindow((overlayX, overlayY) => {
         setCanisterCoordinates({
@@ -267,14 +273,44 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
           y: targetCenter.y - overlayY,
         });
         setIsVacuuming(true);
+        setResidueHarvestComplete(false);
       });
     });
   }, [canVacuum]);
 
   const handleVacuumStop = useCallback(() => {
+    // Auto-extract runs to completion; ignore early release while motes remain.
+    if (lootPoolRef.current.length > 0) return;
     setIsVacuuming(false);
   }, []);
 
+  // Auto-extract as soon as residue appears on the floor — no hold required.
+  useEffect(() => {
+    if (lootPool.length === 0 || canisterFull || isVacuuming) {
+      if (lootPool.length === 0) {
+        autoVacuumArmedRef.current = false;
+      }
+      return undefined;
+    }
+    if (autoVacuumArmedRef.current) return undefined;
+    autoVacuumArmedRef.current = true;
+    setSessionSawResidue(true);
+
+    const timer = setTimeout(() => {
+      handleVacuumStart();
+    }, 420);
+
+    return () => clearTimeout(timer);
+  }, [canisterFull, handleVacuumStart, isVacuuming, lootPool.length]);
+
+  useEffect(() => {
+    if (!isVacuuming) return;
+    if (lootPool.length > 0) return;
+    setIsVacuuming(false);
+    if (sessionSawResidue) {
+      setResidueHarvestComplete(true);
+    }
+  }, [isVacuuming, lootPool.length, sessionSawResidue]);
   const handleParticleAbsorbed = useCallback((value: number, particleId: string) => {
     tickResidueParticleAbsorbed();
 
@@ -335,7 +371,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   }, [unpackedNonResidue]);
 
   const commitPackingContinue = useCallback(() => {
-    handleVacuumStop();
+    setIsVacuuming(false);
     if (!harvestAppliedRef.current) {
       harvestAppliedRef.current = true;
       const result = applyHarvestChoice('FULL');
@@ -349,6 +385,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     swarmedInstanceIdsRef.current.clear();
     instanceRemainingRef.current = {};
     setSwarmedInstanceIds(new Set());
+    setResidueHarvestComplete(false);
+    setSessionSawResidue(false);
+    autoVacuumArmedRef.current = false;
 
     if (runState.pendingAmbush) {
       prepareHarvestAmbushEncounter();
@@ -372,7 +411,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     applyHarvestChoice,
     completeCurrentNode,
     finalizeHarvestScreen,
-    handleVacuumStop,
     prepareHarvestAmbushEncounter,
     runState.pendingAmbush,
     startCombat,
@@ -457,12 +495,13 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 residueCapacity={MAX_RUN_CANISTER_RESIDUE}
                 residueLooseCount={lootPool.length}
                 isVacuuming={isVacuuming}
+                residueHarvestComplete={residueHarvestComplete}
                 packHeaderLabel="CARGO MANIFEST"
                 gridSidecar={(
                   <VeilVacuumCanisterStack
                     ref={canisterRef}
                     harvestPercentage={harvestPercentage}
-                    active={isVacuuming}
+                    active={isVacuuming || residueHarvestComplete}
                     disabled={!canVacuum}
                     onPressIn={handleVacuumStart}
                     onPressOut={handleVacuumStop}

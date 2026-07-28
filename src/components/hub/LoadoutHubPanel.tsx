@@ -13,6 +13,7 @@ import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import HubPageHeader from './HubPageHeader';
 import HubPrimaryCta from './HubPrimaryCta';
+import HubDossierCornerBrackets from './HubDossierCornerBrackets';
 import KeepsakeDeploymentChoiceModal from './KeepsakeDeploymentChoiceModal';
 import ChassisWorkspace, { resolveChassisDossier } from './loadout/ChassisWorkspace';
 import RelicWorkspace, { resolveRelicDossier } from './loadout/RelicWorkspace';
@@ -1016,6 +1017,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       <View style={[styles.dossierColumn, { width: inspectorColumnWidth, flexBasis: inspectorColumnWidth, maxWidth: inspectorColumnWidth }]}>
         {/* Outer shell owns height; Animated.View only fades content so layout cannot collapse. */}
         <View style={styles.dossier}>
+          <HubDossierCornerBrackets />
           <Animated.View style={[styles.dossierFill, { opacity: dossierLock }]}>
             {renderDossier()}
           </Animated.View>

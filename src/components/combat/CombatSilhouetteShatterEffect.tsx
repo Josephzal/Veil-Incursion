@@ -62,6 +62,8 @@ interface GoldenShardProps {
   rotateDeg: number;
   burst: SharedValue<number>;
   fade: SharedValue<number>;
+  /** Unique per host so concurrent fractures don't collide SVG clip ids. */
+  clipNamespace: string;
 }
 
 function GoldenShard({
@@ -72,8 +74,9 @@ function GoldenShard({
   rotateDeg,
   burst,
   fade,
+  clipNamespace,
 }: GoldenShardProps): React.JSX.Element | null {
-  const clipId = `shard-clip-${shard.id}`;
+  const clipId = `${clipNamespace}-shard-${shard.id}`;
   const points = useMemo(
     () => pointsForShard(shard.normPoints, width, height),
     [height, shard.normPoints, width],
@@ -134,6 +137,7 @@ export default function CombatSilhouetteShatterEffect({
   children,
 }: CombatSilhouetteShatterEffectProps): React.JSX.Element {
   const wasTriggeredRef = useRef(false);
+  const clipNamespaceRef = useRef(`shatter-${Math.random().toString(36).slice(2, 9)}`);
   const [shardsActive, setShardsActive] = useState(false);
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const [shardRotations, setShardRotations] = useState<number[]>(
@@ -150,7 +154,9 @@ export default function CombatSilhouetteShatterEffect({
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
-    setLayout({ width, height });
+    setLayout((prev) => (
+      prev.width === width && prev.height === height ? prev : { width, height }
+    ));
   };
 
   useEffect(() => {
@@ -196,27 +202,27 @@ export default function CombatSilhouetteShatterEffect({
       setShardsActive(false);
       burst.value = 0;
       fade.value = 1;
+      shakeX.value = 0;
+      shakeY.value = 0;
+      flashOpacity.value = 0;
     }
-  }, [burst, fade, trigger]);
+  }, [burst, fade, flashOpacity, shakeX, shakeY, trigger]);
 
   const shakeStyle = useAnimatedStyle(() => ({
+    // Portrait + status stay fully visible; only shards use the fade shared value.
+    opacity: 1,
     transform: [
       { translateX: shakeX.value },
       { translateY: shakeY.value },
     ],
   }));
 
-  const flashStyle = useAnimatedStyle(() => ({
-    opacity: flashOpacity.value,
-  }));
-
   const hasLayout = layout.width > 0 && layout.height > 0;
 
   return (
-    <View style={styles.root} onLayout={handleLayout}>
-      <Animated.View style={[styles.content, shakeStyle]}>
+    <View style={styles.root} onLayout={handleLayout} collapsable={false}>
+      <Animated.View style={[styles.content, shakeStyle]} collapsable={false}>
         {children}
-        
       </Animated.View>
 
       {shardsActive && hasLayout ? (
@@ -231,6 +237,7 @@ export default function CombatSilhouetteShatterEffect({
               rotateDeg={shardRotations[index] ?? 0}
               burst={burst}
               fade={fade}
+              clipNamespace={clipNamespaceRef.current}
             />
           ))}
         </View>

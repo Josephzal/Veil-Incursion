@@ -47,10 +47,6 @@ import { resolveCargoGridCellBackground } from '../constants/cargoGridVisual';
 import {
   HARVEST_CARGO_BORDER,
   HARVEST_CARGO_SURFACE,
-  HARVEST_CONTAINMENT_BG,
-  HARVEST_CONTAINMENT_BORDER,
-  HARVEST_CONTAINMENT_SCRIM_BOTTOM,
-  HARVEST_CONTAINMENT_SCRIM_TOP,
   HARVEST_MUTED_SLATE,
   HARVEST_PHOSPHOR,
   HARVEST_STATUS_STRIP_BG,
@@ -1521,7 +1517,14 @@ export default function CargoGridBoard({
           overlayCombatSplit ? styles.combatDetailInnerSplit : null,
         ]}
       >
-        <View style={styles.combatDetailTitleSlot}>
+        <View
+          style={[
+            styles.combatDetailTitleSlot,
+            overlayCombatSplit && !selectedCombatItemId
+              ? styles.combatDetailTitleSlotIdle
+              : null,
+          ]}
+        >
           <Text
             style={[
               styles.combatDetailTitle,
@@ -1529,7 +1532,7 @@ export default function CargoGridBoard({
                 ? { color: accentColor }
                 : [styles.combatDetailTitleIdle, { color: theme.mutedColor }],
             ]}
-            numberOfLines={1}
+            numberOfLines={overlayCombatSplit && !selectedCombatItemId ? 2 : 1}
             ellipsizeMode="tail"
           >
             {selectedCombatItemId
@@ -2049,6 +2052,11 @@ export default function CargoGridBoard({
                   <View style={styles.gridDock}>{gridBlock}</View>
                 </View>
               </View>
+              {cargoReadout ? (
+                <View style={styles.harvestCargoReadoutSlot}>
+                  {cargoReadout}
+                </View>
+              ) : null}
             </View>
 
             {centerPaneFooter ? (
@@ -2155,6 +2163,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   harvestWorkspace: {
+    // Open floor — no panel/scrim so loot reads as physical world pickup.
     flex: 1,
     minWidth: 0,
     minHeight: 0,
@@ -2166,11 +2175,9 @@ const styles = StyleSheet.create({
       web: {
         display: 'grid',
         gridTemplateRows: 'minmax(0, 1fr)',
-        backgroundImage: `linear-gradient(180deg, ${HARVEST_CONTAINMENT_SCRIM_TOP} 0%, ${HARVEST_CONTAINMENT_BG} 28%, ${HARVEST_CONTAINMENT_SCRIM_BOTTOM} 100%)`,
       } as object,
       default: {
         flexDirection: 'column',
-        backgroundColor: HARVEST_CONTAINMENT_BG,
       },
     }),
   },
@@ -2244,7 +2251,7 @@ const styles = StyleSheet.create({
     left: HARVEST_EXTRACTOR_DOCK_LEFT,
     bottom: HARVEST_EXTRACTOR_DOCK_BOTTOM,
     zIndex: 4,
-    maxWidth: '72%',
+    maxWidth: '78%',
     overflow: 'visible',
   },
   workspaceStatusStrip: {
@@ -2258,7 +2265,7 @@ const styles = StyleSheet.create({
     backgroundColor: HARVEST_CARGO_SURFACE,
     borderWidth: 1,
     borderColor: HARVEST_CARGO_BORDER,
-    gap: 16,
+    gap: 12,
     overflow: 'hidden',
     ...Platform.select({
       web: {
@@ -2281,10 +2288,17 @@ const styles = StyleSheet.create({
   harvestCargoMatSlot: {
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 4,
+    gap: 12,
     flex: 1,
     flexShrink: 1,
     minHeight: 0,
+  },
+  harvestCargoReadoutSlot: {
+    width: '100%',
+    flexShrink: 0,
+    paddingHorizontal: 2,
   },
   harvestGridBackdropHost: {
     position: 'relative',
@@ -2521,6 +2535,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
+  combatDetailTitleSlotIdle: {
+    height: undefined,
+    minHeight: COMBAT_DETAIL_TITLE_HEIGHT,
+  },
   combatDetailTitle: {
     fontFamily: 'monospace',
     fontSize: COMBAT_HUD_TYPE.title,
@@ -2580,14 +2598,17 @@ const styles = StyleSheet.create({
   ampouleBtn: {
     borderWidth: 1.25,
     paddingVertical: 10,
+    paddingHorizontal: 10,
     alignItems: 'center',
     backgroundColor: '#050608',
+    width: '100%',
   },
   ampouleBtnText: {
     fontFamily: 'monospace',
     fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '700',
     letterSpacing: 0.6,
+    textAlign: 'center',
   },
   continueBtn: {
     width: CARGO_GRID_FRAME_SIZE,

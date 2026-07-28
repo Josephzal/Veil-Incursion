@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import CargoPackingPanel from '../CargoPackingPanel';
-import TacticalButton from '../TacticalButton';
-import SafehouseTexturedPanel from './SafehouseTexturedPanel';
-import { cargoGridFrameDimensions } from '../CargoGridBoard';
+import HubPrimaryCta from '../hub/HubPrimaryCta';
+import FieldPlate from '../runField/FieldPlate';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../../data/cargoGridEngine';
-import { INCURSION_CARGO_CELL_SIZE } from '../../utils/cargoGridLayout';
+import {
+  BLACK_MARKET_CARGO_CELL_SIZE,
+  resolveUniformIncursionCargoCellSize,
+} from '../../utils/cargoGridLayout';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 import type { CargoRunState } from '../../types/cargoGrid';
 import type { TerminalTheme } from '../../types/theme';
-
-const MUTED_SLATE = '#94A3B8';
 
 interface SafehousePayloadRouterProps {
   cargo: CargoRunState;
@@ -28,6 +29,9 @@ function formatExtractedMass(cargo: CargoRunState): string {
   return `${mass.toFixed(1)}v`;
 }
 
+/**
+ * Safehouse cargo column — FieldPlate chrome + cell sizing match Black Market CARGO DECK.
+ */
 export default function SafehousePayloadRouter({
   cargo,
   theme,
@@ -37,44 +41,69 @@ export default function SafehousePayloadRouter({
   onRelocateItem,
   onBankCargo,
 }: SafehousePayloadRouterProps): React.JSX.Element {
-  const pad = 18 * fontScale;
-  const sectionGap = 10 * fontScale;
+  const panelPad = 14 * fontScale;
+  const actionGap = 10 * fontScale;
+  const dossierMeta = 8 * fontScale;
+  const section = 9 * fontScale;
   const extractedMass = useMemo(() => formatExtractedMass(cargo), [cargo]);
+  const [cargoAreaSize, setCargoAreaSize] = useState({ width: 0, height: 0 });
 
-  const panelMetrics = useMemo(() => {
-    const frame = cargoGridFrameDimensions(INCURSION_CARGO_CELL_SIZE);
-    const contentWidth = frame.frameWidth;
-    const minPanelWidth = Math.ceil(contentWidth + pad * 2);
-    return {
-      cellSize: INCURSION_CARGO_CELL_SIZE,
-      minPanelWidth,
-      preferredPanelWidth: Math.max(minPanelWidth, Math.round(340 * fontScale)),
-    };
-  }, [fontScale, pad]);
+  const cellSize = useMemo(
+    () => (cargoAreaSize.width > 0 && cargoAreaSize.height > 0
+      ? resolveUniformIncursionCargoCellSize(cargoAreaSize.width, cargoAreaSize.height)
+      : BLACK_MARKET_CARGO_CELL_SIZE),
+    [cargoAreaSize.height, cargoAreaSize.width],
+  );
+
+  const handleCargoAreaLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCargoAreaSize({ width, height });
+  }, []);
 
   return (
-    <SafehouseTexturedPanel
-      flex={isDesktop ? 1.15 : undefined}
-      style={isDesktop ? [
-        styles.sidePanel,
-        {
-          minWidth: panelMetrics.minPanelWidth,
-          maxWidth: panelMetrics.preferredPanelWidth,
-        },
-      ] : undefined}
-      padding={pad}
-      contentStyle={[styles.content, { gap: sectionGap }]}
+    <FieldPlate
+      density="standard"
+      tone="neutral"
+      brackets
+      style={[styles.panel, isDesktop ? styles.sidePanel : null]}
+      contentStyle={[styles.panelContent, { gap: actionGap, padding: panelPad }]}
     >
-      <View style={[styles.headerBlock, { gap: 6 * fontScale }]}>
-        <Text style={[styles.header, { fontSize: 8 * fontScale, color: MUTED_SLATE, letterSpacing: 1.5 }]}>
-          [ PAYLOAD ROUTER ]
+      <View style={styles.headerBlock}>
+        <Text
+          style={[
+            styles.eyebrow,
+            { color: RUN_FIELD.mint, fontSize: dossierMeta, lineHeight: dossierMeta * 1.35 },
+          ]}
+        >
+          HOLD // STAGED PAYLOAD
         </Text>
-        <Text style={[styles.meta, { fontSize: 7 * fontScale, color: MUTED_SLATE }]}>
+        <Text
+          style={[
+            styles.sectionLabel,
+            {
+              color: RUN_FIELD.textSecondary,
+              fontSize: section,
+              lineHeight: section * 1.4,
+            },
+          ]}
+        >
+          CARGO DECK
+        </Text>
+        <Text
+          style={[
+            styles.meta,
+            {
+              color: RUN_FIELD.textSecondary,
+              fontSize: dossierMeta,
+              lineHeight: dossierMeta * 1.35,
+            },
+          ]}
+        >
           {`EXTRACTED MASS // ${extractedMass}`}
         </Text>
       </View>
 
-      <View style={styles.gridHost}>
+      <View style={styles.gridHost} onLayout={handleCargoAreaLayout}>
         <CargoPackingPanel
           cargo={cargo}
           theme={theme}
@@ -83,41 +112,55 @@ export default function SafehousePayloadRouter({
           hideContinueButton
           hidePackHeader
           embedded
-          compactCellSize={panelMetrics.cellSize}
+          compactCellSize={cellSize}
+          cargoBackdrop={false}
         />
       </View>
 
-      <View style={[styles.anchorFooter, { paddingTop: 4 * fontScale }]}>
-        <TacticalButton
-          label="[ ANCHOR PAYLOAD ]"
-          active
+      <View style={styles.anchorFooter}>
+        <HubPrimaryCta
+          label="ANCHOR PAYLOAD"
           onPress={onBankCargo}
-          accentColor={activeCabal}
-          mutedColor={MUTED_SLATE}
-          variant="cta"
-          style={[
-            styles.anchorBtn,
-            {
-              borderColor: activeCabal,
-              borderWidth: 2,
-            },
-          ]}
+          variant="glow"
+          accessibilityLabel="Anchor payload"
+          minHeight={48}
+          style={styles.anchorCta}
         />
       </View>
-    </SafehouseTexturedPanel>
+    </FieldPlate>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
+  panel: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    justifyContent: 'flex-start',
+  },
+  sidePanel: {
+    flex: 1.15,
+    minWidth: 280,
+    maxWidth: 520,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  panelContent: {
     flex: 1,
     minHeight: 0,
   },
   headerBlock: {
     flexShrink: 0,
+    gap: 6,
   },
-  header: {
+  eyebrow: {
     fontFamily: 'monospace',
+    fontWeight: '700',
+    letterSpacing: 1.1,
+  },
+  sectionLabel: {
+    fontFamily: 'monospace',
+    letterSpacing: 0.8,
     fontWeight: '700',
   },
   meta: {
@@ -126,8 +169,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   gridHost: {
-    flexGrow: 0,
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -135,12 +178,12 @@ const styles = StyleSheet.create({
   anchorFooter: {
     flexShrink: 0,
     width: '100%',
+    alignItems: 'center',
+    paddingTop: 8,
   },
-  anchorBtn: {
+  anchorCta: {
+    alignSelf: 'center',
     width: '100%',
-  },
-  sidePanel: {
-    flexGrow: 0,
-    flexShrink: 0,
+    maxWidth: 300,
   },
 });

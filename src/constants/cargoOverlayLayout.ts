@@ -16,18 +16,22 @@ export const CARGO_OVERLAY_MIN_CELL_SIZE = 36;
 export const COMBAT_OVERLAY_MAX_CELL_SIZE = INCURSION_CARGO_CELL_SIZE;
 
 /** Horizontal split inside the combat cargo modal content area. */
-export const COMBAT_OVERLAY_GRID_SHARE = 0.65;
-export const COMBAT_OVERLAY_DETAIL_SHARE = 0.35;
-export const COMBAT_OVERLAY_SPLIT_GAP = 8;
+export const COMBAT_OVERLAY_GRID_SHARE = 0.58;
+export const COMBAT_OVERLAY_DETAIL_SHARE = 0.42;
+export const COMBAT_OVERLAY_SPLIT_GAP = 12;
+/** Detail column must fit "Tap an item to inspect" + [ USE ITEM ]. */
+export const COMBAT_OVERLAY_DETAIL_MIN_WIDTH = 188;
 
 export function resolveCombatOverlaySplitWidths(frameWidth: number): {
   gridWidth: number;
   detailWidth: number;
 } {
-  const detailWidth = Math.floor(frameWidth * COMBAT_OVERLAY_DETAIL_SHARE / COMBAT_OVERLAY_GRID_SHARE);
+  const proportional = Math.floor(
+    frameWidth * COMBAT_OVERLAY_DETAIL_SHARE / COMBAT_OVERLAY_GRID_SHARE,
+  );
   return {
     gridWidth: frameWidth,
-    detailWidth,
+    detailWidth: Math.max(COMBAT_OVERLAY_DETAIL_MIN_WIDTH, proportional),
   };
 }
 
@@ -47,13 +51,15 @@ export function resolveCombatOverlayCellSize(
   screenWidth?: number,
 ): number {
   const footerInset = resolveImmersiveFooterInset(bottomInset);
-  const availableHeight =
-    screenHeight
-    - CARGO_OVERLAY_BACKDROP_PADDING * 2
-    - COMBAT_OVERLAY_PANEL_PADDING * 2
-    - CARGO_OVERLAY_HEADER_RESERVE
-    - footerInset
-    - CARGO_OVERLAY_BOARD_GAP;
+  // Header + context + baseline + pressure gap + outer padding.
+  const chromeReserve =
+    CARGO_OVERLAY_HEADER_RESERVE
+    + 36
+    + CARGO_OVERLAY_BOARD_GAP
+    + COMBAT_OVERLAY_PANEL_PADDING * 2
+    + CARGO_OVERLAY_BACKDROP_PADDING * 2
+    + footerInset;
+  const availableHeight = screenHeight - chromeReserve;
   const heightCell = Math.floor(
     (availableHeight - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS,
   );
@@ -61,9 +67,9 @@ export function resolveCombatOverlayCellSize(
   let maxByWidth = COMBAT_OVERLAY_MAX_CELL_SIZE;
   if (screenWidth != null && screenWidth > 0) {
     // Combat modal is grid + detail split; keep the full panel inside the viewport.
-    const maxContentWidth = screenWidth - 12 - COMBAT_OVERLAY_PANEL_PADDING * 2;
+    const maxContentWidth = screenWidth - 32 - COMBAT_OVERLAY_PANEL_PADDING * 2;
     const maxFrameWidth = Math.floor(
-      (maxContentWidth - COMBAT_OVERLAY_SPLIT_GAP) * COMBAT_OVERLAY_GRID_SHARE,
+      (maxContentWidth - COMBAT_OVERLAY_SPLIT_GAP - COMBAT_OVERLAY_DETAIL_MIN_WIDTH),
     );
     maxByWidth = Math.floor(
       (maxFrameWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS,

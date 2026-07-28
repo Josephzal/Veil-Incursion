@@ -30,3 +30,6 @@ export const HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE = scaleHubCargoCellSize(
  * Kept in constants (not utils) to avoid circular init with CargoGridBoard.
  */
 export const INCURSION_CARGO_CELL_SIZE = HUB_CARGO_INCURSION_CELL_TARGET;
+
+/** Black Market cargo deck — 2× the shared in-run cell size. */
+export const BLACK_MARKET_CARGO_CELL_SIZE = INCURSION_CARGO_CELL_SIZE * 1.5;

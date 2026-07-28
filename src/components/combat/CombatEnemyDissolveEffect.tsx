@@ -98,7 +98,10 @@ export default function CombatEnemyDissolveEffect({
 
   useEffect(() => {
     if (active) return;
-    if (completedRef.current) return;
+    // Always restore visibility when dissolve deactivates — completed dissolves
+    // previously skipped this and could leave spriteOpacity stuck at 0 if the
+    // animated branch remounted while still wired to the shared value.
+    completedRef.current = false;
     setShowBurst(false);
     flashOpacity.value = 0;
     spriteOpacity.value = 1;

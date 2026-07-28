@@ -121,6 +121,9 @@ export default function CargoGridOverlay({
     : panelWidth - panelPadding * 2;
 
   const panelAccent = combatMode ? COMBAT_CARGO_ACCENT : accentColor;
+  const overlayMaxWidth = combatMode
+    ? Math.min(screenWidth - 32, Math.max(panelWidth, 520))
+    : screenWidth - 12;
 
   return (
     <RunOverlay
@@ -130,8 +133,8 @@ export default function CargoGridOverlay({
       onClose={onClose}
       combatMode={combatMode}
       accentColor={panelAccent}
-      width={panelWidth}
-      maxWidth={screenWidth - 12}
+      width={Math.max(panelWidth, combatMode ? 420 : panelWidth)}
+      maxWidth={overlayMaxWidth}
       contentPadding={panelPadding}
       headerAccessory={!combatMode && runCredits != null ? (
         <CargoCreditsHud

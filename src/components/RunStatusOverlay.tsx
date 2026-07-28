@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import RunOverlay from './runField/RunOverlay';
 import FieldPlate from './runField/FieldPlate';
 import FieldMetricStrip from './runField/FieldMetricStrip';
@@ -136,15 +136,14 @@ export default function RunStatusOverlay({
       onClose={onClose}
       combatMode={combatMode}
       accentColor={accentColor}
-      maxWidth={combatMode ? 560 : 480}
+      maxWidth={combatMode ? 640 : 520}
+      width={combatMode ? '88%' : '92%'}
+      contentPadding={combatMode ? 20 : 18}
       bodyStyle={styles.body}
     >
       <FieldMetricStrip items={vitals} style={styles.vitalsStrip} />
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.categoryHost}>
         {categories.length === 0 ? (
           <Text style={[styles.emptyState, { fontSize: bodyFont, lineHeight: bodyLine }]}>
             No active buffs, debuffs, or boons. Sector conditions nominal.
@@ -165,38 +164,43 @@ export default function RunStatusOverlay({
             ))}
           </View>
         )}
-      </ScrollView>
+      </View>
     </RunOverlay>
   );
 }
 
 const styles = StyleSheet.create({
   body: {
-    gap: 12,
+    gap: 14,
+    paddingBottom: 4,
   },
   vitalsStrip: {
     flexShrink: 0,
   },
-  scroll: {
+  categoryHost: {
     flexGrow: 0,
-    maxHeight: 380,
+    flexShrink: 1,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
   categoryColumn: {
     flexGrow: 1,
-    flexBasis: 200,
-    minWidth: 200,
+    flexBasis: 220,
+    minWidth: 210,
   },
   categoryPlate: {
     marginBottom: 0,
   },
   categoryContent: {
-    padding: 10,
-    gap: 8,
+    // Override FieldPlate flex:1 so wash plates size to their copy.
+    flexGrow: 0,
+    flexBasis: 'auto',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 10,
   },
   categoryLabel: {
     fontFamily: RUN_FIELD.mono,
@@ -205,7 +209,7 @@ const styles = StyleSheet.create({
     color: RUN_FIELD.textSecondary,
   },
   entry: {
-    gap: 2,
+    gap: 4,
   },
   entryLabel: {
     fontFamily: RUN_FIELD.mono,

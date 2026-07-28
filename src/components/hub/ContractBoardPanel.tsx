@@ -23,7 +23,6 @@ import {
   CabalMark,
   LiveStatus,
   OccultNeonRail,
-  RegistrationBrackets,
 } from './veilChrome';
 import {
   CabalReputationSummary,
@@ -34,6 +33,7 @@ import {
 } from './dossier';
 import BrokerPriorityBulletin from './BrokerPriorityBulletin';
 import ContractGroupHeader from './ContractGroupHeader';
+import HubDossierCornerBrackets from './HubDossierCornerBrackets';
 import HubPageHeader from './HubPageHeader';
 import HubPrimaryCta from './HubPrimaryCta';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
@@ -65,7 +65,6 @@ import {
   VEIL,
   VEIL_BLACK_CHANNEL_TONE,
   VEIL_CHANNEL_CODES,
-  VEIL_MINT_TONE,
 } from '../../theme/veilTerminalTokens';
 import {
   HUB_CARD_BORDER,
@@ -715,7 +714,6 @@ export default function ContractBoardPanel(): React.JSX.Element {
         </View>
 
         <View style={styles.feedSummaryRow}>
-          <RegistrationBrackets tone={VEIL_MINT_TONE} active corners="all" />
           <View style={styles.feedSummaryRep}>
             <CabalReputationSummary
               progress={selectedCabalProgress}
@@ -816,6 +814,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
 
       <View style={[styles.dossierColumn, { width: inspectorColumnWidth, flexBasis: inspectorColumnWidth, maxWidth: inspectorColumnWidth }]}>
       <View style={styles.contractDossier}>
+      <HubDossierCornerBrackets />
       <Animated.View
         style={[
           styles.dossierFill,

@@ -14,9 +14,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { ResidueParticleData } from '../../types/residueParticle';
 import { RUN_FIELD } from '../../theme/runFieldTokens';
+import { HARVEST_VEIL_VIOLET } from '../../constants/harvestScreenVisual';
 
-const VACUUM_SPRING = { damping: 20, stiffness: 88, mass: 0.95 };
-const VACUUM_ABSORB_MS = 720;
+const VACUUM_SPRING = { damping: 18, stiffness: 92, mass: 0.9 };
+const VACUUM_ABSORB_MS = 680;
+const MINT = RUN_FIELD.mint;
+const VIOLET = HARVEST_VEIL_VIOLET;
 
 interface ResidueParticleProps {
   particle: ResidueParticleData;
@@ -26,8 +29,8 @@ interface ResidueParticleProps {
 }
 
 /**
- * Harvest signature — concentric field rings + faint occult residue core.
- * Not a plain glowing dot; responds to vacuum draw toward the extractor.
+ * Supernatural veil residue — soft glowing motes with occult halo, not crystal shards.
+ * Drawn toward the extractor while vacuuming.
  */
 export default function ResidueParticle({
   particle,
@@ -39,9 +42,10 @@ export default function ResidueParticle({
   const posX = useSharedValue(particle.startX);
   const posY = useSharedValue(particle.startY);
   const scale = useSharedValue(1);
-  const opacity = useSharedValue(0.9);
+  const opacity = useSharedValue(0);
   const floatY = useSharedValue(0);
-  const ringPulse = useSharedValue(1);
+  const haloPulse = useSharedValue(1);
+  const sparkOrbit = useSharedValue(0);
 
   const handleAbsorbed = useCallback(() => {
     if (absorbedRef.current) return;
@@ -50,31 +54,41 @@ export default function ResidueParticle({
   }, [onAbsorbed, particle.id, particle.value]);
 
   useEffect(() => {
+    opacity.value = withTiming(1, {
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+    });
+
     floatY.value = withRepeat(
       withSequence(
-        withTiming(-3, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-        withTiming(3, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-4 - particle.size * 0.15, {
+          duration: 1100 + particle.size * 40,
+          easing: Easing.inOut(Easing.sin),
+        }),
+        withTiming(3 + particle.size * 0.1, {
+          duration: 1100 + particle.size * 40,
+          easing: Easing.inOut(Easing.sin),
+        }),
       ),
       -1,
       true,
     );
-    opacity.value = withRepeat(
+
+    haloPulse.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 820, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0.72, { duration: 820, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1.28, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.88, { duration: 900, easing: Easing.inOut(Easing.sin) }),
       ),
       -1,
       true,
     );
-    ringPulse.value = withRepeat(
-      withSequence(
-        withTiming(1.18, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.92, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-      ),
+
+    sparkOrbit.value = withRepeat(
+      withTiming(1, { duration: 2400, easing: Easing.linear }),
       -1,
-      true,
+      false,
     );
-  }, [floatY, opacity, ringPulse]);
+  }, [floatY, haloPulse, opacity, particle.size, sparkOrbit]);
 
   useEffect(() => {
     if (!isVacuuming || !canisterCoordinates || absorbedRef.current) return undefined;
@@ -83,25 +97,20 @@ export default function ResidueParticle({
     posY.value = particle.startY;
     scale.value = 1;
     cancelAnimation(floatY);
-    cancelAnimation(ringPulse);
+    cancelAnimation(haloPulse);
+    cancelAnimation(sparkOrbit);
     floatY.value = 0;
-    ringPulse.value = 1.4;
+    haloPulse.value = 1.55;
 
     const targetX = canisterCoordinates.x;
     const targetY = canisterCoordinates.y;
     const delay = particle.vacuumDelayMs;
 
-    posX.value = withDelay(
-      delay,
-      withSpring(targetX, VACUUM_SPRING),
-    );
-    posY.value = withDelay(
-      delay,
-      withSpring(targetY, VACUUM_SPRING),
-    );
+    posX.value = withDelay(delay, withSpring(targetX, VACUUM_SPRING));
+    posY.value = withDelay(delay, withSpring(targetY, VACUUM_SPRING));
     scale.value = withDelay(
       delay,
-      withTiming(0.1, { duration: VACUUM_ABSORB_MS, easing: Easing.in(Easing.cubic) }),
+      withTiming(0.08, { duration: VACUUM_ABSORB_MS, easing: Easing.in(Easing.cubic) }),
     );
     opacity.value = withDelay(
       delay,
@@ -124,6 +133,7 @@ export default function ResidueParticle({
     canisterCoordinates,
     floatY,
     handleAbsorbed,
+    haloPulse,
     isVacuuming,
     opacity,
     particle.vacuumDelayMs,
@@ -131,16 +141,17 @@ export default function ResidueParticle({
     particle.startY,
     posX,
     posY,
-    ringPulse,
     scale,
+    sparkOrbit,
   ]);
 
-  const span = Math.max(particle.size * 2.4, 22);
+  const span = Math.max(particle.size * 3.2, 28);
   const half = span / 2;
-  const coreSize = Math.max(particle.size * 0.55, 5);
+  const coreSize = Math.max(particle.size * 0.7, 6);
+  const midSize = Math.max(particle.size * 1.35, 12);
 
   const style = useAnimatedStyle(() => ({
-    position: 'absolute',
+    position: 'absolute' as const,
     left: posX.value - half,
     top: posY.value - half + floatY.value,
     width: span,
@@ -149,22 +160,43 @@ export default function ResidueParticle({
     transform: [{ scale: scale.value }],
   }));
 
-  const outerRingStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: ringPulse.value }],
-    opacity: 0.35 + (ringPulse.value - 1) * 0.4,
+  const haloStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: haloPulse.value }],
+    opacity: 0.28 + (haloPulse.value - 0.88) * 0.55,
   }));
 
-  const midRingStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 0.85 + (ringPulse.value - 1) * 0.5 }],
-    opacity: 0.45,
+  const midGlowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 0.92 + (haloPulse.value - 1) * 0.35 }],
+    opacity: 0.55,
   }));
+
+  const sparkStyle = useAnimatedStyle(() => {
+    const angle = sparkOrbit.value * Math.PI * 2;
+    const radius = span * 0.22;
+    return {
+      opacity: 0.55 + Math.sin(angle) * 0.25,
+      transform: [
+        { translateX: Math.cos(angle) * radius },
+        { translateY: Math.sin(angle) * radius * 0.7 },
+      ],
+    };
+  });
 
   return (
     <Animated.View style={style} pointerEvents="none">
       <View style={styles.anchor}>
-        <Animated.View style={[styles.ringOuter, outerRingStyle]} />
-        <Animated.View style={[styles.ringMid, midRingStyle]} />
-        <View style={styles.residueGlyph} />
+        <Animated.View style={[styles.halo, haloStyle]} />
+        <Animated.View
+          style={[
+            styles.midGlow,
+            midGlowStyle,
+            {
+              width: midSize,
+              height: midSize,
+              borderRadius: midSize / 2,
+            },
+          ]}
+        />
         <View
           style={[
             styles.core,
@@ -175,6 +207,17 @@ export default function ResidueParticle({
             },
           ]}
         />
+        <View
+          style={[
+            styles.coreHot,
+            {
+              width: Math.max(2, coreSize * 0.35),
+              height: Math.max(2, coreSize * 0.35),
+              borderRadius: 99,
+            },
+          ]}
+        />
+        <Animated.View style={[styles.spark, sparkStyle]} />
       </View>
     </Animated.View>
   );
@@ -186,37 +229,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ringOuter: {
-    ...StyleSheet.absoluteFill,
-    margin: 0,
+  halo: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: 999,
+    backgroundColor: 'rgba(99, 226, 177, 0.12)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(99, 226, 177, 0.55)',
-  },
-  ringMid: {
-    position: 'absolute',
-    width: '72%',
-    height: '72%',
-    borderRadius: 999,
-    borderWidth: 1,
     borderColor: 'rgba(190, 82, 164, 0.35)',
+    shadowColor: MINT,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    ...(Platform.OS === 'android' ? { elevation: 10 } : null),
   },
-  residueGlyph: {
+  midGlow: {
     position: 'absolute',
-    width: '38%',
-    height: '38%',
-    borderRadius: 2,
-    transform: [{ rotate: '45deg' }],
-    backgroundColor: 'rgba(190, 82, 164, 0.22)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(190, 82, 164, 0.4)',
+    backgroundColor: 'rgba(167, 139, 250, 0.28)',
+    shadowColor: VIOLET,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 10,
   },
   core: {
-    backgroundColor: 'rgba(99, 226, 177, 0.92)',
-    shadowColor: RUN_FIELD.mint,
+    backgroundColor: 'rgba(180, 255, 230, 0.95)',
+    shadowColor: MINT,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.85,
-    shadowRadius: 6,
-    ...(Platform.OS === 'android' ? { elevation: 8 } : null),
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    ...(Platform.OS === 'android' ? { elevation: 12 } : null),
+  },
+  coreHot: {
+    position: 'absolute',
+    backgroundColor: '#ffffff',
+    opacity: 0.9,
+  },
+  spark: {
+    position: 'absolute',
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(233, 213, 255, 0.95)',
+    shadowColor: VIOLET,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
   },
 });

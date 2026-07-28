@@ -64,6 +64,8 @@ interface CargoPackingPanelProps {
   residueCapacity?: number;
   residueLooseCount?: number;
   isVacuuming?: boolean;
+  /** True after this visit's loose residue has been vacuumed into the canister. */
+  residueHarvestComplete?: boolean;
   gridSidecar?: React.ReactNode;
   externalHover?: { itemId: import('../types/cargoGrid').CargoItemId; row: number; col: number } | null;
   selectedPlacementItemId?: import('../types/cargoGrid').CargoItemId | null;
@@ -114,6 +116,7 @@ export default function CargoPackingPanel({
   residueCapacity = MAX_RUN_CANISTER_RESIDUE,
   residueLooseCount = 0,
   isVacuuming = false,
+  residueHarvestComplete = false,
   gridSidecar,
   onHarvestFloorMeasured,
   fixedExternalSlotCount,
@@ -293,6 +296,7 @@ export default function CargoPackingPanel({
       fontScale={fontScale}
       active={isVacuuming}
       residueAvailable={residueLooseCount > 0}
+      harvestComplete={residueHarvestComplete}
       style={styles.extractorPanelFill}
     >
       {gridSidecar}
@@ -349,7 +353,7 @@ export default function CargoPackingPanel({
       centerPaneFooter={cargoConsoleFooter}
       workspaceStatusStrip={workspaceStatusStrip}
       residueLooseCount={residueLooseCount}
-      cargoReadout={null}
+      cargoReadout={cargoReadout}
       rightPaneWidth={rightPaneWidth}
       selectedHarvestInstanceId={harvestTriPane ? selectedCargoInstanceId : null}
       onHarvestCargoSelect={harvestTriPane ? setSelectedCargoInstanceId : undefined}

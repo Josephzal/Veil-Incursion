@@ -78,7 +78,9 @@ import CombatTacticalDashboard from './combat/layouts/CombatTacticalDashboard';
 import CombatDashboardMacroLog from './combat/layouts/CombatDashboardMacroLog';
 import HostileIntelView from './combat/layouts/HostileIntelView';
 import TurnOrderTopBar from './combat/layouts/TurnOrderTopBar';
-import CombatMissionReadout from './combat/layouts/CombatMissionReadout';
+import CombatMissionReadout, {
+  type CombatQuestLogInfo,
+} from './combat/layouts/CombatMissionReadout';
 import CombatRightRail from './combat/layouts/CombatRightRail';
 import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
 import CombatHudAtmosphereOverlay from '../components/combat/ui/CombatHudAtmosphereOverlay';
@@ -90,6 +92,7 @@ import { OTT } from '../constants/occultTacticalTerminalTheme';
 import { resolveWeaponState } from '../data/weaponProgressionEngine';
 import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
 import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
+import { sponsorDisplayName } from '../utils/contractUi';
 
 type CombatResolutionPanelState = {
   outcome: 'VICTORY' | 'DEFEAT';
@@ -819,10 +822,70 @@ export default function CombatScreen(): React.JSX.Element {
     activeIncursion.runGenerationContext?.sectorState?.activeAnchor?.type
       ?? activeIncursion.currentDistrict
       ?? 'UNKNOWN SECTOR';
+  const activeContract = activeIncursion.activeContract;
+  const activeOperation =
+    activeIncursion.runGenerationContext?.activeOperation
+    ?? activeIncursion.runGenerationContext?.sectorState?.activeOperation
+    ?? null;
   const missionObjective =
-    activeIncursion.runGenerationContext?.activeOperation?.title
-      ?? activeIncursion.runGenerationContext?.activeOperation?.objectiveKind
-      ?? (activeIncursion.defendRiftActive ? 'Hold the Rift' : null);
+    activeContract?.title
+    ?? activeOperation?.title
+    ?? activeOperation?.objectiveKind
+    ?? (activeIncursion.defendRiftActive ? 'Hold the Rift' : null);
+  const combatQuestLog = useMemo((): CombatQuestLogInfo | null => {
+    if (!activeContract?.title && !activeOperation?.title) {
+      if (activeIncursion.defendRiftActive) {
+        return {
+          contractTitle: 'Independent Descent',
+          sponsorLabel: 'No Sponsor Mandate',
+          objectiveText: 'Hold the Rift under fire and survive the encounter.',
+          sectorLabel: String(missionSectorLabel).replace(/_/g, ' '),
+        };
+      }
+      return null;
+    }
+
+    const reward = activeContract?.reward;
+    const rewardText = reward
+      ? `+${reward.credits} CR // +${reward.reputation} REP${
+          reward.rareLootBonusPct ? ` // +${reward.rareLootBonusPct}% rare loot` : ''
+        }`
+      : null;
+    const sealed = activeContract?.keepsakeSealedClause?.text?.trim();
+    const mirrored = activeContract?.keepsakeMirroredObjective?.text?.trim();
+    const bonusParts = [
+      activeContract?.bonusObjectiveText?.trim(),
+      sealed ? `Sealed: ${sealed}` : null,
+      mirrored ? `Mirror: ${mirrored}` : null,
+    ].filter(Boolean);
+
+    return {
+      contractTitle: activeContract?.title?.trim() || 'Independent Descent',
+      sponsorLabel: activeContract?.sponsorId
+        ? sponsorDisplayName(activeContract.sponsorId)
+        : 'No Sponsor Mandate',
+      objectiveText:
+        activeContract?.objectiveText?.trim()
+        || activeContract?.title?.trim()
+        || 'Survive the encounter and extract.',
+      bonusText: bonusParts.length > 0 ? bonusParts.join(' · ') : null,
+      rewardText,
+      difficultyLabel: activeContract?.difficulty
+        ? `Tier ${activeContract.difficulty} / 5`
+        : null,
+      operationTitle: activeOperation?.title?.trim() || null,
+      operationBrief:
+        activeOperation?.description?.trim()
+        || activeOperation?.rewardPreview?.trim()
+        || null,
+      sectorLabel: String(missionSectorLabel).replace(/_/g, ' '),
+    };
+  }, [
+    activeContract,
+    activeOperation,
+    activeIncursion.defendRiftActive,
+    missionSectorLabel,
+  ]);
 
   return (
     <IncursionShell>
@@ -859,6 +922,7 @@ export default function CombatScreen(): React.JSX.Element {
                       depthLabel={missionDepthLabel}
                       sectorLabel={String(missionSectorLabel).replace(/_/g, ' ')}
                       objectiveLabel={missionObjective ? String(missionObjective).replace(/_/g, ' ') : null}
+                      questLog={combatQuestLog}
                     />
 
                     <TurnOrderTopBar

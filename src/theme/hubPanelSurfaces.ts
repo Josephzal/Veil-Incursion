@@ -162,10 +162,6 @@ export function hubCardSurfaceStyle(opts?: {
   };
 }
 
-/** Top-right clip matching Contract Board dossier. */
-export const HUB_DOSSIER_CLIP_PATH =
-  'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)';
-
 /**
  * Right-rail column host — fills the hub shell height (flex row / grid stretch).
  * Avoid percentage height alone; it collapses to content inside auto-sized grid rows.
@@ -198,6 +194,7 @@ export function hubDossierColumnStyle(): ViewStyle {
 /**
  * Floating dossier document shell.
  * Fills the column; header/footer stay put and the body absorbs spare space.
+ * Square corners — registration marks come from HubDossierCornerBrackets.
  */
 export function hubDossierShellStyle(): ViewStyle {
   return {
@@ -224,7 +221,6 @@ export function hubDossierShellStyle(): ViewStyle {
         flexBasis: 0,
         height: '100%',
         minHeight: 0,
-        clipPath: HUB_DOSSIER_CLIP_PATH,
       } as object,
       default: {
         flex: 1,

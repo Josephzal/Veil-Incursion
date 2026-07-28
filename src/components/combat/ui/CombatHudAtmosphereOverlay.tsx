@@ -34,7 +34,6 @@ export default function CombatHudAtmosphereOverlay(): React.JSX.Element {
       <View style={styles.scanBandB} />
       <View style={styles.scanBandC} />
       <View style={[styles.frameCorner, styles.tl]} />
-      <View style={[styles.frameCorner, styles.tr]} />
       <View style={[styles.frameCorner, styles.bl]} />
       <View style={[styles.frameCorner, styles.br]} />
     </View>
@@ -91,7 +90,6 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   tl: { top: 10, left: 10, borderTopWidth: 1, borderLeftWidth: 1 },
-  tr: { top: 10, right: 10, borderTopWidth: 1, borderRightWidth: 1 },
   bl: { bottom: 10, left: 10, borderBottomWidth: 1, borderLeftWidth: 1 },
   br: { bottom: 10, right: 10, borderBottomWidth: 1, borderRightWidth: 1 },
 });

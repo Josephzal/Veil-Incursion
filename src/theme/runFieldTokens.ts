@@ -64,7 +64,7 @@ export const RUN_FIELD = {
     offerName: 24,
     offerNameMin: 20,
     offerNameMax: 26,
-    offerEffect: 16,
+    offerEffect: 12,
     offerDescriptor: 14,
   },
 

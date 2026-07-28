@@ -1603,6 +1603,11 @@ export default function TacticalCombatHub({
         });
         const hookValid = staged != null && isUnitHookValidForClass(operativeClass, staged, u);
         const alive = isUnitAlive(u);
+        if (alive) {
+          // Keep living / fractured hostiles mounted — never publish a stuck dissolve hide.
+          delete dissolveSeqRef.current[unitId];
+          dissolvedHiddenRef.current.delete(unitId);
+        }
         const targetable = fractureBreachActive
           ? (alive && isFractureBreachTarget)
           : targetingActive && alive && (
@@ -1817,12 +1822,28 @@ export default function TacticalCombatHub({
     registerDissolveCompleteHandler?.((unitId) => handleUnitDissolveCompleteRef.current(unitId));
   }, [registerDissolveCompleteHandler]);
 
+  /** Cancel ashen dissolve when a unit is still (or again) a living combatant. */
+  const clearDissolveForLivingUnit = (unitId: string) => {
+    const hadSeq = (dissolveSeqRef.current[unitId] ?? 0) > 0;
+    const wasHidden = dissolvedHiddenRef.current.has(unitId);
+    if (!hadSeq && !wasHidden) return false;
+    delete dissolveSeqRef.current[unitId];
+    dissolvedHiddenRef.current.delete(unitId);
+    return true;
+  };
+
   const beginDissolveForUnit = (
     unitId: string,
     profile: EnemyCombatProfile,
     hp: number,
   ) => {
     if (hp > 0) return;
+    // Fracture / thrall slump can leave currentHp at 0 briefly while still "alive".
+    const latest = getUnitById(squadRef.current, unitId) ?? profile;
+    if (isUnitAlive(latest)) {
+      clearDissolveForLivingUnit(unitId);
+      return;
+    }
     const bump = (id: string) => {
       if (dissolvedHiddenRef.current.has(id)) return;
       if ((dissolveSeqRef.current[id] ?? 0) > 0) return;
@@ -1893,6 +1914,10 @@ export default function TacticalCombatHub({
     const wasFractured = prev ? isEnemyFractured(prev) : false;
     const nextSquad = patchSquadUnit(squadRef.current, unitId, patch);
     const next = getUnitById(nextSquad, unitId);
+    // Living / fractured hostiles must never stay stuck in ashen dissolve opacity 0.
+    if (next && isUnitAlive(next)) {
+      clearDissolveForLivingUnit(unitId);
+    }
     if (next && !wasFractured && isEnemyFractured(next)) {
       Vibration.vibrate(40);
       const weeping = resolveWeepingGargoyleFracturePulse(depthVariantRuntimeRef.current, next);
@@ -7542,7 +7567,8 @@ export default function TacticalCombatHub({
     syncFractureBreakTarget(null);
     combatPausedRef.current = false;
     const unit = getUnitById(squadRef.current, unitId);
-    if (unit?.unitId) {
+    if (unit?.unitId && isUnitAlive(unit)) {
+      clearDissolveForLivingUnit(unit.unitId);
       patchUnit(unit.unitId, applyFracturedState(unit));
       log(`>> FRACTURE BREAK EXPIRED — ${unit.designation} enters FRACTURED state.`);
     }
@@ -7569,11 +7595,15 @@ export default function TacticalCombatHub({
       });
       triggerHaptic('impactLight');
     }
+    const afterHits = getUnitById(squadRef.current, unit.unitId);
     if (operativeClass === 'ENVOY') {
       triggerShake('heavy');
       triggerHitstop(120);
     } else if (operativeClass === 'AEGIS') {
-      patchUnit(unit.unitId, applyFracturedState(unit));
+      if (afterHits?.unitId && isUnitAlive(afterHits)) {
+        clearDissolveForLivingUnit(afterHits.unitId);
+        patchUnit(afterHits.unitId, applyFracturedState(afterHits));
+      }
       enemyStunPendingRef.current = true;
       triggerHitstop(100);
       triggerHaptic('impactHeavy');
@@ -7586,6 +7616,7 @@ export default function TacticalCombatHub({
       && isUnitAlive(refreshed)
       && operativeClass !== 'AEGIS'
     ) {
+      clearDissolveForLivingUnit(refreshed.unitId);
       patchUnit(refreshed.unitId, applyFracturedState(refreshed));
     }
     syncFractureBreakTarget(null);

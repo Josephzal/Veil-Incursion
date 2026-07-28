@@ -1,5 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import TerminalText from '../TerminalText';
 import {
   HARVEST_INSTRUMENT_BG,
@@ -14,6 +23,7 @@ import {
   HARVEST_EXTRACTOR_MODULE_WIDTH_CSS,
 } from '../../constants/harvestLayout';
 import { MAX_RUN_CANISTER_RESIDUE } from '../../constants/veilResidue';
+import { RUN_FIELD } from '../../theme/runFieldTokens';
 
 interface HarvestExtractorPanelProps {
   harvestPercentage: number;
@@ -25,6 +35,8 @@ interface HarvestExtractorPanelProps {
   fontScale: number;
   active?: boolean;
   residueAvailable?: boolean;
+  /** True once this visit's loose residue has been fully extracted. */
+  harvestComplete?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -42,14 +54,50 @@ export default function HarvestExtractorPanel({
   fontScale,
   active = false,
   residueAvailable = false,
+  harvestComplete = false,
   style,
 }: HarvestExtractorPanelProps): React.JSX.Element {
   const clampedPct = Math.min(100, Math.max(0, harvestPercentage));
   const currentUnits = residueCollected != null
     ? Math.round(residueCollected)
     : Math.round((clampedPct / 100) * residueCapacity);
-  const idle = !residueAvailable && !active;
-  const fillColor = active ? HARVEST_PHOSPHOR : idle ? HARVEST_MUTED_SLATE : accentColor;
+  const idle = !residueAvailable && !active && !harvestComplete;
+  const fillColor = harvestComplete
+    ? HARVEST_PHOSPHOR
+    : active
+      ? HARVEST_PHOSPHOR
+      : idle
+        ? HARVEST_MUTED_SLATE
+        : accentColor;
+
+  const glowPulse = useSharedValue(0);
+
+  useEffect(() => {
+    if (!harvestComplete) {
+      cancelAnimation(glowPulse);
+      glowPulse.value = withTiming(0, { duration: 280 });
+      return;
+    }
+    glowPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.45, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(glowPulse);
+  }, [glowPulse, harvestComplete]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowPulse.value * 0.85,
+    transform: [{ scale: 1 + glowPulse.value * 0.012 }],
+  }));
+
+  const artGlowStyle = useAnimatedStyle(() => ({
+    opacity: 0.35 + glowPulse.value * 0.55,
+    shadowOpacity: 0.35 + glowPulse.value * 0.55,
+  }));
 
   return (
     <View
@@ -58,19 +106,32 @@ export default function HarvestExtractorPanel({
         {
           paddingHorizontal: padding,
           paddingVertical: Math.max(12, padding - 1),
-          borderColor: active
-            ? 'rgba(100, 201, 177, 0.36)'
-            : residueAvailable
-              ? 'rgba(91, 224, 195, 0.18)'
-              : 'rgba(91, 224, 195, 0.14)',
+          borderColor: harvestComplete
+            ? 'rgba(99, 226, 177, 0.55)'
+            : active
+              ? 'rgba(100, 201, 177, 0.36)'
+              : residueAvailable
+                ? 'rgba(91, 224, 195, 0.18)'
+                : 'rgba(91, 224, 195, 0.14)',
           opacity: idle ? 0.86 : 1,
         },
+        harvestComplete ? styles.moduleSecured : null,
         style,
       ]}
     >
-      <View style={[styles.artColumn, idle ? styles.artIdle : null]}>
+      {harvestComplete ? (
+        <Animated.View style={[styles.securedAura, glowStyle]} pointerEvents="none" />
+      ) : null}
+
+      <Animated.View
+        style={[
+          styles.artColumn,
+          idle ? styles.artIdle : null,
+          harvestComplete ? [styles.artSecured, artGlowStyle] : null,
+        ]}
+      >
         {children}
-      </View>
+      </Animated.View>
 
       <View style={styles.readoutColumn}>
         <TerminalText
@@ -118,7 +179,15 @@ export default function HarvestExtractorPanel({
           ) : null}
         </View>
 
-        {idle ? (
+        {harvestComplete ? (
+          <TerminalText
+            size={6.5 * fontScale}
+            letterSpacing={0.75}
+            style={styles.supportLineSecured}
+          >
+            RESIDUE SECURED
+          </TerminalText>
+        ) : idle ? (
           <TerminalText
             size={6.5 * fontScale}
             letterSpacing={0.7}
@@ -126,13 +195,21 @@ export default function HarvestExtractorPanel({
           >
             NO RESIDUE DETECTED
           </TerminalText>
-        ) : residueAvailable && !active ? (
+        ) : active ? (
           <TerminalText
             size={7 * fontScale}
             letterSpacing={0.75}
             style={styles.supportLineHold}
           >
-            HOLD VACUUM RESIDUE
+            EXTRACTING RESIDUE
+          </TerminalText>
+        ) : residueAvailable ? (
+          <TerminalText
+            size={7 * fontScale}
+            letterSpacing={0.75}
+            style={styles.supportLineHold}
+          >
+            RESIDUE DETECTED
           </TerminalText>
         ) : (
           <View style={styles.supportSpacer} />
@@ -166,6 +243,21 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     alignItems: 'center',
     gap: 14,
+    position: 'relative',
+  },
+  moduleSecured: {
+    shadowColor: RUN_FIELD.mint,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 16,
+    ...(Platform.OS === 'android' ? { elevation: 10 } : null),
+  },
+  securedAura: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 226, 177, 0.45)',
+    backgroundColor: 'rgba(99, 226, 177, 0.06)',
+    zIndex: 0,
   },
   artColumn: {
     width: HARVEST_EXTRACTOR_ART_WIDTH,
@@ -175,9 +267,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    zIndex: 1,
   },
   artIdle: {
     opacity: 0.52,
+  },
+  artSecured: {
+    opacity: 1,
+    shadowColor: RUN_FIELD.mint,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 14,
   },
   readoutColumn: {
     flex: 1,
@@ -187,6 +286,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'visible',
     paddingRight: 2,
+    zIndex: 1,
   },
   eyebrow: {
     color: HARVEST_MUTED_SLATE,
@@ -257,6 +357,20 @@ const styles = StyleSheet.create({
   },
   supportLineHold: {
     color: HARVEST_MUTED_SLATE,
+    fontWeight: '700',
+    marginTop: 4,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(12px, 0.8vw, 14px)',
+        lineHeight: '1.3',
+      } as object,
+      default: {
+        lineHeight: 16,
+      },
+    }),
+  },
+  supportLineSecured: {
+    color: HARVEST_PHOSPHOR,
     fontWeight: '700',
     marginTop: 4,
     ...Platform.select({

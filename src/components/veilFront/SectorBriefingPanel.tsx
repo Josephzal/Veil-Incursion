@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
+import HubDossierCornerBrackets from '../hub/HubDossierCornerBrackets';
 import { ProgressBar } from './VeilFrontUiPrimitives';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
@@ -433,6 +434,7 @@ export default function SectorBriefingPanel({
 
   return (
     <View style={styles.dossier}>
+      <HubDossierCornerBrackets />
       <View style={[
         styles.header,
         {

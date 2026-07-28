@@ -73,6 +73,13 @@ export default function RunEventChoiceCard({
   const effectSize = scaleFont(RUN_FIELD.type.offerEffect);
   const metaSize = scaleFont(Math.min(13, Math.max(11, RUN_FIELD.type.secondary)));
   const visualHeight = Math.min(120, Math.max(88, scaleFont(100)));
+  const nameLineHeight = Platform.OS === 'web'
+    ? Math.round(RUN_FIELD.type.offerNameMax * 1.2)
+    : Math.round(scaleFont(RUN_FIELD.type.offerName) * 1.2);
+  const nameSlotHeight = nameLineHeight * 2;
+  const taglineLineHeight = Math.round(descriptorSize * 1.35);
+  /** Always reserve two tagline lines so the visual well shares a Y across the spread. */
+  const taglineSlotHeight = taglineLineHeight * 2;
 
   /** Hover/selected title always reads mint — occult supplies haze only, never the accent text color. */
   const hotColor = RUN_FIELD.mint;
@@ -130,31 +137,37 @@ export default function RunEventChoiceCard({
                 </Text>
               ) : null}
             </View>
-            <Text
-              style={[
-                styles.name,
-                offerNameStyle(scaleFont),
-                { color: resolvedTitleColor },
-              ]}
-              numberOfLines={2}
-            >
-              {name}
-            </Text>
-            {tagline ? (
-              <Text
-                style={[
-                  styles.tagline,
-                  {
-                    fontSize: descriptorSize,
-                    lineHeight: Math.round(descriptorSize * 1.35),
-                    color: RUN_FIELD.textSecondary,
-                  },
-                ]}
-                numberOfLines={2}
-              >
-                {tagline}
-              </Text>
-            ) : null}
+            <View style={styles.copyBand}>
+              <View style={[styles.nameSlot, { height: nameSlotHeight }]}>
+                <Text
+                  style={[
+                    styles.name,
+                    offerNameStyle(scaleFont),
+                    { color: resolvedTitleColor },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {name}
+                </Text>
+              </View>
+              <View style={[styles.taglineSlot, { height: taglineSlotHeight }]}>
+                {tagline ? (
+                  <Text
+                    style={[
+                      styles.tagline,
+                      {
+                        fontSize: descriptorSize,
+                        lineHeight: taglineLineHeight,
+                        color: RUN_FIELD.textSecondary,
+                      },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {tagline}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
 
             <View style={[styles.visualWell, { height: visualHeight }]}>
               <View
@@ -249,17 +262,27 @@ const styles = StyleSheet.create({
     color: RUN_FIELD.mint,
     flexShrink: 0,
   },
+  copyBand: {
+    flexShrink: 0,
+    gap: 8,
+  },
+  nameSlot: {
+    justifyContent: 'flex-start',
+    overflow: 'hidden',
+  },
+  taglineSlot: {
+    justifyContent: 'flex-start',
+    overflow: 'hidden',
+  },
   name: {
     fontFamily: RUN_FIELD.mono,
     fontWeight: '800',
     letterSpacing: 0.4,
-    flexShrink: 0,
   },
   tagline: {
     fontFamily: RUN_FIELD.mono,
     fontWeight: '500',
     letterSpacing: 0.2,
-    flexShrink: 0,
   },
   visualWell: {
     flexGrow: 0,

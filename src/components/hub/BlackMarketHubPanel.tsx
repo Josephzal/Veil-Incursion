@@ -10,6 +10,7 @@ import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import HubPrimaryCta from './HubPrimaryCta';
 import HubPageHeader from './HubPageHeader';
+import HubDossierCornerBrackets from './HubDossierCornerBrackets';
 import ForgeWorkspace, {
   resolveForgeSelection,
   resolveInitialForgeRecipeId,
@@ -1385,6 +1386,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
       <View style={[styles.dossierColumn, { width: inspectorColumnWidth, flexGrow: 0, flexBasis: inspectorColumnWidth, maxWidth: inspectorColumnWidth }]}>
         <View style={[styles.dossier, activeMode === 'VENDOR' && styles.dossierVendor]}>
+          <HubDossierCornerBrackets />
           <Animated.View style={[styles.dossierFill, { opacity: dossierLock }]}>
             {activeMode === 'FORGE'
               ? (forgeSelection

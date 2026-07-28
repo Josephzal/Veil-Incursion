@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type DimensionValue,
   type StyleProp,
   type ViewStyle,
@@ -53,6 +54,11 @@ export default function RunOverlay({
   bodyStyle,
   closeAccessibilityLabel,
 }: RunOverlayProps): React.JSX.Element {
+  const { height: windowHeight } = useWindowDimensions();
+  // Pixel max-height — percentage maxHeight against an auto-sized host collapses
+  // the bordered plate while children still paint outside the frame.
+  const plateMaxHeight = Math.max(280, windowHeight - 48);
+
   return (
     <Modal
       visible={visible}
@@ -76,7 +82,14 @@ export default function RunOverlay({
             density="strong"
             tone={combatMode ? 'mint' : 'neutral'}
             state={combatMode ? 'selected' : 'idle'}
-            style={[styles.plate, { width, maxWidth }]}
+            style={[
+              styles.plate,
+              {
+                width,
+                maxWidth,
+                maxHeight: plateMaxHeight,
+              },
+            ]}
             contentStyle={[styles.plateContent, { padding: contentPadding }]}
           >
             <View style={styles.headerRow}>
@@ -130,27 +143,38 @@ const styles = StyleSheet.create({
     backgroundColor: `rgba(5, 9, 10, ${RUN_FIELD.environmentScrimDense})`,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
   },
   backdropTap: {
     ...StyleSheet.absoluteFill,
   },
   host: {
     width: '100%',
+    maxHeight: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   plate: {
-    maxHeight: '92%',
+    // Grow to children; clip only if we hit the viewport maxHeight.
+    overflow: 'hidden',
+    alignSelf: 'center',
   },
   plateContent: {
+    // FieldPlate defaults content to flex:1 (basis 0), which collapses auto-height
+    // hosts so the mint border shrinks while children paint outside the frame.
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 'auto',
     minWidth: 0,
+    width: '100%',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 10,
+    flexShrink: 0,
   },
   headerCopy: {
     flex: 1,
@@ -198,8 +222,10 @@ const styles = StyleSheet.create({
     backgroundColor: RUN_FIELD.line,
     marginTop: 12,
     marginBottom: 12,
+    flexShrink: 0,
   },
   body: {
     minWidth: 0,
+    flexShrink: 1,
   },
 });

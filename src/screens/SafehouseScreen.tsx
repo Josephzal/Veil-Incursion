@@ -80,9 +80,7 @@ export default function SafehouseScreen(): React.JSX.Element {
   const [loadoutDraft, setLoadoutDraft] = useState<AegisAbilityId[]>([...activeIncursion.aegisLoadout]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...activeIncursion.hexShotLoadout]);
   const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...activeIncursion.envoyLoadout]);
-  const [selectedSlot, setSelectedSlot] = useState(
-    () => (activeIncursion.activeClass ?? account.activeClass) === 'AEGIS' ? 0 : 1,
-  );
+  const [selectedSlot, setSelectedSlot] = useState(1);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
 
   const operativeClass = activeIncursion.activeClass ?? account.activeClass;
@@ -171,9 +169,12 @@ export default function SafehouseScreen(): React.JSX.Element {
   }, [account.unlockedEnvoyAbilities, appendRunLog, setAccountEnvoyLoadout, setEnvoyLoadout]);
 
   const handleAssignAbility = useCallback((abilityId: string, slotIndex: number) => {
+    // Slot 0 is the class anchor — never reassigned at the in-run safehouse bench.
+    if (slotIndex === 0) return;
+
     if (operativeClass === 'AEGIS') {
       const id = abilityId as AegisAbilityId;
-      if (id === 'EVISCERATE') return;
+      if (id === 'EVISCERATE' || id === 'STRIKE') return;
       if (!isAbilityUnlocked(account.unlockedAegisAbilities, id)) return;
       const next = [...loadoutDraft];
       next[slotIndex] = id;
@@ -183,7 +184,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     }
     if (operativeClass === 'HEX_SHOT') {
       const id = abilityId as HexShotAbilityId;
-      if (HEX_SHOT_INTRINSIC.includes(id) || id === HEX_SHOT_ANCHOR || slotIndex === 0) return;
+      if (HEX_SHOT_INTRINSIC.includes(id) || id === HEX_SHOT_ANCHOR) return;
       if (!isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, id)) return;
       const next: HexShotAbilityId[] = [...hexDraft];
       next[slotIndex] = id;
@@ -192,7 +193,7 @@ export default function SafehouseScreen(): React.JSX.Element {
       return;
     }
     const id = abilityId as EnvoyAbilityId;
-    if (ENVOY_INTRINSIC.includes(id) || id === ENVOY_ANCHOR || slotIndex === 0) return;
+    if (ENVOY_INTRINSIC.includes(id) || id === ENVOY_ANCHOR) return;
     if (!isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, id)) return;
     const next: EnvoyAbilityId[] = [...envoyDraft];
     next[slotIndex] = id;
@@ -235,7 +236,8 @@ export default function SafehouseScreen(): React.JSX.Element {
         slotIndex,
         label: AEGIS_ABILITY_CATALOG[abilityId].label,
         abilityId,
-        editable: true,
+        editable: slotIndex > 0,
+        anchor: slotIndex === 0,
       }));
     }
     if (operativeClass === 'HEX_SHOT') {

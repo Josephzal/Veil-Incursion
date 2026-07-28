@@ -6,7 +6,7 @@ import { useRun } from '../../context/RunContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import {
   resolveUniformIncursionCargoCellSize,
-  INCURSION_CARGO_CELL_SIZE,
+  BLACK_MARKET_CARGO_CELL_SIZE,
 } from '../../utils/cargoGridLayout';
 
 interface RunIncursionCargoPanelProps {
@@ -50,7 +50,7 @@ export default function RunIncursionCargoPanel({
   const cellSize = useMemo(
     () => (cargoAreaSize.width > 0 && cargoAreaSize.height > 0
       ? resolveUniformIncursionCargoCellSize(cargoAreaSize.width, cargoAreaSize.height)
-      : INCURSION_CARGO_CELL_SIZE),
+      : BLACK_MARKET_CARGO_CELL_SIZE),
     [cargoAreaSize.height, cargoAreaSize.width],
   );
 

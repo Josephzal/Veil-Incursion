@@ -13,15 +13,15 @@ function randomInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-/** Base particle counts per drop — doubled for denser swarms; values still sum to totalValue. */
+/** Base particle counts per drop — denser supernatural mote swarms. */
 function particleCountForTier(tier: ResidueEnemyTier): number {
   switch (tier) {
     case 'elite':
-      return randomInt(12, 20);
+      return randomInt(16, 26);
     case 'boss':
-      return randomInt(30, 40);
+      return randomInt(36, 48);
     default:
-      return randomInt(4, 8);
+      return randomInt(8, 14);
   }
 }
 

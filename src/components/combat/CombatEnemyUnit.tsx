@@ -12,6 +12,7 @@ import CombatEnemyEvadeLabel from './CombatEnemyEvadeLabel';
 import CombatFloatingStatusText from './CombatFloatingStatusText';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
+import CombatEnemyEvadeEffect from './CombatEnemyEvadeEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
@@ -161,36 +162,41 @@ export default function CombatEnemyUnit({
                   impactFxSeq={unit.classImpactFxSeq}
                   impactFxKind={unit.classImpactFxKind}
                 >
-                  <CombatEnemyHitEffect
-                    hitFlashSeq={unit.hitFlashSeq}
+                  <CombatEnemyEvadeEffect
+                    evadeImpactSeq={unit.evadeImpactSeq}
                     portraitSource={unit.portraitSource}
                   >
-                    <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
-                      <View style={styles.portraitDefenseStack}>
-                        <CombatEnemyPortraitSkia
-                          source={unit.portraitSource}
-                          attackSource={unit.attackPortraitSource}
-                          turnPhase={unit.turnPhase ?? null}
-                          backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
-                          isBacklineDashing={unit.isBacklineDashing === true}
-                          glow={portraitGlow}
-                          intentShimmer={unit.intentShimmer ?? null}
-                          isEnraged={unit.isEnraged === true}
-                          isSlumped={unit.isSlumped === true}
-                        />
-                        <TargetingBrackets
-                          active={showAbilityReticle || unit.isSlumped === true}
-                          color={
-                            unit.isSlumped
-                              ? OTT.terminalGreenMuted
-                              : unit.isAoeAffected
-                                ? OTT.warningAmber
-                                : OTT.cyanSelect
-                          }
-                        />
-                      </View>
-                    </CombatSilhouetteShatterEffect>
-                  </CombatEnemyHitEffect>
+                    <CombatEnemyHitEffect
+                      hitFlashSeq={unit.hitFlashSeq}
+                      portraitSource={unit.portraitSource}
+                    >
+                      <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+                        <View style={styles.portraitDefenseStack}>
+                          <CombatEnemyPortraitSkia
+                            source={unit.portraitSource}
+                            attackSource={unit.attackPortraitSource}
+                            turnPhase={unit.turnPhase ?? null}
+                            backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
+                            isBacklineDashing={unit.isBacklineDashing === true}
+                            glow={portraitGlow}
+                            intentShimmer={unit.intentShimmer ?? null}
+                            isEnraged={unit.isEnraged === true}
+                            isSlumped={unit.isSlumped === true}
+                          />
+                          <TargetingBrackets
+                            active={showAbilityReticle || unit.isSlumped === true}
+                            color={
+                              unit.isSlumped
+                                ? OTT.terminalGreenMuted
+                                : unit.isAoeAffected
+                                  ? OTT.warningAmber
+                                  : OTT.cyanSelect
+                            }
+                          />
+                        </View>
+                      </CombatSilhouetteShatterEffect>
+                    </CombatEnemyHitEffect>
+                  </CombatEnemyEvadeEffect>
                 </CombatEnemyClassImpact>
               </CombatEnemyCritImpact>
             </View>

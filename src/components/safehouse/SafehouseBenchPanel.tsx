@@ -201,8 +201,10 @@ export default function SafehouseBenchPanel({
       onUnlock(abilityId);
       return;
     }
+    const target = slots.find((slot) => slot.slotIndex === selectedSlot);
+    if (!target?.editable) return;
     onAssign(abilityId, selectedSlot);
-  }, [arsenal, onAssign, onUnlock, selectedSlot]);
+  }, [arsenal, onAssign, onUnlock, selectedSlot, slots]);
 
   const slotGap = 12 * fontScale;
 

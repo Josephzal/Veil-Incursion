@@ -12,6 +12,7 @@ import {
   HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE,
   HUB_CARGO_INCURSION_CELL_MAX,
   HUB_CARGO_INCURSION_CELL_TARGET,
+  BLACK_MARKET_CARGO_CELL_SIZE,
   INCURSION_CARGO_CELL_SIZE,
   scaleHubCargoCellSize,
 } from '../constants/cargoGridLayout';
@@ -25,6 +26,7 @@ export {
   HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE,
   HUB_CARGO_INCURSION_CELL_MAX,
   HUB_CARGO_INCURSION_CELL_TARGET,
+  BLACK_MARKET_CARGO_CELL_SIZE,
   INCURSION_CARGO_CELL_SIZE,
   scaleHubCargoCellSize,
 };
@@ -99,8 +101,8 @@ export function resolveUniformIncursionCargoCellSize(
   return resolveHubLoadoutCellSize(
     areaWidth,
     areaHeight,
-    INCURSION_CARGO_CELL_SIZE,
-    INCURSION_CARGO_CELL_SIZE,
+    BLACK_MARKET_CARGO_CELL_SIZE,
+    BLACK_MARKET_CARGO_CELL_SIZE,
   );
 }
 
