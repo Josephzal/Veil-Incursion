@@ -81,6 +81,19 @@ export function weaponArmorPierceLayers(mods: WeaponStatModifiers): number {
   return Math.max(0, mods.armorPierceLayers ?? 0);
 }
 
+/** Nullbreach floors pierce at innate pressure so armor identity is never graft-only. */
+export function resolveWeaponArmorPressureLayers(
+  familyId: WeaponFamilyId,
+  mods: WeaponStatModifiers,
+  innateFloor = 0,
+): number {
+  const fromMods = weaponArmorPierceLayers(mods);
+  if (familyId === 'hex-void-cannon') {
+    return Math.max(fromMods, innateFloor, 1);
+  }
+  return Math.max(fromMods, innateFloor);
+}
+
 export function weaponHealReceivedMultiplier(mods: WeaponStatModifiers): number {
   const pct = mods.healReceivedPct ?? 0;
   return Math.max(0.1, 1 + pct / 100);

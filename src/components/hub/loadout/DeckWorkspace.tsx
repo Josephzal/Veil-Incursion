@@ -27,6 +27,10 @@ import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
 } from '../../../utils/classLoadoutUtils';
+import { getEquippedWeaponForClass } from '../../../data/weaponProgressionEngine';
+import { resolveAbilityGuidanceForWeapon } from '../../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
+import type { OperativeAbilityId } from '../../../types/weaponLoadoutRecommendation';
+import type { WeaponAbilityGuidanceLabel } from '../../../types/weaponPlayerFacing';
 import { MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
 import { OccultNeonRail } from '../veilChrome';
 import {
@@ -57,6 +61,7 @@ export interface DeckInspectModel {
   tags: string;
   description: string;
   slotLine: string;
+  guidanceLine?: string | null;
   actions: DeckDossierAction[];
 }
 
@@ -75,6 +80,8 @@ type PoolEntry = {
   tagsLine: string;
   unlocked: boolean;
   inDeckSlot: number | null;
+  guidanceLabel: WeaponAbilityGuidanceLabel | null;
+  guidanceReason: string | null;
 };
 
 export default function DeckWorkspace({
@@ -135,12 +142,31 @@ export default function DeckWorkspace({
       ? hexDraft
       : envoyDraft;
 
+  const equippedWeaponId = useMemo(
+    () => getEquippedWeaponForClass({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, account.activeClass),
+    [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks],
+  );
+
   const pool: PoolEntry[] = useMemo(() => {
+    const withGuidance = (id: string, base: Omit<PoolEntry, 'guidanceLabel' | 'guidanceReason'>): PoolEntry => {
+      const guidance = equippedWeaponId
+        ? resolveAbilityGuidanceForWeapon(equippedWeaponId, id as OperativeAbilityId)
+        : null;
+      return {
+        ...base,
+        guidanceLabel: guidance?.label ?? null,
+        guidanceReason: guidance?.reason ?? null,
+      };
+    };
     if (account.activeClass === 'AEGIS') {
       return getAssignableAbilities().map((id) => {
         const def = AEGIS_ABILITY_CATALOG[id];
         const inDeckSlot = aegisDraft.findIndex((entry) => entry === id);
-        return {
+        return withGuidance(id, {
           id,
           label: def.label,
           description: def.description,
@@ -148,14 +174,14 @@ export default function DeckWorkspace({
           tagsLine: getAbilityDefinition(id).tags.join(' · '),
           unlocked: isAbilityUnlocked(account.unlockedAegisAbilities, id),
           inDeckSlot: inDeckSlot >= 0 ? inDeckSlot : null,
-        };
+        });
       });
     }
     if (account.activeClass === 'HEX_SHOT') {
       return getAssignableHexShotAbilities().map((id) => {
         const def = HEX_SHOT_ABILITY_CATALOG[id];
         const inDeckSlot = hexDraft.findIndex((entry) => entry === id);
-        return {
+        return withGuidance(id, {
           id,
           label: def.label,
           description: def.description,
@@ -163,13 +189,13 @@ export default function DeckWorkspace({
           tagsLine: formatHexShotAbilityTags(id),
           unlocked: isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, id),
           inDeckSlot: inDeckSlot >= 0 ? inDeckSlot : null,
-        };
+        });
       });
     }
     return getAssignableEnvoyAbilities().map((id) => {
       const def = ENVOY_ABILITY_CATALOG[id];
       const inDeckSlot = envoyDraft.findIndex((entry) => entry === id);
-      return {
+      return withGuidance(id, {
         id,
         label: def.label,
         description: def.description,
@@ -177,7 +203,7 @@ export default function DeckWorkspace({
         tagsLine: formatEnvoyAbilityTags(id),
         unlocked: isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, id),
         inDeckSlot: inDeckSlot >= 0 ? inDeckSlot : null,
-      };
+      });
     });
   }, [
     account.activeClass,
@@ -186,6 +212,7 @@ export default function DeckWorkspace({
     account.unlockedHexShotAbilities,
     aegisDraft,
     envoyDraft,
+    equippedWeaponId,
     hexDraft,
   ]);
 
@@ -196,17 +223,16 @@ export default function DeckWorkspace({
   const assignToSelectedSlot = useCallback((abilityId: string) => {
     if (account.activeClass === 'AEGIS') {
       const id = abilityId as AegisAbilityId;
-      if (id === 'EVISCERATE') return;
+      if (id === 'EVISCERATE' || id === 'WRAITH_PARRY' || id === 'STRIKE') return;
       if (!isAbilityUnlocked(account.unlockedAegisAbilities, id)) {
         const result = unlockAegisAbility(id);
         appendHubLog(result.logLine);
         return;
       }
-      const target = selection?.kind === 'SLOT' ? selection.index : 0;
-      if (target === 0) return;
       setAegisDraft((prev) => {
         const next = [...prev];
-        next[target] = id;
+        next[0] = 'STRIKE';
+        next[selectedFlexSlot] = id;
         return next;
       });
       return;
@@ -276,6 +302,7 @@ export default function DeckWorkspace({
         tags: '—',
         description: 'Select an ability from the pool to assign here.',
         slotLine: `SLOT ${(slotIndex ?? 0) + 1}`,
+        guidanceLine: null,
         actions: [{ label: '[ SELECT ABILITY FROM POOL ]', disabled: true, tone: 'muted' }],
       });
       return;
@@ -343,6 +370,9 @@ export default function DeckWorkspace({
       tags: poolEntry?.tagsLine || '—',
       description: poolEntry?.description || '',
       slotLine: slotIndex != null ? `SLOT ${slotIndex + 1}` : 'NOT IN DECK',
+      guidanceLine: poolEntry?.guidanceLabel
+        ? `${poolEntry.guidanceLabel} — ${poolEntry.guidanceReason ?? 'Supports the equipped chassis loop.'}`
+        : null,
       actions,
     });
   }, [
@@ -367,6 +397,8 @@ export default function DeckWorkspace({
         tagsLine: '',
         unlocked: true,
         inDeckSlot: index,
+        guidanceLabel: null,
+        guidanceReason: null,
       };
     const isAnchor = index === 0;
     const selected = selection?.kind === 'SLOT' && selection.index === index;
@@ -468,6 +500,11 @@ export default function DeckWorkspace({
                   <TerminalText size={11} letterSpacing={0.35} style={styles.signalTitle} numberOfLines={1}>
                     {entry.label.replace(/[\[\]]/g, '').trim().toUpperCase()}
                   </TerminalText>
+                  {entry.guidanceLabel ? (
+                    <TerminalText size={7} letterSpacing={0.7} style={styles.guidanceChip} numberOfLines={1}>
+                      {entry.guidanceLabel}
+                    </TerminalText>
+                  ) : null}
                   <TerminalText size={7.5} style={styles.signalCost} numberOfLines={1}>
                     {entry.costLine || '—'}
                   </TerminalText>
@@ -583,6 +620,16 @@ const styles = StyleSheet.create({
   signalTopline: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   signalMeta: { color: MUTED, fontWeight: '700' },
   signalTitle: { marginTop: 5, color: TEXT_PRIMARY, fontWeight: '700' },
+  guidanceChip: {
+    marginTop: 5,
+    alignSelf: 'flex-start',
+    color: MUTED,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: 'rgba(105, 200, 173, 0.22)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   signalCost: { marginTop: 4, color: TEXT_SECONDARY, fontVariant: ['tabular-nums'] },
   signalBody: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
 });

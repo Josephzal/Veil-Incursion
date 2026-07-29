@@ -14,6 +14,7 @@ import { OPERATIVE_ARENA_SPRITE_WIDTH, OPERATIVE_ARENA_LEFT_INSET, OPERATIVE_ARE
 import { OTT_STAGE } from '../../constants/occultTacticalTerminalTheme';
 import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 import type { ClassType } from '../../types/game';
+import type { WeaponFamilyId } from '../../types/weapon';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
 import CombatGroundContact from './ui/CombatGroundContact';
 
@@ -30,6 +31,7 @@ interface CombatLandscapeArenaProps {
   portraitKey: string;
   portraitSource: ImageSourcePropType;
   operativeClass: ClassType;
+  weaponFamilyId?: WeaponFamilyId | null;
   wardPrimed?: boolean;
   abilityPrimed?: boolean;
   enemySquadPanel: React.ReactNode;
@@ -45,6 +47,7 @@ export default function CombatLandscapeArena({
   portraitKey,
   portraitSource,
   operativeClass,
+  weaponFamilyId = null,
   wardPrimed = false,
   abilityPrimed = false,
   enemySquadPanel,
@@ -103,6 +106,7 @@ export default function CombatLandscapeArena({
           <PlayerEntity
             playerViewportRef={playerViewportRef}
             operativeClass={operativeClass}
+            weaponFamilyId={weaponFamilyId}
             wardPrimed={wardPrimed}
             abilityPrimed={abilityPrimed}
           />

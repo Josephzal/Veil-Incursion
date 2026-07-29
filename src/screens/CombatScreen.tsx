@@ -90,6 +90,7 @@ import CombatOperativeHud, {
 } from '../components/combat/CombatOperativeHud';
 import { OTT } from '../constants/occultTacticalTerminalTheme';
 import { resolveWeaponState } from '../data/weaponProgressionEngine';
+import { resolveClassCompatibleWeaponFamily } from '../data/weaponRunState';
 import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
 import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
 import { sponsorDisplayName } from '../utils/contractUi';
@@ -135,25 +136,24 @@ export default function CombatScreen(): React.JSX.Element {
     clearEncounterUltimateDisabled,
     setCombatLogActive,
     clearRunLog,
+    beginCombatRunLogSession,
     recordDepthIdentityCombatVictory,
     recordCompositionEncounterVictory,
     recordBalanceCombatSample,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
+  const { account, addLockedContainer } = usePlayerAccount();
   const operativeClass = activeIncursion.activeClass ?? account.activeClass;
-  const baseWeaponStats = useMemo(() => {
-    const familyId = activeIncursion.activeWeaponFamilyId;
-    const tier = activeIncursion.activeWeaponTier ?? 1;
-    if (familyId) {
-      return resolveWeaponCombatStatsFromState(resolveWeaponState(familyId, tier));
-    }
-    return getWeaponCombatStats(operativeClass);
-  }, [
-    activeIncursion.activeWeaponFamilyId,
-    activeIncursion.activeWeaponTier,
-    getWeaponCombatStats,
+  const combatWeaponFamilyId = resolveClassCompatibleWeaponFamily(
     operativeClass,
+    activeIncursion.activeWeaponFamilyId,
+  );
+  const baseWeaponStats = useMemo(() => {
+    const tier = activeIncursion.activeWeaponTier ?? 1;
+    return resolveWeaponCombatStatsFromState(resolveWeaponState(combatWeaponFamilyId, tier));
+  }, [
+    combatWeaponFamilyId,
+    activeIncursion.activeWeaponTier,
   ]);
   const strikeBonusPct = activeIncursion.strikeDamageBonusPct ?? 0;
   const weaponCombatStats = useMemo(() => {
@@ -187,13 +187,13 @@ export default function CombatScreen(): React.JSX.Element {
   );
 
   useEffect(() => {
-    setCombatLogActive(true);
+    beginCombatRunLogSession();
     clearPendingNarrativeCombatBoons();
     return () => {
       setCombatLogActive(false);
       clearRunLog();
     };
-  }, [clearPendingNarrativeCombatBoons, clearRunLog, setCombatLogActive]);
+  }, [beginCombatRunLogSession, clearPendingNarrativeCombatBoons, clearRunLog, setCombatLogActive]);
 
   const [squadUi, setSquadUi] = useState<CombatSquadUiSnapshot | null>(null);
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
@@ -818,10 +818,17 @@ export default function CombatScreen(): React.JSX.Element {
 
   const missionDepth = depthFromNodesCleared(activeIncursion.nodesCleared);
   const missionDepthLabel = `DEPTH ${missionDepth} // LEVEL ${activeIncursion.nodesCleared + 1}`;
-  const missionSectorLabel =
-    activeIncursion.runGenerationContext?.sectorState?.activeAnchor?.type
-      ?? activeIncursion.currentDistrict
-      ?? 'UNKNOWN SECTOR';
+  const rawSectorCandidate =
+    activeIncursion.runGenerationContext?.sectorState?.activeAnchor?.displayName
+    ?? activeIncursion.currentDistrict
+    ?? null;
+  const missionSectorLabel = (() => {
+    if (rawSectorCandidate == null) return '';
+    const text = String(rawSectorCandidate).replace(/_/g, ' ').trim();
+    // Omit bare numeric / empty rows (was showing an isolated "2" under DEPTH).
+    if (!text || /^\d+$/.test(text)) return '';
+    return text;
+  })();
   const activeContract = activeIncursion.activeContract;
   const activeOperation =
     activeIncursion.runGenerationContext?.activeOperation
@@ -920,7 +927,7 @@ export default function CombatScreen(): React.JSX.Element {
 
                     <CombatMissionReadout
                       depthLabel={missionDepthLabel}
-                      sectorLabel={String(missionSectorLabel).replace(/_/g, ' ')}
+                      sectorLabel={missionSectorLabel}
                       objectiveLabel={missionObjective ? String(missionObjective).replace(/_/g, ' ') : null}
                       questLog={combatQuestLog}
                     />
@@ -955,6 +962,7 @@ export default function CombatScreen(): React.JSX.Element {
                       portraitKey={portraitKey}
                       portraitSource={focusedPortraitSource}
                       operativeClass={operativeClass}
+                      weaponFamilyId={combatWeaponFamilyId}
                       wardPrimed={wardPrimed}
                       abilityPrimed={abilityPrimed}
                       enemySquadPanel={enemySquadPanel}
@@ -1000,8 +1008,9 @@ export default function CombatScreen(): React.JSX.Element {
                       onCombatComplete={handleCombatComplete}
                       onLethalEnemyStrike={recordRunKillAttacker}
                       onGraftLootDrop={(kind) => {
-                        if (kind === 'CREDITS') {
-                          awardRunCredits(standardKillCredits(activeIncursion.nodesCleared), 'Scavenger Bolt graft');
+                        if (kind.startsWith('CREDITS')) {
+                          const amount = Number(kind.split(':')[1] ?? '5') || 5;
+                          awardRunCredits(amount, 'Graft salvage (capped)');
                         }
                         if (kind === 'LEY_SLAG') {
                           grantCombatSalvage('ley-slag', 5);
@@ -1036,8 +1045,9 @@ export default function CombatScreen(): React.JSX.Element {
                       playerKineticArmorBonus={runKineticArmor}
                       kineticBatteryActive={kineticBatteryActive}
                       narrativeCombatBoons={narrativeCombatBoons}
-                      activeWeaponFamilyId={activeIncursion.activeWeaponFamilyId}
+                      activeWeaponFamilyId={combatWeaponFamilyId}
                       activeWeaponTier={activeIncursion.activeWeaponTier ?? 1}
+                      simplifiedUltimateInputs={account.simplifiedUltimateInputs === true}
                       playerCritChanceBonus={playerCritChanceBonus}
                       onPlayerCritImpact={handlePlayerCritImpact}
                       godModeActive={activeIncursion.godModeActive}

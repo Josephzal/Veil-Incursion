@@ -19,6 +19,8 @@ import {
   GAUGE_VEIL_FLUX,
 } from '../../utils/combatTelemetryFormat';
 import CombatRunicBrandGauge from './CombatRunicBrandGauge';
+import WeaponCombatCalloutStrip from './WeaponCombatCalloutStrip';
+import { resolveWeaponCombatCallouts } from '../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 import ResourceRail from './ui/ResourceRail';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
@@ -45,6 +47,10 @@ export interface CombatOperativeTelemetry {
   /** Aegis narrative / Demon's Lung overcharge flag. */
   overcharged?: boolean;
   zeroProtocolReady?: boolean;
+  /** Equipped weapon ultimate ready (any class meter + WIRED gate). */
+  weaponUltimateReady?: boolean;
+  /** Player-facing ultimate display name for HUD chips. */
+  weaponUltimateDisplayName?: string;
   /** Hex Shot ammo-type refactor v1. */
   hexAmmoType?: import('../../types/hexAmmo').HexAmmoType;
   hexProtocolCharges?: number;
@@ -56,6 +62,18 @@ export interface CombatOperativeTelemetry {
   envoySilenced?: boolean;
   veilRotStacksTotal?: number;
   catalyticPayloadEstimate?: number;
+  /** Phase 3L — weapon-loop HUD fields (optional; omit when unknown). */
+  activeWeaponFamilyId?: import('../../types/weapon').WeaponFamilyId;
+  riftEdgeTempoArmed?: boolean;
+  claymoreStaminaCommitted?: boolean;
+  perfectReloadWindow?: boolean;
+  pulseSpreadSecondaryCount?: number;
+  previousCatalyst?: 'NULL' | 'ECHO' | 'BLOOD' | 'ASH' | null;
+  cleanCatalystCycleReady?: boolean;
+  lanternDetonationReady?: boolean;
+  prismBrinkActive?: boolean;
+  prismSacrificePreview?: number;
+  prismCanPayFullSacrifice?: boolean;
 }
 
 interface CombatOperativeHudProps {
@@ -104,6 +122,8 @@ export default function CombatOperativeHud({
     overchargeMultiplier = 0,
     overcharged = false,
     zeroProtocolReady = false,
+    weaponUltimateReady = false,
+    weaponUltimateDisplayName,
     veilFlux = 0,
     fluxMaxCap = 100,
     envoyVoidSiphoned = false,
@@ -115,11 +135,47 @@ export default function CombatOperativeHud({
     hexNextShotOvercharged = false,
   } = telemetry;
 
+  const ultimateReady = weaponUltimateReady
+    || eviscerateReady
+    || zeroProtocolReady;
+  const ultimateLabel = weaponUltimateDisplayName ?? undefined;
+
   const effectiveMax = maxSoulAnchor;
   const soulAnchorRatio = effectiveMax > 0 ? operativeHp / effectiveMax : 0;
   const abyssalRatio = formatAegisReserveRatio(abyssalReserve, abyssalCap);
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
   const fluxRatio = fluxMaxCap > 0 ? Math.min(1, veilFlux / fluxMaxCap) : 0;
+
+  const weaponCallouts = telemetry.activeWeaponFamilyId
+    ? resolveWeaponCombatCallouts({
+      weaponFamilyId: telemetry.activeWeaponFamilyId,
+      operativeClass,
+      abyssalReserve,
+      stamina,
+      maxStamina,
+      riftEdgeTempoArmed: telemetry.riftEdgeTempoArmed,
+      claymoreStaminaCommitted: telemetry.claymoreStaminaCommitted,
+      currentAmmo,
+      maxAmmo,
+      hexProtocolCharges,
+      hexMaxProtocolCharges,
+      zeroProtocolReady: ultimateReady && operativeClass === 'HEX_SHOT',
+      weaponUltimateReady: ultimateReady,
+      weaponUltimateDisplayName: ultimateLabel,
+      hexNextShotOvercharged,
+      perfectReloadWindow: telemetry.perfectReloadWindow,
+      pulseSpreadSecondaryCount: telemetry.pulseSpreadSecondaryCount,
+      veilFlux,
+      fluxMaxCap,
+      previousCatalyst: telemetry.previousCatalyst,
+      cleanCatalystCycleReady: telemetry.cleanCatalystCycleReady,
+      veilRotStacksTotal,
+      lanternDetonationReady: telemetry.lanternDetonationReady,
+      prismBrinkActive: telemetry.prismBrinkActive,
+      prismSacrificePreview: telemetry.prismSacrificePreview,
+      prismCanPayFullSacrifice: telemetry.prismCanPayFullSacrifice,
+    })
+    : [];
 
   const compact = deckAligned || wide || dashboardCompact || consolePanel;
   const rowVariant = desktopArena
@@ -185,7 +241,8 @@ export default function CombatOperativeHud({
             currentAmmo={currentAmmo}
             maxAmmo={maxAmmo}
             overchargeMultiplier={overchargeMultiplier}
-            markReady={zeroProtocolReady}
+            markReady={ultimateReady}
+            readyUltimateLabel={ultimateLabel}
             labelColor={OTT.warningAmber}
             variant="compact"
             ammoType={hexAmmoType}
@@ -195,8 +252,14 @@ export default function CombatOperativeHud({
           />
         ) : null}
         {operativeClass === 'ENVOY' ? (
-          <CombatVeilRotGauge totalStacks={veilRotStacksTotal} variant="compact" />
+          <CombatVeilRotGauge
+            totalStacks={veilRotStacksTotal}
+            variant="compact"
+            ultimateReady={ultimateReady}
+            readyUltimateLabel={ultimateLabel}
+          />
         ) : null}
+        <WeaponCombatCalloutStrip callouts={weaponCallouts} />
       </View>
     );
   }
@@ -208,7 +271,8 @@ export default function CombatOperativeHud({
           currentAmmo={currentAmmo}
           maxAmmo={maxAmmo}
           overchargeMultiplier={overchargeMultiplier}
-          markReady={zeroProtocolReady}
+          markReady={ultimateReady}
+          readyUltimateLabel={ultimateLabel}
           labelColor="#fbbf24"
           variant={resourceVariant}
           labelFontScale={labelScale}
@@ -235,6 +299,8 @@ export default function CombatOperativeHud({
             totalStacks={veilRotStacksTotal}
             variant={resourceVariant}
             labelFontScale={labelScale}
+            ultimateReady={ultimateReady}
+            readyUltimateLabel={ultimateLabel}
           />
         </>
       );
@@ -245,7 +311,8 @@ export default function CombatOperativeHud({
           label={formatAegisReserveLabel(abyssalReserve, abyssalCap, {
             voidWardPrimed,
             overcharged,
-            eviscerateReady,
+            eviscerateReady: ultimateReady,
+            ultimateReadyLabel: ultimateReady ? ultimateLabel : null,
           })}
           labelColor="#00D2C4"
           fillColor={GAUGE_ABYSSAL}
@@ -287,6 +354,7 @@ export default function CombatOperativeHud({
         {...gaugeProps}
       />
       {renderClassResource()}
+      <WeaponCombatCalloutStrip callouts={weaponCallouts} />
       {operativeClass === 'HEX_SHOT' ? (
         <CombatTelemetryGaugeRow
           label={`STM // ${stamina}/${maxStamina}`}

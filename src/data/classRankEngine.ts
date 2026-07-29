@@ -1,13 +1,14 @@
 /**
- * Progression Spine Phase 1F — Class Rank reward skeleton (hooks only).
- * Awards class XP from runs, ranks 1–10, grants unlock-hook flags — no new combat content.
+ * Progression Spine — Class Rank reward skeleton + graft capacity axis.
+ * Awards class XP from runs, ranks 1–20. Ranks 1–10 preserve original rewards;
+ * ranks 11–20 append graft-capacity / socket gates (non-graft rewards deferred).
  */
 import type { ClassType } from '../types/game';
 import type { BreachGradeId, ProgressionProfile } from '../types/progression';
 import { appendProgressionEvent } from './progressionEventLog';
 import { getBreachGradeTuning } from './breachGradeEngine';
 
-export const CLASS_RANK_MAX = 10;
+export const CLASS_RANK_MAX = 20;
 
 export type ClassRankHookKind =
   | 'ABILITY_RECIPE'
@@ -85,6 +86,31 @@ export const CLASS_RANK_REWARD_TABLE: readonly ClassRankRewardHooks[] = [
     label: 'Alternate ultimate mandate',
     kind: 'ALTERNATE_ULTIMATE',
     flagHooks: ['hook.class.alternate_ultimate'],
+  },
+  // Ranks 11–20: graft-capacity axis extension. Non-graft rewards deferred (report gaps).
+  {
+    rank: 12,
+    label: 'Third graft capacity',
+    kind: 'GRAFT_LICENSE',
+    graftHooks: ['hook.graft.capacity_3'],
+  },
+  {
+    rank: 15,
+    label: 'Ultimate graft socket',
+    kind: 'GRAFT_LICENSE',
+    graftHooks: ['hook.graft.ultimate'],
+  },
+  {
+    rank: 17,
+    label: 'Fourth graft capacity',
+    kind: 'GRAFT_LICENSE',
+    graftHooks: ['hook.graft.capacity_4'],
+  },
+  {
+    rank: 20,
+    label: 'Apex / Masterwork graft access',
+    kind: 'GRAFT_LICENSE',
+    graftHooks: ['hook.graft.apex_masterwork'],
   },
 ];
 

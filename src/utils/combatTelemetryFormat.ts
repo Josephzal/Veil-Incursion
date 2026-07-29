@@ -1,3 +1,4 @@
+import { formatHostileDisplayName } from './hostileDisplayName';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import type { CombatUnitTag } from '../types/aegisCombat';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
@@ -11,6 +12,7 @@ import {
 import { resolveActiveEnemyStatuses, type EnemyStatusEffectKey } from './enemyStatusEffects';
 
 export type { EnemyStatusEffectKey } from './enemyStatusEffects';
+export { formatHostileDisplayName } from './hostileDisplayName';
 
 export type CombatClassImpactKind = 'AEGIS_SLICE' | 'HEX_BULLET' | 'ENVOY_BURST';
 
@@ -61,12 +63,9 @@ const INTENT_READOUT: Record<EnemyIntent, string> = {
   BINDING_WARD: 'BINDING WARD',
 };
 
+/** @deprecated Prefer formatHostileDisplayName — kept for call-site migration. */
 export function formatHostileId(designation: string): string {
-  const slug = designation
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
-  return slug.length > 28 ? slug.slice(0, 28) : slug;
+  return formatHostileDisplayName(designation);
 }
 
 export function formatIntentReadout(intent: EnemyIntent): string {
@@ -106,7 +105,10 @@ export function formatAegisReserveRatio(reserve: number, cap: number): number {
 export interface AegisReserveLabelOptions {
   voidWardPrimed?: boolean;
   overcharged?: boolean;
+  /** @deprecated Prefer ultimateReadyLabel — kept for call-site migration. */
   eviscerateReady?: boolean;
+  /** Player-facing ultimate name when AR ultimate is ready (from equipped weapon). */
+  ultimateReadyLabel?: string | null;
   riposteReady?: boolean;
 }
 
@@ -136,7 +138,9 @@ export function formatAegisReserveLabel(
   if (options.voidWardPrimed) tags.push('WARD');
   if (options.riposteReady) tags.push('RIPOSTE');
   if (options.overcharged) tags.push('OVERCHARGED');
-  if (options.eviscerateReady) tags.push('EVISCERATE');
+  const ultimateLabel = options.ultimateReadyLabel
+    ?? (options.eviscerateReady ? 'THREEFOLD BRAND' : null);
+  if (ultimateLabel) tags.push(ultimateLabel);
   const suffix = tags.length > 0 ? ` • ${tags.join(' • ')}` : '';
   return `AR // ${capLabel}${suffix}`;
 }

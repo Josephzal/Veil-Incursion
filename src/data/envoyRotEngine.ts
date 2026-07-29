@@ -29,7 +29,7 @@ export const CATALYTIC_RING_MAX_CHARGE_SCALE =
 /** @deprecated Use CATALYTIC_RING_PASS_EPSILON */
 export const CATALYTIC_PERFECT_OVERLAP_EPSILON = CATALYTIC_RING_PASS_EPSILON;
 
-/** Total Veil Rot stacks across the board required to prime Cataclysm Sigil. */
+/** Total Veil Rot stacks across the board required to prime Envoy weapon ultimates. */
 export const CATACLYSM_ROT_GATE = 6;
 
 export function getVeilRotStacks(

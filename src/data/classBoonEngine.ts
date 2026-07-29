@@ -21,6 +21,9 @@ import { LEY_LINE_MUTATION_CATALOG, pickRandomLeyLineMutations } from './leyLine
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 import type { HexAmmoType } from '../types/hexAmmo';
+import type { WeaponFamilyId } from '../types/weapon';
+import { prepareWeightedBoonOffers } from './boonOffer/boonOfferEngine';
+import { resolveWeaponUltimateActionTags } from './weaponUltimateSurfaceEngine';
 
 export interface ClassBoonRule {
   id: OperativeClassBoonId;
@@ -81,7 +84,7 @@ export function resolveHexEffectiveTags(
   abilityId: string,
   ammoType?: HexAmmoType,
 ): readonly string[] {
-  const base = getHexShotAbilityTags(abilityId as HexShotAbilityId);
+  const base = resolveWeaponUltimateActionTags(abilityId, 'HEX_SHOT');
   if (ammoType === 'WRAITHGLASS' && base.includes('BALLISTIC') && !base.includes('VOID_AMMO')) {
     return [...base, 'VOID_AMMO'];
   }
@@ -90,7 +93,7 @@ export function resolveHexEffectiveTags(
 
 export function isUsingWraithglassAmmo(abilityId: string, ammoType?: HexAmmoType): boolean {
   if (ammoType !== 'WRAITHGLASS') return false;
-  return getHexShotAbilityTags(abilityId as HexShotAbilityId).includes('BALLISTIC');
+  return resolveWeaponUltimateActionTags(abilityId, 'HEX_SHOT').includes('BALLISTIC');
 }
 
 export function boonMatchesHexAction(
@@ -114,7 +117,7 @@ export function boonMatchesEnvoyAction(
   const rule = ENVOY_BOON_RULES[boonId];
   if (!rule || !hasEnvoyBoon(boons, boonId)) return false;
   if (!abilityId) return rule.hook === 'passive' || rule.hook === 'onEncounterStart';
-  const tags = getEnvoyAbilityTags(abilityId as EnvoyAbilityId);
+  const tags = resolveWeaponUltimateActionTags(abilityId, 'ENVOY');
   return tagsMatch(tags, rule.tagAll, rule.tagAny);
 }
 
@@ -206,7 +209,32 @@ export function preparePostCombatBoonOffers(
   ownedHex: readonly HexShotBoonId[],
   ownedEnvoy: readonly EnvoyBoonId[],
   count = 3,
+  weighted?: {
+    weaponFamilyId: WeaponFamilyId;
+    equippedAbilityIds: readonly string[];
+    seed: string;
+    depthBand?: 1 | 2 | 3;
+    isFirstOffer?: boolean;
+    acquiredEngineFamilies?: readonly string[];
+    abilityGrafts?: Readonly<Record<string, string>>;
+  },
 ): PostCombatBoonOffer[] {
+  if (weighted) {
+    return prepareWeightedBoonOffers({
+      classId,
+      weaponFamilyId: weighted.weaponFamilyId,
+      equippedAbilityIds: weighted.equippedAbilityIds,
+      ownedAegis,
+      ownedHex,
+      ownedEnvoy,
+      seed: weighted.seed,
+      count,
+      depthBand: weighted.depthBand,
+      isFirstOffer: weighted.isFirstOffer,
+      acquiredEngineFamilies: weighted.acquiredEngineFamilies,
+      abilityGrafts: weighted.abilityGrafts,
+    });
+  }
   if (classId === 'HEX_SHOT') {
     return pickRandomHexShotBoons(count, ownedHex).map(toOffer);
   }

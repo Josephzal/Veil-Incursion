@@ -3,7 +3,8 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 import type { ClassType } from '../types/game';
 import { aliveUnits } from '../data/combatSquadEngine';
-import { formatHostileId, formatIntentReadout } from './combatTelemetryFormat';
+import { formatHostileDisplayName } from './hostileDisplayName';
+import { formatIntentReadout } from './combatTelemetryFormat';
 
 export type CombatTurnOrderEntryState = 'active' | 'queued' | 'waiting' | 'defeated';
 
@@ -40,8 +41,15 @@ function sortByGridSlot(units: EnemyCombatProfile[]): EnemyCombatProfile[] {
 }
 
 function hostileLabel(unit: EnemyCombatProfile): string {
-  const slug = formatHostileId(unit.designation);
-  return slug.length > 10 ? slug.slice(0, 10) : slug;
+  const full = formatHostileDisplayName(unit.designation);
+  // Prefer complete concise names; only abbreviate past ~14 chars at word boundaries.
+  if (full.length <= 14) return full;
+  const words = full.split(' ');
+  if (words.length >= 2) {
+    const short = words.map((w) => (w.length <= 4 ? w : `${w.slice(0, 3)}.`)).join(' ');
+    if (short.length <= 16) return short;
+  }
+  return full.slice(0, 13).trimEnd();
 }
 
 function operativeIsActive(phase: CombatTurnPhase): boolean {

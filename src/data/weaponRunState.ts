@@ -1,7 +1,7 @@
 import type { ActiveIncursionState } from '../types/game';
 import type { WeaponFamilyId, WeaponRuntimeState, WeaponTierNumber } from '../types/weapon';
 import { createDefaultWeaponProgression, resolveWeaponState } from './weaponProgressionEngine';
-import { getStarterWeaponForClass } from './weaponRegistry';
+import { getStarterWeaponForClass, getWeaponFamily, isWeaponFamilyId } from './weaponRegistry';
 
 export function createDefaultWeaponRuntime(): WeaponRuntimeState {
   return {
@@ -13,6 +13,9 @@ export function createDefaultWeaponRuntime(): WeaponRuntimeState {
     sacrificeHpBonusUsed: false,
     firstArmoredHitUsed: false,
     postReloadBallisticBonus: false,
+    riftEdgeTempoArmed: false,
+    claymoreBreakCashoutUsed: false,
+    magazineEmptiedThisCombat: false,
   };
 }
 
@@ -20,10 +23,21 @@ export function resetWeaponRuntime(runtime: WeaponRuntimeState): WeaponRuntimeSt
   return createDefaultWeaponRuntime();
 }
 
+export function resolveClassCompatibleWeaponFamily(
+  classId: import('../types/game').ClassType,
+  familyId?: WeaponFamilyId | null,
+): WeaponFamilyId {
+  if (familyId && isWeaponFamilyId(familyId)
+    && getWeaponFamily(familyId).classId === classId) {
+    return familyId;
+  }
+  return getStarterWeaponForClass(classId);
+}
+
 export function hydrateWeaponIncursionFields<
   T extends Partial<Pick<ActiveIncursionState, 'activeWeaponFamilyId' | 'activeWeaponTier' | 'weaponRuntime'>>,
 >(incursion: T, classId: import('../types/game').ClassType): T & Pick<ActiveIncursionState, 'activeWeaponFamilyId' | 'activeWeaponTier' | 'weaponRuntime'> {
-  const familyId = incursion.activeWeaponFamilyId ?? getStarterWeaponForClass(classId);
+  const familyId = resolveClassCompatibleWeaponFamily(classId, incursion.activeWeaponFamilyId);
   const tier = incursion.activeWeaponTier ?? 1;
   return {
     ...incursion,
@@ -50,7 +64,10 @@ export function snapshotWeaponForRun(
 }
 
 export function resolveActiveWeaponState(incursion: ActiveIncursionState) {
-  const familyId = incursion.activeWeaponFamilyId ?? getStarterWeaponForClass(incursion.activeClass ?? 'AEGIS');
+  const familyId = resolveClassCompatibleWeaponFamily(
+    incursion.activeClass ?? 'AEGIS',
+    incursion.activeWeaponFamilyId,
+  );
   const tier = incursion.activeWeaponTier ?? 1;
   return resolveWeaponState(familyId, tier);
 }

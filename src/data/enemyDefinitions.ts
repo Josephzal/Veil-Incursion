@@ -301,13 +301,6 @@ export const ENEMY_DEFINITIONS: Record<EncounterEnemyKey, EnemyDefinition> = {
   RIFT_SPIKE_SNIPER: veil('RIFT_SPIKE_SNIPER', WIDE, 'BACKLINE', 2, d3Gates(5), {
     3: { maxHp: 204, baseDamage: 52, fractureThreshold: 132 },
   }, ['UNREACHABLE_BACKLINE', 'TRUE_DAMAGE']),
-
-  /** Legacy alias — maps to echoing-brute roster. */
-  RIOT_VANGUARD: veil('RIOT_VANGUARD', BZ, 'FRONTLINE', 3, gates([1, 2, 3]), {
-    1: { maxHp: 130, baseDamage: 18, kineticArmor: 10, fractureThreshold: 90 },
-    2: { maxHp: 215, baseDamage: 32, kineticArmor: 10, fractureThreshold: 145 },
-    3: { maxHp: 312, baseDamage: 47, kineticArmor: 10, fractureThreshold: 210 },
-  }),
 };
 
 export function getEnemyDefinition(

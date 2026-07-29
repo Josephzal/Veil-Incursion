@@ -20,6 +20,7 @@ import {
   RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
 import type { ClassType } from '../../types/game';
+import type { WeaponFamilyId } from '../../types/weapon';
 import {
   computeFootprintAttackLayout,
   computeFootprintIdleLayout,
@@ -40,6 +41,7 @@ interface CombatPlayerAttackSpriteProps {
   idleSource: ImageSourcePropType;
   attackSource: ImageSourcePropType;
   operativeClass?: ClassType;
+  weaponFamilyId?: WeaponFamilyId | null;
   /** Faction strike aura — shares attack footprint so it sits on the attack pose. */
   strikeAuraOpacity: SharedValue<number>;
   strikeTint: string;
@@ -53,6 +55,7 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     idleSource,
     attackSource,
     operativeClass = 'AEGIS',
+    weaponFamilyId = null,
     strikeAuraOpacity,
     strikeTint,
     primedGlowOpacity,
@@ -146,8 +149,8 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     }));
 
     const hasDistinctAttackArt = idleSource !== attackSource;
-    const idleLayerStyle = computeFootprintIdleLayout(footprintBox, operativeClass);
-    const attackLayerStyle = computeFootprintAttackLayout(footprintBox, operativeClass);
+    const idleLayerStyle = computeFootprintIdleLayout(footprintBox, operativeClass, weaponFamilyId);
+    const attackLayerStyle = computeFootprintAttackLayout(footprintBox, operativeClass, weaponFamilyId);
 
     return (
       <View

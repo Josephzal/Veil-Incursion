@@ -14,9 +14,13 @@ interface CombatVeilRotGaugeProps {
   spentColor?: string;
   variant?: 'compact' | 'inline' | 'stacked';
   labelFontScale?: number;
+  /** Weapon ultimate ready at Rot gate. */
+  ultimateReady?: boolean;
+  /** Player-facing ultimate name when ready. */
+  readyUltimateLabel?: string | null;
 }
 
-/** Catalyst-aligned orb row — tracks total Veil Rot toward Cataclysm gate. */
+/** Catalyst-aligned orb row — tracks total Veil Rot toward weapon ultimate gate. */
 export default function CombatVeilRotGauge({
   totalStacks,
   gate = CATACLYSM_ROT_GATE,
@@ -25,13 +29,18 @@ export default function CombatVeilRotGauge({
   spentColor = 'rgba(34, 197, 94, 0.28)',
   variant = 'compact',
   labelFontScale = 1,
+  ultimateReady = false,
+  readyUltimateLabel = null,
 }: CombatVeilRotGaugeProps): React.JSX.Element | null {
   if (totalStacks <= 0) return null;
 
   const slots = Math.max(1, gate);
   const isStacked = variant === 'stacked';
   const isInline = variant === 'compact' || variant === 'inline';
-  const labelText = `VEIL ROT // ${totalStacks}/${gate}`;
+  const readyName = readyUltimateLabel?.trim();
+  const labelText = ultimateReady && readyName
+    ? `VEIL ROT // ${totalStacks}/${gate} // ${readyName}`
+    : `VEIL ROT // ${totalStacks}/${gate}`;
 
   const orbRow = (
     <View style={styles.orbRow}>

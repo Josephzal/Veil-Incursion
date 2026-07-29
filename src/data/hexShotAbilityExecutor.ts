@@ -1,9 +1,11 @@
 import type { HexShotAbilityId } from '../types/operativeClass';
 import type { ClassCombatEncounterState } from '../types/classCombatAbility';
 import type { EnemyCombatProfile } from '../types/run';
+import type { ResolvedWeaponState } from '../types/weapon';
 import { getHexShotAbilityDefinition } from './hexShotAbilities';
 import { graftForcesSingleTarget } from './hexShotIntrinsics';
 import { resolveHexShotResourceCosts } from './hexShotResourceEngine';
+import { resolveHexBasicShot } from './weaponBasicEngine';
 import { addCombatTag } from './combatFractureEngine';
 import {
   aliveUnits,
@@ -19,6 +21,8 @@ export interface HexShotAbilityHurtOptions {
   abilityId?: HexShotAbilityId;
   rollCrit?: boolean;
   forceCrit?: boolean;
+  /** Floor for Kinetic Armor strip layers (Nullbreach innate pressure). */
+  innateArmorPressureLayers?: number;
 }
 
 export interface HexShotExecutionContext {
@@ -51,6 +55,10 @@ export interface HexShotExecutionContext {
   ultimatePerformance?: number;
   /** Graft-modified tags for this cast (e.g. Widow-Choke AoE → single). */
   effectiveTags?: readonly string[];
+  /** Equipped weapon — drives unique basic delivery (Phase 3D). */
+  resolvedWeapon?: ResolvedWeaponState | null;
+  /** Called when magazine hits 0 after a basic (shotgun / breach loop). */
+  onMagazineEmptied?: () => void;
 }
 
 export type HexShotExecutionResult =
@@ -117,6 +125,41 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
       if (!unit?.unitId) {
         ctx.log('[REJECTED] >> Sidearm requires a target.');
         return { ok: false, refundAp: def.apCost, refundAmmo: def.ammoCost };
+      }
+      const weapon = ctx.resolvedWeapon;
+      if (weapon) {
+        const plan = resolveHexBasicShot({
+          weapon,
+          squad: ctx.squad,
+          primaryTargetId: unit.unitId,
+          catalogBaseDamage: def.baseDamage || ballisticDamage(ctx, ctx.abilityId),
+          forceSingleTarget: graftForcesSingleTarget(ctx.effectiveTags),
+        });
+        plan.logLines.forEach((line) => ctx.log(line));
+        if (plan.hits.length === 0) {
+          return { ok: false, refundAp: def.apCost, refundAmmo: def.ammoCost };
+        }
+        if (plan.staminaCost > 0 && !ctx.spendStamina(plan.staminaCost)) {
+          ctx.log('[REJECTED] >> Insufficient stamina for breach round.');
+          return { ok: false, refundAp: def.apCost, refundAmmo: def.ammoCost };
+        }
+        // Ammo already spent above via ammoCost; shotgun still spends 1.
+        // Spread hits share one cast-level ammo payload in the hub (tracker caps).
+        // Nullbreach innate KA pressure is applied once in hurtEnemy via
+        // resolveWeaponArmorPressureLayers (floor = innateArmorPressureLayers).
+        for (const hit of plan.hits) {
+          ctx.hurtEnemy(hit.damage, hit.isPrimary ? '[WEAPON BASIC]' : '[SPREAD]', {
+            channel: 'KINETIC',
+            fractureGain: hit.fractureGain,
+            abilityId: ctx.abilityId,
+            targetId: hit.targetId,
+            innateArmorPressureLayers: plan.innateArmorPressureLayers,
+          }, hit.targetId);
+        }
+        if (ctx.currentAmmo - (ammoCost || plan.ammoCost) <= 0) {
+          ctx.onMagazineEmptied?.();
+        }
+        return { ok: true };
       }
       ctx.hurtEnemy(ballisticDamage(ctx, ctx.abilityId), '[SILVER-CORE]', {
         channel: 'KINETIC',
@@ -327,24 +370,24 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
 
     case 'ZERO_PROTOCOL': {
       if (ctx.currentAmmo < ctx.maxAmmo) {
-        ctx.log('[REJECTED] >> Zero-Protocol requires a full magazine.');
+        ctx.log('[REJECTED] >> Zero Protocol requires a full magazine.');
         return { ok: false, refundAp: def.apCost };
       }
       const unit = targetUnit(ctx);
       if (!unit?.unitId) {
-        ctx.log('[REJECTED] >> Zero-Protocol requires a target.');
+        ctx.log('[REJECTED] >> Zero Protocol requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
       const performance = ctx.ultimatePerformance ?? 1;
       const burst = Math.floor((def.baseDamage + ctx.currentAmmo * 4) * (0.55 + performance * 0.45));
-      ctx.hurtEnemy(burst, '[ZERO-PROTOCOL]', {
+      ctx.hurtEnemy(burst, '[ZERO PROTOCOL]', {
         channel: 'TRUE',
         abilityId: ctx.abilityId,
         rollCrit: false,
         targetId: unit.unitId,
       }, unit.unitId);
       ctx.emptyMagazine();
-      ctx.log('[ZERO-PROTOCOL] >> Magazine dumped — execution channel resolved.');
+      ctx.log('[ZERO PROTOCOL] >> Magazine dumped — execution channel resolved.');
       return { ok: true };
     }
 

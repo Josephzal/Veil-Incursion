@@ -48,6 +48,11 @@ import type { BreachGradeId } from '../../types/progression';
 import { sectorPrimaryResourcePool } from '../../data/sectorResourceTableEngine';
 import { getResourceDefinition } from '../../data/resourceRegistry';
 import { isBreachGradeUnlockedInProfile } from '../../data/progressionProfileEngine';
+import { getEquippedWeaponForClass } from '../../data/weaponProgressionEngine';
+import {
+  getWeaponPlayerFacingSummary,
+  resolveWeaponSectorPressureNote,
+} from '../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import { VEIL } from '../../theme/veilTerminalTokens';
 import {
   HUB_CARD_BORDER,
@@ -390,6 +395,24 @@ export default function SectorBriefingPanel({
     [sector.id],
   );
 
+  const chassisPressure = useMemo(() => {
+    const familyId = getEquippedWeaponForClass({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, account.activeClass);
+    if (!familyId) return null;
+    const facing = getWeaponPlayerFacingSummary(familyId);
+    const note = resolveWeaponSectorPressureNote(familyId, sector.id, 1);
+    return { facing, note };
+  }, [
+    account.activeClass,
+    account.equippedWeaponByClass,
+    account.weaponTiers,
+    account.weaponUnlocks,
+    sector.id,
+  ]);
+
   useEffect(() => {
     if (persisted.selectedBreachGrade !== selectedBreachGrade) {
       setSelectedBreachGrade(selectedBreachGrade);
@@ -524,6 +547,37 @@ export default function SectorBriefingPanel({
             />
           </View>
         </View>
+
+        {chassisPressure ? (
+          <View style={[styles.section, isCompactHeight && styles.sectionCompact]}>
+            <View style={styles.sectionLabelRow}>
+              <View style={styles.sectionBoneRule} />
+              <TerminalText size={TYPE.label} letterSpacing={1.05} style={styles.sectionLabel}>
+                CHASSIS BRIEF
+              </TerminalText>
+            </View>
+            <TerminalText size={TYPE.body} style={styles.recoverableItem}>
+              {`${chassisPressure.facing.displayName.toUpperCase()} · ${chassisPressure.facing.roleLabel.toUpperCase()}`}
+            </TerminalText>
+            {chassisPressure.note.advantage ? (
+              <TerminalText size={TYPE.body} style={[styles.recoverableItem, { marginTop: 4 }]}>
+                {`ADVANTAGE — ${chassisPressure.note.advantage}`}
+              </TerminalText>
+            ) : null}
+            {chassisPressure.note.pressure ? (
+              <TerminalText size={TYPE.body} style={[styles.recoverableItem, { marginTop: 4, color: RAIL.textSecondary }]}>
+                {`PRESSURE — ${chassisPressure.note.pressure}`}
+              </TerminalText>
+            ) : null}
+            <TerminalText size={TYPE.body} style={[styles.recoverableItem, { marginTop: 4, color: RAIL.textSecondary }]}>
+              {chassisPressure.note.preparation
+                ?? chassisPressure.note.fallbackNeutral}
+            </TerminalText>
+            <TerminalText size={TYPE.label} letterSpacing={0.5} style={[styles.sectionLabel, { marginTop: 8, opacity: 0.7 }]}>
+              Sector-level planning only — not a roster reveal.
+            </TerminalText>
+          </View>
+        ) : null}
 
         <ActiveOperationSummary
           title={op.title.toUpperCase()}

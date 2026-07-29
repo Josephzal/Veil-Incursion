@@ -291,7 +291,7 @@ function CataclysmSigilOverlay({
   return (
     <View style={styles.overlay}>
       <View style={styles.panel}>
-        <Text style={styles.title}>[ CATACLYSM SIGIL // TRACE PATTERN ]</Text>
+        <Text style={styles.title}>[ NULL CIRCUIT // TRACE PATTERN ]</Text>
         <Text style={styles.sub}>
           {awaitingTap
             ? 'Click the highlighted node to begin.'

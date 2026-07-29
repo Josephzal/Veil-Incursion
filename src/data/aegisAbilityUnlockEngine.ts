@@ -94,7 +94,8 @@ export function abilityHasTag(
 }
 
 export function getAssignableAbilities(): AegisAbilityId[] {
+  // Flex pool only — STRIKE is the fixed weapon-basic slot (see AEGIS_ANCHOR).
   return (Object.keys(AEGIS_ABILITY_CATALOG) as AegisAbilityId[]).filter(
-    (id) => id !== 'EVISCERATE' && id !== 'WRAITH_PARRY',
+    (id) => id !== 'EVISCERATE' && id !== 'WRAITH_PARRY' && id !== 'STRIKE',
   );
 }

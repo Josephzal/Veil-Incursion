@@ -15,6 +15,7 @@ import { countMissingCost, formatWeaponCostLine } from '../../../data/weaponReso
 import { formatWeaponStatLines } from '../../../data/weaponCombatEngine';
 import { getResourceDisplayName } from '../../../data/resourceRegistry';
 import { getStashCount } from '../../../data/resourceStashEngine';
+import { getWeaponPlayerFacingSummary } from '../../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import type { WeaponFamilyId } from '../../../types/weapon';
 import { MISSING, MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
 import { OccultNeonRail } from '../veilChrome';
@@ -38,6 +39,8 @@ export interface ChassisRowModel {
   familyId: WeaponFamilyId;
   name: string;
   role: string;
+  loopCue: string;
+  selectionSummary: string;
   description: string;
   tier: number;
   unlocked: boolean;
@@ -45,6 +48,7 @@ export interface ChassisRowModel {
   status: ChassisStatus;
   nextSummary: string | null;
   statusColor: string;
+  isStarter: boolean;
 }
 
 function resolveStatus(args: {
@@ -97,24 +101,28 @@ export function buildChassisRows(account: ReturnType<typeof usePlayerAccount>['a
       : status === 'UPGRADE AVAILABLE' || status === 'EQUIPPED'
         ? TERMINAL
         : MUTED;
+    const facing = getWeaponPlayerFacingSummary(def.id);
     return {
       familyId: def.id,
       name: tierState.displayName,
-      role: def.role,
-      description: def.description,
+      role: facing.roleLabel,
+      loopCue: facing.loopCueTag,
+      selectionSummary: facing.selectionSummary,
+      description: facing.selectionSummary,
       tier,
       unlocked,
       equipped,
       status,
       nextSummary,
       statusColor,
+      isStarter: facing.isStarter,
     };
   });
 }
 
 interface ChassisWorkspaceProps {
   selectedId: WeaponFamilyId | null;
-  onSelect: (familyId: WeaponFamilyId) => void;
+  onSelect: (familyId: WeaponFamilyId, opts?: { silent?: boolean }) => void;
   compact?: boolean;
 }
 
@@ -129,7 +137,7 @@ export default function ChassisWorkspace({
   useEffect(() => {
     if (selectedId && rows.some((row) => row.familyId === selectedId)) return;
     const equipped = rows.find((row) => row.equipped) ?? rows[0];
-    if (equipped) onSelect(equipped.familyId);
+    if (equipped) onSelect(equipped.familyId, { silent: true });
   }, [onSelect, rows, selectedId]);
 
   return (
@@ -177,21 +185,29 @@ export default function ChassisWorkspace({
                 >
                   {row.name.toUpperCase()}
                 </TerminalText>
-                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={2}>
-                  {row.description}
+                <TerminalText size={8} letterSpacing={0.55} style={styles.signalRoleInline} numberOfLines={1}>
+                  {row.role.toUpperCase()}
                 </TerminalText>
-                {row.nextSummary ? (
-                  <TerminalText size={7.5} letterSpacing={0.4} style={styles.signalNext} numberOfLines={1}>
-                    {row.nextSummary}
+                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={2}>
+                  {row.selectionSummary}
+                </TerminalText>
+                <View style={styles.loopCueRow}>
+                  <TerminalText size={7} letterSpacing={0.8} style={styles.loopCue} numberOfLines={1}>
+                    {row.loopCue}
                   </TerminalText>
-                ) : null}
+                  {row.isStarter ? (
+                    <TerminalText size={7} letterSpacing={0.6} style={styles.starterCue} numberOfLines={1}>
+                      COMPLETE BASELINE
+                    </TerminalText>
+                  ) : null}
+                </View>
               </View>
               <View style={styles.signalClassCol}>
                 <TerminalText size={8} letterSpacing={0.7} style={styles.signalTier}>
                   {`TIER ${['I', 'II', 'III'][row.tier - 1] ?? row.tier}`}
                 </TerminalText>
                 <TerminalText size={7.5} letterSpacing={0.5} style={styles.signalRole} numberOfLines={2}>
-                  {row.role.toUpperCase()}
+                  {row.unlocked ? 'LINK READY' : 'LOCKED'}
                 </TerminalText>
               </View>
               <View style={styles.signalStatusCol}>
@@ -216,6 +232,7 @@ export function resolveChassisDossier(account: ReturnType<typeof usePlayerAccoun
   };
   const def = listWeaponFamiliesForClass(account.activeClass).find((entry) => entry.id === familyId);
   if (!def) return null;
+  const facing = getWeaponPlayerFacingSummary(def.id);
   const unlocked = account.weaponUnlocks.includes(def.id);
   const tier = getWeaponTier(progression, def.id);
   const tierState = resolveWeaponState(def.id, tier);
@@ -234,6 +251,7 @@ export function resolveChassisDossier(account: ReturnType<typeof usePlayerAccoun
   const missing = countMissingCost(account.resourceStash, activeCost);
   return {
     def,
+    facing,
     tierState,
     tier,
     unlocked,
@@ -312,7 +330,18 @@ const styles = StyleSheet.create({
   },
   signalTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
   signalTitleSelected: { color: '#F0F2EF' },
+  signalRoleInline: { marginTop: 4, color: MUTED, fontWeight: '700' },
   signalBody: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
+  loopCueRow: { marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  loopCue: {
+    color: MUTED,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: 'rgba(105, 200, 173, 0.22)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  starterCue: { color: MUTED, fontWeight: '600' },
   signalNext: { marginTop: 6, color: MUTED, fontWeight: '700' },
   signalClassCol: {
     minWidth: 0,

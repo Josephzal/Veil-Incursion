@@ -16,6 +16,7 @@ import HubPrimaryCta from './HubPrimaryCta';
 import HubDossierCornerBrackets from './HubDossierCornerBrackets';
 import KeepsakeDeploymentChoiceModal from './KeepsakeDeploymentChoiceModal';
 import ChassisWorkspace, { resolveChassisDossier } from './loadout/ChassisWorkspace';
+import WeaponChassisBriefModal from './loadout/WeaponChassisBriefModal';
 import RelicWorkspace, { resolveRelicDossier } from './loadout/RelicWorkspace';
 import DeckWorkspace, { type DeckInspectModel, type DeckSelection } from './loadout/DeckWorkspace';
 import FieldKitWorkspace, { type FieldKitSelection } from './loadout/FieldKitWorkspace';
@@ -76,6 +77,7 @@ import { formatCargoRoutingPostExtractReminder } from '../../data/cargoRoutingIn
 import { resolvePlayerBadgePortrait } from '../../utils/combatPlayerPortrait';
 import type { WeaponFamilyId } from '../../types/weapon';
 import type { KeepsakeId } from '../../types/expeditionKeepsake';
+import { shouldOpenWeaponFirstUseBrief } from '../../data/weaponPlayerFacing/weaponBriefPersistence';
 
 const CATEGORIES: LoadoutCategory[] = ['CHASSIS', 'RELIC', 'DECK', 'FIELD_KIT', 'CARGO'];
 
@@ -125,6 +127,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     equipWeaponFamily,
     unlockWeaponFamilyAccount,
     upgradeWeaponFamilyTier,
+    acknowledgeWeaponBrief,
+    hasAcknowledgedWeaponBrief,
     setEquippedKeepsake,
     setKeepsakeAttunement,
     setKeepsakeRouteDoctrine,
@@ -139,6 +143,9 @@ export default function LoadoutHubPanel(): React.JSX.Element {
 
   const [activeCategory, setActiveCategory] = useState<LoadoutCategory>('CHASSIS');
   const [chassisId, setChassisId] = useState<WeaponFamilyId | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefMode, setBriefMode] = useState<'first-use' | 'reopen'>('first-use');
+  const pendingFirstUseFamilyIdRef = useRef<WeaponFamilyId | null>(null);
   const [relicId, setRelicId] = useState<KeepsakeId | null>(null);
   const [deckSelection, setDeckSelection] = useState<DeckSelection | null>(null);
   const [deckInspect, setDeckInspect] = useState<DeckInspectModel | null>(null);
@@ -211,10 +218,23 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     playDossierLock();
   };
 
-  const handleSelectChassis = useCallback((id: WeaponFamilyId) => {
+  const handleSelectChassis = useCallback((id: WeaponFamilyId, opts?: { silent?: boolean }) => {
     setChassisId(id);
-    playDossierLock();
-  }, [playDossierLock]);
+    if (!opts?.silent) playDossierLock();
+    const unlocked = account.weaponUnlocks.includes(id);
+    const open = shouldOpenWeaponFirstUseBrief({
+      familyId: id,
+      unlocked,
+      acknowledged: account.weaponBriefAcknowledged,
+      interaction: opts?.silent ? 'silent' : (unlocked ? 'explicit-select' : 'locked-browse'),
+      pendingFirstUseFamilyId: pendingFirstUseFamilyIdRef.current,
+    });
+    if (open) {
+      pendingFirstUseFamilyIdRef.current = id;
+      setBriefMode('first-use');
+      setBriefOpen(true);
+    }
+  }, [account.weaponBriefAcknowledged, account.weaponUnlocks, playDossierLock]);
 
   const handleSelectRelic = useCallback((id: KeepsakeId | null) => {
     setRelicId(id);
@@ -403,7 +423,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       if (!chassisDossier) {
         return emptyDossier('Select a chassis from the equipment feed.');
       }
-      const { tierState, tier, unlocked, equipped, canUnlock, canUpgrade, nextTier, statLines, costLines, missing } = chassisDossier;
+      const { facing, tierState, tier, unlocked, equipped, canUnlock, canUpgrade, nextTier, costLines, missing } = chassisDossier;
       const status = equipped
         ? 'EQUIPPED'
         : !unlocked
@@ -417,55 +437,90 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             <OccultNeonRail style={styles.dossierHeaderAccent} />
             <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>WEAPON CHASSIS</TerminalText>
-            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
-              {tierState.displayName.toUpperCase()}
+            <TerminalText size={14} letterSpacing={0.15} style={styles.dossierTitle}>
+              {facing.displayName.toUpperCase()}
+            </TerminalText>
+            <TerminalText size={8} letterSpacing={0.7} style={styles.dossierSecondary}>
+              {facing.roleLabel.toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
               {`${status} · TIER ${['I', 'II', 'III'][tier - 1] ?? tier}`}
             </TerminalText>
           </View>
           <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
-            <DossierSection label="IDENTITY">
-              <TerminalText size={8.5} style={styles.dossierValue}>{chassisDossier.def.description}</TerminalText>
-              <TerminalText size={8} style={styles.dossierSecondary}>{chassisDossier.def.role}</TerminalText>
-            </DossierSection>
-            <DossierSection label="COMBAT PROFILE">
-              {statLines.map((line) => (
-                <TerminalText key={line} size={8.5} style={styles.dossierValueTight}>{line}</TerminalText>
-              ))}
-            </DossierSection>
-            <DossierSection label="TIER COMPARISON" last={costLines.length === 0}>
-              <TerminalText size={8} letterSpacing={0.6} style={styles.dossierSecondary}>
-                {`CURRENT · TIER ${['I', 'II', 'III'][tier - 1] ?? tier}`}
-              </TerminalText>
-              <TerminalText size={8.5} style={styles.dossierValueTight}>
-                {tierState.displayName}
-              </TerminalText>
-              {tierState.effectSummary ? (
-                <TerminalText size={8.5} style={styles.dossierValueTight}>
-                  {tierState.effectSummary}
+            <DossierSection label="PLAYSTYLE">
+              <TerminalText size={8.5} style={styles.dossierValue}>{facing.playstyleExplanation}</TerminalText>
+              {facing.starterFraming ? (
+                <TerminalText size={8} style={[styles.dossierSecondary, { marginTop: 6 }]}>
+                  {facing.starterFraming}
                 </TerminalText>
               ) : null}
-              {nextTier ? (
-                <>
-                  <TerminalText size={8} letterSpacing={0.6} style={[styles.dossierSecondary, { marginTop: 10 }]}>
-                    {`NEXT · TIER ${['I', 'II', 'III'][tier] ?? (tier + 1)}`}
-                  </TerminalText>
-                  <TerminalText size={8.5} style={styles.dossierValueTight}>
-                    {nextTier.displayName}
-                  </TerminalText>
-                  <TerminalText size={8.5} style={styles.dossierValueTight}>
-                    {nextTier.effectSummary}
-                  </TerminalText>
-                </>
-              ) : (
-                <TerminalText size={8.5} style={[styles.dossierValueTight, { marginTop: 10 }]}>
-                  Max tier reached for this chassis.
-                </TerminalText>
-              )}
             </DossierSection>
-            {costLines.length > 0 ? (
-              <DossierSection label={!unlocked ? 'UNLOCK REQUIREMENTS' : 'UPGRADE REQUIREMENTS'} last>
+            <DossierSection label="BASIC ACTION">
+              <TerminalText size={8.5} style={styles.dossierValue}>{facing.basicExplanation}</TerminalText>
+            </DossierSection>
+            <DossierSection label="RESOURCE / METER">
+              <TerminalText size={8.5} style={styles.dossierValue}>{facing.meterBehavior}</TerminalText>
+            </DossierSection>
+            <DossierSection label="STRENGTHS">
+              {facing.strengths.map((s) => (
+                <TerminalText key={s.mechanicalSource} size={8.5} style={styles.dossierValueTight}>
+                  {s.phrase}{s.reason ? ` — ${s.reason}` : ''}
+                </TerminalText>
+              ))}
+            </DossierSection>
+            <DossierSection label="PRESSURES">
+              {facing.pressures.map((s) => (
+                <TerminalText key={s.mechanicalSource} size={8.5} style={styles.dossierValueTight}>
+                  {s.phrase}{s.reason ? ` — ${s.reason}` : ''}
+                </TerminalText>
+              ))}
+            </DossierSection>
+            <DossierSection label="BUILDS TOWARD">
+              <TerminalText size={8.5} style={styles.dossierValue}>
+                {facing.buildDirectionTags.join(' · ')}
+              </TerminalText>
+            </DossierSection>
+            <DossierSection label="MASTERY TIP">
+              <TerminalText size={8.5} style={styles.dossierValue}>{facing.firstUseBrief.watchThis}</TerminalText>
+              {unlocked ? (
+                <HapticPressable
+                  onPress={() => {
+                    setBriefMode('reopen');
+                    setBriefOpen(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="View chassis tactical brief"
+                  style={styles.viewBriefBtn}
+                >
+                  <TerminalText size={7.5} letterSpacing={0.8} style={styles.viewBriefText}>
+                    [ VIEW BRIEF ]
+                  </TerminalText>
+                </HapticPressable>
+              ) : null}
+            </DossierSection>
+            {facing.sanctuaryPaths.length > 0 ? (
+              <DossierSection label="SANCTUARY PATHS">
+                <TerminalText size={8} style={[styles.dossierSecondary, { marginBottom: 6 }]}>
+                  Informational only — grafts are found and applied at Sanctuaries during a deployment, not equipped here.
+                </TerminalText>
+                {facing.sanctuaryPaths.map((path) => (
+                  <TerminalText key={`${path.abilityId}-${path.graftId}`} size={8.5} style={styles.dossierValueTight}>
+                    {`${path.abilityId} → ${path.graftId} — ${path.reason}`}
+                  </TerminalText>
+                ))}
+              </DossierSection>
+            ) : null}
+            {facing.alternateLoadoutNote ? (
+              <DossierSection label="ALTERNATE LOADOUT NOTE">
+                <TerminalText size={8.5} style={styles.dossierValue}>{facing.alternateLoadoutNote}</TerminalText>
+              </DossierSection>
+            ) : null}
+            {!unlocked ? (
+              <DossierSection label="UNLOCK REQUIREMENTS" last={costLines.length === 0}>
+                <TerminalText size={8} style={[styles.dossierSecondary, { marginBottom: 6 }]}>
+                  Class rank is not a weapon gate — stash fabrication only. Not a numeric upgrade over the starter.
+                </TerminalText>
                 {costLines.map((line) => (
                   <View key={line.label} style={styles.reqRow}>
                     <TerminalText size={8} style={[styles.dossierSecondary, styles.reqLabel]} numberOfLines={2}>
@@ -488,7 +543,36 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                   </TerminalText>
                 ) : null}
               </DossierSection>
-            ) : null}
+            ) : costLines.length > 0 ? (
+              <DossierSection label="UPGRADE REQUIREMENTS" last>
+                {costLines.map((line) => (
+                  <View key={line.label} style={styles.reqRow}>
+                    <TerminalText size={8} style={[styles.dossierSecondary, styles.reqLabel]} numberOfLines={2}>
+                      {line.label.toUpperCase()}
+                    </TerminalText>
+                    <TerminalText
+                      size={8}
+                      style={[
+                        styles.reqCount,
+                        { color: line.owned >= line.need ? TEXT_PRIMARY : MISSING },
+                      ]}
+                    >
+                      {`${line.owned} / ${line.need}`}
+                    </TerminalText>
+                  </View>
+                ))}
+              </DossierSection>
+            ) : nextTier ? (
+              <DossierSection label="NEXT TIER" last>
+                <TerminalText size={8.5} style={styles.dossierValueTight}>{nextTier.effectSummary}</TerminalText>
+              </DossierSection>
+            ) : (
+              <DossierSection label="TIER" last>
+                <TerminalText size={8.5} style={styles.dossierValueTight}>
+                  Max tier — {tierState.effectSummary || 'chassis fully upgraded.'}
+                </TerminalText>
+              </DossierSection>
+            )}
           </ScrollView>
           <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
             <View style={styles.dossierFooterRule} />
@@ -504,7 +588,24 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               <View style={[styles.dossierFooterActions, narrow && styles.dossierFooterActionsStack]}>
                 {!equipped ? (
                   <HubPrimaryCta
-                    onPress={() => appendHubLog(equipWeaponFamily(chassisDossier.def.id).logLine)}
+                    onPress={() => {
+                      const result = equipWeaponFamily(chassisDossier.def.id);
+                      appendHubLog(result.logLine);
+                      if (result.success) {
+                        const open = shouldOpenWeaponFirstUseBrief({
+                          familyId: chassisDossier.def.id,
+                          unlocked: true,
+                          acknowledged: account.weaponBriefAcknowledged,
+                          interaction: 'explicit-equip',
+                          pendingFirstUseFamilyId: pendingFirstUseFamilyIdRef.current,
+                        });
+                        if (open) {
+                          pendingFirstUseFamilyIdRef.current = chassisDossier.def.id;
+                          setBriefMode('first-use');
+                          setBriefOpen(true);
+                        }
+                      }
+                    }}
                     accessibilityLabel="Equip chassis"
                     label="[ EQUIP CHASSIS ]"
                     minHeight={50}
@@ -654,6 +755,14 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             <DossierSection label="EFFECT">
               <TerminalText size={8.5} style={styles.dossierValue}>{deckInspect.description}</TerminalText>
             </DossierSection>
+            {deckInspect.guidanceLine ? (
+              <DossierSection label="CHASSIS GUIDANCE">
+                <TerminalText size={8} style={[styles.dossierSecondary, { marginBottom: 4 }]}>
+                  Advisory only — legal off-meta loadouts remain available.
+                </TerminalText>
+                <TerminalText size={8.5} style={styles.dossierValue}>{deckInspect.guidanceLine}</TerminalText>
+              </DossierSection>
+            ) : null}
             <DossierSection label="LOADOUT RELATIONSHIP" last>
               <TerminalText size={8.5} style={styles.dossierValue}>{deckInspect.slotLine}</TerminalText>
             </DossierSection>
@@ -1042,6 +1151,23 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           }}
         />
       ) : null}
+
+      <WeaponChassisBriefModal
+        visible={briefOpen && chassisDossier != null}
+        summary={chassisDossier?.facing ?? null}
+        mode={briefMode}
+        onAcknowledge={() => {
+          if (chassisDossier) {
+            acknowledgeWeaponBrief(chassisDossier.def.id);
+            pendingFirstUseFamilyIdRef.current = null;
+          }
+          setBriefOpen(false);
+        }}
+        onDismissWithoutAck={() => {
+          // Reopen path only — do not clear pending first-use until acknowledged.
+          if (briefMode === 'reopen') setBriefOpen(false);
+        }}
+      />
     </View>
   );
 }
@@ -1344,6 +1470,15 @@ const styles = StyleSheet.create({
   dossierValue: { marginTop: 7, color: VEIL.text, lineHeight: 20 },
   dossierValueTight: { marginTop: 5, color: VEIL.text, lineHeight: 19 },
   dossierSecondary: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
+  viewBriefBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(105, 200, 173, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  viewBriefText: { color: TERMINAL, fontWeight: '700' },
   reqRow: {
     marginTop: 8,
     flexDirection: 'row',

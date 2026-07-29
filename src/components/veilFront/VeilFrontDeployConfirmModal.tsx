@@ -15,6 +15,8 @@ import HubPrimaryCta from '../hub/HubPrimaryCta';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { CLASS_DEFINITIONS } from '../../data/classes';
+import { getEquippedWeaponForClass, resolveWeaponState, getWeaponTier } from '../../data/weaponProgressionEngine';
+import { getWeaponPlayerFacingSummary } from '../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import { formatAbilityLabel, getActiveClassSnapshot } from '../../data/classLoadoutEngine';
 import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
 import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
@@ -78,6 +80,20 @@ function formatBreachGradeEffectLine(grade: BreachGradeId): string | null {
 
 function formatWeaponLine(weaponLine: string): string {
   return weaponLine.replace(/^WEAPON:\s*/i, '').trim().toUpperCase();
+}
+
+function resolveEquippedChassisLine(account: PlayerAccount): string {
+  const progression = {
+    weaponUnlocks: account.weaponUnlocks,
+    weaponTiers: account.weaponTiers,
+    equippedWeaponByClass: account.equippedWeaponByClass,
+  };
+  const familyId = getEquippedWeaponForClass(progression, account.activeClass);
+  if (!familyId) return formatWeaponLine(CLASS_DEFINITIONS[account.activeClass].weaponLine);
+  const facing = getWeaponPlayerFacingSummary(familyId);
+  const tier = getWeaponTier(progression, familyId);
+  const display = resolveWeaponState(familyId, tier).displayName;
+  return `${display.toUpperCase()} · ${facing.roleLabel.toUpperCase()}`;
 }
 
 function ConditionItem({
@@ -408,7 +424,7 @@ export default function VeilFrontDeployConfirmModal({
                   {`${classDef.displayName.toUpperCase()} · CLEARANCE ${clearance}`}
                 </TerminalText>
                 <TerminalText size={8} style={styles.runnerWeapon} numberOfLines={1}>
-                  {formatWeaponLine(classDef.weaponLine)}
+                  {resolveEquippedChassisLine(account)}
                 </TerminalText>
               </View>
               {canCycleClass ? (

@@ -48,6 +48,13 @@ import { getAbilityDefinition } from '../data/aegisAbilities';
 import { buildGraftCastPlan, canAffordGraftResources, scaleGraftDamage } from '../data/veilGraftEngine';
 import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
 import type { GraftCastPlan } from '../types/veilGraft';
+import {
+  APEX_TRIGGER_AP_REFUND_CAP_PER_ENCOUNTER,
+  accrueGraftSalvageCredits,
+  canRefundApexTriggerAp,
+  createDefaultGraftEncounterSafetyState,
+  recordApexTriggerApRefund,
+} from '../data/graftSynergy/graftEncounterSafety';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { stripKineticArmor, stripOccultWards } from '../data/combatDefenseLayerEngine';
 import { DEFENSE_TELEGRAPH_PROFILES } from '../data/combatArenaDefenseTelegraphEngine';
@@ -227,6 +234,7 @@ import { getEnvoyAbilityTags } from '../data/envoyAbilities';
 import { normalizeSquad, spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import {
   allUnitsDefeated,
+  adjacentAliveUnits,
   aliveUnits,
   canUnitAct,
   getUnitById,
@@ -280,12 +288,25 @@ import {
   runWeaponOnBallisticHitHooks,
   runWeaponOnFractureHooks,
   runWeaponOnMeleeHitHooks,
+  runWeaponOnOccultCastHooks,
   runWeaponOnReloadHooks,
+  runWeaponOnSacrificeHpHooks,
+  runWeaponOnDebuffAppliedHooks,
   scaleFractureGain,
   stripExtraArmorFromTarget,
   weaponCritChanceBonus,
-  weaponArmorPierceLayers,
+  resolveWeaponArmorPressureLayers,
 } from '../data/weaponCombatEngine';
+import {
+  armRiftEdgeTempo,
+  consumeRiftEdgeTempo,
+  resolveAegisStrikeBasic,
+  resolveClaymoreFractureBreakReserve,
+  PRISM_BASIC_HP_SACRIFICE_MAX,
+  PRISM_BASIC_HP_SACRIFICE_PCT,
+  PRISM_BRINK_FLUX_THRESHOLD,
+} from '../data/weaponBasicEngine';
+import { resolvePlayerHealReceived, scalePlayerOriginDebuffDuration } from '../data/weaponModifierResolution';
 import { createDefaultWeaponRuntime } from '../data/weaponRunState';
 import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction, tickThrallSlumpsAtPlayerTurnEnd } from '../data/combatLifecycleEngine';
 import {
@@ -372,6 +393,7 @@ import {
   executeCatalyticRelease,
   getVeilRotStacks,
   purgeAllVeilRotStacks,
+  consumeVeilRotStacks,
   tickVeilRotEndOfEnemyTurn,
   totalCatalyticPayload,
   totalVeilRotStacks,
@@ -400,24 +422,32 @@ import {
   type HexAmmoCastTracker,
   type HexAmmoEffectResult,
 } from '../data/hexAmmoEffectEngine';
-import {
-  computeZeroProtocolPlan,
-  performanceFromTaps,
-  type ZeroProtocolTarget,
-} from '../data/hexZeroProtocolEngine';
 import ActiveReloadOverlay from './combat/ActiveReloadOverlay';
 import ZeroProtocolGridOverlay from './combat/ZeroProtocolGridOverlay';
 import CataclysmSigilOverlay from './combat/CataclysmSigilOverlay';
+import WeaponUltimateHostChrome from './combat/WeaponUltimateHostChrome';
 import EnvoyWardOverlay, { type EnvoyWardExpansionSpeed } from './combat/EnvoyWardOverlay';
 import CatalyticConsoleOverlay from './combat/CatalyticConsoleOverlay';
 import { ASHEN_DISSOLVE_TOTAL_MS } from './combat/CombatEnemyDissolveEffect';
 import {
-  CATACLYSM_FAIL_BACKLASH,
   FRACTURE_BREAK_PROMPT_MS,
   cataclysmSigilTraceMultiplier,
   isEnvoyProcUltimate,
   isHexShotProcUltimate,
 } from '../data/combatMasteryEngine';
+import {
+  computeZeroProtocolPlan,
+  type ZeroProtocolTarget,
+} from '../data/hexZeroProtocolEngine';
+import {
+  gradeToZeroProtocolPerformance,
+  resolveWeaponUltimateGrade,
+} from '../data/weaponUltimateGradeEngine';
+import {
+  buildSimplifiedUltimateRawResult,
+  resolveWeaponUltimateInputMode,
+  shouldSkipUltimateMinigame,
+} from '../data/weaponUltimateInputAdapter';
 import {
   sanitizeEnvoyCombatLoadout,
   sanitizeHexShotCombatLoadout,
@@ -458,6 +488,36 @@ import {
 } from '../data/classAbilityResolver';
 import { formatAbilityCardEffectLine } from '../data/combatAbilityPresentation';
 import { formatAbilityLabel } from '../data/classLoadoutEngine';
+import {
+  getWeaponAnchorAttack,
+  toRuntimeClassBasicId,
+} from '../data/weaponAnchorAttackRegistry';
+import { resolveWeaponAnchorCardPresentation } from '../data/weaponAnchorCardPresentation';
+import {
+  canFireLegacyClassUltimate,
+  canFireWeaponUltimate,
+  formatWeaponUltimateLogTag,
+  getWeaponUltimate,
+  getWeaponUltimateById,
+  type WeaponUltimateId,
+} from '../data/weaponUltimateRegistry';
+import {
+  isWu4NewUltimateId,
+  planCrimsonRefraction,
+  planFuneralKnot,
+  planGravefall,
+  planLastKnock,
+  planRendTheVeil,
+  planSixthSeal,
+} from '../data/weaponUltimateNewResolveEngine';
+import { resolveLanternFluxPurgePayoff } from '../data/weaponLanternRotPayoff';
+import WeaponUltimateStagedSkillOverlay from './combat/WeaponUltimateStagedSkillOverlay';
+import type { WeaponUltimateGrade } from '../types/weaponUltimateInteraction';
+import {
+  resolveWeaponUltimateDisplayName,
+  resolveWeaponUltimateLegacyHookAbilityId,
+  resolveWeaponUltimateActionTags,
+} from '../data/weaponUltimateSurfaceEngine';
 import {
   detonateRiftSnareOnUnit,
   executeHexShotAbility,
@@ -675,6 +735,8 @@ interface TacticalCombatHubProps {
   /** Active weapon family locked at run start. */
   activeWeaponFamilyId?: WeaponFamilyId | null;
   activeWeaponTier?: WeaponTierNumber;
+  /** WU-3 — Simplified Ultimate Inputs (STANDARD grade only). */
+  simplifiedUltimateInputs?: boolean;
   /** Faction passive crit bonus (e.g. Solaris +10%). */
   playerCritChanceBonus?: number;
   /** Arena camera shake + global crit hooks (CombatScreen). */
@@ -773,6 +835,7 @@ export default function TacticalCombatHub({
   narrativeCombatBoons,
   activeWeaponFamilyId = null,
   activeWeaponTier = 1,
+  simplifiedUltimateInputs = false,
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
   godModeActive = false,
@@ -929,6 +992,8 @@ export default function TacticalCombatHub({
   const [zeroProtocolVisible, setZeroProtocolVisible] = useState(false);
   const zeroProtocolActiveRef = useRef(false);
   const [cataclysmSigilVisible, setCataclysmSigilVisible] = useState(false);
+  const [stagedWeaponUltimateId, setStagedWeaponUltimateId] = useState<WeaponUltimateId | null>(null);
+  const stagedWeaponUltimateIdRef = useRef<WeaponUltimateId | null>(null);
   const [fractureBreakUnitId, setFractureBreakUnitId] = useState<string | null>(null);
   const fractureBreakUnitIdRef = useRef<string | null>(null);
   const executeFractureBreakRef = useRef<(unitId: string) => void>(() => {});
@@ -969,6 +1034,7 @@ export default function TacticalCombatHub({
   const envoyCombatStateRef = useRef(envoyCombatState);
   const voidSiphonedEnteredRef = useRef(false);
   const sessionExtrasRef = useRef<CombatSessionExtras>(createDefaultCombatSessionExtras());
+  const graftEncounterSafetyRef = useRef(createDefaultGraftEncounterSafetyState());
   const [playerMaxAnchorDebt, setPlayerMaxAnchorDebt] = useState(0);
   const combatChanceRef = useRef<CombatChanceEncounterState>(createDefaultCombatChanceState());
   const [combatFeedback, setCombatFeedback] = useState<{
@@ -1178,18 +1244,35 @@ export default function TacticalCombatHub({
   const counterReady = operativeClass === 'AEGIS' && voidWardPrimed;
   const sliceReady = operativeClass === 'AEGIS'
     && abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP
-    && !isExhausted;
+    && !isExhausted
+    && canFireLegacyClassUltimate('EVISCERATE', activeWeaponFamilyId);
   const zeroProtocolReady = operativeClass === 'HEX_SHOT'
     && hexShotState.isUltimateAvailable
-    && !isExhausted;
+    && !isExhausted
+    && canFireLegacyClassUltimate('ZERO_PROTOCOL', activeWeaponFamilyId);
   const cataclysmReady = operativeClass === 'ENVOY'
     && cataclysmReadyUi
-    && !isExhausted;
-  const ultimatePingVariant: UltimatePingVariant | null = zeroProtocolReady
+    && !isExhausted
+    && canFireLegacyClassUltimate('CATACLYSM_SIGIL', activeWeaponFamilyId);
+  const classMeterUltimateReady = !isExhausted && (
+    (operativeClass === 'AEGIS' && abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP)
+    || (operativeClass === 'HEX_SHOT' && hexShotState.isUltimateAvailable)
+    || (operativeClass === 'ENVOY' && cataclysmReadyUi)
+  );
+  const activeUltimateRecord = activeWeaponFamilyId
+    ? getWeaponUltimate(activeWeaponFamilyId)
+    : null;
+  const stagedUltimateReady = classMeterUltimateReady
+    && canFireWeaponUltimate(activeWeaponFamilyId)
+    && activeUltimateRecord != null
+    && isWu4NewUltimateId(activeUltimateRecord.id);
+  const ultimatePingVariant: UltimatePingVariant | null = zeroProtocolReady || (
+    stagedUltimateReady && operativeClass === 'HEX_SHOT'
+  )
     ? 'zero_protocol'
-    : cataclysmReady
+    : cataclysmReady || (stagedUltimateReady && operativeClass === 'ENVOY')
       ? 'cataclysm'
-      : sliceReady
+      : sliceReady || (stagedUltimateReady && operativeClass === 'AEGIS')
         ? 'eviscerate'
         : null;
   const ultimatePingReady = ultimatePingVariant != null;
@@ -1554,13 +1637,16 @@ export default function TacticalCombatHub({
     if (operativeClass === 'ENVOY') {
       const rotTotal = totalVeilRotStacks(classCombatRef.current);
       setEnvoyRotStacksUi(rotTotal);
-      const ready = evaluateEnvoyCataclysmReady(classCombatRef.current, nextSquad);
+      const rotReady = evaluateEnvoyCataclysmReady(classCombatRef.current, nextSquad);
+      const ready = rotReady
+        && canFireWeaponUltimate(activeWeaponFamilyId);
       classCombatRef.current.cataclysmReady = ready;
       if (ready !== cataclysmReadyPrevRef.current) {
         cataclysmReadyPrevRef.current = ready;
         setCataclysmReadyUi(ready);
-        if (ready) {
-          log('>> [CATACLYSM SIGIL] >> Rot saturation critical — trace the void pattern.');
+        if (ready && activeWeaponFamilyId) {
+          const tag = formatWeaponUltimateLogTag(activeWeaponFamilyId);
+          log(`>> ${tag} >> Rot saturation critical — ultimate channel armed.`);
         }
       }
       syncEnvoyFleshRotArmorDebuff(
@@ -1935,6 +2021,15 @@ export default function TacticalCombatHub({
         if (fractureHooks.runtimePatch) applyWeaponRuntimePatch(fractureHooks.runtimePatch);
         if (fractureHooks.staminaDelta) {
           applyStamina(staminaRef.current + fractureHooks.staminaDelta);
+        }
+        const claymore = resolveClaymoreFractureBreakReserve(
+          resolvedWeapon.familyId,
+          weaponRuntimeRef.current,
+        );
+        if (claymore.runtimePatch) applyWeaponRuntimePatch(claymore.runtimePatch);
+        if (claymore.reserveGain > 0) {
+          chargeAr(claymore.reserveGain, true);
+          if (claymore.log) log(claymore.log);
         }
       }
     }
@@ -2407,11 +2502,14 @@ export default function TacticalCombatHub({
     });
   });
   applyHealRef.current = (amount: number) => {
-    const penalty = runItemCombatFlagsRef.current.healingReceivedPenaltyPct;
-    const penalized = penalty > 0
-      ? Math.floor(amount * (1 - penalty / 100))
-      : amount;
-    const effectiveAmount = Math.floor(penalized * cargoHealMultRef.current);
+    const weaponMods = resolvedWeapon?.statModifiers;
+    const { effectiveAmount, logged } = resolvePlayerHealReceived({
+      rawAmount: amount,
+      mods: weaponMods,
+      healingReceivedPenaltyPct: runItemCombatFlagsRef.current.healingReceivedPenaltyPct,
+      cargoHealMult: cargoHealMultRef.current,
+    });
+    if (logged) log(logged);
     if (effectiveAmount <= 0) return;
     setOperativeHp((p) => {
       const n = Math.min(p + effectiveAmount, getEffectiveMaxSoulAnchor());
@@ -2432,20 +2530,7 @@ export default function TacticalCombatHub({
 
   const resolveOperativeAbilityTags = (abilityId: string | null | undefined): readonly string[] => {
     if (!abilityId) return [];
-    if (operativeClass === 'AEGIS') {
-      try {
-        return getAbilityTags(abilityId as AegisAbilityId);
-      } catch {
-        return [];
-      }
-    }
-    if (operativeClass === 'HEX_SHOT') {
-      return getHexShotAbilityTags(abilityId as HexShotAbilityId);
-    }
-    if (operativeClass === 'ENVOY') {
-      return getEnvoyAbilityTags(abilityId as EnvoyAbilityId);
-    }
-    return [];
+    return resolveWeaponUltimateActionTags(abilityId, operativeClass);
   };
 
   const applyVeilShardFracture = () => {
@@ -2540,6 +2625,7 @@ export default function TacticalCombatHub({
             squadRef.current,
             sessionExtrasRef.current,
             result.frontlineBlindTurns,
+            { debuffDurationPct: resolvedWeapon?.statModifiers.debuffDurationPct },
           );
           blindResult.logLines.forEach((line) => log(line));
         }
@@ -2549,6 +2635,7 @@ export default function TacticalCombatHub({
         squadRef.current,
         sessionExtrasRef.current,
         result.frontlineBlindTurns,
+        { debuffDurationPct: resolvedWeapon?.statModifiers.debuffDurationPct },
       );
       blindResult.logLines.forEach((line) => log(line));
     }
@@ -2970,6 +3057,10 @@ export default function TacticalCombatHub({
         playerViewportRef?.current?.triggerEvadeAfterimage();
         log(msg?.replace(/— \d+.*/, '') ?? `>> ${options.attacker.designation} STRIKES — [ MISS ]`);
         log('[EVADE] >> Operative afterimage — attack whiffed.');
+        if (resolvedWeapon?.familyId === 'aegis-rift-edge') {
+          weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
+          log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
+        }
         if (hasMutation(leyLineMutations, 'GRID_GHOST')) {
           runOnEvadeSuccess(buildAegisBoonHookCtx());
         }
@@ -3139,6 +3230,8 @@ export default function TacticalCombatHub({
       /** Burn/bleed/DoT — skip operative attack pose; still flash the damaged unit. */
       indirectDamage?: boolean;
       ignoreDefenses?: boolean;
+      /** Floor for Kinetic Armor strip (Nullbreach innate pressure). */
+      innateArmorPressureLayers?: number;
     },
   ): boolean => {
     const rawTargetId = options?.targetId
@@ -3216,7 +3309,11 @@ export default function TacticalCombatHub({
     }
     let working = e;
     if (source && resolvedWeapon && operativeClass === 'HEX_SHOT') {
-      const pierce = weaponArmorPierceLayers(resolvedWeapon.statModifiers);
+      const pierce = resolveWeaponArmorPressureLayers(
+        resolvedWeapon.familyId,
+        resolvedWeapon.statModifiers,
+        options?.innateArmorPressureLayers ?? 0,
+      );
       if (pierce > 0) {
         working = applyWeaponArmorPierceToTarget(working, pierce);
       }
@@ -3722,9 +3819,15 @@ export default function TacticalCombatHub({
       }
       const classGraftCrit = activeClassGraftPlanRef.current;
       if (classGraftCrit?.refundApOnCrit && operativeClass !== 'AEGIS') {
-        playerApRef.current += 1;
-        setPlayerActionPoints(playerApRef.current);
-        log(`>> [${classGraftCrit.graftName.toUpperCase()}] — critical hit refunds 1 AP.`);
+        const safety = graftEncounterSafetyRef.current;
+        if (canRefundApexTriggerAp(safety)) {
+          graftEncounterSafetyRef.current = recordApexTriggerApRefund(safety);
+          playerApRef.current += 1;
+          setPlayerActionPoints(playerApRef.current);
+          log(`>> [${classGraftCrit.graftName.toUpperCase()}] — critical hit refunds 1 AP (${graftEncounterSafetyRef.current.apexTriggerApRefunds}/${APEX_TRIGGER_AP_REFUND_CAP_PER_ENCOUNTER} encounter cap).`);
+        } else {
+          log(`>> [${classGraftCrit.graftName.toUpperCase()}] — AP refund blocked (encounter cap reached).`);
+        }
       }
       const critChannel = options?.channel ?? 'KINETIC';
       if (e.unitId) {
@@ -3903,12 +4006,27 @@ export default function TacticalCombatHub({
         log(`>> [${killGraft.graftName.toUpperCase()}] — kill confirmed, AP refunded (+${refund}).`);
       }
       if (dropLootKind) {
-        onGraftLootDrop?.(dropLootKind);
-        const resolvedAbility = (options?.abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
-        const fallbackGraftId = resolvedAbility ? abilityGraftsRef.current[resolvedAbility] : undefined;
-        const graftLabel = killGraft?.graftName
-          ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
-        log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${dropLootKind.toLowerCase()}.`);
+        if (dropLootKind === 'CREDITS') {
+          const { next, granted } = accrueGraftSalvageCredits(graftEncounterSafetyRef.current);
+          graftEncounterSafetyRef.current = next;
+          if (granted > 0) {
+            onGraftLootDrop?.(`CREDITS:${granted}`);
+            const resolvedAbility = (options?.abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
+            const fallbackGraftId = resolvedAbility ? abilityGraftsRef.current[resolvedAbility] : undefined;
+            const graftLabel = killGraft?.graftName
+              ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
+            log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${granted} credits (salvage cap).`);
+          } else {
+            log('>> GRAFT SALVAGE — credit cap reached for this encounter.');
+          }
+        } else {
+          onGraftLootDrop?.(dropLootKind);
+          const resolvedAbility = (options?.abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
+          const fallbackGraftId = resolvedAbility ? abilityGraftsRef.current[resolvedAbility] : undefined;
+          const graftLabel = killGraft?.graftName
+            ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
+          log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${dropLootKind.toLowerCase()}.`);
+        }
       }
       const abilityTags = options?.abilityTags?.length
         ? options.abilityTags
@@ -4068,11 +4186,7 @@ export default function TacticalCombatHub({
           });
         },
         healOperative: (amount) => {
-          setOperativeHp((p) => {
-            const n = Math.min(maxSoulAnchor, p + amount);
-            operativeHpRef.current = n;
-            return n;
-          });
+          applyHealRef.current(amount);
         },
         maxHp: maxSoulAnchor,
         ammoType: hexShotStateRef.current.currentAmmoType,
@@ -4095,11 +4209,7 @@ export default function TacticalCombatHub({
         log,
         patchUnit,
         healOperative: (amount) => {
-          setOperativeHp((p) => {
-            const n = Math.min(maxSoulAnchor, p + amount);
-            operativeHpRef.current = n;
-            return n;
-          });
+          applyHealRef.current(amount);
         },
         encounter: classBoonEncounterRef.current,
       });
@@ -4308,11 +4418,7 @@ export default function TacticalCombatHub({
           setPlayerActionPoints(playerApRef.current);
         },
         healOperative: (amount: number) => {
-          setOperativeHp((p) => {
-            const n = Math.min(maxSoulAnchor, p + amount);
-            operativeHpRef.current = n;
-            return n;
-          });
+          applyHealRef.current(amount);
         },
         restoreStamina: () => applyStamina(maxStamina),
         fillMagazine: () => setMagazineAmmo(maxAmmo),
@@ -4346,11 +4452,7 @@ export default function TacticalCombatHub({
           encounter: classBoonEncounterRef.current,
           log,
           healOperative: (amount) => {
-            setOperativeHp((p) => {
-              const n = Math.min(maxSoulAnchor, p + amount);
-              operativeHpRef.current = n;
-              return n;
-            });
+            applyHealRef.current(amount);
           },
           maxHp: maxSoulAnchor,
           currentHp: operativeHpRef.current,
@@ -4534,7 +4636,7 @@ export default function TacticalCombatHub({
     if (mods.corruptedBloodDamage > 0) {
       log('[CORRUPTED BLOOD] >> Survivors marked for void bleed.');
     }
-    log('[EVISCERATE] >> Reserve vented — survivor armor shattered.');
+    log('[THREEFOLD BRAND] >> Reserve vented — survivor armor shattered.');
   };
 
   const applyTetanusGlitch = () => {
@@ -6115,6 +6217,7 @@ export default function TacticalCombatHub({
     notifyRunItemCombatStart();
     weaponRuntimeRef.current = createDefaultWeaponRuntime();
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
+    graftEncounterSafetyRef.current = createDefaultGraftEncounterSafetyState();
     initPlayerMaxHpDebtTracking(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
     setPlayerMaxAnchorDebt(0);
     kineticBatteryChargedRef.current = false;
@@ -6234,7 +6337,14 @@ export default function TacticalCombatHub({
     }
     applyPlayerTurnBlueprintHooks();
     log('>> OPERATIVE TURN // Command deck online.');
-    log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
+    {
+      const linkAnchor = activeWeaponFamilyId
+        ? getWeaponAnchorAttack(activeWeaponFamilyId)
+        : null;
+      const weaponName = linkAnchor?.weaponDisplayName ?? strikeStats.label;
+      const attackName = linkAnchor?.displayName ?? 'BASIC';
+      log(`>> WEAPON LINK: ${weaponName} // ${attackName}`);
+    }
     if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');
     if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
     if (env.startingStaminaPenalty > 0) log(`>> ENV: STAMINA PENALTY — entry ceiling reduced to 50.`);
@@ -6245,11 +6355,14 @@ export default function TacticalCombatHub({
     }
     formatObjectiveBriefing(objectiveSessionRef.current).forEach((line) => log(line));
     if (env.eliteModifier) log(`>> ELITE MODIFIER ACTIVE — ${env.eliteModifier.replace(/_/g, ' ')}`);
-    log(`>> HOSTILE GRID — ${initialSquad.length} unit(s) // threat budget ${threatBudgetRef.current}`);
-    initialSquad.forEach((unit) => {
-      log(`>> LOCK ${unit.gridSlot}: ${unit.designation} // CLASS ${unit.class}`);
-    });
-    if (entryAr > 0 && operativeClass === 'AEGIS') {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      log(`>> HOSTILE GRID — ${initialSquad.length} unit(s) // threat budget ${threatBudgetRef.current}`);
+      initialSquad.forEach((unit) => {
+        log(`>> LOCK ${unit.gridSlot}: ${unit.designation} // CLASS ${unit.class}`);
+      });
+    } else {
+      log(`>> ${initialSquad.length} hostile signature(s) on grid.`);
+    }    if (entryAr > 0 && operativeClass === 'AEGIS') {
       log(`>> Abyssal reserve pre-charged to ${entryAr}%.`);
     }
     if (operativeClass === 'HEX_SHOT') {
@@ -6339,6 +6452,7 @@ export default function TacticalCombatHub({
       abilityId?: HexShotAbilityId;
       rollCrit?: boolean;
       forceCrit?: boolean;
+      innateArmorPressureLayers?: number;
     },
     targetId?: string,
   ): boolean => {
@@ -6390,6 +6504,7 @@ export default function TacticalCombatHub({
           targetId: strikeTarget,
           abilityId: options?.abilityId as AegisAbilityId,
           rollCrit,
+          innateArmorPressureLayers: options?.innateArmorPressureLayers,
         }) || killed;
       }
     }
@@ -6558,6 +6673,12 @@ export default function TacticalCombatHub({
   };
 
   const applyClassGraftLootDrop = (kind: string) => {
+    if (kind === 'CREDITS') {
+      const { next, granted } = accrueGraftSalvageCredits(graftEncounterSafetyRef.current);
+      graftEncounterSafetyRef.current = next;
+      if (granted > 0) onGraftLootDrop?.(`CREDITS:${granted}`);
+      return;
+    }
     onGraftLootDrop?.(kind);
   };
 
@@ -6692,6 +6813,15 @@ export default function TacticalCombatHub({
         maxSoulAnchor,
         classState: classCombatRef.current,
         effectiveTags: graftPlan.effectiveTags,
+        resolvedWeapon,
+        onMagazineEmptied: () => {
+          if (resolvedWeapon) {
+            weaponRuntimeRef.current = {
+              ...weaponRuntimeRef.current,
+              magazineEmptiedThisCombat: true,
+            };
+          }
+        },
         log,
         apCostOverride: graftPlan.apCost,
         ammoCostOverride: ammoOverride,
@@ -6728,11 +6858,7 @@ export default function TacticalCombatHub({
         patchUnit,
         syncSquad,
         healOperative: (amount) => {
-          setOperativeHp((p) => {
-            const n = Math.min(maxSoulAnchor, p + amount);
-            operativeHpRef.current = n;
-            return n;
-          });
+          applyHealRef.current(amount);
         },
         setShadowStepEvadeActive: (active) => {
           combatChanceRef.current.shadowStepEvadeActive = active;
@@ -6748,7 +6874,7 @@ export default function TacticalCombatHub({
 
   const executeEnvoyClassAbility = (abilityId: EnvoyAbilityId) => {
     if (abilityId === 'CATACLYSM_SIGIL') {
-      log('[REJECTED] >> Cataclysm Sigil procs at 6+ Veil Rot stacks — use the mastery ping.');
+      log('[REJECTED] >> Null Circuit procs at 6+ Veil Rot stacks — use the mastery ping.');
       return;
     }
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand()) return;
@@ -6823,17 +6949,27 @@ export default function TacticalCombatHub({
         fluxRegenOverride: graftPlan.fluxRegen,
         fluxCostOverride: graftPlan.fluxCost,
         ultimatePerformance,
+        resolvedWeapon,
+        weaponRuntime: weaponRuntimeRef.current,
+        operativeHp: operativeHpRef.current,
+        applyWeaponRuntimePatch,
+        applyVeilFluxBonus: (delta) => applyVeilFlux(delta),
+        applyHpSacrifice: (amount) => {
+          if (amount <= 0) return;
+          setOperativeHp((p) => {
+            const n = Math.max(1, p - amount);
+            operativeHpRef.current = n;
+            return n;
+          });
+        },
+        sessionExtras: sessionExtrasRef.current,
         spendStamina: spendStam,
         applyFluxDelta: (delta) => applyVeilFlux(delta),
         hurtEnemy: buildEnvoyHurtEnemy(),
         patchUnit,
         syncSquad,
         healOperative: (amount) => {
-          setOperativeHp((p) => {
-            const n = Math.min(maxSoulAnchor, p + amount);
-            operativeHpRef.current = n;
-            return n;
-          });
+          applyHealRef.current(amount);
         },
         setShadowStepEvadeActive: (active) => {
           combatChanceRef.current.shadowStepEvadeActive = active;
@@ -6881,11 +7017,7 @@ export default function TacticalCombatHub({
             }
           }
           if (payoff.healAmount) {
-            setOperativeHp((p) => {
-              const n = Math.min(maxSoulAnchor, p + payoff.healAmount!);
-              operativeHpRef.current = n;
-              return n;
-            });
+            applyHealRef.current(payoff.healAmount);
           }
           if (payoff.shieldAmount) {
             sessionExtrasRef.current.playerShield =
@@ -6914,11 +7046,7 @@ export default function TacticalCombatHub({
             sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + amount;
           },
           healOperative: (amount) => {
-            setOperativeHp((p) => {
-              const n = Math.min(maxSoulAnchor, p + amount);
-              operativeHpRef.current = n;
-              return n;
-            });
+            applyHealRef.current(amount);
           },
           echoSpellDamage: (amount, targetId) => {
             hurtEnemy(amount, '[ECHOING AETHER]', 'STRIKE', {
@@ -7098,22 +7226,57 @@ export default function TacticalCombatHub({
     const squadBeforeAbility = squadRef.current.map((unit) => ({ ...unit, currentHp: unit.currentHp }));
     applyAbilityResolvedBoons(abilityId);
 
-    switch (abilityId) {
+    const runtimeAbilityId = toRuntimeClassBasicId(abilityId, activeWeaponFamilyId);
+    const equippedAnchor = activeWeaponFamilyId
+      ? getWeaponAnchorAttack(activeWeaponFamilyId)
+      : null;
+
+    switch (runtimeAbilityId) {
       case 'STRIKE': {
-        const kineticBase = def.baseKineticDamage ?? 10;
         const targetBefore = enemyRef.current;
         const riposte = consumeRiposteReady();
-        let kinetic = kineticBase;
-        if (riposte) {
-          const fracturedBonus = targetBefore && isEnemyFractured(targetBefore) ? 1.3 : 1.15;
-          kinetic = Math.floor(kineticBase * fracturedBonus);
-          log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic${targetBefore && isEnemyFractured(targetBefore) ? ' (Fractured +30%)' : ' (+15%)'}.`);
+        const weaponPlan = resolvedWeapon
+          ? resolveAegisStrikeBasic({
+            weapon: resolvedWeapon,
+            runtime: weaponRuntimeRef.current,
+            riposte,
+            targetFractured: !!(targetBefore && isEnemyFractured(targetBefore)),
+          })
+          : null;
+        if (weaponPlan?.staminaCost && !spendStam(weaponPlan.staminaCost)) {
+          log('[REJECTED] >> Insufficient stamina for heavy strike.');
+          playerApRef.current += activeGraftApCostRef.current;
+          setPlayerActionPoints(playerApRef.current);
+          activeGraftPlanRef.current = null;
+          return;
         }
-        const eradicated = hurtEnemy(kinetic, riposte ? '[RIPOSTE]' : '[STRIKE]', 'STRIKE', {
+        weaponPlan?.logLines.forEach((line) => log(line));
+        let kinetic = weaponPlan?.kineticDamage ?? (def.baseKineticDamage ?? 10);
+        if (riposte && !weaponPlan) {
+          const fracturedBonus = targetBefore && isEnemyFractured(targetBefore) ? 1.3 : 1.15;
+          kinetic = Math.floor((def.baseKineticDamage ?? 10) * fracturedBonus);
+          log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic${targetBefore && isEnemyFractured(targetBefore) ? ' (Fractured +30%)' : ' (+15%)'}.`);
+        } else if (riposte && weaponPlan) {
+          log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic.`);
+        }
+        const strikeTag = riposte
+          ? '[RIPOSTE]'
+          : `[${equippedAnchor?.displayName ?? "WARDEN'S STRIKE"}]`;
+        const eradicated = hurtEnemy(kinetic, strikeTag, 'STRIKE', {
           channel: 'KINETIC',
-          fractureGain: riposte ? 40 : 25,
+          fractureGain: weaponPlan?.fractureGain ?? (riposte ? 40 : 25),
           abilityId: 'STRIKE',
         });
+        if (weaponPlan?.occultRiderDamage && weaponPlan.occultRiderDamage > 0 && !eradicated) {
+          hurtEnemy(weaponPlan.occultRiderDamage, '[VEIL EDGE RIDER]', 'STRIKE', {
+            channel: 'OCCULT',
+            fractureGain: 0,
+            abilityId: 'STRIKE',
+          });
+        }
+        if (weaponPlan?.consumeTempo) {
+          weaponRuntimeRef.current = consumeRiftEdgeTempo(weaponRuntimeRef.current);
+        }
         if (riposte && targetBefore?.unitId) {
           const after = getUnitById(squadRef.current, targetBefore.unitId) ?? targetBefore;
           if ((after.kineticArmor ?? 0) > 0) {
@@ -7127,7 +7290,7 @@ export default function TacticalCombatHub({
           }
         }
         const struck = enemyRef.current;
-        chargeAr(def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
+        chargeAr(weaponPlan?.reserveGain ?? def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
         imprintRunicBrand(def.brandsImprinted ?? 1);
         if (struck && fractureRatio(struck) > 0.5) {
           syncEnemy(addCombatTag(struck, 'CONCUSSED'));
@@ -7410,20 +7573,99 @@ export default function TacticalCombatHub({
       log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
       return;
     }
+    const inputMode = resolveWeaponUltimateInputMode({
+      simplifiedUltimateInputs: simplifiedUltimateInputs === true,
+    });
+    const skipMinigame = shouldSkipUltimateMinigame(inputMode);
+
     if (zeroProtocolReady) {
+      if (skipMinigame) {
+        const taps = buildSimplifiedUltimateRawResult('ZERO_PROTOCOL').tapCount ?? 1;
+        log('>> [ZERO PROTOCOL] >> Simplified inputs — STANDARD grade commit.');
+        finishZeroProtocol(taps, true);
+        return;
+      }
       zeroProtocolActiveRef.current = true;
       setZeroProtocolVisible(true);
       combatPausedRef.current = true;
-      log('>> [ZERO-PROTOCOL] >> Rapid execution grid online.');
+      log('>> [ZERO PROTOCOL] >> Rapid execution grid online.');
       return;
     }
     if (cataclysmReady) {
+      if (skipMinigame) {
+        const nodes = buildSimplifiedUltimateRawResult('NULL_CIRCUIT').nodesCompleted ?? 1;
+        log('>> [NULL CIRCUIT] >> Simplified inputs — STANDARD grade commit.');
+        handleCataclysmResolve(nodes, true);
+        return;
+      }
       setCataclysmSigilVisible(true);
       combatPausedRef.current = true;
-      log('>> [CATACLYSM SIGIL] >> Trace the void pattern.');
+      log('>> [NULL CIRCUIT] >> Trace the void pattern.');
       return;
     }
-    if (sliceReady) onSlice();
+    if (sliceReady) {
+      if (skipMinigame) {
+        log('>> [THREEFOLD BRAND] >> Simplified inputs — STANDARD grade commit.');
+        commitThreefoldBrandSimplified();
+        return;
+      }
+      onSlice();
+      return;
+    }
+    if (stagedUltimateReady && activeUltimateRecord) {
+      if (
+        activeUltimateRecord.id === 'LAST_KNOCK'
+        && currentAmmoRef.current <= 0
+      ) {
+        log('[LAST KNOCK] >> RELOAD REQUIRED — no rounds chambered.');
+        return;
+      }
+      const tag = formatWeaponUltimateLogTag(activeUltimateRecord.weaponFamilyId);
+      stagedWeaponUltimateIdRef.current = activeUltimateRecord.id;
+      if (skipMinigame) {
+        log(`>> ${tag} >> Simplified inputs — STANDARD grade commit.`);
+        commitStagedWeaponUltimate('STANDARD', true);
+        return;
+      }
+      setStagedWeaponUltimateId(activeUltimateRecord.id);
+      combatPausedRef.current = true;
+      log(`>> ${tag} >> Skill aperture open.`);
+    }
+  };
+
+  const cancelWeaponUltimateInteraction = () => {
+    // Free cancel — never spends Protocol / Rot / Abyssal Reserve.
+    if (zeroProtocolVisible || zeroProtocolActiveRef.current) {
+      zeroProtocolActiveRef.current = false;
+      setZeroProtocolVisible(false);
+      combatPausedRef.current = false;
+      log('>> [ZERO PROTOCOL] >> Cancelled — free. Protocol Charges retained.');
+      return;
+    }
+    if (cataclysmSigilVisible) {
+      setCataclysmSigilVisible(false);
+      combatPausedRef.current = false;
+      log('>> [NULL CIRCUIT] >> Cancelled — free. Veil Rot retained.');
+      return;
+    }
+    if (stagedWeaponUltimateIdRef.current || stagedWeaponUltimateId) {
+      stagedWeaponUltimateIdRef.current = null;
+      setStagedWeaponUltimateId(null);
+      combatPausedRef.current = false;
+      if (activeWeaponFamilyId) {
+        log(`>> ${formatWeaponUltimateLogTag(activeWeaponFamilyId)} >> Cancelled — free. Charge retained.`);
+      } else {
+        log('>> [WEAPON ULTIMATE] >> Cancelled — free. Charge retained.');
+      }
+      return;
+    }
+    if (cycleRef.current === 'OFFENSE_SLICE') {
+      abortCombatMinigames();
+      cycleRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
+      log('>> [THREEFOLD BRAND] >> Cancelled — free. Abyssal Reserve retained.');
+    }
   };
 
   const handleZeroProtocolTap = () => {
@@ -7431,6 +7673,343 @@ export default function TacticalCombatHub({
     // Taps drive performance/feel only — damage resolves from the Protocol plan.
     triggerHaptic('impactLight');
     triggerShake('micro');
+  };
+
+  const pickPrimaryUltimateTarget = (): EnemyCombatProfile | null => {
+    const focused = focusedUnitIdRef.current
+      ? getUnitById(squadRef.current, focusedUnitIdRef.current)
+      : null;
+    if (focused?.unitId && isUnitAlive(focused)) return focused;
+    return primaryAliveUnit(squadRef.current) ?? null;
+  };
+
+  const closeStagedWeaponUltimate = () => {
+    stagedWeaponUltimateIdRef.current = null;
+    setStagedWeaponUltimateId(null);
+    combatPausedRef.current = false;
+  };
+
+  const spendAegisUltimateReserve = () => {
+    abyssalRef.current = 0;
+    setAbyssalReserve(0);
+    setRunicBrands(0);
+    classCombatRef.current.runicBrands = 0;
+    setSuccessfulParryCount(0);
+    classCombatRef.current.successfulParryCount = 0;
+  };
+
+  const spendHexProtocolCharges = () => {
+    dispatchHexShot({
+      type: 'HEX_EXECUTE_ZERO_PROTOCOL',
+      encounter: classCombatRef.current,
+      squad: squadRef.current,
+    });
+  };
+
+  const spendEnvoyRotUltimateGate = () => {
+    purgeAllVeilRotStacks(classCombatRef.current);
+    setCataclysmReadyUi(false);
+    cataclysmReadyPrevRef.current = false;
+    classCombatRef.current.cataclysmReady = false;
+    setEnvoyRotStacksUi(0);
+  };
+
+  const commitStagedWeaponUltimate = (
+    grade: WeaponUltimateGrade,
+    forceStandard = false,
+  ) => {
+    const ultimateId = stagedWeaponUltimateIdRef.current ?? stagedWeaponUltimateId;
+    closeStagedWeaponUltimate();
+    if (!ultimateId || !activeWeaponFamilyId) return;
+    if (!canFireWeaponUltimate(activeWeaponFamilyId)) {
+      log(`[REJECTED] >> ${ultimateId} unavailable for equipped weapon.`);
+      return;
+    }
+    const resolvedGrade: WeaponUltimateGrade = forceStandard ? 'STANDARD' : grade;
+    const tag = formatWeaponUltimateLogTag(activeWeaponFamilyId);
+    const hookAbilityId = resolveWeaponUltimateLegacyHookAbilityId(activeWeaponFamilyId);
+    if (hookAbilityId) {
+      lastPlayerAbilityRef.current = hookAbilityId;
+    }
+    const primary = pickPrimaryUltimateTarget();
+
+    if (ultimateId === 'REND_THE_VEIL') {
+      if (!primary?.unitId) {
+        log(`${tag} >> No target — channel collapses.`);
+        return;
+      }
+      const tempoArmed = weaponRuntimeRef.current.riftEdgeTempoArmed === true;
+      const plan = planRendTheVeil({
+        grade: resolvedGrade,
+        baseStrike: Math.max(10, strikeStats.strikeDamage),
+        tempoArmed,
+      });
+      hurtEnemy(plan.kineticHitDamage, tag, 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: primary.unitId,
+        abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+      });
+      hurtEnemy(plan.kineticHitDamage, tag, 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: primary.unitId,
+        abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+      });
+      hurtEnemy(plan.occultRuptureDamage, tag, 'STRIKE', {
+        channel: 'OCCULT',
+        targetId: primary.unitId,
+        abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+      });
+      if (plan.consumeTempo) {
+        weaponRuntimeRef.current = consumeRiftEdgeTempo(weaponRuntimeRef.current);
+      }
+      plan.notes.forEach((n) => log(`>> ${tag} ${n}`));
+      spendAegisUltimateReserve();
+      log(`>> ${tag} >> ${resolvedGrade} — veil rent.`);
+      publishSquadUi(squadRef.current);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      passToEnemy(false);
+      return;
+    }
+
+    if (ultimateId === 'GRAVEFALL') {
+      if (!primary?.unitId) {
+        log(`${tag} >> No target — channel collapses.`);
+        return;
+      }
+      const fractured = isEnemyFractured(primary);
+      const plan = planGravefall({
+        grade: resolvedGrade,
+        baseStrike: Math.max(12, strikeStats.strikeDamage),
+        targetFractured: fractured,
+      });
+      if (resolvedGrade === 'CLEAN' || resolvedGrade === 'PERFECT') {
+        const strip = stripKineticArmor(primary, 1);
+        if (strip.enemy.unitId) patchUnit(strip.enemy.unitId, strip.enemy);
+        const refreshed = getUnitById(squadRef.current, primary.unitId) ?? primary;
+        const fracturedNext = applyFractureDamage(refreshed, 18);
+        if (fracturedNext.unitId) patchUnit(fracturedNext.unitId, fracturedNext);
+      }
+      hurtEnemy(plan.impactDamage, tag, 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: primary.unitId,
+        abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+      });
+      if (plan.fractureCashoutHint && primary.unitId) {
+        const after = getUnitById(squadRef.current, primary.unitId);
+        if (after?.unitId && isUnitAlive(after) && isEnemyFractured(after)) {
+          executeFractureBreak(after.unitId);
+        }
+      }
+      if (plan.shockwaveSecondary && primary.unitId) {
+        const splash = Math.max(1, Math.floor(plan.impactDamage * 0.35));
+        for (const adj of adjacentAliveUnits(squadRef.current, primary.unitId).slice(0, 2)) {
+          if (!adj.unitId) continue;
+          hurtEnemy(splash, tag, 'STRIKE', {
+            channel: 'KINETIC',
+            targetId: adj.unitId,
+            abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+          });
+        }
+      }
+      plan.notes.forEach((n) => log(`>> ${tag} ${n}`));
+      spendAegisUltimateReserve();
+      log(`>> ${tag} >> ${resolvedGrade} — gravefall lands.`);
+      publishSquadUi(squadRef.current);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      passToEnemy(false);
+      return;
+    }
+
+    if (ultimateId === 'SIXTH_SEAL') {
+      if (!primary?.unitId) {
+        log(`${tag} >> No target — channel collapses.`);
+        return;
+      }
+      const plan = planSixthSeal({
+        grade: resolvedGrade,
+        magSize: Math.max(1, hexShotStateRef.current.maxAmmo),
+      });
+      const reloadQuality: ReloadQuality =
+        plan.reloadQuality === 'PERFECT' ? 'PERFECT' : 'CLEAN';
+      const ammoType = hexShotStateRef.current.currentAmmoType;
+      dispatchHexShot({
+        type: 'HEX_RESOLVE_RELOAD',
+        quality: reloadQuality,
+        ammoType,
+        encounter: classCombatRef.current,
+        squad: squadRef.current,
+      });
+      log(`>> ${tag} >> Cylinder sealed — ${plan.reloadQuality.toLowerCase()} reload (${ammoType}).`);
+      const shotDamage = Math.max(
+        4,
+        Math.floor(strikeStats.strikeDamage * (resolvedGrade === 'PERFECT' ? 0.55 : resolvedGrade === 'CLEAN' ? 0.5 : 0.45)),
+      );
+      for (let i = 0; i < plan.precisionShots; i += 1) {
+        if (currentAmmoRef.current <= 0) break;
+        setMagazineAmmo(currentAmmoRef.current - 1);
+        hurtEnemy(shotDamage, tag, 'STRIKE', {
+          channel: 'KINETIC',
+          targetId: primary.unitId,
+          abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+        });
+      }
+      if (plan.emptyMagazineAfter) {
+        setMagazineAmmo(0);
+      }
+      spendHexProtocolCharges();
+      plan.notes.forEach((n) => log(`>> ${tag} ${n}`));
+      log(`>> ${tag} >> ${resolvedGrade} — seal closed.`);
+      publishSquadUi(squadRef.current);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      passToEnemy(false);
+      return;
+    }
+
+    if (ultimateId === 'LAST_KNOCK') {
+      const knockPlan = planLastKnock({
+        grade: resolvedGrade,
+        currentAmmo: currentAmmoRef.current,
+        baseBallistic: Math.max(10, strikeStats.strikeDamage),
+      });
+      if ('blocked' in knockPlan) {
+        log(`[LAST KNOCK] >> ${knockPlan.reason}`);
+        return;
+      }
+      if (!primary?.unitId) {
+        log(`${tag} >> No target — channel collapses.`);
+        return;
+      }
+      setMagazineAmmo(0);
+      const strip = stripKineticArmor(primary, knockPlan.armorStrip);
+      if (strip.enemy.unitId) patchUnit(strip.enemy.unitId, strip.enemy);
+      const afterStrip = getUnitById(squadRef.current, primary.unitId) ?? strip.enemy;
+      const fracturedNext = applyFractureDamage(afterStrip, knockPlan.fractureBonus);
+      if (fracturedNext.unitId) patchUnit(fracturedNext.unitId, fracturedNext);
+      hurtEnemy(knockPlan.breachDamage, tag, 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: primary.unitId,
+        abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+      });
+      spendHexProtocolCharges();
+      knockPlan.notes.forEach((n) => log(`>> ${tag} ${n}`));
+      log(`>> ${tag} >> ${resolvedGrade} — door answered.`);
+      publishSquadUi(squadRef.current);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      passToEnemy(false);
+      return;
+    }
+
+    if (ultimateId === 'FUNERAL_KNOT') {
+      const plan = planFuneralKnot({
+        grade: resolvedGrade,
+        baseOccult: Math.max(8, Math.floor(strikeStats.strikeDamage * 0.85)),
+      });
+      const hurtFn = buildEnvoyHurtEnemy();
+      for (const unit of aliveUnits(squadRef.current)) {
+        if (!unit.unitId) continue;
+        hurtFn(plan.baselineOccult, tag, {
+          channel: 'OCCULT',
+          targetId: unit.unitId,
+          abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+        }, unit.unitId);
+        const lantern = resolveLanternFluxPurgePayoff({
+          familyId: 'envoy-echo-lantern',
+          classState: classCombatRef.current,
+          targetId: unit.unitId,
+          baseDamage: Math.max(1, Math.floor(plan.baselineOccult * plan.detonationEfficiency)),
+        });
+        if (lantern.rotConsume > 0) {
+          const bonus = Math.max(
+            0,
+            Math.floor(lantern.damage * plan.detonationEfficiency) - plan.baselineOccult,
+          );
+          if (bonus > 0) {
+            hurtFn(bonus, tag, {
+              channel: 'OCCULT',
+              targetId: unit.unitId,
+              abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+            }, unit.unitId);
+          }
+          consumeVeilRotStacks(classCombatRef.current, unit.unitId, lantern.rotConsume);
+          lantern.logLines.forEach((line) => log(line.replace('ECHO LANTERN', 'FUNERAL KNOT')));
+        }
+      }
+      plan.notes.forEach((n) => log(`>> ${tag} ${n}`));
+      spendEnvoyRotUltimateGate();
+      log(`>> ${tag} >> ${resolvedGrade} — knot torn.`);
+      publishSquadUi(squadRef.current);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      if (operativeHpRef.current <= 0) return;
+      passToEnemy(false);
+      return;
+    }
+
+    if (ultimateId === 'CRIMSON_REFRACTION') {
+      const maxSafe = Math.min(
+        PRISM_BASIC_HP_SACRIFICE_MAX,
+        Math.max(1, Math.floor(getEffectiveMaxSoulAnchor() * PRISM_BASIC_HP_SACRIFICE_PCT)),
+      );
+      const plan = planCrimsonRefraction({
+        grade: resolvedGrade,
+        baseOccult: Math.max(8, Math.floor(strikeStats.strikeDamage * 0.9)),
+        offeredHp: maxSafe,
+        maxSafeOffer: maxSafe,
+        operativeHp: operativeHpRef.current,
+        veilFlux: veilFluxRef.current,
+        brinkThresholdPct: PRISM_BRINK_FLUX_THRESHOLD,
+      });
+      if (plan.offeredHp > 0) {
+        setOperativeHp((p) => {
+          const n = Math.max(1, p - plan.offeredHp);
+          operativeHpRef.current = n;
+          return n;
+        });
+      }
+      const hurtFn = buildEnvoyHurtEnemy();
+      for (const unit of aliveUnits(squadRef.current)) {
+        if (!unit.unitId) continue;
+        hurtFn(plan.occultPerTarget, tag, {
+          channel: 'OCCULT',
+          targetId: unit.unitId,
+          abilityId: hookAbilityId as AegisAbilityId | undefined,
+        rollCrit: false,
+        }, unit.unitId);
+      }
+      plan.notes.forEach((n) => log(`>> ${tag} ${n}`));
+      spendEnvoyRotUltimateGate();
+      log(`>> ${tag} >> ${resolvedGrade} — refraction complete.`);
+      publishSquadUi(squadRef.current);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      if (operativeHpRef.current <= 0) return;
+      passToEnemy(false);
+    }
   };
 
   const pickZeroProtocolTarget = (): EnemyCombatProfile | null => {
@@ -7441,10 +8020,19 @@ export default function TacticalCombatHub({
     return alive.reduce((best, u) => ((u.currentHp ?? 0) > (best.currentHp ?? 0) ? u : best), alive[0]);
   };
 
-  const finishZeroProtocol = (tapCount: number) => {
+  const finishZeroProtocol = (tapCount: number, forceStandard = false) => {
     zeroProtocolActiveRef.current = false;
     setZeroProtocolVisible(false);
     combatPausedRef.current = false;
+    if (!canFireLegacyClassUltimate('ZERO_PROTOCOL', activeWeaponFamilyId)) {
+      log('[REJECTED] >> Zero Protocol requires the Carbine.');
+      return;
+    }
+    const resolved = resolveWeaponUltimateGrade({
+      tapCount,
+      forceStandard: forceStandard || undefined,
+    });
+    const performance = gradeToZeroProtocolPerformance(resolved.grade);
     const hexState = hexShotStateRef.current;
     const primary = pickZeroProtocolTarget();
     if (primary && primary.unitId) {
@@ -7462,7 +8050,7 @@ export default function TacticalCombatHub({
       const plan = computeZeroProtocolPlan({
         calibrated: hexState.calibratedAmmoTypes,
         currentAmmoType: hexState.currentAmmoType,
-        performance: performanceFromTaps(tapCount),
+        performance,
         hasMinigameResult: true,
         target,
       });
@@ -7482,8 +8070,8 @@ export default function TacticalCombatHub({
       }
       if (plan.stunNonBoss) reduceEnemyAp(targetId, 99);
       if (plan.bossDamageReductionPct > 0) reduceEnemyAp(targetId, 1);
-      plan.notes.forEach((note) => log(`>> [ZERO-PROTOCOL] ${note}`));
-      hurtEnemy(plan.trueDamage, '[ZERO-PROTOCOL]', 'STRIKE', {
+      plan.notes.forEach((note) => log(`>> [ZERO PROTOCOL] ${note}`));
+      hurtEnemy(plan.trueDamage, '[ZERO PROTOCOL]', 'STRIKE', {
         channel: 'TRUE',
         targetId,
         abilityId: 'ZERO_PROTOCOL' as AegisAbilityId,
@@ -7495,16 +8083,24 @@ export default function TacticalCombatHub({
       encounter: classCombatRef.current,
       squad: squadRef.current,
     });
-    log('>> [ZERO-PROTOCOL] >> Firing solution complete. Protocol discharged.');
+    log(`>> [ZERO PROTOCOL] >> ${resolved.grade} grade — firing solution complete. Protocol discharged.`);
   };
 
-  const handleCataclysmResolve = (nodesCompleted: number) => {
+  const handleCataclysmResolve = (nodesCompleted: number, forceStandard = false) => {
     setCataclysmSigilVisible(false);
     combatPausedRef.current = false;
+    if (!canFireLegacyClassUltimate('CATACLYSM_SIGIL', activeWeaponFamilyId)) {
+      log('[REJECTED] >> Null Circuit requires the Scythe.');
+      return;
+    }
+    const resolved = resolveWeaponUltimateGrade({
+      nodesCompleted,
+      forceStandard: forceStandard || undefined,
+    });
+    const effectiveNodes = resolved.effectiveNodes ?? Math.max(1, nodesCompleted);
     const rotTotal = totalVeilRotStacks(classCombatRef.current);
-    const traceMultiplier = cataclysmSigilTraceMultiplier(nodesCompleted);
+    const traceMultiplier = cataclysmSigilTraceMultiplier(effectiveNodes);
     const damage = computeCataclysmSigilDamage(rotTotal, traceMultiplier);
-    const perfect = nodesCompleted >= 3;
     const hurtFn = buildEnvoyHurtEnemy();
     for (const unit of aliveUnits(squadRef.current)) {
       if (!unit.unitId) continue;
@@ -7521,7 +8117,7 @@ export default function TacticalCombatHub({
     for (const unit of aliveUnits(squadRef.current)) {
       if (!unit.unitId) continue;
       if (damage <= 0) break;
-      hurtFn(damage, '[CATACLYSM SIGIL]', {
+      hurtFn(damage, '[NULL CIRCUIT]', {
         channel: 'TRUE',
         targetId: unit.unitId,
         abilityId: 'CATACLYSM_SIGIL',
@@ -7533,26 +8129,23 @@ export default function TacticalCombatHub({
     cataclysmReadyPrevRef.current = false;
     classCombatRef.current.cataclysmReady = false;
     setEnvoyRotStacksUi(0);
-    if (perfect) {
+    // WU-3: no player backlash on imperfect / 0-node — STANDARD floor commits instead.
+    if (resolved.grade === 'PERFECT') {
       triggerHitstop(150);
       triggerShake('heavy');
       triggerHaptic('impactHeavy');
-      log(`>> [CATACLYSM SIGIL] >> Pattern locked — ${damage} TRUE to all hostiles. Veil Rot purged.`);
-    } else if (nodesCompleted <= 0) {
-      hurtPlayer(
-        CATACLYSM_FAIL_BACKLASH,
-        true,
-        `>> SIGIL BACKLASH — ${CATACLYSM_FAIL_BACKLASH} TRUE.`,
-        { rollCrit: false },
-      );
+      log(`>> [NULL CIRCUIT] >> PERFECT — pattern locked — ${damage} TRUE to all hostiles. Veil Rot purged.`);
+    } else if (resolved.grade === 'CLEAN') {
       triggerShake('light');
-      triggerHaptic('notificationError');
-      log('>> [CATACLYSM SIGIL] >> Pattern failed — sigil collapsed. Veil Rot purged.');
+      triggerHaptic('impactLight');
+      log(
+        `>> [NULL CIRCUIT] >> CLEAN (${Math.round(traceMultiplier * 100)}%) — ${damage} TRUE rupture. Veil Rot purged.`,
+      );
     } else {
       triggerShake('light');
       triggerHaptic('impactLight');
       log(
-        `>> [CATACLYSM SIGIL] >> Partial trace (${Math.round(traceMultiplier * 100)}%) — ${damage} TRUE rupture. Veil Rot purged.`,
+        `>> [NULL CIRCUIT] >> STANDARD (${Math.round(traceMultiplier * 100)}%) — ${damage} TRUE rupture. Veil Rot purged.`,
       );
     }
     publishSquadUi(squadRef.current);
@@ -7643,12 +8236,16 @@ export default function TacticalCombatHub({
       log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
       return;
     }
-    if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
-    if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) {
-      log('[REJECTED] >> Eviscerate requires 100% Abyssal Reserve.');
+    if (!canFireLegacyClassUltimate('EVISCERATE', activeWeaponFamilyId)) {
+      log('[REJECTED] >> Threefold Brand requires the Longsword.');
       return;
     }
-    log('[EVISCERATE] >> Execution aperture open.');
+    if (isExhausted) { log('[REJECTED] >> Exhausted — Threefold Brand offline.'); return; }
+    if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) {
+      log('[REJECTED] >> Threefold Brand requires 100% Abyssal Reserve.');
+      return;
+    }
+    log('[THREEFOLD BRAND] >> Execution aperture open.');
     triggerSlice();
   };
 
@@ -7910,6 +8507,10 @@ export default function TacticalCombatHub({
         log(`[VOID WARD] >> Perfect lock — ${pendingWeight} fracture reflected.`);
         log('[AEGIS] >> Perfect Parry — Lock canceled, Riposte Ready.');
         armRiposteReady('Perfect Parry');
+        if (resolvedWeapon?.familyId === 'aegis-rift-edge') {
+          weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
+          log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
+        }
         classLoopTelemetryRef.current.parriesSuccessful += 1;
         classLoopTelemetryRef.current.perfectParries += 1;
         classLoopTelemetryRef.current.damagePreventedByParry += pendingWeight;
@@ -8037,21 +8638,16 @@ export default function TacticalCombatHub({
     if (isCombatTerminal()) return;
     const s = sliceSessionRef.current; if (s.evaluated) return;
     s.evaluated = true; clearSliceTimers(); activeSliceRef.current = -1; setActiveSliceIndex(-1);
-    const hits = s.hitCount;
-    if (hits === 0) {
-      log('[EXECUTION FAILED] >> 0 damage.');
-      cycleRef.current = 'TEXT_COMBAT';
-      setCycleState('TEXT_COMBAT');
-      setEviscerateTargetUnitId(null);
-      passToEnemy(false);
-      return;
-    }
+    const resolved = resolveWeaponUltimateGrade({ hitCount: s.hitCount });
+    const hits = resolved.effectiveHits ?? Math.max(1, s.hitCount);
     const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
-    const dmg = hits === 3 ? base : Math.floor(base * (hits / 3));
-    log(hits === 3
-      ? `[EXECUTION SEVERANCE] >> Perfect [3/3] — ${dmg} damage.`
-      : `[EXECUTION SEVERANCE] >> [${hits}/3] — ${dmg} damage.`);
-    const eradicated = hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE', {
+    const dmg = hits >= 3 ? base : Math.floor(base * (hits / 3));
+    log(
+      resolved.grade === 'PERFECT'
+        ? `[THREEFOLD BRAND] >> PERFECT [3/3] — ${dmg} damage.`
+        : `[THREEFOLD BRAND] >> ${resolved.grade} [${hits}/3] — ${dmg} damage.`,
+    );
+    const eradicated = hurtEnemy(dmg, '[THREEFOLD BRAND]', 'EVISCERATE', {
       channel: 'TRUE',
       abilityId: 'EVISCERATE',
     });
@@ -8060,6 +8656,33 @@ export default function TacticalCombatHub({
     cycleRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
     setEviscerateTargetUnitId(null);
+    passToEnemy(false);
+  };
+
+  const commitThreefoldBrandSimplified = () => {
+    if (!canFireLegacyClassUltimate('EVISCERATE', activeWeaponFamilyId)) {
+      log('[REJECTED] >> Threefold Brand requires the Longsword.');
+      return;
+    }
+    if (isExhausted) {
+      log('[REJECTED] >> Exhausted — Threefold Brand offline.');
+      return;
+    }
+    if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) {
+      log('[REJECTED] >> Threefold Brand requires 100% Abyssal Reserve.');
+      return;
+    }
+    const resolved = resolveWeaponUltimateGrade(buildSimplifiedUltimateRawResult('THREEFOLD_BRAND'));
+    const hits = resolved.effectiveHits ?? 1;
+    const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
+    const dmg = Math.floor(base * (hits / 3));
+    log(`[THREEFOLD BRAND] >> STANDARD simplified — ${dmg} damage.`);
+    const eradicated = hurtEnemy(dmg, '[THREEFOLD BRAND]', 'EVISCERATE', {
+      channel: 'TRUE',
+      abilityId: 'EVISCERATE',
+    });
+    if (!eradicated) applyEviscerateAftermath();
+    if (eradicated) return;
     passToEnemy(false);
   };
 
@@ -8493,8 +9116,10 @@ export default function TacticalCombatHub({
       ? formatCatalystChip(classCombatRef.current)
       : null;
     const catLine = catChip ? `CATALYST: ${catChip}` : '';
-    // Zero Protocol readiness (v1 refactor — Protocol Charges gate, not full mag).
-    const zeroProtocolLine = operativeClass === 'HEX_SHOT' && abilityId === 'ZERO_PROTOCOL'
+    // Zero Protocol readiness (Carbine weapon ultimate — Protocol Charges gate).
+    const zeroProtocolLine = operativeClass === 'HEX_SHOT'
+      && abilityId === 'ZERO_PROTOCOL'
+      && canFireLegacyClassUltimate('ZERO_PROTOCOL', activeWeaponFamilyId)
       ? (hexShotStateRef.current.protocolCharges >= hexShotStateRef.current.maxProtocolCharges
         ? 'ZERO PROTOCOL READY — true-damage execution using calibrated ammo.'
         : `PROTOCOL: ${hexShotStateRef.current.protocolCharges}/${hexShotStateRef.current.maxProtocolCharges} — Perfect Phase-Shift Reloads generate Protocol.`)
@@ -8596,8 +9221,14 @@ export default function TacticalCombatHub({
       voidWardPrimed,
       runicBrands,
       runicBrandCap: RUNIC_BRAND_CAP,
-      eviscerateReady: sliceReady,
-      zeroProtocolReady,
+      eviscerateReady: operativeClass === 'AEGIS'
+        && (sliceReady || stagedUltimateReady),
+      zeroProtocolReady: operativeClass === 'HEX_SHOT'
+        && (zeroProtocolReady || stagedUltimateReady),
+      weaponUltimateReady: (sliceReady || zeroProtocolReady || cataclysmReady || stagedUltimateReady),
+      weaponUltimateDisplayName: activeWeaponFamilyId
+        ? (resolveWeaponUltimateDisplayName(activeWeaponFamilyId) ?? undefined)
+        : undefined,
       currentAmmo,
       maxAmmo,
       overchargeMultiplier: operativeClass === 'HEX_SHOT'
@@ -8614,6 +9245,27 @@ export default function TacticalCombatHub({
       envoySilenced: envoyCombatState.isVoidSiphoned && !envoyBoonMods.masochisticChannel,
       veilRotStacksTotal: envoyRotStacksTotal,
       catalyticPayloadEstimate: envoyCatalyticPayload,
+      activeWeaponFamilyId: activeWeaponFamilyId ?? undefined,
+      riftEdgeTempoArmed: weaponRuntimeRef.current.riftEdgeTempoArmed,
+      previousCatalyst: operativeClass === 'ENVOY'
+        ? (classCombatRef.current.previousCatalyst ?? null)
+        : undefined,
+      cleanCatalystCycleReady: operativeClass === 'ENVOY'
+        && activeWeaponFamilyId === 'envoy-null-conduit'
+        && (classCombatRef.current.previousCatalyst === 'NULL'
+          || classCombatRef.current.previousCatalyst === 'BLOOD'),
+      lanternDetonationReady: operativeClass === 'ENVOY'
+        && activeWeaponFamilyId === 'envoy-echo-lantern'
+        && envoyRotStacksTotal > 0,
+      prismBrinkActive: operativeClass === 'ENVOY'
+        && activeWeaponFamilyId === 'envoy-sanguine-prism'
+        && veilFlux <= 25,
+      prismSacrificePreview: operativeClass === 'ENVOY' && activeWeaponFamilyId === 'envoy-sanguine-prism'
+        ? Math.min(8, Math.floor(getEffectiveMaxSoulAnchor() * 0.05))
+        : undefined,
+      prismCanPayFullSacrifice: operativeClass === 'ENVOY'
+        && activeWeaponFamilyId === 'envoy-sanguine-prism'
+        && operativeHp > Math.min(8, Math.floor(getEffectiveMaxSoulAnchor() * 0.05)),
     });
   }, [
     onOperativeTelemetryChange,
@@ -8629,6 +9281,8 @@ export default function TacticalCombatHub({
     runicBrands,
     sliceReady,
     zeroProtocolReady,
+    cataclysmReady,
+    stagedUltimateReady,
     aegisOvercharged,
     currentAmmo,
     maxAmmo,
@@ -8642,6 +9296,7 @@ export default function TacticalCombatHub({
     envoyBoonMods.masochisticChannel,
     envoyRotStacksTotal,
     envoyCatalyticPayload,
+    activeWeaponFamilyId,
     enemy?.currentHp,
   ]);
 
@@ -8664,13 +9319,73 @@ export default function TacticalCombatHub({
       isActionEnabled={isOperativeAbilityEnabled}
       canSelectActions={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getActionDisableReason={getOperativeAbilityDisableReason}
-      getAbilityLabel={(abilityId) => formatAbilityLabel(operativeClass, abilityId)}
+      getAbilityLabel={(abilityId) => formatAbilityLabel(
+        operativeClass,
+        abilityId,
+        activeWeaponFamilyId,
+      )}
       getAbilityCategory={(abilityId) => resolveAbilityUiCategory(operativeClass, abilityId)}
-      getAbilityEffectTags={(abilityId) => formatAbilityCardEffectLine(operativeClass, abilityId)}
+      getAbilityEffectTags={(abilityId) => {
+        if (resolvedWeapon && activeWeaponFamilyId) {
+          const living = Math.max(1, aliveUnits(squad).length || 1);
+          const card = resolveWeaponAnchorCardPresentation({
+            classId: operativeClass,
+            abilityId,
+            weapon: resolvedWeapon,
+            runtime: weaponRuntimeRef.current,
+            stamina,
+            currentAmmo,
+            veilFlux,
+            operativeHp,
+            maxOperativeHp: combatMaxSoulAnchor,
+            previousCatalyst: classCombatRef.current.previousCatalyst ?? null,
+            pulseSpreadSecondaryCount: Math.max(0, living - 1),
+            claymoreStaminaCommitted: !weaponRuntimeRef.current.claymoreBreakCashoutUsed,
+            hexPerfectReload: false,
+            lanternDetonationReady: operativeClass === 'ENVOY'
+              && activeWeaponFamilyId === 'envoy-echo-lantern'
+              && envoyRotStacksTotal > 0,
+            prismCanPayFullSacrifice: operativeClass === 'ENVOY'
+              && activeWeaponFamilyId === 'envoy-sanguine-prism'
+              ? operativeHp > Math.min(8, Math.floor(combatMaxSoulAnchor * 0.05))
+              : undefined,
+          });
+          if (card) return card.effectLine;
+        }
+        return formatAbilityCardEffectLine(operativeClass, abilityId, {
+          equippedWeaponFamilyId: activeWeaponFamilyId,
+        });
+      }}
       getAbilityTargetMode={(abilityId) => classAbilityTargetMode(operativeClass, abilityId)}
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedCostImpact={getStagedCostImpact}
-      getStagedAbilityDescription={getStagedAbilityDescription}
+      getStagedAbilityDescription={(abilityId) => {
+        if (resolvedWeapon && activeWeaponFamilyId) {
+          const living = Math.max(1, aliveUnits(squad).length || 1);
+          const card = resolveWeaponAnchorCardPresentation({
+            classId: operativeClass,
+            abilityId,
+            weapon: resolvedWeapon,
+            runtime: weaponRuntimeRef.current,
+            stamina,
+            currentAmmo,
+            veilFlux,
+            operativeHp,
+            maxOperativeHp: combatMaxSoulAnchor,
+            previousCatalyst: classCombatRef.current.previousCatalyst ?? null,
+            pulseSpreadSecondaryCount: Math.max(0, living - 1),
+            lanternDetonationReady: operativeClass === 'ENVOY'
+              && activeWeaponFamilyId === 'envoy-echo-lantern'
+              && envoyRotStacksTotal > 0,
+            prismCanPayFullSacrifice: operativeClass === 'ENVOY'
+              && activeWeaponFamilyId === 'envoy-sanguine-prism'
+              ? operativeHp > Math.min(8, Math.floor(combatMaxSoulAnchor * 0.05))
+              : undefined,
+          });
+          if (card) return card.expandedDescription;
+        }
+        return getStagedAbilityDescription(abilityId);
+      }}
       getActionAccent={getAbilityAccent}
       bloodForTimeAvailable={bloodForTimeOwned}
       bloodForTimeEnabled={
@@ -8865,15 +9580,43 @@ export default function TacticalCombatHub({
         currentAmmoType={hexShotState.currentAmmoType}
         onResolve={handleActiveReloadResolve}
       />
-      <ZeroProtocolGridOverlay
-        visible={zeroProtocolVisible}
-        onTap={handleZeroProtocolTap}
-        onComplete={finishZeroProtocol}
-      />
-      <CataclysmSigilOverlay
-        visible={cataclysmSigilVisible}
-        onResolve={handleCataclysmResolve}
-      />
+      <WeaponUltimateHostChrome
+        active={
+          zeroProtocolVisible
+          || cataclysmSigilVisible
+          || stagedWeaponUltimateId != null
+          || cycleState === 'OFFENSE_SLICE'
+        }
+        title={
+          zeroProtocolVisible
+            ? '[ ZERO PROTOCOL ]'
+            : cataclysmSigilVisible
+              ? '[ NULL CIRCUIT ]'
+              : stagedWeaponUltimateId
+                ? `[ ${getWeaponUltimateById(stagedWeaponUltimateId).displayName} ]`
+                : cycleState === 'OFFENSE_SLICE'
+                  ? '[ THREEFOLD BRAND ]'
+                  : '[ WEAPON ULTIMATE ]'
+        }
+        onCancel={cancelWeaponUltimateInteraction}
+        simplified={simplifiedUltimateInputs === true}
+      >
+        <ZeroProtocolGridOverlay
+          visible={zeroProtocolVisible}
+          onTap={handleZeroProtocolTap}
+          onComplete={(taps) => finishZeroProtocol(taps, false)}
+        />
+        <CataclysmSigilOverlay
+          visible={cataclysmSigilVisible}
+          onResolve={(nodes) => handleCataclysmResolve(nodes, false)}
+        />
+        <WeaponUltimateStagedSkillOverlay
+          visible={stagedWeaponUltimateId != null}
+          ultimateId={stagedWeaponUltimateId}
+          simplified={simplifiedUltimateInputs === true}
+          onComplete={({ grade }) => commitStagedWeaponUltimate(grade, false)}
+        />
+      </WeaponUltimateHostChrome>
       <CatalyticConsoleOverlay
         visible={catalyticConsoleVisible}
         rotStacksTotal={envoyRotStacksTotal}

@@ -44,7 +44,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   const [aegisDraft, setAegisDraft] = useState<AegisAbilityId[]>([...account.aegisLoadout]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...account.hexShotLoadout]);
   const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...account.envoyLoadout]);
-  const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2 | 3>(0);
+  const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2 | 3>(1);
   const [selectedFlexSlot, setSelectedFlexSlot] = useState<1 | 2 | 3>(1);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
 
@@ -128,13 +128,18 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   };
 
   const assignAegisAbility = useCallback((abilityId: AegisAbilityId) => {
-    if (abilityId === 'EVISCERATE') return;
+    if (abilityId === 'EVISCERATE' || abilityId === 'WRAITH_PARRY' || abilityId === 'STRIKE') return;
+    if (selectedSlot === 0) {
+      setLoadoutStatus('>> SLOT 1 IS FIXED WEAPON BASIC — STRIKE.');
+      return;
+    }
     if (!isAbilityUnlocked(account.unlockedAegisAbilities, abilityId)) {
       setLoadoutStatus(`>> ${abilityId.replace(/_/g, ' ')} NOT UNLOCKED — DECRYPT PROTOCOL FIRST.`);
       return;
     }
     setAegisDraft((prev) => {
       const next = [...prev];
+      next[0] = 'STRIKE';
       next[selectedSlot] = abilityId;
       return next;
     });

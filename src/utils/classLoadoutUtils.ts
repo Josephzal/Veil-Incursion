@@ -28,7 +28,7 @@ export function validateHexShotLoadoutCommit(
   }
   const flex = loadout.slice(1);
   if (flex.some((id) => isHexShotProcUltimate(id))) {
-    return '>> LOADOUT REJECTED — ZERO-PROTOCOL is a mastery proc, not a deck slot.';
+    return '>> LOADOUT REJECTED — ZERO PROTOCOL is a weapon ultimate, not a deck slot.';
   }
   if (new Set(flex).size < flex.length) {
     return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';
@@ -52,7 +52,7 @@ export function validateEnvoyLoadoutCommit(
   }
   const flex = loadout.slice(1);
   if (flex.some((id) => isEnvoyProcUltimate(id))) {
-    return '>> LOADOUT REJECTED — CATACLYSM SIGIL is a mastery proc, not a deck slot.';
+    return '>> LOADOUT REJECTED — NULL CIRCUIT is a weapon ultimate, not a deck slot.';
   }
   if (new Set(flex).size < flex.length) {
     return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';

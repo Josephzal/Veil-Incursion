@@ -42,9 +42,11 @@ export default function CombatMissionReadout({
       <Text style={styles.depth} numberOfLines={1}>
         {depthLabel}
       </Text>
-      <Text style={styles.sector} numberOfLines={1}>
-        {sectorLabel}
-      </Text>
+      {sectorLabel.trim() ? (
+        <Text style={styles.sector} numberOfLines={1}>
+          {sectorLabel}
+        </Text>
+      ) : null}
       <View style={styles.rule} />
 
       <HapticPressable

@@ -7,6 +7,12 @@ import {
   getClassGraftDefinition,
   rollClassGraftOffers,
 } from '../data/classGraftEngine';
+import {
+  filterGraftOffersForClassRank,
+  recomputeMaxSoulAnchorFromGraftBaseline,
+  validateSanctuaryGraftApplication,
+} from '../data/graftSynergy/permanentGraftLoadoutEngine';
+import { getGraftSocketAccessForClassRank } from '../data/graftSynergy/graftCapacityEngine';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { resolveStartingRunCanisterResidue } from '../data/veilResidueRunEngine';
 import {
@@ -583,6 +589,8 @@ export interface RunStartConfig {
   /** Weapon family + tier locked at descent. */
   activeWeaponFamilyId?: import('../types/weapon').WeaponFamilyId;
   activeWeaponTier?: import('../types/weapon').WeaponTierNumber;
+  /** Class rank carried for Sanctuary capacity/socket validation (not a graft snapshot). */
+  classRank?: number;
 }
 
 export interface BadgeTestCombatConfig {
@@ -591,6 +599,9 @@ export interface BadgeTestCombatConfig {
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
   alignedFaction?: FactionType | null;
+  /** Equipped weapon locked for sandbox combat — required for class-correct portraits/ultimates. */
+  activeWeaponFamilyId?: import('../types/weapon').WeaponFamilyId;
+  activeWeaponTier?: import('../types/weapon').WeaponTierNumber;
 }
 
 interface RunContextType {
@@ -1033,6 +1044,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const hpBonus = config?.factionPerks?.maxHpBonus ?? 0;
     const shadowHpBonus = config?.runModifiers?.maxHpBonusPct ?? 0;
     const stamBonus = config?.factionPerks?.maxStaminaBonus ?? 0;
+    // Descent starts with zero run-scoped grafts — no Safehouse snapshot.
     const maxSoulAnchor = Math.floor((BASE_MAX_SOUL_ANCHOR + hpBonus) * (1 + shadowHpBonus / 100));
     const maxStamina = BASE_MAX_STAMINA + stamBonus;
     const citySector = INITIAL_SECTOR_POOL.find((s) => s.id === 'city-subway') ?? INITIAL_SECTOR_POOL[0];
@@ -1210,6 +1222,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       })(),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
+      abilityGrafts: {},
+      hexShotAbilityGrafts: {},
+      envoyAbilityGrafts: {},
+      sanctuaryGraftOffers: null,
+      graftBaselineMaxSoulAnchor: maxSoulAnchor,
       runModifiers: runModifiersWithBrief,
       runGenerationContext: runGenerationContextWithBrief,
       runWorldBrief: resolvedRunWorldBrief,
@@ -1687,12 +1704,41 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setPostCombatMutationChoices([]);
       return [];
     }
+    const classId = inc.activeClass;
+    const equipped =
+      classId === 'HEX_SHOT'
+        ? inc.hexShotLoadout
+        : classId === 'ENVOY'
+          ? inc.envoyLoadout
+          : inc.aegisLoadout;
+    const ownedCount =
+      classId === 'HEX_SHOT'
+        ? inc.hexShotBoons.length
+        : classId === 'ENVOY'
+          ? inc.envoyBoons.length
+          : inc.leyLineMutations.length;
+    const depthBand = (Math.min(3, Math.max(1, inc.currentDepth ?? 1)) as 1 | 2 | 3);
+    const seed = `${inc.activeClass}:${inc.activeWeaponFamilyId}:${node.id}:boon:${ownedCount}:d${depthBand}`;
+    const abilityGrafts =
+      classId === 'HEX_SHOT'
+        ? (inc.hexShotAbilityGrafts as Record<string, string>)
+        : classId === 'ENVOY'
+          ? (inc.envoyAbilityGrafts as Record<string, string>)
+          : (inc.abilityGrafts as Record<string, string>);
     const choices = preparePostCombatBoonOffers(
-      inc.activeClass,
+      classId,
       inc.leyLineMutations,
       inc.hexShotBoons,
       inc.envoyBoons,
       3,
+      {
+        weaponFamilyId: inc.activeWeaponFamilyId,
+        equippedAbilityIds: [...equipped],
+        seed,
+        depthBand,
+        isFirstOffer: ownedCount === 0,
+        abilityGrafts,
+      },
     );
     setPostCombatMutationChoices(choices);
     return choices;
@@ -1783,21 +1829,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const openSanctuaryGraftTerminal = useCallback(() => {
     const inc = activeIncursionRef.current;
     const classId = inc.activeClass ?? 'AEGIS';
-    const offers = rollClassGraftOffers(classId, 3);
+    const classRank = account.progressionProfile.classes[classId]?.rank ?? 1;
+    const rolled = rollClassGraftOffers(classId, 3);
+    const offers = filterGraftOffersForClassRank(classId, rolled as string[], classRank);
+    // If rank filtering empties the pool, fall back to rolled Standard pool (preserve economy UX).
+    const staged = (offers.length > 0 ? offers : (rolled as string[])).slice(0, 3);
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        sanctuaryGraftOffers: offers,
+        sanctuaryGraftOffers: staged as ActiveIncursionState['sanctuaryGraftOffers'],
       };
       activeIncursionRef.current = next;
       return next;
     });
     appendRunLog(`>> ${classId} GRAFT TERMINAL ONLINE — three volatile mutations staged.`);
-    offers.forEach((graftId) => {
+    staged.forEach((graftId) => {
       const graft = getClassGraftDefinition(classId, graftId);
       appendRunLog(`>> — OFFER: ${graft.name.toUpperCase()} (${graft.cost} RESIDUE)`);
     });
-  }, [appendRunLog]);
+  }, [account.progressionProfile.classes, appendRunLog]);
 
   const applyClassGraftToAbility = useCallback((
     abilityId: string,
@@ -1805,54 +1855,55 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   ): { success: boolean; message: string } => {
     const inc = activeIncursionRef.current;
     const classId = inc.activeClass ?? 'AEGIS';
+    const classRank = account.progressionProfile.classes[classId]?.rank ?? 1;
+    const currentMap =
+      classId === 'HEX_SHOT'
+        ? (inc.hexShotAbilityGrafts as Record<string, string>)
+        : classId === 'ENVOY'
+          ? (inc.envoyAbilityGrafts as Record<string, string>)
+          : (inc.abilityGrafts as Record<string, string>);
 
-    if (!canGraftClassAbility(classId, abilityId)) {
-      return { success: false, message: 'This ability slot cannot be grafted.' };
+    const previousMap = { ...currentMap };
+    const validation = validateSanctuaryGraftApplication({
+      classId,
+      abilityId,
+      graftId,
+      classRank,
+      currentMap,
+      sanctuarySessionActive: inc.sanctuaryGraftOffers != null,
+      residueBalance: inc.sessionVeilResidueCollected,
+      sanctuaryOffers: inc.sanctuaryGraftOffers,
+    });
+
+    if (!validation.ok) {
+      appendRunLog(`>> GRAFT REJECTED — ${validation.message}`);
+      return { success: false, message: validation.message };
+    }
+
+    const access = getGraftSocketAccessForClassRank(classRank);
+    if (!canGraftClassAbility(classId, abilityId, {
+      allowFixedBasic: access.allowFixedBasic,
+      allowUltimate: access.allowUltimate,
+    })) {
+      appendRunLog('>> GRAFT REJECTED — ability socket locked for current class rank.');
+      return { success: false, message: 'This ability slot cannot be grafted at current class rank.' };
     }
 
     const graft = getClassGraftDefinition(classId, graftId);
-    if (inc.sessionVeilResidueCollected < graft.cost) {
-      return { success: false, message: 'Insufficient Veil Residue.' };
-    }
+    const cost = validation.cost;
+    const proposedMap = validation.proposedMap;
 
-    if (graft.reduceMaxHp != null) {
-      setRunState((runPrev) => {
-        const nextMaxHp = Math.max(1, Math.floor(runPrev.maxSoulAnchor * (1 - graft.reduceMaxHp!)));
-        const runNext = {
-          ...runPrev,
-          maxSoulAnchor: nextMaxHp,
-          soulAnchorIntegrity: Math.min(runPrev.soulAnchorIntegrity, nextMaxHp),
-        };
-        runStateRef.current = runNext;
-        return runNext;
-      });
-    }
-
+    // Atomic commit: assignment + residue after full validation.
     setActiveIncursion((prev) => {
       const graftPatch = classId === 'HEX_SHOT'
-        ? {
-          hexShotAbilityGrafts: {
-            ...prev.hexShotAbilityGrafts,
-            [abilityId]: graftId,
-          },
-        }
+        ? { hexShotAbilityGrafts: proposedMap as ActiveIncursionState['hexShotAbilityGrafts'] }
         : classId === 'ENVOY'
-          ? {
-            envoyAbilityGrafts: {
-              ...prev.envoyAbilityGrafts,
-              [abilityId]: graftId,
-            },
-          }
-          : {
-            abilityGrafts: {
-              ...prev.abilityGrafts,
-              [abilityId as import('../types/aegisCombat').AegisAbilityId]: graftId as import('../types/veilGraft').VeilGraftId,
-            },
-          };
+          ? { envoyAbilityGrafts: proposedMap as ActiveIncursionState['envoyAbilityGrafts'] }
+          : { abilityGrafts: proposedMap as ActiveIncursionState['abilityGrafts'] };
 
       const next = {
         ...prev,
-        sessionVeilResidueCollected: prev.sessionVeilResidueCollected - graft.cost,
+        sessionVeilResidueCollected: prev.sessionVeilResidueCollected - cost,
         ...graftPatch,
         encounterUltimateDisabled: graft.disableUltimate === true
           ? true
@@ -1862,17 +1913,33 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
+    // Recompute Max HP from baseline — never stack penalties across replacements.
+    const baseline = inc.graftBaselineMaxSoulAnchor > 0
+      ? inc.graftBaselineMaxSoulAnchor
+      : runStateRef.current.maxSoulAnchor;
+    const nextMax = recomputeMaxSoulAnchorFromGraftBaseline(baseline, classId, proposedMap);
+    setRunState((runPrev) => {
+      const runNext = {
+        ...runPrev,
+        maxSoulAnchor: nextMax,
+        soulAnchorIntegrity: Math.min(runPrev.soulAnchorIntegrity, nextMax),
+      };
+      runStateRef.current = runNext;
+      return runNext;
+    });
+
+    void previousMap;
     const abilityLabel = abilityId.replace(/_/g, ' ');
-    appendRunLog(`>> GRAFT APPLIED — ${graft.name.toUpperCase()} fused to ${abilityLabel}. (−${graft.cost} RESIDUE)`);
+    appendRunLog(`>> GRAFT APPLIED — ${graft.name.toUpperCase()} fused to ${abilityLabel}. (−${cost} RESIDUE)`);
     if (graft.reduceMaxHp != null) {
-      appendRunLog(`>> MARTYR TAX — max soul anchor reduced by ${Math.round(graft.reduceMaxHp * 100)}%.`);
+      appendRunLog(`>> MARTYR TAX — max soul anchor recalculated (−${Math.round(graft.reduceMaxHp * 100)}% graft tax).`);
     }
     if (graft.disableUltimate) {
       appendRunLog('>> APEX MUTATION — ultimate channel sealed for next combat encounter.');
     }
 
     return { success: true, message: `${graft.name} applied.` };
-  }, [appendRunLog]);
+  }, [account.progressionProfile.classes, appendRunLog]);
 
   const clearEncounterUltimateDisabled = useCallback(() => {
     setActiveIncursion((prev) => {
@@ -2246,6 +2313,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
     runStateRef.current = next;
     setRunState(next);
+    const weaponSnapshot = config.activeWeaponFamilyId
+      ? {
+        activeWeaponFamilyId: config.activeWeaponFamilyId,
+        activeWeaponTier: config.activeWeaponTier ?? 1,
+        weaponRuntime: createDefaultWeaponRuntime(),
+      }
+      : snapshotWeaponForRun(config.activeClass);
     const resetIncursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -2254,6 +2328,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       hexShotLoadout: sanitizeHexShotCombatLoadout(config.hexShotLoadout),
       envoyLoadout: sanitizeEnvoyCombatLoadout(config.envoyLoadout),
       alignedFaction: config.alignedFaction ?? null,
+      ...weaponSnapshot,
       runCredits: 750,
       nodesCleared: 4,
       currentDistrict: 2 as const,

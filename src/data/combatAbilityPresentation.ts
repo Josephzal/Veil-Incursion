@@ -1,7 +1,11 @@
 import type { ClassType } from '../types/game';
 import type { AegisAbilityId } from '../types/aegisCombat';
+import type { WeaponFamilyId } from '../types/weapon';
 import { getAbilityDefinition } from './aegisAbilities';
 import { resolveClassAbilityCost } from './classAbilityResolver';
+import {
+  resolveWeaponAnchorForAbility,
+} from './weaponAnchorAttackRegistry';
 
 const PRIORITY_EFFECT_TAGS = [
   'BUFF',
@@ -37,7 +41,26 @@ function parseLeadingDamageChip(description: string): string | null {
 export function resolveAbilityCardEffectChips(
   classId: ClassType,
   abilityId: string,
+  options?: {
+    equippedWeaponFamilyId?: WeaponFamilyId | null;
+    weaponEffectLine?: string | null;
+  },
 ): string[] {
+  const anchor = resolveWeaponAnchorForAbility(
+    abilityId,
+    options?.equippedWeaponFamilyId,
+    classId,
+  );
+  if (anchor && options?.weaponEffectLine) {
+    return options.weaponEffectLine.split(' // ').filter(Boolean).slice(0, 4);
+  }
+  if (anchor) {
+    return [
+      ...anchor.definingEffects.slice(0, 2),
+      anchor.targetPattern,
+    ];
+  }
+
   const cost = resolveClassAbilityCost(classId, abilityId);
   const chips: string[] = [];
 
@@ -72,6 +95,10 @@ export function resolveAbilityCardEffectChips(
 export function formatAbilityCardEffectLine(
   classId: ClassType,
   abilityId: string,
+  options?: {
+    equippedWeaponFamilyId?: WeaponFamilyId | null;
+    weaponEffectLine?: string | null;
+  },
 ): string {
-  return resolveAbilityCardEffectChips(classId, abilityId).join(' // ');
+  return resolveAbilityCardEffectChips(classId, abilityId, options).join(' // ');
 }

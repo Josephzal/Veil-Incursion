@@ -158,10 +158,16 @@ import {
   unlockWeaponFamily,
   upgradeWeaponTier,
 } from '../data/weaponProgressionEngine';
+import { isDevGodModeActive, resetDevProgressionKeepItems, toggleDevGodMode } from '../data/devGodModeEngine';
 import {
   resolveWeaponCombatStatsFromState,
 } from '../data/weaponCombatEngine';
 import type { WeaponFamilyId } from '../types/weapon';
+import {
+  hasWeaponBriefAcknowledged,
+  normalizeWeaponBriefAcknowledged,
+  withWeaponBriefAcknowledged,
+} from '../data/weaponPlayerFacing/weaponBriefPersistence';
 import { getWeaponFamily } from '../data/weaponRegistry';
 import {
   DECRYPTION_COST,
@@ -295,6 +301,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     weaponUnlocks: weaponProgression.weaponUnlocks,
     weaponTiers: weaponProgression.weaponTiers,
     equippedWeaponByClass: weaponProgression.equippedWeaponByClass,
+    weaponBriefAcknowledged: [],
+    simplifiedUltimateInputs: false,
     craftedAugments: [],
     hubCraftedConsumables: {},
     preRunCargo: createDefaultCargoRunState(),
@@ -364,6 +372,8 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       weaponTiers: parsed.weaponTiers,
       equippedWeaponByClass: parsed.equippedWeaponByClass,
     }),
+    weaponBriefAcknowledged: normalizeWeaponBriefAcknowledged(parsed.weaponBriefAcknowledged),
+    simplifiedUltimateInputs: parsed.simplifiedUltimateInputs === true,
     craftedAugments: parsed.craftedAugments ?? defaults.craftedAugments,
     hubCraftedConsumables: {
       ...defaults.hubCraftedConsumables,
@@ -477,9 +487,17 @@ interface PlayerAccountContextType {
   equipWeaponFamily: (familyId: WeaponFamilyId) => { success: boolean; logLine: string };
   unlockWeaponFamilyAccount: (familyId: WeaponFamilyId) => { success: boolean; logLine: string };
   upgradeWeaponFamilyTier: (familyId: WeaponFamilyId) => { success: boolean; logLine: string };
+  acknowledgeWeaponBrief: (familyId: WeaponFamilyId) => void;
+  hasAcknowledgedWeaponBrief: (familyId: WeaponFamilyId) => boolean;
+  setSimplifiedUltimateInputs: (enabled: boolean) => void;
   unlockAllWeaponFamilies: () => void;
   resetWeaponFamilies: () => void;
   grantWeaponUnlockResources: () => void;
+  /** Dev Test — toggle full unlocks + max ranks; second click restores snapshot. */
+  toggleDevGodModeUnlocks: () => { active: boolean; logLine: string };
+  isDevGodModeUnlocksActive: () => boolean;
+  /** Dev Test — level 1 / no unlocks; keeps stash, cargo, inventory, credits. */
+  resetDevProgressionKeepItems: () => string;
   setEquippedKeepsake: (keepsakeId: KeepsakeId | null) => void;
   setKeepsakeAttunement: (attunement: KeepsakeAttunement | null) => void;
   setKeepsakeRouteDoctrine: (routeDoctrine: KeepsakeRouteDoctrine | null) => void;
@@ -1226,12 +1244,63 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [account.equippedWeaponByClass, account.resourceStash, account.weaponTiers, account.weaponUnlocks, updateAccount],
   );
 
+  const acknowledgeWeaponBrief = useCallback(
+    (familyId: WeaponFamilyId) => {
+      updateAccount((prev) => ({
+        ...prev,
+        weaponBriefAcknowledged: withWeaponBriefAcknowledged(prev.weaponBriefAcknowledged, familyId),
+      }));
+    },
+    [updateAccount],
+  );
+
+  const hasAcknowledgedWeaponBrief = useCallback(
+    (familyId: WeaponFamilyId) => hasWeaponBriefAcknowledged(account.weaponBriefAcknowledged, familyId),
+    [account.weaponBriefAcknowledged],
+  );
+
+  const setSimplifiedUltimateInputs = useCallback(
+    (enabled: boolean) => {
+      updateAccount((prev) => ({
+        ...prev,
+        simplifiedUltimateInputs: enabled === true,
+      }));
+    },
+    [updateAccount],
+  );
+
   const unlockAllWeaponFamilies = useCallback(() => {
     updateAccount((prev) => ({
       ...prev,
       ...unlockAllWeapons(),
     }));
   }, [updateAccount]);
+
+  const toggleDevGodModeUnlocks = useCallback((): { active: boolean; logLine: string } => {
+    let active = false;
+    let logLine = '';
+    updateAccount((prev) => {
+      const toggled = toggleDevGodMode(prev);
+      active = toggled.active;
+      logLine = toggled.logLine;
+      return toggled.account;
+    });
+    appendHubLog(logLine);
+    return { active, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const isDevGodModeUnlocksActive = useCallback(() => isDevGodModeActive(), []);
+
+  const resetDevProgressionKeepItemsAccount = useCallback((): string => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = resetDevProgressionKeepItems(prev);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+    return logLine;
+  }, [appendHubLog, updateAccount]);
 
   const resetWeaponFamilies = useCallback(() => {
     updateAccount((prev) => ({
@@ -2613,7 +2682,13 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       equipWeaponFamily,
       unlockWeaponFamilyAccount,
       upgradeWeaponFamilyTier,
+      acknowledgeWeaponBrief,
+      hasAcknowledgedWeaponBrief,
+      setSimplifiedUltimateInputs,
       unlockAllWeaponFamilies,
+      toggleDevGodModeUnlocks,
+      isDevGodModeUnlocksActive,
+      resetDevProgressionKeepItems: resetDevProgressionKeepItemsAccount,
       resetWeaponFamilies,
       grantWeaponUnlockResources,
       setEquippedKeepsake,
@@ -2724,7 +2799,13 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       equipWeaponFamily,
       unlockWeaponFamilyAccount,
       upgradeWeaponFamilyTier,
+      acknowledgeWeaponBrief,
+      hasAcknowledgedWeaponBrief,
+      setSimplifiedUltimateInputs,
       unlockAllWeaponFamilies,
+      toggleDevGodModeUnlocks,
+      isDevGodModeUnlocksActive,
+      resetDevProgressionKeepItemsAccount,
       resetWeaponFamilies,
       grantWeaponUnlockResources,
       setEquippedKeepsake,

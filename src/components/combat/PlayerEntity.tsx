@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { ClassType } from '../../types/game';
+import type { WeaponFamilyId } from '../../types/weapon';
 import CombatPlayerViewport, { type CombatPlayerViewportRef } from './CombatPlayerViewport';
 import {
   resolvePlayerCombatAttackPortrait,
@@ -11,6 +12,7 @@ import { OPERATIVE_ARENA_SPRITE_WIDTH } from '../../constants/combatLayout';
 interface PlayerEntityProps {
   playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
   operativeClass: ClassType;
+  weaponFamilyId?: WeaponFamilyId | null;
   wardPrimed?: boolean;
   abilityPrimed?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -20,6 +22,7 @@ interface PlayerEntityProps {
 export default function PlayerEntity({
   playerViewportRef,
   operativeClass,
+  weaponFamilyId = null,
   wardPrimed = false,
   abilityPrimed = false,
   style,
@@ -32,9 +35,10 @@ export default function PlayerEntity({
     ]}>
       <CombatPlayerViewport
         ref={playerViewportRef}
-        imageSource={resolvePlayerCombatIdlePortrait(operativeClass)}
-        attackImageSource={resolvePlayerCombatAttackPortrait(operativeClass)}
+        imageSource={resolvePlayerCombatIdlePortrait(operativeClass, weaponFamilyId)}
+        attackImageSource={resolvePlayerCombatAttackPortrait(operativeClass, weaponFamilyId)}
         operativeClass={operativeClass}
+        weaponFamilyId={weaponFamilyId}
         // Aegis lunges into the enemy line; Envoy / Hex Shot stay planted for ranged strikes.
         stationaryAttack={operativeClass !== 'AEGIS'}
         wardPrimed={wardPrimed}

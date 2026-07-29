@@ -133,6 +133,7 @@ import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
 import type { DevSandboxPreset } from '../../types/devSandbox';
 import type { OperationObjectiveKind, SectorId } from '../../types/worldState';
+import { snapshotWeaponForRun } from '../../data/weaponRunState';
 import { generateContractForObjectiveKind } from '../../data/contractGenerator';
 import { freezeContractForRun } from '../../types/contract';
 import {
@@ -297,6 +298,10 @@ export default function DevTestHubPanel(): React.JSX.Element {
     unlockAllWeaponFamilies,
     resetWeaponFamilies,
     grantWeaponUnlockResources,
+    toggleDevGodModeUnlocks,
+    isDevGodModeUnlocksActive,
+    resetDevProgressionKeepItems,
+    setSimplifiedUltimateInputs,
     equipWeaponFamily,
     upgradeWeaponFamilyTier,
     appendHubLog,
@@ -382,6 +387,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
   } = useWorldState();
   const [hubOpen, setHubOpen] = useState(false);
   const [debugReport, setDebugReport] = useState<string | null>(null);
+  const [godModeActive, setGodModeActive] = useState(() => isDevGodModeUnlocksActive());
   const keyColor = hubKeyColor(theme.mutedColor);
 
   const operationKinds = useMemo<OperationObjectiveKind[]>(() => [
@@ -392,18 +398,30 @@ export default function DevTestHubPanel(): React.JSX.Element {
     'ECHO_RECOVERY',
   ], []);
 
-  const sandboxConfig = useMemo(() => ({
-    activeClass: account.activeClass,
-    aegisLoadout: account.aegisLoadout,
-    hexShotLoadout: account.hexShotLoadout,
-    envoyLoadout: account.envoyLoadout,
-    alignedFaction: account.alignedFaction,
-  }), [
+  const sandboxConfig = useMemo(() => {
+    const weaponSnapshot = snapshotWeaponForRun(account.activeClass, {
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    });
+    return {
+      activeClass: account.activeClass,
+      aegisLoadout: account.aegisLoadout,
+      hexShotLoadout: account.hexShotLoadout,
+      envoyLoadout: account.envoyLoadout,
+      alignedFaction: account.alignedFaction,
+      activeWeaponFamilyId: weaponSnapshot.activeWeaponFamilyId,
+      activeWeaponTier: weaponSnapshot.activeWeaponTier,
+    };
+  }, [
     account.activeClass,
     account.aegisLoadout,
-    account.envoyLoadout,
     account.alignedFaction,
+    account.envoyLoadout,
+    account.equippedWeaponByClass,
     account.hexShotLoadout,
+    account.weaponTiers,
+    account.weaponUnlocks,
   ]);
 
   const launchSandbox = useCallback((
@@ -518,6 +536,48 @@ export default function DevTestHubPanel(): React.JSX.Element {
       subtitle="Isolated node previews — continue returns here."
       scrollable
     >
+      <HubSectionHeader title="GOD MODE // FULL UNLOCK" color={theme.statusColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label={godModeActive
+            ? '[ RESTORE NORMAL STATE ]'
+            : '[ UNLOCK ALL + MAX LEVEL ]'}
+          accentColor={godModeActive ? theme.mutedColor : theme.statusColor}
+          onPress={() => {
+            const result = toggleDevGodModeUnlocks();
+            setGodModeActive(result.active);
+            setDebugReport(result.logLine);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ RESET TO LEVEL 1 — KEEP ITEMS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            const logLine = resetDevProgressionKeepItems();
+            setGodModeActive(false);
+            setDebugReport(logLine);
+          }}
+        />
+        <SandboxLaunchButton
+          label={account.simplifiedUltimateInputs
+            ? '[ SIMPLIFIED ULTIMATES: ON ]'
+            : '[ SIMPLIFIED ULTIMATES: OFF ]'}
+          accentColor={account.simplifiedUltimateInputs ? theme.statusColor : theme.mutedColor}
+          onPress={() => {
+            const next = !(account.simplifiedUltimateInputs === true);
+            setSimplifiedUltimateInputs(next);
+            setDebugReport(next
+              ? '>> SIMPLIFIED ULTIMATE INPUTS ON — weapon ultimates commit STANDARD only.'
+              : '>> SIMPLIFIED ULTIMATE INPUTS OFF — full skill minigames restored.');
+          }}
+        />
+      </View>
+      {godModeActive ? (
+        <Text style={[styles.debugMeta, { color: theme.statusColor }]}>
+          GOD MODE ACTIVE — click restore to revert weapons, sectors, recipes, ranks, stash
+        </Text>
+      ) : null}
+
       <HubSectionHeader title="NARRATIVE // TENSION MINI-GAMES" color={theme.mutedColor} />
       <View style={styles.grid}>
         <SandboxLaunchButton

@@ -58,24 +58,49 @@ export function canAffordAnySanctuaryGraft(classId: ClassType, residueBalance: n
   return residueBalance >= getMinimumClassGraftCost(classId);
 }
 
+/** Sanctuary residue graft application is the live grant path. */
+export function isSanctuaryGraftGrantEnabled(): boolean {
+  return true;
+}
+
 export function isDeadMansSwitchReloadGraft(
   grafts: HexShotAbilityGraftMap,
 ): boolean {
   return grafts.PHASE_SHIFT_RELOAD === 'DEAD_MAN_SWITCH_GRAFT';
 }
 
-export function canGraftClassAbility(classId: ClassType, abilityId: string): boolean {
+export function canGraftClassAbility(
+  classId: ClassType,
+  abilityId: string,
+  access?: { allowFixedBasic?: boolean; allowUltimate?: boolean },
+): boolean {
+  const allowBasic = access?.allowFixedBasic === true;
+  const allowUltimate = access?.allowUltimate === true;
   if (classId === 'HEX_SHOT') {
     if (abilityId === 'PHASE_SHIFT_RELOAD') return true;
-    return !HEX_ANCHORS.includes(abilityId as HexShotAbilityId)
-      && abilityId !== 'ZERO_PROTOCOL';
+    if (abilityId === 'SILVER_CORE_SIDEARM') return allowBasic;
+    if (abilityId === 'ZERO_PROTOCOL') return allowUltimate;
+    // WU-5: weapon ultimate IDs graft as ultimates (legacy ZERO_PROTOCOL path).
+    if (abilityId === 'SIXTH_SEAL' || abilityId === 'LAST_KNOCK') return allowUltimate;
+    return true;
   }
   if (classId === 'ENVOY') {
-    return !ENVOY_ANCHORS.includes(abilityId as EnvoyAbilityId)
-      && abilityId !== 'RIFT_WARD'
-      && abilityId !== 'CATACLYSM_SIGIL';
+    if (abilityId === 'VEIL_SPLINTER') return allowBasic;
+    if (abilityId === 'RIFT_WARD' || abilityId === 'CATACLYSM_SIGIL') return allowUltimate;
+    if (abilityId === 'FUNERAL_KNOT' || abilityId === 'CRIMSON_REFRACTION' || abilityId === 'NULL_CIRCUIT') {
+      return allowUltimate;
+    }
+    return true;
   }
-  return canGraftAbility(abilityId as AegisAbilityId);
+  if (abilityId === 'EVISCERATE' || abilityId === 'WRAITH_PARRY') return allowUltimate;
+  if (
+    abilityId === 'THREEFOLD_BRAND'
+    || abilityId === 'REND_THE_VEIL'
+    || abilityId === 'GRAVEFALL'
+  ) {
+    return allowUltimate;
+  }
+  return canGraftAbility(abilityId as AegisAbilityId) || (abilityId === 'STRIKE' && allowBasic);
 }
 
 function applyTagMods(

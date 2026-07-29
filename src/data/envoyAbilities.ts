@@ -35,8 +35,8 @@ export const ENVOY_ABILITY_CATALOG: Record<EnvoyAbilityId, EnvoyAbilityDefinitio
   CATACLYSM_SIGIL: {
     id: 'CATACLYSM_SIGIL',
     classId: 'ENVOY',
-    label: '[ CATACLYSM SIGIL ]',
-    description: 'Ultimate — consumes all Veil Rot for grid-wide true damage (procs at 6+ stacks).',
+    label: '[ NULL CIRCUIT ]',
+    description: 'Scythe ultimate — consumes all Veil Rot for grid-wide true damage (procs at 6+ stacks).',
     apCost: 0,
     fluxCost: 0,
     fluxRegen: 0,

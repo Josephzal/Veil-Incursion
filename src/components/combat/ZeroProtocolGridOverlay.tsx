@@ -61,7 +61,7 @@ export default function ZeroProtocolGridOverlay({
   return (
     <HapticPressable style={styles.overlay} onPress={handlePress} disabled={!channelActive}>
       <View style={styles.hud} pointerEvents="none">
-        <Text style={styles.title}>[ ZERO-PROTOCOL // RAPID EXECUTION ]</Text>
+        <Text style={styles.title}>[ ZERO PROTOCOL // RAPID EXECUTION ]</Text>
         <Text style={styles.timer}>
           {channelActive ? '2.0s CHANNEL — TAP HOSTILE GRID' : 'CHANNEL CLOSED'}
         </Text>

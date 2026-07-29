@@ -6,8 +6,10 @@ interface CombatMagazineGaugeProps {
   currentAmmo: number;
   maxAmmo: number;
   overchargeMultiplier?: number;
-  /** Zero-Protocol gate open (Protocol Charges full). */
+  /** Zero-Protocol / weapon ultimate gate open (Protocol Charges full). */
   markReady?: boolean;
+  /** Player-facing ultimate name when markReady (defaults ZERO PROTOCOL). */
+  readyUltimateLabel?: string | null;
   labelColor?: string;
   liveColor?: string;
   spentColor?: string;
@@ -25,6 +27,7 @@ export default function CombatMagazineGauge({
   maxAmmo,
   overchargeMultiplier = 0,
   markReady = false,
+  readyUltimateLabel = null,
   labelColor = '#fbbf24',
   liveColor = '#fbbf24',
   spentColor = 'rgba(148, 163, 184, 0.35)',
@@ -41,7 +44,8 @@ export default function CombatMagazineGauge({
 
   const ammoMeta = ammoType ? HEX_AMMO_META[ammoType] : null;
   const overchargeLabel = nextShotOvercharged || overchargeMultiplier > 0 ? ' // OC' : '';
-  const markLabel = markReady ? ' // ZERO READY' : '';
+  const readyName = readyUltimateLabel?.trim() || 'ZERO PROTOCOL';
+  const markLabel = markReady ? ` // ${readyName}` : '';
   const labelText = `${ammoMeta ? `${ammoMeta.chip} ` : 'MAGAZINE // '}${currentAmmo}/${maxAmmo}${overchargeLabel}${markLabel}`;
 
   const protocolRow = maxProtocolCharges > 0 ? (
@@ -62,7 +66,7 @@ export default function CombatMagazineGauge({
         );
       })}
       <Text style={[styles.protocolLabel, markReady ? styles.protocolLabelReady : null]}>
-        {markReady ? 'ZERO PROTOCOL' : 'PROTOCOL'}
+        {markReady ? readyName : 'PROTOCOL'}
       </Text>
       {nextShotOvercharged ? <Text style={styles.overchargeTag}>⚡OC</Text> : null}
     </View>

@@ -1,5 +1,6 @@
 import type { ClassType, PlayerAccount } from '../types/game';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
+import type { WeaponFamilyId } from '../types/weapon';
 import {
   ALL_OPERATIVE_CLASSES,
   DEFAULT_ENVOY_LOADOUT,
@@ -27,6 +28,7 @@ import {
 import { migrateHexShotAbilityId } from './hexShotMigration';
 import { migrateEnvoyAbilityId } from './envoyMigration';
 import { sanitizeEnvoyCombatLoadout } from './classAbilityUnlockEngine';
+import { resolveWeaponAnchorForAbility } from './weaponAnchorAttackRegistry';
 
 export function migrateClassType(classId: string | undefined): ClassType {
   if (classId === 'RIFTSHOT') return 'HEX_SHOT';
@@ -86,7 +88,15 @@ export function getActiveClassLoadoutForRun(account: PlayerAccount): readonly st
   return getActiveClassSnapshot(account).loadout;
 }
 
-export function formatAbilityLabel(classId: ClassType, abilityId: string): string {
+export function formatAbilityLabel(
+  classId: ClassType,
+  abilityId: string,
+  equippedWeaponFamilyId?: WeaponFamilyId | null,
+): string {
+  const anchor = resolveWeaponAnchorForAbility(abilityId, equippedWeaponFamilyId, classId);
+  if (anchor) {
+    return `[ ${anchor.displayName} ]`;
+  }
   if (classId === 'HEX_SHOT') {
     return getHexShotAbilityDefinition(abilityId as HexShotAbilityId).label;
   }

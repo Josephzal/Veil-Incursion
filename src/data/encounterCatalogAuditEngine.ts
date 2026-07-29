@@ -18,8 +18,8 @@ import { enemyAllowedAtDepth } from './encounterSpawnGateEngine';
 import type { VeilBiome } from '../types/encounterSpawn';
 import { ALL_VEIL_BIOMES } from './sectorBiomeBridge';
 import type { SynergySquadSpec } from './synergyEncounterTypes';
+import { LEGACY_ENEMY_ALIAS_KEYS, isLegacyEnemyAliasKey } from './enemyAliasCanonical';
 
-const LEGACY_ALIAS_KEYS: readonly EncounterEnemyKey[] = ['RIOT_VANGUARD'];
 /** Injected at combat spawn — not drafted into biome squad decks. */
 const INJECT_ONLY_ENEMY_KEYS: readonly EncounterEnemyKey[] = ['ANCHOR_HUSK'];
 
@@ -40,7 +40,7 @@ function assertBiomePoolHints(): void {
             `verifyEncounterCatalog: ${key} in ${biome} D${depth} pool but biomeTags=${def.biomeTags.join(',')}`,
           );
         }
-        if (!enemyAllowedAtDepth(key, depth) && !LEGACY_ALIAS_KEYS.includes(key)) {
+        if (!enemyAllowedAtDepth(key, depth)) {
           throw new Error(
             `verifyEncounterCatalog: ${key} listed in ${biome} D${depth} pool but blocked by spawn gates`,
           );
@@ -52,8 +52,19 @@ function assertBiomePoolHints(): void {
 
 function assertDefinitionRosterParity(): void {
   const definedKeys = new Set(allDefinedEnemyKeys());
+  for (const alias of LEGACY_ENEMY_ALIAS_KEYS) {
+    if ((definedKeys as Set<string>).has(alias)) {
+      throw new Error(`verifyEncounterCatalog: legacy alias ${alias} must not remain in ENEMY_DEFINITIONS`);
+    }
+    if (Object.prototype.hasOwnProperty.call(ENCOUNTER_KEY_TO_ROSTER, alias)) {
+      throw new Error(`verifyEncounterCatalog: legacy alias ${alias} must not remain in ENCOUNTER_KEY_TO_ROSTER`);
+    }
+  }
   for (const key of Object.keys(ENCOUNTER_KEY_TO_ROSTER) as EncounterEnemyKey[]) {
-    if (!definedKeys.has(key) && !LEGACY_ALIAS_KEYS.includes(key)) {
+    if (isLegacyEnemyAliasKey(key)) {
+      throw new Error(`verifyEncounterCatalog: legacy alias ${key} leaked into ENCOUNTER_KEY_TO_ROSTER`);
+    }
+    if (!definedKeys.has(key)) {
       throw new Error(`verifyEncounterCatalog: ${key} missing from ENEMY_DEFINITIONS`);
     }
     const rosterId = ENCOUNTER_KEY_TO_ROSTER[key];
@@ -63,7 +74,6 @@ function assertDefinitionRosterParity(): void {
   }
 
   for (const key of definedKeys) {
-    if (LEGACY_ALIAS_KEYS.includes(key)) continue;
     if (!(key in ENCOUNTER_KEY_TO_ROSTER)) {
       throw new Error(`verifyEncounterCatalog: definition ${key} missing ENCOUNTER_KEY_TO_ROSTER mapping`);
     }
@@ -78,7 +88,6 @@ function assertDefinitionRosterParity(): void {
 
 function assertRosterOriginAlignment(): void {
   for (const [key, def] of Object.entries(ENEMY_DEFINITIONS) as Array<[EncounterEnemyKey, typeof ENEMY_DEFINITIONS[EncounterEnemyKey]]>) {
-    if (LEGACY_ALIAS_KEYS.includes(key)) continue;
     const rosterId = ENCOUNTER_KEY_TO_ROSTER[key];
     const entry = ENEMY_ROSTER[rosterId];
     if (!entry) continue;
@@ -104,7 +113,7 @@ function assertDeckCoverage(): void {
   const usedKeys = new Set(collectDeckUnitKeys([...synergy, ...elite]));
 
   for (const key of allDefinedEnemyKeys()) {
-    if (LEGACY_ALIAS_KEYS.includes(key) || INJECT_ONLY_ENEMY_KEYS.includes(key)) continue;
+    if (INJECT_ONLY_ENEMY_KEYS.includes(key)) continue;
     const def = getEnemyDefinition(key)!;
     if (def.origin === 'RIVAL_MERC') {
       if (!usedKeys.has(key)) {

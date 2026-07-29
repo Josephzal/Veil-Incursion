@@ -35,8 +35,8 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
   ZERO_PROTOCOL: {
     id: 'ZERO_PROTOCOL',
     classId: 'HEX_SHOT',
-    label: '[ ZERO-PROTOCOL ]',
-    description: 'Ultimate — true-damage execution sequence using calibrated ammo. Requires 3 Protocol Charges from Perfect reloads.',
+    label: '[ ZERO PROTOCOL ]',
+    description: 'Carbine ultimate — true-damage execution using calibrated ammo. Requires 3 Protocol Charges from Perfect reloads.',
     apCost: 0,
     ammoCost: 0,
     staminaCost: 0,

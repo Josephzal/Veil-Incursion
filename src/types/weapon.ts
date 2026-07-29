@@ -114,6 +114,12 @@ export interface WeaponRuntimeState {
   sacrificeHpBonusUsed: boolean;
   firstArmoredHitUsed: boolean;
   postReloadBallisticBonus: boolean;
+  /** Veil Edge — armed by evade/parry success; consumed by Occult rider basic. */
+  riftEdgeTempoArmed: boolean;
+  /** Claymore — first Fracture-break cashout per encounter. */
+  claymoreBreakCashoutUsed: boolean;
+  /** Hex shotgun / mag loop — emptied at least once this combat. */
+  magazineEmptiedThisCombat: boolean;
 }
 
 export interface ResolvedWeaponState {

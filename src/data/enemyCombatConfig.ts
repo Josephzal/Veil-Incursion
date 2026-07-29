@@ -18,7 +18,6 @@ export type EncounterEnemyKey =
   | 'SPATIAL_GLITCH'
   | 'GUTTER_GOLIATH'
   | 'CONCRETE_GARGOYLE'
-  | 'RIOT_VANGUARD'
   | 'SPALL'
   | 'SCUTTLER'
   | 'THRALL'
@@ -74,7 +73,6 @@ export const ENCOUNTER_KEY_TO_ROSTER: Record<EncounterEnemyKey, EnemyRosterId> =
   SPATIAL_GLITCH: 'spatial-glitch',
   GUTTER_GOLIATH: 'gutter-goliath',
   CONCRETE_GARGOYLE: 'concrete-gargoyle',
-  RIOT_VANGUARD: 'echoing-brute',
   SPALL: 'spall',
   SCUTTLER: 'scuttler',
   THRALL: 'thrall',
@@ -445,5 +443,8 @@ export const ENEMY_ARCHETYPE_FOR_KEY: Record<EncounterEnemyKey, EnemySpawnArchet
   NULL_CROWN_SHADE: 'SUPPORT',
   CHOIR_BOUND_RESONANCE_CASTER: 'ARTILLERY',
   RIFT_SPIKE_SNIPER: 'ARTILLERY',
-  RIOT_VANGUARD: 'MELEE',
 };
+
+export function isEncounterEnemyKey(key: string): key is EncounterEnemyKey {
+  return Object.prototype.hasOwnProperty.call(ENCOUNTER_KEY_TO_ROSTER, key);
+}

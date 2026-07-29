@@ -741,7 +741,7 @@ Weapons define baseline combat style **before** boons/grafts mutate the run. Dis
 
 **Model:**
 
-- **Weapon family** — horizontal playstyle option (e.g. Longsword vs Claymore vs Rift Edge).
+- **Weapon family** — horizontal playstyle option (e.g. Longsword vs Paired Blades vs Unmaker).
 - **Weapon tier** — vertical upgrade within a family (Tier I → II → III). Tier III adds a small once-per-combat identity passive.
 - **Masterwork** — hooks only (`masterworkUnlocked`, `requiresAnomalousCore`); not implemented in v1.
 
@@ -749,24 +749,26 @@ Weapons define baseline combat style **before** boons/grafts mutate the run. Dis
 
 | Class | Starter |
 |-------|---------|
-| Aegis | Runed Longsword |
-| Hex Shot | Silver-Core Sidearm |
-| Envoy | Null Conduit |
+| Aegis | Longsword |
+| Hex Shot | Revolver |
+| Envoy | Vambrace |
 
 **Roster:**
 
-| Class | Family | Role | Unlock (stash) |
-|-------|--------|------|----------------|
-| Aegis | Runed Longsword | Balanced starter | Default |
-| Aegis | Claymore-Blade | Heavy fracture | 3× Legion Blood-Iron, 5× Ley-Slag |
-| Aegis | Rift Edge | Fast crit / Reserve | 2× Ossified Ley-Knot, 8× Echo-Glass Shard |
-| Hex Shot | Silver-Core Sidearm | Balanced starter | Default |
-| Hex Shot | Pulse Rifle | Sustained fire / magazine | 3× Encrypted Grid-Drive, 10× Ley-Slag |
-| Hex Shot | Nullbreach Carbine | Heavy armor-pierce | 1× Grid-Drive, 2× Combustion Cylinder, 5× Ley-Slag |
-| Envoy | Null Conduit | Balanced starter | Default |
-| Envoy | Sanguine Prism | Sacrifice / risk | 3× Sanguine Ampoule, 2× Ossified Ley-Knot |
-| Envoy | Echo Lantern | Control / debuff | 12× Echo-Glass, 1× Grid-Drive, 1× Sanguine Ampoule |
+| Class | Family (permanent ID) | Display name | Role | Unlock (stash; no class-rank gate) |
+|-------|----------------------|--------------|------|-------------------------------------|
+| Aegis | `aegis-runed-longsword` | Longsword | Balanced Fracture starter | Default |
+| Aegis | `aegis-rift-edge` | Paired Blades | Tempo / evade / Occult rider | 2× Ossified Ley-Knot, 2× Resonant Filament, 6× Echo-Glass |
+| Aegis | `aegis-claymore-blade` | Unmaker | Heavy Fracture-break | 3× Legion Blood-Iron, 2× Rail Capacitor, 2× Combustion Cylinder |
+| Hex Shot | `hex-silver-core-sidearm` | Revolver | Precision / reload starter | Default |
+| Hex Shot | `hex-void-cannon` | Black Door | Armor-breach ST | 1× Grid-Drive, 2× Combustion Cylinder, 1× Rail Capacitor, 1× Breach-Thread |
+| Hex Shot | `hex-pulse-rifle` | Carbine | Spread / cluster | 3× Grid-Drive, 2× Rail Capacitor, 1× Containment Seal, 4× Nullcrete |
+| Envoy | `envoy-echo-lantern` | Vambrace | Rot / curse / detonate starter | Default |
+| Envoy | `envoy-null-conduit` | Scythe | Clean Flux / Catalyst | 8× Echo-Glass, 3× Resonant Filament, 1× Grid-Drive, 1× Sanguine Ampoule |
+| Envoy | `envoy-sanguine-prism` | Heart's Due | Brink / sacrifice | 3× Sanguine Ampoule, 1× Mycelial Ichor, 2× Ossified Ley-Knot |
 
+**Display renames (WU-1; IDs stable):** Full player-facing rename pass (Longsword / Paired Blades / Unmaker / Revolver / Carbine / Black Door / Vambrace / Scythe / Heart's Due). Retired live strings include prior 3L names (Veil Edge, Nullbreach Shotgun, Echo Lantern, Null Conduit, etc.). Renames do **not** change permanent IDs, mechanics, ammo, or targeting.
+**Envoy starter migration (WU-1):** Starter is Vambrace (`envoy-echo-lantern`). Scythe (`envoy-null-conduit`) receives the former Lantern unlock costs; existing Scythe ownership is preserved; Vambrace entitlement is granted on normalize; equipped weapon is not force-swapped mid-save / mid-incursion.
 **Persistence (`PlayerAccount`):** `weaponUnlocks[]`, `weaponTiers` (per family), `equippedWeaponByClass`. Unlocks and tier upgrades are permanent. One equipped weapon per class. Legacy blueprint fields deprecated; saves reset to starter progression (pre-launch).
 
 **Run snapshot (`ActiveIncursionState`):** `activeWeaponFamilyId`, `activeWeaponTier`, `weaponRuntime` (once-per-combat passive counters). Snapshotted at descent — combat reads run state, not live account.
@@ -779,7 +781,7 @@ Weapons define baseline combat style **before** boons/grafts mutate the run. Dis
 
 **Validation + dev:** `weaponValidationEngine.ts` (registry, account, active run); boot + `VALIDATE ALL` integration report; Dev Test Hub — Validate Weapons, Unlock All, Reset, Grant Resources.
 
-**Key files:** `types/weapon.ts`, `weaponRegistry.ts`, `weaponProgressionEngine.ts`, `weaponCombatEngine.ts`, `weaponRunState.ts`, `weaponValidationEngine.ts`, `runDebriefWeaponEngine.ts`, `WeaponLoadoutPanel.tsx`, `PlayerAccountContext.tsx`, `RunContext.tsx` (descent snapshot), `TacticalCombatHub.tsx`, `CombatScreen.tsx`.
+**Key files:** `types/weapon.ts`, `weaponRegistry.ts`, `weaponIdentityProfiles.ts`, `weaponAnchorAttackRegistry.ts`, `weaponAnchorCardPresentation.ts`, `weaponBasicEngine.ts`, `weaponProgressionEngine.ts`, `weaponCombatEngine.ts`, `weaponRunState.ts`, `weaponValidationEngine.ts`, `weaponPlayerFacing/*`, `runDebriefWeaponEngine.ts`, `WeaponLoadoutPanel.tsx`, `PlayerAccountContext.tsx`, `RunContext.tsx` (descent snapshot), `TacticalCombatHub.tsx`, `CombatScreen.tsx`.
 
 **Weapon Families v1 — acceptance criteria:**
 
@@ -793,6 +795,90 @@ Weapons define baseline combat style **before** boons/grafts mutate the run. Dis
 8. ✅ Legacy 3-blueprint LOADOUT forge recipes removed.
 
 **Not in v1:** Masterwork weapons, mid-run weapon swap, weapon XP, inventory katana as combat stat source (deprecated).
+
+### Weapon identity (approved)
+
+Nine families keep distinct loops and structural drawbacks (`weaponIdentityProfiles.ts`, `weaponDrawbackEngine.ts`, `weaponBasicEngine.ts`).
+
+| Permanent ID | Display name | Identity | Structural pressure |
+|----|----------|----------|---------------------|
+| `aegis-runed-longsword` | Longsword | Reliable Fracture / Parry / Reserve | Single-target; weaker burst/crowd than specialists |
+| `aegis-rift-edge` | Paired Blades | Tempo evade/parry → Occult rider | Weak baseline armor pressure until tempo armed |
+| `aegis-claymore-blade` | Unmaker | Committed Fracture-break cashout | High stamina; chip hits stay Reserve-poor |
+| `hex-silver-core-sidearm` | Revolver | Precision / reload / Protocol / execute | Poor AoE; limited innate armor pressure |
+| `hex-void-cannon` | Black Door | Armor-breach ST burst | Small mag; weak vs soft swarms |
+| `hex-pulse-rifle` | Carbine | Spread / cluster | Ammo-hungry; weak when targets are isolated; basic ≠ Ash-Jacket Salvo |
+| `envoy-echo-lantern` | Vambrace | Rot setup / delayed detonation (starter) | Fragile singles collapse before cashout choice |
+| `envoy-null-conduit` | Scythe | CLEAN_CYCLE Flux / Catalyst specialist | Forgiving; not top-tier burst |
+| `envoy-sanguine-prism` | Heart's Due | Brink + capped HP sacrifice | Exposure required; full payoff only when fully paid |
+
+**Hex class rules:** three ammo types via Reload only; Active Reload / Perfect Reload / Protocol Charge remain central for all Hex weapons. Zero Protocol is the **Carbine** weapon ultimate (not a shared Hex class ultimate). Do not restore full-mag Zero Protocol or ability-based Void Ammo pools.
+
+**Prism constants (live):** Brink at Flux ≤ 25% (×1.2); sacrifice `min(8, floor(maxHp × 5%))` once per action, cannot directly kill; full sacrifice payoff ×1.15 only when fully paid.
+
+**Loadout deck:** four slots per class. Slot 0 is the permanent **weapon-specific anchor attack** (not a shared class label). Three flex abilities fill the remaining slots. Recommendation profiles (`weaponLoadoutRecommendationProfiles*`) are advisory only — zero runtime effect. `ABYSSAL_FAULT` may stay intentionally unmapped in recommendations but still affects boon eligibility when equipped.
+
+#### Weapon-specific anchor attacks (Phase 3L canon)
+
+Each equipped weapon has its own stable anchor ID and player-facing name (`weaponAnchorAttackRegistry.ts`). Card labels, combat log, and HUD previews resolve from the **equipped weapon**, not merely the selected class. Mechanics/numbers still come from `weaponBasicEngine` (Phase 3G). Class tokens `STRIKE` / `SILVER_CORE_SIDEARM` / `VEIL_SPLINTER` remain save/executor compatibility inputs only — they must not appear as the resting card name for an equipped permanent weapon.
+
+| Permanent weapon ID | Display name | Anchor ID | Player-facing name |
+|---------------------|--------------|-----------|--------------------|
+| `aegis-runed-longsword` | Longsword | `WARDENS_STRIKE` | `WARDEN'S STRIKE` |
+| `aegis-rift-edge` | Paired Blades | `VEILSTEP_SLASH` | `VEILSTEP SLASH` |
+| `aegis-claymore-blade` | Unmaker | `BREAKING_HEW` | `BREAKING HEW` |
+| `hex-silver-core-sidearm` | Revolver | `SILVER_VERDICT` | `SILVER VERDICT` |
+| `hex-void-cannon` | Black Door | `BREACH_ROUND` | `BREACH ROUND` |
+| `hex-pulse-rifle` | Carbine | `CINDER_SWEEP` | `CINDER SWEEP` |
+| `envoy-echo-lantern` | Vambrace | `GRAVEWEAVE` | `GRAVEWEAVE` |
+| `envoy-null-conduit` | Scythe | `NULL_ARC` | `NULL ARC` |
+| `envoy-sanguine-prism` | Heart's Due | `BLOOD_REFRACTION` | `BLOOD REFRACTION` |
+
+**Retired player-facing strings (never emit live):** Rift Edge, Veil Edge, Nullbreach Carbine, Nullbreach Shotgun, Runed Longsword, Claymore Blade, Silver-Core Sidearm, Pulse Rifle, Null Conduit, Echo Lantern, Sanguine Prism, WARDEN'S CUT, RIFTSTEP CUT, CLEAN DISCHARGE, BLACK WICK. Legacy aliases `WARDENS_CUT` / `RIFTSTEP_CUT` / `CLEAN_DISCHARGE` / `BLACK_WICK` canonicalize to the rows above.
+
+#### Weapon-specific ultimates (WU plan)
+
+Each permanent weapon owns one ultimate (`weaponUltimateRegistry.ts`). Resolve from **equipped weapon**, never class alone. Sibling weapons must not share one ultimate.
+
+| Permanent weapon ID | Ultimate ID | Display name | Phase status |
+|---------------------|-------------|--------------|--------------|
+| `aegis-runed-longsword` | `THREEFOLD_BRAND` | THREEFOLD BRAND | **WIRED** (migrate EVISCERATE) |
+| `aegis-rift-edge` | `REND_THE_VEIL` | REND THE VEIL | REGISTERED (new) |
+| `aegis-claymore-blade` | `GRAVEFALL` | GRAVEFALL | REGISTERED (new) |
+| `hex-silver-core-sidearm` | `SIXTH_SEAL` | SIXTH SEAL | REGISTERED (new) |
+| `hex-pulse-rifle` | `ZERO_PROTOCOL` | ZERO PROTOCOL | **WIRED** (Carbine only) |
+| `hex-void-cannon` | `LAST_KNOCK` | LAST KNOCK | REGISTERED (new) |
+| `envoy-echo-lantern` | `FUNERAL_KNOT` | FUNERAL KNOT | REGISTERED (new) |
+| `envoy-null-conduit` | `NULL_CIRCUIT` | NULL CIRCUIT | **WIRED** (migrate CATACLYSM_SIGIL) |
+| `envoy-sanguine-prism` | `CRIMSON_REFRACTION` | CRIMSON REFRACTION | REGISTERED (new) |
+
+**Phases:** WU-1 → WU-6 **complete**. All nine weapon ultimates are WIRED and validated (`weaponUltimateValidationEngine` via `validateWeaponRegistry`). HUD ready tags and combat callouts resolve from the equipped weapon ultimate. Class meters (AR / Protocol / Veil Rot) remain shared; fire gate is `canFireWeaponUltimate`. ULTIMATE-tagged boons/grafts match via legacy hook ability IDs. Shared grades STANDARD/CLEAN/PERFECT; cancel free; `simplifiedUltimateInputs` commits STANDARD only. Retired live titles: EVISCERATE (label), CATACLYSM SIGIL, ZERO-PROTOCOL, The Black Door.
+### Boon offers (elite post-combat)
+
+Live random class-boon offers use hard eligibility → category composition → soft weighting → seeded selection (`src/data/boonOffer/`). Elite post-combat is the only random class-boon surface; Bound Requisition mutations stay curated. Affinity tags are soft-only and never merge into mechanical action tags. Recommendation profiles alone never change eligibility or weight. Graft-added/removed mechanical tags update subsequent offers only after the graft is applied on the run.
+
+### Grafts (Sanctuary, run-scoped)
+
+- **49** live grafts (16 Aegis / 17 Hex / 16 Envoy). Catalog audit: `graftSynergy/graftCatalogAudit.ts`.
+- Class rank permanently unlocks **capacity / sockets / tiers** (not ownership of applied grafts): capacity 0→1@3→2@7 (+fixed-basic)→3@12→3@15 (+ultimate)→4@17→4@20 (+Apex/Masterwork). `CLASS_RANK_MAX=20`; ranks 1–10 XP/rewards preserved; non-graft rewards for 11–20 deferred.
+- Applied at **Sanctuary** via Residue (`RestScreen` Attune + Graft). Session-gated `openSanctuaryGraftTerminal` / `applyClassGraftToAbility`: validate then commit; charge Residue once on success only; failed replace preserves prior assignment.
+- Maps live on `ActiveIncursion.*AbilityGrafts`. Descent starts **empty** (no Safehouse equip / no descent snapshot). Persist between encounters and save/resume; clear on extraction / death / abandonment. Never convert to permanent ownership.
+- Max HP graft taxes recompute from `graftBaselineMaxSoulAnchor` (no stacking). Encounter caps: Apex AP refund ≤1; salvage ≤25 credits. `BLOOD_MAG` banned on Hex fixed basic.
+- Key files: `classGraftEngine.ts`, `graftSynergy/*`, `RunContext.tsx`, `RestScreen.tsx`.
+
+### Weapon↔enemy / sector matchups
+
+Read-only classification under `src/data/weaponMatchup/` (**51** canonical non-boss enemies after legacy-alias collapse; five sectors × three depths). Depth 3 remains a corruption of the **selected** sector (`runVeilBiome`); obsolete Depth-3 Deep Veil / Sanguine / Fractal biome pool is unused by combat spawn. Rival Mercs may appear in every sector; Veil enemies stay biome-scoped. Matchup data does **not** alter damage, AI, spawn weights, boons, or grafts. Defense routing: KINETIC→Armor, OCCULT→Wards, TRUE/pierce bypass; strip→Fracture (`combatDefenseLayerEngine.ts`).
+
+**`RIOT_VANGUARD`:** Legacy compatibility string only — not a live `EncounterEnemyKey`, definition, alpha row, composition member, matchup key, or audit row. `canonicalizeEncounterEnemyKey('RIOT_VANGUARD')` → `ECHOING_BRUTE` before any registry/lookup. Player-facing name: **ECHOING BRUTE**. Canonical non-boss enemy count: **51**. Weapon↔enemy matchups: **459** (9×51). Sector×depth: **135**.
+
+### Weapon UI communication (Phase 3L)
+
+Canonical player-facing summaries live in `src/data/weaponPlayerFacing/` — one dossier model per permanent family (role, playstyle, basic, meter, strengths/pressures, build tags, first-use brief, Sanctuary paths). Wired into Loadout chassis cards/dossier, ability guidance labels (`REINFORCES LOOP` / `COVERS PRESSURE` / `ALTERNATE PATH`), Veil Front sector chassis brief, deploy confirm / operative identity (live equipped chassis — not stale class `weaponLine`), and compact combat HUD callouts.
+
+**Combat HUD / first-slot cards:** resting slot-0 cards show the equipped weapon's unique anchor name, AP, live damage/outcome, secondary cost (stamina / ammo / Flux / HP), target pattern, and one–two defining effects plus conditional state when live (`TEMPO ARMED`, `PRIMARY ONLY`, `CLEAN CYCLE`, `FULL PAY` / `PARTIAL PAY`, etc.). Preview numbers resolve from `weaponBasicEngine` via `weaponAnchorCardPresentation.ts` — not hardcoded duplicates. Enemy intel and turn order use spaced player-facing designations (`formatHostileDisplayName`) — never underscore registry IDs. Combat log clears on encounter start and uses the equipped chassis + weapon-specific attack name (e.g. `WARDEN'S STRIKE`, `VEILSTEP SLASH`, `NULL ARC`).
+
+First-use briefs acknowledge on `PlayerAccount.weaponBriefAcknowledged` (missing ⇒ not acknowledged; survives extraction/death/new-run). Recommendation and matchup rendering remain read-only with zero runtime weight. Deferred: VFX/SFX/feel (3M), validation expansion (3N), full alias migration (3O), numerical tuning including Nullbreach favorable-share / Lantern strained band / Rival Merc density (3P). Weapon-specific ultimates shipped WU-1→WU-6.
 
 ## Progression Spine (Phase 1)
 
@@ -808,7 +894,7 @@ Career-long progression distinct from in-run systems. Persisted on `PlayerAccoun
 | **Pinned Goals** | 2 slots (3 with clearance flag) — Veil Front recommendations + debrief pin |
 | **Debrief Theater** | Structured “what changed / what’s next” on REWARDS; always-exit preserved |
 
-Class Rank and Cabal Reputation are **side rails**: XP/tiers and reward **hooks** only in Phase 1 (no full new weapons/boons/grafts from those tables yet).
+Class Rank and Cabal Reputation are **side rails** on `ProgressionProfile`. Class Rank runs **1–20** (`CLASS_RANK_MAX=20`): ranks 1–10 keep original XP thresholds and reward hooks; ranks 11–20 extend graft capacity / socket gates (see Grafts above). Cabal rep remains hooks-first.
 
 ### 1A — Data foundation
 
@@ -1531,7 +1617,7 @@ Phase B rewires crafting costs so new sector/system mats matter immediately — 
 
 **Starters kept simple:** Standard Coagulant `2× Ley-Slag`, Sonar-Ping `3× Echo-Glass`, Kinetic Hollow-Points `3× Ley-Slag`.
 
-**Weapons:** Claymore / Pulse / Nullbreach / Rift Edge / Sanguine Prism / Echo Lantern unlocks lightly use Rail Capacitor, Containment Seal, Resonant Filament, Mycelial Ichor, and Breach Thread — no Anomalous Core on normal unlocks.
+**Weapons:** Claymore / Pulse / Nullbreach / Veil Edge / Sanguine Prism / Echo Lantern unlocks lightly use Rail Capacitor, Containment Seal, Resonant Filament, Mycelial Ichor, and Breach Thread — no Anomalous Core on normal unlocks.
 
 **Debrief:** Crafting opportunity list prefers run-item recipes when forge CONSUMABLE duplicates the same output.
 
@@ -1817,11 +1903,11 @@ See **Weapon Families + Vertical Upgrade Tracks v1** above for the full roster, 
 | Weapon | Tier III passive |
 |--------|------------------|
 | Runed Longsword | First melee hit each combat +5 Abyssal Reserve |
-| Claymore-Blade | First Fracture each combat +15 Stamina |
-| Rift Edge | Melee crits +5 Reserve |
+| Claymore Blade | First Fracture each combat +15 Stamina |
+| Veil Edge | Melee crits +5 Reserve |
 | Silver-Core Sidearm | First reload each combat +10 Stamina |
 | Pulse Rifle | After reload, next Ballistic attack +10% damage |
-| Nullbreach Carbine | First hit vs armored enemy strips 1 extra armor |
+| Nullbreach Shotgun | First hit vs armored enemy strips 1 extra armor |
 | Null Conduit | First Occult ability each combat +5 Veil-Flux |
 | Sanguine Prism | Once per combat, HP sacrifice grants +10 Veil-Flux |
 | Echo Lantern | First debuff applied each combat +1 temporary ward |
@@ -1941,7 +2027,7 @@ Combat uses:
 
 Legacy flat absorb (`layers × 3`) is retired. Authored high layer counts are **normalized** at spawn into 0–3 stacks. Depth 1 early nodes (≤3) cap at 1 layered enemy and never both KA+OW on one unit. Depth 1 HP/dmg also soft-scaled (`depth1HpSoftMult` / `depth1DamageSoftMult`).
 
-**Class starters:** Aegis `STRIKE` has `ARMOR_BREAK`; Hex `SILVER_CORE_SIDEARM` has `ARMOR_BREAK`, `WRAITH_PIERCER_ROUND` has `WARD_BREAK`; Envoy `VEIL_SPLINTER` has `WARD_BREAK`. Items: Grid-Cracker Mag / Eclipse Flare still strip and now trigger Fracture on break.
+**Class starters (defense tags on weapon basics):** Aegis weapon anchors carry `ARMOR_BREAK` via the class-compat basic path; Hex weapon anchors carry `ARMOR_BREAK` (Hex `WRAITH_PIERCER_ROUND` still has `WARD_BREAK`); Envoy weapon anchors carry `WARD_BREAK`. Player-facing names are the nine weapon-specific anchors above — not shared `STRIKE` / `SILVER_CORE_SIDEARM` / `VEIL_SPLINTER` labels. Items: Grid-Cracker Mag / Eclipse Flare still strip and now trigger Fracture on break.
 
 **Telemetry:** `BalanceCombatEncounterSample` records class/depth/enemy count + defense flags. Dev Test: `[ COMBAT BALANCE REPORT ]`, `[ CLASS DEFENSE COUNTERS ]`. Constants: `src/data/balance/combatDefenseBalanceConfig.ts`.
 
@@ -1949,7 +2035,7 @@ Also still in play:
 
 - Evade posture / Fortify posture
 - Void Ward / parry (Aegis)
-- **Riposte Ready** (Aegis Phase 3) — Perfect Parry / Fracture / armor break arms next Strike cash-out
+- **Riposte Ready** (Aegis Phase 3) — Perfect Parry / Fracture / armor break arms next weapon-basic cash-out (equipped Aegis anchor)
 - Player shields / temporary mitigation
 - Veil Barrier charges / Warden intercepts
 - **Hex Shot ammo profiles** (Phase 3) — Breacher / Null / Flash / Hollow identities on existing shots; chamber bonus after tactical reload
@@ -2328,6 +2414,12 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 - **Run Integration + Progression Audit v1 (complete):** Full-loop audit, aggregated validation, debrief outcome detail, anchor/crafting/next-steps, pacing presets, balance telemetry, content matrix, sponsor rep preview.
 - **Full Run Balance + Tuning Framework v1 (Phase A):** Central `src/data/balance/` registry for combat/reward/economy/contract/operation/scanner knobs + target comments; DevTest BALANCE CONFIG dump.
 - **Weapon Families + Vertical Upgrade Tracks v1 (complete):** 9 weapon families × 3 tiers, Loadout Weapon Chassis unlock/equip/upgrade, run snapshot, combat stat hooks + tier-III passives, debrief opportunities, validation + dev tools. Legacy blueprint forge recipes removed.
+- **Weapon identity / WU-3 (live host):** Shared ultimate grades STANDARD/CLEAN/PERFECT; free cancel; Simplified Ultimate Inputs (`PlayerAccount.simplifiedUltimateInputs`) skip minigames and force STANDARD; Null Circuit no longer backlashes on 0 nodes; Threefold Brand floors at STANDARD damage instead of zero.
+- **Weapon identity / WU-6 (validation closeout):** `weaponUltimateValidationEngine` audits all nine WIRED ultimates, ownership gates, staged scripts, and retired player-facing titles; included in `validateWeaponRegistry` / DevTest VALIDATE WEAPONS.
+- **Weapon identity / WU-5 (live surfaces):** HUD gauges, combat callouts, and logs show the equipped weapon's ultimate display name. ULTIMATE-tagged boons/grafts remain compatible via legacy hook ability IDs (`EVISCERATE` / `ZERO_PROTOCOL` / `CATACLYSM_SIGIL`) while player-facing copy never emits retired class ultimate titles.
+- **Weapon identity / WU-2 (live rebind):** Longsword fires THREEFOLD BRAND (legacy EVISCERATE path); Carbine alone fires ZERO PROTOCOL; Scythe alone fires NULL CIRCUIT (legacy CATACLYSM_SIGIL). Sibling weapons retain class charge gauges and fire their own WU-4 ultimates.
+- **Weapon identity / WU-1 (live foundation):** Display names Longsword / Paired Blades / Unmaker / Revolver / Carbine / Black Door / Vambrace / Scythe / Heart's Due; Envoy starter = Vambrace; Vambrace anchor `GRAVEWEAVE` (legacy `BLACK_WICK`); combat portraits resolve from equipped weapon; `weaponUltimateRegistry` registers nine ultimates. Permanent family IDs unchanged.
+- **Weapon identity / Phase 3L naming (superseded by WU-1 for display):** Prior 3L names (Veil Edge, Nullbreach Shotgun, Echo Lantern, etc.) are retired live strings. Nine unique weapon-specific slot-0 anchors remain; combat HUD first-slot + log resolve from equipped weapon.
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Run World Brief + Procedural Director + Sector Aftermath v1 (complete):** Unified deploy brief with crisis theme/resource stress/threat profile; director validation, pressure scoring, manifestation checks, safety caps, explainability; 10-rule sector aftermath with stackKey merge, intensity, sector-local ticking, debrief preview + persistence, brief bias application, idempotency guard, validation + dev sim tools. See Run World Brief section above.

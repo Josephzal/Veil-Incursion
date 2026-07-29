@@ -1,21 +1,58 @@
 import type { ImageSourcePropType, ImageStyle } from 'react-native';
 import { Platform } from 'react-native';
 import type { ClassType } from '../types/game';
+import type { WeaponFamilyId } from '../types/weapon';
+import { STARTER_WEAPON_BY_CLASS, getWeaponFamily, isWeaponFamilyId } from '../data/weaponRegistry';
 
 import AegisCombatAttack from '../../assets/images/character images/aegis/aegis_attacking.png';
 import AegisCombatIdle from '../../assets/images/character images/aegis/aegis_combat.png';
+import AegisPairedIdle from '../../assets/images/character images/aegis/aegis_paired_idle.png';
+import AegisPairedAttack from '../../assets/images/character images/aegis/aegis_paired_attack.png';
+import AegisGreatswordIdle from '../../assets/images/character images/aegis/aegis_greatsword_idle.png';
+import AegisGreatswordAttack from '../../assets/images/character images/aegis/aegis_greatsword_attack.png';
 import AegisIcon from '../../assets/images/character images/aegis/aegis_icon.png';
 import HexShotAttack from '../../assets/images/character images/hex-shot/hex_shot_attack.png';
 import HexShotIdle from '../../assets/images/character images/hex-shot/hex_shot_idle.png';
+import HexCarbineIdle from '../../assets/images/character images/hex-shot/hex_carbine_idle.png';
+import HexCarbineAttack from '../../assets/images/character images/hex-shot/hex_carbine_attack.png';
+import HexShotgunIdle from '../../assets/images/character images/hex-shot/hex_shotgun_idle.png';
+import HexShotgunAttack from '../../assets/images/character images/hex-shot/hex_shotgun_attack.png';
 import HexShotIcon from '../../assets/images/character images/hex-shot/hex_shot_icon.png';
-import EnvoyAttack from '../../assets/images/character images/envoy/envoy_attack.png';
-import EnvoyIdle from '../../assets/images/character images/envoy/envoy_idle.png';
+import EnvoyVambraceIdle from '../../assets/images/character images/envoy/envoy_vambrace_idle.png';
+import EnvoyVambraceAttack from '../../assets/images/character images/envoy/envoy_vambrace_attack.png';
+import EnvoyScytheIdle from '../../assets/images/character images/envoy/envoy_scythe_idle.png';
+import EnvoyScytheAttack from '../../assets/images/character images/envoy/envoy_scythe_attack.png';
+import EnvoyHeartIdle from '../../assets/images/character images/envoy/envoy_heart_idle.png';
+import EnvoyHeartAttack from '../../assets/images/character images/envoy/envoy_heart_attack.png';
 import EnvoyIcon from '../../assets/images/character images/envoy/envoy_icon.png';
 
-const CLASS_PORTRAITS: Record<ClassType, { idle: ImageSourcePropType; attack: ImageSourcePropType }> = {
+type PortraitPair = { idle: ImageSourcePropType; attack: ImageSourcePropType };
+
+const CLASS_FALLBACK_PORTRAITS: Record<ClassType, PortraitPair> = {
   AEGIS: { idle: AegisCombatIdle, attack: AegisCombatAttack },
   HEX_SHOT: { idle: HexShotIdle, attack: HexShotAttack },
-  ENVOY: { idle: EnvoyIdle, attack: EnvoyAttack },
+  // Envoy starter is Vambrace — never fall back to legacy class-only art.
+  ENVOY: { idle: EnvoyVambraceIdle, attack: EnvoyVambraceAttack },
+};
+
+/**
+ * Per-weapon combat portraits (idle / attack).
+ * Longsword + Revolver keep the original class art; all other families use
+ * dedicated weapon PNGs under assets/images/character images/.
+ */
+const WEAPON_PORTRAITS: Record<WeaponFamilyId, PortraitPair> = {
+  // Aegis
+  'aegis-runed-longsword': { idle: AegisCombatIdle, attack: AegisCombatAttack },
+  'aegis-rift-edge': { idle: AegisPairedIdle, attack: AegisPairedAttack },
+  'aegis-claymore-blade': { idle: AegisGreatswordIdle, attack: AegisGreatswordAttack },
+  // Hex Shot
+  'hex-silver-core-sidearm': { idle: HexShotIdle, attack: HexShotAttack },
+  'hex-pulse-rifle': { idle: HexCarbineIdle, attack: HexCarbineAttack },
+  'hex-void-cannon': { idle: HexShotgunIdle, attack: HexShotgunAttack },
+  // Envoy
+  'envoy-echo-lantern': { idle: EnvoyVambraceIdle, attack: EnvoyVambraceAttack },
+  'envoy-null-conduit': { idle: EnvoyScytheIdle, attack: EnvoyScytheAttack },
+  'envoy-sanguine-prism': { idle: EnvoyHeartIdle, attack: EnvoyHeartAttack },
 };
 
 const CLASS_BADGE_ICONS: Record<ClassType, ImageSourcePropType> = {
@@ -32,7 +69,10 @@ export type PortraitMeta = {
   feetFromBottom: number;
 };
 
-export const PORTRAIT_META: Record<ClassType, { idle: PortraitMeta; attack: PortraitMeta }> = {
+type PortraitMetaPair = { idle: PortraitMeta; attack: PortraitMeta };
+
+/** Class-keyed meta retained for badge / legacy callers. */
+export const PORTRAIT_META: Record<ClassType, PortraitMetaPair> = {
   ENVOY: {
     idle: { canvasW: 450, canvasH: 1088, contentH: 1070, feetFromBottom: 0 },
     attack: { canvasW: 824, canvasH: 1156, contentH: 1102, feetFromBottom: 19 },
@@ -47,7 +87,59 @@ export const PORTRAIT_META: Record<ClassType, { idle: PortraitMeta; attack: Port
   },
 };
 
+const WEAPON_PORTRAIT_META: Record<WeaponFamilyId, PortraitMetaPair> = {
+  'aegis-runed-longsword': PORTRAIT_META.AEGIS,
+  'aegis-rift-edge': {
+    idle: { canvasW: 1384, canvasH: 1636, contentH: 1600, feetFromBottom: 20 },
+    attack: { canvasW: 1666, canvasH: 1384, contentH: 1340, feetFromBottom: 18 },
+  },
+  'aegis-claymore-blade': {
+    idle: { canvasW: 1200, canvasH: 1608, contentH: 1570, feetFromBottom: 20 },
+    attack: { canvasW: 1130, canvasH: 1626, contentH: 1590, feetFromBottom: 18 },
+  },
+  'hex-silver-core-sidearm': PORTRAIT_META.HEX_SHOT,
+  'hex-pulse-rifle': {
+    idle: { canvasW: 988, canvasH: 1772, contentH: 1720, feetFromBottom: 24 },
+    attack: { canvasW: 1174, canvasH: 1724, contentH: 1670, feetFromBottom: 26 },
+  },
+  'hex-void-cannon': {
+    idle: { canvasW: 682, canvasH: 1632, contentH: 1580, feetFromBottom: 22 },
+    attack: { canvasW: 1394, canvasH: 1542, contentH: 1490, feetFromBottom: 24 },
+  },
+  'envoy-echo-lantern': {
+    idle: { canvasW: 772, canvasH: 1734, contentH: 1690, feetFromBottom: 12 },
+    attack: { canvasW: 1284, canvasH: 1578, contentH: 1520, feetFromBottom: 18 },
+  },
+  'envoy-null-conduit': {
+    idle: { canvasW: 968, canvasH: 1698, contentH: 1650, feetFromBottom: 14 },
+    attack: { canvasW: 1962, canvasH: 1396, contentH: 1340, feetFromBottom: 16 },
+  },
+  'envoy-sanguine-prism': {
+    idle: { canvasW: 856, canvasH: 1554, contentH: 1510, feetFromBottom: 12 },
+    attack: { canvasW: 2058, canvasH: 1256, contentH: 1200, feetFromBottom: 14 },
+  },
+};
+
 export type FootprintBox = { width: number; height: number };
+
+function resolvePortraitFamily(
+  classId: ClassType,
+  weaponFamilyId?: WeaponFamilyId | null,
+): WeaponFamilyId {
+  if (weaponFamilyId && isWeaponFamilyId(weaponFamilyId)
+    && getWeaponFamily(weaponFamilyId).classId === classId) {
+    return weaponFamilyId;
+  }
+  return STARTER_WEAPON_BY_CLASS[classId];
+}
+
+function resolveMetaPair(
+  classId: ClassType,
+  weaponFamilyId?: WeaponFamilyId | null,
+): PortraitMetaPair {
+  const family = resolvePortraitFamily(classId, weaponFamilyId);
+  return WEAPON_PORTRAIT_META[family] ?? PORTRAIT_META[classId];
+}
 
 function attackArtScaleForBox(idle: PortraitMeta, attack: PortraitMeta, box: FootprintBox): number {
   const idleScale = containScale(idle, box);
@@ -67,10 +159,21 @@ const ATTACK_RELATIVE_TO_IDLE: Record<ClassType, number> = {
 
 /**
  * Where the character body sits in the attack canvas (0 = left edge, 0.5 = center).
- * Aegis attack art extends right with the blade — keep the body under the idle pose
- * so the lunge reads forward instead of canceling into a centered wide frame.
+ * Wide melee / scythe / heart canvases keep the body under the idle pose.
  */
-const ATTACK_BODY_ANCHOR_X: Record<ClassType, number> = {
+const ATTACK_BODY_ANCHOR_X_BY_WEAPON: Record<WeaponFamilyId, number> = {
+  'aegis-runed-longsword': 0.30,
+  'aegis-rift-edge': 0.32,
+  'aegis-claymore-blade': 0.34,
+  'hex-silver-core-sidearm': 0.50,
+  'hex-pulse-rifle': 0.48,
+  'hex-void-cannon': 0.42,
+  'envoy-echo-lantern': 0.48,
+  'envoy-null-conduit': 0.34,
+  'envoy-sanguine-prism': 0.32,
+};
+
+const ATTACK_BODY_ANCHOR_X_BY_CLASS: Record<ClassType, number> = {
   AEGIS: 0.30,
   HEX_SHOT: 0.50,
   ENVOY: 0.50,
@@ -101,7 +204,11 @@ const WEB_CONTAIN_BOTTOM: ImageStyle = Platform.OS === 'web'
   : {};
 
 /** Pixel-locked idle layout — canvas bottom sits on the art-box floor. */
-export function computeFootprintIdleLayout(box: FootprintBox, classId: ClassType): ImageStyle {
+export function computeFootprintIdleLayout(
+  box: FootprintBox,
+  classId: ClassType,
+  weaponFamilyId?: WeaponFamilyId | null,
+): ImageStyle {
   if (box.width <= 0 || box.height <= 0) {
     return {
       position: 'absolute',
@@ -114,7 +221,7 @@ export function computeFootprintIdleLayout(box: FootprintBox, classId: ClassType
     };
   }
 
-  const { idle } = PORTRAIT_META[classId];
+  const { idle } = resolveMetaPair(classId, weaponFamilyId);
   const display = canvasDisplaySize(idle, box);
 
   return {
@@ -132,7 +239,11 @@ export function computeFootprintIdleLayout(box: FootprintBox, classId: ClassType
  * Pixel-locked attack layout — slightly smaller than idle character height,
  * body-anchored so wide melee canvases still read as lunging forward.
  */
-export function computeFootprintAttackLayout(box: FootprintBox, classId: ClassType): ImageStyle {
+export function computeFootprintAttackLayout(
+  box: FootprintBox,
+  classId: ClassType,
+  weaponFamilyId?: WeaponFamilyId | null,
+): ImageStyle {
   if (box.width <= 0 || box.height <= 0) {
     return {
       position: 'absolute',
@@ -145,12 +256,15 @@ export function computeFootprintAttackLayout(box: FootprintBox, classId: ClassTy
     };
   }
 
-  const { idle, attack } = PORTRAIT_META[classId];
+  const { idle, attack } = resolveMetaPair(classId, weaponFamilyId);
   const boost = attackArtScaleForBox(idle, attack, box) * ATTACK_RELATIVE_TO_IDLE[classId];
   const display = canvasDisplaySize(attack, box, boost);
   const footDeltaPx = (attack.feetFromBottom - idle.feetFromBottom) * (display.width / attack.canvasW);
   const idleCenterX = box.width / 2;
-  const bodyAnchorX = ATTACK_BODY_ANCHOR_X[classId];
+  const family = resolvePortraitFamily(classId, weaponFamilyId);
+  const bodyAnchorX = weaponFamilyId
+    ? ATTACK_BODY_ANCHOR_X_BY_WEAPON[family]
+    : ATTACK_BODY_ANCHOR_X_BY_CLASS[classId];
   const left = idleCenterX - display.width * bodyAnchorX;
 
   return {
@@ -165,16 +279,27 @@ export function computeFootprintAttackLayout(box: FootprintBox, classId: ClassTy
   };
 }
 
-export function resolvePlayerCombatIdlePortrait(classId: ClassType = 'AEGIS'): ImageSourcePropType {
-  return CLASS_PORTRAITS[classId].idle;
+export function resolvePlayerCombatIdlePortrait(
+  classId: ClassType = 'AEGIS',
+  weaponFamilyId?: WeaponFamilyId | null,
+): ImageSourcePropType {
+  const family = resolvePortraitFamily(classId, weaponFamilyId);
+  return WEAPON_PORTRAITS[family]?.idle ?? CLASS_FALLBACK_PORTRAITS[classId].idle;
 }
 
-export function resolvePlayerCombatAttackPortrait(classId: ClassType = 'AEGIS'): ImageSourcePropType {
-  return CLASS_PORTRAITS[classId].attack;
+export function resolvePlayerCombatAttackPortrait(
+  classId: ClassType = 'AEGIS',
+  weaponFamilyId?: WeaponFamilyId | null,
+): ImageSourcePropType {
+  const family = resolvePortraitFamily(classId, weaponFamilyId);
+  return WEAPON_PORTRAITS[family]?.attack ?? CLASS_FALLBACK_PORTRAITS[classId].attack;
 }
 
-export function resolvePlayerCombatAttackArtScale(classId: ClassType = 'AEGIS'): number {
-  const { idle, attack } = PORTRAIT_META[classId];
+export function resolvePlayerCombatAttackArtScale(
+  classId: ClassType = 'AEGIS',
+  weaponFamilyId?: WeaponFamilyId | null,
+): number {
+  const { idle, attack } = resolveMetaPair(classId, weaponFamilyId);
   return attackArtScaleEstimate(idle, attack) * ATTACK_RELATIVE_TO_IDLE[classId];
 }
 

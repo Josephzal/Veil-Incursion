@@ -134,6 +134,22 @@ export interface PlayerAccount {
   envoyLoadout: import('./operativeClass').EnvoyLoadout;
   /** Hub-unlocked Envoy abilities. */
   unlockedEnvoyAbilities: import('./operativeClass').EnvoyAbilityId[];
+  /**
+   * Class-rank progression unlocks graft tier/socket/capacity access.
+   * Individual graft applications are run-scoped on ActiveIncursion — not stored here.
+   */
+  /** @deprecated Not an equipment surface — ignored on load. Grafts apply at Sanctuary. */
+  ownedVeilGraftIds?: import('./veilGraft').VeilGraftId[];
+  /** @deprecated Not an equipment surface — ignored on load. */
+  ownedHexShotGraftIds?: import('./classGraft').HexShotGraftId[];
+  /** @deprecated Not an equipment surface — ignored on load. */
+  ownedEnvoyGraftIds?: import('./classGraft').EnvoyGraftId[];
+  /** @deprecated Safehouse is not a graft equipment surface. */
+  abilityGrafts?: Partial<Record<import('./aegisCombat').AegisAbilityId, import('./veilGraft').VeilGraftId>>;
+  /** @deprecated Safehouse is not a graft equipment surface. */
+  hexShotAbilityGrafts?: Partial<Record<import('./operativeClass').HexShotAbilityId, import('./classGraft').HexShotGraftId>>;
+  /** @deprecated Safehouse is not a graft equipment surface. */
+  envoyAbilityGrafts?: Partial<Record<import('./operativeClass').EnvoyAbilityId, import('./classGraft').EnvoyGraftId>>;
   /** Hub-side abstract resource counts for fabrication. */
   resourceStash: ResourceQuantity;
   /** @deprecated Reset on load — use weaponUnlocks. */
@@ -144,6 +160,17 @@ export interface PlayerAccount {
   weaponTiers: Partial<Record<import('./weapon').WeaponFamilyId, import('./weapon').WeaponTierNumber>>;
   /** Equipped weapon per operative class. */
   equippedWeaponByClass: Partial<Record<ClassType, import('./weapon').WeaponFamilyId>>;
+  /**
+   * Phase 3L — acknowledged first-use weapon briefs.
+   * Missing / undefined on older saves ⇒ not yet acknowledged.
+   */
+  weaponBriefAcknowledged?: import('./weapon').WeaponFamilyId[];
+  /**
+   * WU-3 — Simplified Ultimate Inputs.
+   * When true, weapon ultimates skip skill minigames and commit STANDARD grade only.
+   * Missing / undefined on older saves ⇒ false (FULL inputs).
+   */
+  simplifiedUltimateInputs?: boolean;
   /** Hub-forged passive augments available for pre-run loadout staging. */
   craftedAugments: import('./boundRequisition').BoundRequisitionId[];
   /** Hub-crafted tactical consumables awaiting run deployment. */
@@ -510,14 +537,17 @@ export interface ActiveIncursionState {
   sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
   /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
   strikeDamageBonusPct: number;
-  /** Veil-Grafts applied to Aegis loadout abilities for this incursion. */
+  /** Run-scoped Sanctuary graft applications for this deployment (cleared at deployment end). */
   abilityGrafts: Partial<Record<import('./aegisCombat').AegisAbilityId, import('./veilGraft').VeilGraftId>>;
-  /** Hex Shot grafts applied to loadout abilities for this incursion. */
   hexShotAbilityGrafts: Partial<Record<import('./operativeClass').HexShotAbilityId, HexShotGraftId>>;
-  /** Envoy grafts applied to loadout abilities for this incursion. */
   envoyAbilityGrafts: Partial<Record<import('./operativeClass').EnvoyAbilityId, EnvoyGraftId>>;
-  /** Rolled graft offers at the current sanctuary terminal (3 choices). */
+  /** Active Sanctuary graft offers for the current Rest visit (null when terminal closed). */
   sanctuaryGraftOffers: (VeilGraftId | HexShotGraftId | EnvoyGraftId)[] | null;
+  /**
+   * Ungrafted max Soul Anchor for this deployment — used to reapply Max HP graft taxes
+   * without stacking across Sanctuary replacements or save/resume.
+   */
+  graftBaselineMaxSoulAnchor: number;
   /** Set when Apex Graft disables ultimate for the active combat encounter. */
   encounterUltimateDisabled: boolean;
   /** VOID'S TOLL — permanent +1 AP per ultimate kill this incursion. */
@@ -686,6 +716,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     hexShotAbilityGrafts: {},
     envoyAbilityGrafts: {},
     sanctuaryGraftOffers: null,
+    graftBaselineMaxSoulAnchor: 100,
     encounterUltimateDisabled: false,
     voidsTollApBonus: 0,
     runModifiers: {

@@ -121,7 +121,6 @@ export const ENEMY_COMPOSITION_ROLES: Record<EncounterEnemyKey, EnemyComposition
     artilleryThreat: true,
     trueDamage: true,
   },
-  RIOT_VANGUARD: { primaryRole: 'BRUISER', secondaryRoles: [] },
 };
 
 export function getEnemyCompositionRole(

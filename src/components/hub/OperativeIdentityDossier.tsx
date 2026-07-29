@@ -3,6 +3,8 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import { CLASS_DEFINITIONS } from '../../data/classes';
+import { getEquippedWeaponForClass } from '../../data/weaponProgressionEngine';
+import { getWeaponPlayerFacingSummary } from '../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import ClassAbilityRoster from '../ClassAbilityRoster';
@@ -163,7 +165,16 @@ export default function OperativeIdentityDossier({
             style={[styles.metaLine, { color: theme.statusColor }]}
             numberOfLines={1}
           >
-            {classDef.weaponLine}
+            {(() => {
+              const familyId = getEquippedWeaponForClass({
+                weaponUnlocks: account.weaponUnlocks,
+                weaponTiers: account.weaponTiers,
+                equippedWeaponByClass: account.equippedWeaponByClass,
+              }, account.activeClass);
+              if (!familyId) return classDef.weaponLine;
+              const facing = getWeaponPlayerFacingSummary(familyId);
+              return `WEAPON: ${facing.displayName.toUpperCase()} · ${facing.roleLabel.toUpperCase()}`;
+            })()}
           </TerminalText>
           <TerminalText
             size={metaSize}

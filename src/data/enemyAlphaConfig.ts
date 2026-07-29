@@ -136,7 +136,6 @@ export const ENEMY_ALPHA_CONFIG: Record<EncounterEnemyKey, AlphaModifiers> = {
   NULL_CROWN_SHADE: alpha('Null-Crown', { immuneToOccult: true, shieldCastTarget: 'AOE' }),
   CHOIR_BOUND_RESONANCE_CASTER: alpha('Choir-Bound', { damageScalingPerTurn: 0.75 }),
   RIFT_SPIKE_SNIPER: alpha('Rift', { lockOnTurns: 2 }),
-  RIOT_VANGUARD: alpha('Resonant', { adaptiveDamageMultiplier: 2.0 }),
 };
 
 const ROSTER_TO_ENCOUNTER: Partial<Record<EnemyRosterId, EncounterEnemyKey>> = {

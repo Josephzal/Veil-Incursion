@@ -25,6 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FACTION_STRIKE_TINT } from '../../constants/combatFactionStrike';
 import type { ClassType, FactionType } from '../../types/game';
+import type { WeaponFamilyId } from '../../types/weapon';
 import type { EnemyDeckStrikeVariant } from '../../utils/combatTelemetryFormat';
 import {
   FRONTLINE_MELEE_RETURN_IDLE_MS,
@@ -73,6 +74,7 @@ interface CombatPlayerViewportProps {
   imageSource: ImageSourcePropType;
   attackImageSource?: ImageSourcePropType;
   operativeClass?: ClassType;
+  weaponFamilyId?: WeaponFamilyId | null;
   /** Crossfade attack art only — no lunge or scale. */
   stationaryAttack?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -86,6 +88,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       imageSource,
       attackImageSource,
       operativeClass = 'AEGIS',
+      weaponFamilyId = null,
       stationaryAttack = false,
       style,
       wardPrimed = false,
@@ -298,6 +301,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
               idleSource={imageSource}
               attackSource={resolvedAttackSource}
               operativeClass={operativeClass}
+              weaponFamilyId={weaponFamilyId}
               strikeAuraOpacity={strikeAuraOpacity}
               strikeTint={strikeTint}
               primedGlowOpacity={glowOpacity}

@@ -10,6 +10,7 @@ import type {
 } from '../types/combatHooks';
 import type { BlueprintId } from '../types/equipmentBlueprint';
 import type { EnemyCombatProfile } from '../types/run';
+import { scalePlayerOriginDebuffDuration } from './weaponModifierResolution';
 
 function applyEnemyStatus(
   extras: CombatSessionExtras,
@@ -151,17 +152,25 @@ export function applyFrontlineBlinded(
   squad: EnemyCombatProfile[],
   extras: CombatSessionExtras,
   turns: number,
+  opts?: { debuffDurationPct?: number; log?: (msg: string) => void },
 ): CombatHookResult {
   const logLines: string[] = [];
   const applied: CombatHookResult['enemyStatusApplied'] = [];
+  const scaled = scalePlayerOriginDebuffDuration(turns, {
+    debuffDurationPct: opts?.debuffDurationPct,
+  });
+  if (scaled.logged) {
+    logLines.push(scaled.logged);
+    opts?.log?.(scaled.logged);
+  }
   squad.forEach((unit) => {
     if (!unit.unitId || !unit.gridSlot) return;
     if (laneForSlot(unit.gridSlot) !== 'FRONTLINE') return;
-    applyEnemyStatus(extras, unit.unitId, 'BLINDED', turns);
-    applied?.push({ unitId: unit.unitId, status: 'BLINDED', turns });
+    applyEnemyStatus(extras, unit.unitId, 'BLINDED', scaled.turns);
+    applied?.push({ unitId: unit.unitId, status: 'BLINDED', turns: scaled.turns });
   });
   if (applied && applied.length > 0) {
-    logLines.push(`[VEIL-ASH GRENADE] >> ${applied.length} frontline hostiles blinded (−30% accuracy, ${turns} turns).`);
+    logLines.push(`[VEIL-ASH GRENADE] >> ${applied.length} frontline hostiles blinded (−30% accuracy, ${scaled.turns} turns).`);
   }
   return { enemyStatusApplied: applied, logLines };
 }

@@ -11,6 +11,7 @@ import type {
   SectorAccessMandateState,
   SectorProgressionState,
 } from '../types/progression';
+import { CLASS_RANK_MAX } from './classRankEngine';
 
 export const PROGRESSION_SCHEMA_VERSION = 1 as const;
 export const PROGRESSION_EVENT_LOG_CAP = 80;
@@ -133,7 +134,7 @@ function normalizeClassState(
   const defaults = createDefaultClassProgression();
   if (!raw) return defaults;
   return {
-    rank: Math.max(1, Math.floor(raw.rank ?? defaults.rank)),
+    rank: Math.max(1, Math.min(CLASS_RANK_MAX, Math.floor(raw.rank ?? defaults.rank))),
     xp: Math.max(0, Math.floor(raw.xp ?? defaults.xp)),
     unlockedAbilities: [...(raw.unlockedAbilities ?? [])],
     unlockedWeapons: [...(raw.unlockedWeapons ?? [])],

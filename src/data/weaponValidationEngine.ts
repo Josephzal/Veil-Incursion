@@ -8,12 +8,15 @@ import {
   STARTER_WEAPON_BY_CLASS,
   WEAPON_REGISTRY,
 } from './weaponRegistry';
+import { validateWeaponIdentityProfiles } from './weaponIdentityProfiles';
+import { validateWeaponLoadoutRecommendations } from './weaponLoadoutRecommendationEngine';
 import {
   getEquippedWeaponForClass,
   getWeaponTier,
 } from './weaponProgressionEngine';
 import type { ActiveIncursionState } from '../types/game';
 import { resolveActiveWeaponState } from './weaponRunState';
+import { validateWeaponUltimates } from './weaponUltimateValidationEngine';
 
 export type { WeaponValidationIssue };
 
@@ -26,6 +29,22 @@ export function validateWeaponRegistry(): WeaponValidationIssue[] {
       message: `Expected 9 weapon families, found ${ALL_WEAPON_FAMILY_IDS.length}.`,
     });
   }
+
+  validateWeaponIdentityProfiles().forEach((message) => {
+    issues.push({ severity: 'error', message: `Identity profile: ${message}` });
+  });
+
+  validateWeaponLoadoutRecommendations().forEach((issue) => {
+    issues.push({
+      severity: issue.severity,
+      weaponId: issue.weaponId,
+      message: `Loadout recommendation: ${issue.message}`,
+    });
+  });
+
+  validateWeaponUltimates().forEach((issue) => {
+    issues.push(issue);
+  });
 
   const startersByClass = new Map<ClassType, number>();
   ALL_WEAPON_FAMILY_IDS.forEach((id) => {

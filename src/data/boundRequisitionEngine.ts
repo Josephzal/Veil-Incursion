@@ -7,7 +7,7 @@ import type {
 import { createDefaultBoundRequisitionRuntime } from '../types/boundRequisition';
 import { getBoundRequisitionDefinition } from './boundRequisitions';
 import { placeCargoAtFirstOpenSlot } from './cargoGridEngine';
-import { pickRandomLeyLineMutations } from './leyLineMutations';
+import { ALL_LEY_LINE_MUTATION_IDS } from './leyLineMutations';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 
 const POWERFUL_MUTATION_IDS: LeyLineMutationId[] = [
@@ -36,8 +36,9 @@ function pickPowerfulMutation(owned: readonly LeyLineMutationId[]): LeyLineMutat
   if (pool.length > 0) {
     return pool[Math.floor(Math.random() * pool.length)];
   }
-  const fallback = pickRandomLeyLineMutations(1, owned);
-  return fallback[0]?.id ?? 'ABYSSAL_RESONANCE';
+  // Curated pool exhausted — deterministic live fallback (not unweighted full-catalog random).
+  const live = ALL_LEY_LINE_MUTATION_IDS.find((id) => !owned.includes(id));
+  return live ?? 'ABYSSAL_RESONANCE';
 }
 
 export function buildBoundRequisitionRuntime(id: BoundRequisitionId): BoundRequisitionRuntime {
