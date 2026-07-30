@@ -6,6 +6,7 @@ import {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { playScannerLipKey, playUiClick } from '../../utils/uiFeedbackAudio';
 import {
   buildDegreeTicks,
   buildNonEuclideanGrid,
@@ -220,6 +221,7 @@ export function useVectorScannerEngine({
 
   const notifyNodeSelected = useCallback((nodeId: string) => {
     Vibration.vibrate(SIPHON_HAPTIC_MS);
+    playScannerLipKey();
     queueMicrotask(() => onSelectNodeRef.current?.(nodeId));
   }, []);
 
@@ -239,6 +241,7 @@ export function useVectorScannerEngine({
       setSiphonedNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
       setSiphonPulseKeys((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? 0) + 1 }));
       Vibration.vibrate(SIPHON_HAPTIC_MS);
+      playScannerLipKey();
     },
     [scanInteractive, siphonedNodeIds, isNodeIlluminated, ensureBlipState, bumpRender],
   );
@@ -246,6 +249,7 @@ export function useVectorScannerEngine({
   const handleCeaseScan = useCallback(() => {
     if (!active || contactsLocked || isCeasedRef.current) return;
     if (siphonedNodeIds.length < MIN_SIPHONS_TO_CEASE) return;
+    playUiClick();
     isCeasedRef.current = true;
     setIsCeased(true);
     ceaseStartRef.current = performance.now();

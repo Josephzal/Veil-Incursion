@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Image, type ImageSourcePropType, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -8,48 +8,51 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-const DAMAGE_TINT = '#dc2626';
-
 interface CombatEnemyHitEffectProps {
   hitFlashSeq?: number;
-  portraitSource: ImageSourcePropType;
+  /** Kept for API compatibility — full portrait tint removed (Phase 3M). */
+  portraitSource?: unknown;
   children: React.ReactNode;
 }
 
-/** Red image tint flash when damaged. Enraged pulse lives on AnimatedEnemySprite. */
+/**
+ * Localized contact spark on damage — no opaque red full-character silhouette.
+ */
 export default function CombatEnemyHitEffect({
   hitFlashSeq = 0,
-  portraitSource,
   children,
 }: CombatEnemyHitEffectProps): React.JSX.Element {
   const lastSeqRef = useRef(0);
   const flashOpacity = useSharedValue(0);
+  const flashScale = useSharedValue(0.6);
 
   useEffect(() => {
     if (hitFlashSeq <= 0 || hitFlashSeq === lastSeqRef.current) return;
     lastSeqRef.current = hitFlashSeq;
 
     flashOpacity.value = withSequence(
-      withTiming(0.65, { duration: 60, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) }),
+      withTiming(0.9, { duration: 40, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 140, easing: Easing.in(Easing.quad) }),
     );
-  }, [flashOpacity, hitFlashSeq]);
+    flashScale.value = withSequence(
+      withTiming(1.15, { duration: 50, easing: Easing.out(Easing.back(1.2)) }),
+      withTiming(0.8, { duration: 130 }),
+    );
+  }, [flashOpacity, flashScale, hitFlashSeq]);
 
-  const flashStyle = useAnimatedStyle(() => ({
+  const sparkStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
+    transform: [{ scale: flashScale.value }],
   }));
 
   return (
-    <Animated.View style={styles.root}>
+    <View style={styles.root}>
       {children}
-      <Animated.View style={[styles.imageFlashWrap, flashStyle]} pointerEvents="none">
-        <Image
-          source={portraitSource}
-          resizeMode="contain"
-          style={[styles.portraitTint, { tintColor: DAMAGE_TINT }]}
-        />
+      <Animated.View style={[styles.sparkHost, sparkStyle]} pointerEvents="none">
+        <View style={styles.spark} />
+        <View style={styles.sparkEdge} />
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -61,14 +64,29 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'visible',
   },
-  imageFlashWrap: {
-    ...StyleSheet.absoluteFillObject,
+  sparkHost: {
+    position: 'absolute',
+    bottom: '38%',
+    width: 22,
+    height: 22,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     zIndex: 5,
   },
-  portraitTint: {
-    width: '100%',
-    height: '100%',
+  spark: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 232, 240, 0.85)',
+    backgroundColor: 'transparent',
+  },
+  sparkEdge: {
+    position: 'absolute',
+    width: 18,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(203, 213, 225, 0.7)',
+    transform: [{ rotate: '-28deg' }],
   },
 });

@@ -252,7 +252,7 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 0,
     threatTier: 1,
-    evadeChance: 0.50,
+    evadeChance: 0.20,
     critChance: 0,
   },
   'thrall': {

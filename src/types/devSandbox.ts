@@ -32,6 +32,21 @@ export const DEV_SANDBOX_NARRATIVE_PRESETS = [
   'narrative-tumbler',
 ] as const satisfies readonly DevSandboxPreset[];
 
+/** Combat sandbox presets — used for ultimate-primed start and combat-only tooling. */
+export const DEV_SANDBOX_COMBAT_PRESETS = [
+  'standard-combat',
+  'elite-combat',
+  'combat-easy',
+  'combat-hard',
+  'hostile-echo-combat',
+] as const satisfies readonly DevSandboxPreset[];
+
 export function isDevSandboxPreset(value: DevSandboxPreset | null | undefined): value is DevSandboxPreset {
   return value != null;
+}
+
+export function isDevSandboxCombatPreset(
+  value: DevSandboxPreset | null | undefined,
+): value is typeof DEV_SANDBOX_COMBAT_PRESETS[number] {
+  return value != null && (DEV_SANDBOX_COMBAT_PRESETS as readonly string[]).includes(value);
 }

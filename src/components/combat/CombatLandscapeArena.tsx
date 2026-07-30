@@ -18,11 +18,12 @@ import type { WeaponFamilyId } from '../../types/weapon';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
 import CombatGroundContact from './ui/CombatGroundContact';
 
-function operativeScaleForClass(operativeClass: ClassType, isCombatDesktop: boolean): number {
-  if (!isCombatDesktop) return 0.92;
-  if (operativeClass === 'AEGIS') return 1.1;
-  if (operativeClass === 'ENVOY') return 1.4;
-  return 1.6;
+/**
+ * Shared arena scale for every class/weapon.
+ * Figure height is normalized to envoy-echo-lantern idle in combatPlayerPortrait.
+ */
+function operativeArenaScale(isCombatDesktop: boolean): number {
+  return isCombatDesktop ? 1.6 : 0.92;
 }
 
 interface CombatLandscapeArenaProps {
@@ -56,7 +57,8 @@ export default function CombatLandscapeArena({
   onEradicationComplete,
 }: CombatLandscapeArenaProps): React.JSX.Element {
   const { isCombatDesktop, scaleCombatSize } = useCombatDesktopLayout();
-  const operativeScale = operativeScaleForClass(operativeClass, isCombatDesktop);
+  const operativeScale = operativeArenaScale(isCombatDesktop);
+  // Figure height matches Vambrace idle via portrait math for every class/weapon.
   const meleeWide = operativeClass === 'AEGIS';
   const spriteSlotWidth = OPERATIVE_ARENA_SPRITE_WIDTH * (meleeWide ? 1.45 : 1);
   const operativeLeft = isCombatDesktop ? OTT_STAGE.playerLeftPercent : '6%';

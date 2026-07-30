@@ -17,6 +17,7 @@ import {
 import type { ActiveIncursionState } from '../types/game';
 import { resolveActiveWeaponState } from './weaponRunState';
 import { validateWeaponUltimates } from './weaponUltimateValidationEngine';
+import { validateWeaponCombatPresentation } from './weaponCombatPresentation/validation';
 
 export type { WeaponValidationIssue };
 
@@ -44,6 +45,15 @@ export function validateWeaponRegistry(): WeaponValidationIssue[] {
 
   validateWeaponUltimates().forEach((issue) => {
     issues.push(issue);
+  });
+
+  // Phase 3M focused presentation registry checks (not the broader 3N suite).
+  validateWeaponCombatPresentation().forEach((issue) => {
+    issues.push({
+      severity: issue.level === 'error' ? 'error' : 'warn',
+      weaponId: undefined,
+      message: `Presentation 3M: ${issue.code} — ${issue.message}`,
+    });
   });
 
   const startersByClass = new Map<ClassType, number>();

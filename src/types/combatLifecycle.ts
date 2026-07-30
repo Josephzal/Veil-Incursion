@@ -67,8 +67,6 @@ export interface HitTakenLifecycleResult {
   immunePopupUnitId?: string;
   extras?: Partial<CombatSessionExtras>;
   playerHpDelta?: number;
-  /** Scuttler counter-attack after dodge. */
-  scuttlerCounter?: boolean;
   playerStaminaDelta?: number;
 }
 

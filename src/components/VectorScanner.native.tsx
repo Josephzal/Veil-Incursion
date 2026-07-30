@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
+import { playScannerLipKey, playUiClick } from '../utils/uiFeedbackAudio';
 import {
   Blur,
   Canvas,
@@ -394,6 +395,7 @@ function VectorScannerComponent({
 
   const notifyNodeSelected = useCallback((nodeId: string) => {
     Vibration.vibrate(SIPHON_HAPTIC_MS);
+    playScannerLipKey();
     queueMicrotask(() => onSelectNodeRef.current?.(nodeId));
   }, []);
 
@@ -413,6 +415,7 @@ function VectorScannerComponent({
       setSiphonedNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
       setSiphonPulseKeys((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? 0) + 1 }));
       Vibration.vibrate(SIPHON_HAPTIC_MS);
+      playScannerLipKey();
     },
     [
       scanInteractive,
@@ -426,6 +429,7 @@ function VectorScannerComponent({
   const handleCeaseScan = useCallback(() => {
     if (!active || contactsLocked || isCeasedRef.current) return;
     if (siphonedNodeIds.length < MIN_SIPHONS_TO_CEASE) return;
+    playUiClick();
     isCeasedRef.current = true;
     setIsCeased(true);
     ceaseStartRef.current = performance.now();

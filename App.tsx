@@ -29,6 +29,7 @@ import RunCompleteScreen from './src/screens/RunCompleteScreen';
 import RunWorldStateBridge from './src/components/RunWorldStateBridge';
 import OperationDebriefScreen from './src/screens/OperationDebriefScreen';
 import SafehouseScreen from './src/screens/SafehouseScreen';
+import BgmDirector from './src/components/BgmDirector';
 
 function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -41,6 +42,7 @@ function GameRoot(): React.JSX.Element {
 
   return (
     <TransitionOverlay>
+      <BgmDirector />
       <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
         {currentScreen === 'HUB' && <OverworldHubScreen />}
         {currentScreen === 'WELCOME' && <WelcomeScreen />}

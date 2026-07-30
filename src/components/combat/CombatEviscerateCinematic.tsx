@@ -1,39 +1,34 @@
 import React from 'react';
 import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
 import { useCombatEnemyChrome } from '../../context/CombatEnemyChromeContext';
-import VectorSliceOverlay from './VectorSliceOverlay';
 
 interface CombatEviscerateCinematicProps {
   targetPortrait: ImageSourcePropType | null;
 }
 
-/** Full-screen eviscerate sequence — dim backdrop, large target portrait, scaled slashes. */
+/**
+ * Threefold Brand cinematic backdrop while the real slice interaction
+ * runs in CombatMinigameOverlayHost (VectorSliceOverlay).
+ * Portrait is optional — never gate the ultimate on portrait availability.
+ */
 export default function CombatEviscerateCinematic({
   targetPortrait,
 }: CombatEviscerateCinematicProps): React.JSX.Element | null {
-  const { ui, handlersRef } = useCombatEnemyChrome();
+  const { ui } = useCombatEnemyChrome();
 
-  if (!ui.sliceVisible || !targetPortrait) return null;
+  if (!ui.sliceVisible) return null;
 
   return (
-    <View style={styles.root} pointerEvents="box-none">
-      <View style={styles.backdrop} pointerEvents="none" />
-      <View style={styles.portraitStage} pointerEvents="none">
-        <Image
-          source={targetPortrait}
-          style={styles.portrait}
-          resizeMode="contain"
-        />
-      </View>
-      {handlersRef.current.slicePanHandlers ? (
-        <VectorSliceOverlay
-          visible
-          variant="cinematic"
-          lines={ui.sliceLines}
-          activeIndex={ui.activeSliceIndex}
-          panHandlers={handlersRef.current.slicePanHandlers}
-          onArenaLayout={(layout) => handlersRef.current.registerSliceArena(layout)}
-        />
+    <View style={styles.root} pointerEvents="none">
+      <View style={styles.backdrop} />
+      {targetPortrait ? (
+        <View style={styles.portraitStage}>
+          <Image
+            source={targetPortrait}
+            style={styles.portrait}
+            resizeMode="contain"
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -42,12 +37,12 @@ export default function CombatEviscerateCinematic({
 const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 50,
-    elevation: 50,
+    zIndex: 40,
+    elevation: 40,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   portraitStage: {
     position: 'absolute',
@@ -57,6 +52,7 @@ const styles = StyleSheet.create({
     bottom: '12%',
     alignItems: 'center',
     justifyContent: 'center',
+    opacity: 0.55,
   },
   portrait: {
     width: '100%',

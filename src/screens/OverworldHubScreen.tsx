@@ -15,6 +15,7 @@ import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { transitionActions } from '../stores/transitionStore';
+import { ensureHubBgmPlaying, unlockBgm } from '../utils/bgmController';
 
 export default function OverworldHubScreen(): React.JSX.Element {
   const { theme, updateCabalAlignment, alignment } = useTerminal();
@@ -31,15 +32,27 @@ export default function OverworldHubScreen(): React.JSX.Element {
   const [launchingIncursion, setLaunchingIncursion] = useState(false);
 
   const breachFaction = account.alignedFaction ?? 'TERRAN_GRID';
+  const hubReady = isHydrated && worldStateHydrated;
 
   useEffect(() => {
     if (breachFaction === alignment) return;
     updateCabalAlignment(breachFaction);
   }, [alignment, breachFaction, updateCabalAlignment]);
 
+  // Veil Front visible — kick hub music immediately (and keep retrying via controller watchdog).
+  useEffect(() => {
+    if (!hubReady) return;
+    ensureHubBgmPlaying();
+  }, [hubReady]);
+
+  const handleHubPointer = useCallback(() => {
+    ensureHubBgmPlaying(400);
+  }, []);
+
   const handleInitiateDeepDive = useCallback(() => {
     if (launchingIncursion) return;
     setLaunchingIncursion(true);
+    unlockBgm();
 
     // Prepare destination before the 1s Veil transit begins — swap stays instantaneous under cover.
     const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
@@ -94,7 +107,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
     startNewRun,
   ]);
 
-  if (!isHydrated || !worldStateHydrated) {
+  if (!hubReady) {
     return (
       <TerminalSafeArea>
         <View style={styles.loadingRoot}>
@@ -107,7 +120,11 @@ export default function OverworldHubScreen(): React.JSX.Element {
 
   return (
     <TerminalSafeArea>
-      <View style={styles.root}>
+      <View
+        style={styles.root}
+        onTouchStart={handleHubPointer}
+        {...({ onClick: handleHubPointer } as object)}
+      >
         <TerminalHubLayout
           activeView={terminalView}
           onSelectView={setTerminalView}

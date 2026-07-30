@@ -21,3 +21,21 @@ declare module '*.webp' {
   const source: ImageSourcePropType;
   export default source;
 }
+
+declare module '*.wav' {
+  import type { ImageSourcePropType } from 'react-native';
+  const source: ImageSourcePropType;
+  export default source;
+}
+
+declare module '*.mp3' {
+  import type { ImageSourcePropType } from 'react-native';
+  const source: ImageSourcePropType;
+  export default source;
+}
+
+declare module '*.m4a' {
+  import type { ImageSourcePropType } from 'react-native';
+  const source: ImageSourcePropType;
+  export default source;
+}

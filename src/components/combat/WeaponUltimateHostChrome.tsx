@@ -54,7 +54,7 @@ export default function WeaponUltimateHostChrome({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     zIndex: 60,
     elevation: 60,
   },

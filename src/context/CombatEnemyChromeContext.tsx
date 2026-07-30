@@ -26,6 +26,12 @@ export interface CombatEnemyChromeUIState {
   ultimatePingReady: boolean;
   ultimatePingDisabled: boolean;
   ultimatePingVariant: 'eviscerate' | 'zero_protocol' | 'cataclysm' | null;
+  /** Accessible label including canonical ultimate name. */
+  ultimatePingAccessibilityLabel: string;
+  /** Canonical ultimate display name for HUD chrome. */
+  ultimatePingDisplayName: string | null;
+  /** True while a weapon ultimate interaction popup is open. */
+  ultimatePingInteractionOpen: boolean;
   masteryProgressVisible: boolean;
   masteryProgressCurrent: number;
   masteryProgressRequired: number;
@@ -63,6 +69,9 @@ const IDLE_UI: CombatEnemyChromeUIState = {
   ultimatePingReady: false,
   ultimatePingDisabled: true,
   ultimatePingVariant: null,
+  ultimatePingAccessibilityLabel: 'Fire weapon ultimate',
+  ultimatePingDisplayName: null,
+  ultimatePingInteractionOpen: false,
   masteryProgressVisible: false,
   masteryProgressCurrent: 0,
   masteryProgressRequired: 3,
@@ -118,6 +127,9 @@ function uiStateEqual(prev: CombatEnemyChromeUIState, next: CombatEnemyChromeUIS
     && prev.ultimatePingReady === next.ultimatePingReady
     && prev.ultimatePingDisabled === next.ultimatePingDisabled
     && prev.ultimatePingVariant === next.ultimatePingVariant
+    && prev.ultimatePingAccessibilityLabel === next.ultimatePingAccessibilityLabel
+    && prev.ultimatePingDisplayName === next.ultimatePingDisplayName
+    && prev.ultimatePingInteractionOpen === next.ultimatePingInteractionOpen
     && prev.masteryProgressVisible === next.masteryProgressVisible
     && prev.masteryProgressCurrent === next.masteryProgressCurrent
     && prev.masteryProgressRequired === next.masteryProgressRequired
@@ -221,6 +233,9 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     ultimatePingReady,
     ultimatePingDisabled,
     ultimatePingVariant,
+    ultimatePingAccessibilityLabel,
+    ultimatePingDisplayName,
+    ultimatePingInteractionOpen,
     masteryProgressVisible,
     masteryProgressCurrent,
     masteryProgressRequired,
@@ -264,6 +279,9 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
       ultimatePingReady,
       ultimatePingDisabled,
       ultimatePingVariant,
+      ultimatePingAccessibilityLabel,
+      ultimatePingDisplayName,
+      ultimatePingInteractionOpen,
       masteryProgressVisible,
       masteryProgressCurrent,
       masteryProgressRequired,
@@ -286,6 +304,9 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     ultimatePingReady,
     ultimatePingDisabled,
     ultimatePingVariant,
+    ultimatePingAccessibilityLabel,
+    ultimatePingDisplayName,
+    ultimatePingInteractionOpen,
     masteryProgressVisible,
     masteryProgressCurrent,
     masteryProgressRequired,

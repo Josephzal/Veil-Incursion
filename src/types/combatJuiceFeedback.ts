@@ -1,6 +1,6 @@
 /**
  * Combat Refactor Phase 5 — combat juice / VFX / SFX feedback hooks.
- * No assets — metadata only for a future presentation layer.
+ * Phase 3M wires these events into audible/visual presentation via combatPresentationBus.
  */
 
 export type CombatJuiceIntensity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';

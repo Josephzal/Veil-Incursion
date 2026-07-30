@@ -208,6 +208,8 @@ import {
   validateWeaponRegistry,
   debugPrintEquippedWeapons,
 } from '../../data/weaponValidationEngine';
+import { formatWeaponCombatPresentationValidationReport } from '../../data/weaponCombatPresentation';
+import WeaponFeedbackLabPanel from './WeaponFeedbackLabPanel';
 import {
   debugListEncounterObjectiveTemplates,
   debugPreviewDefendRiftObjective,
@@ -2377,8 +2379,12 @@ export default function DevTestHubPanel(): React.JSX.Element {
         <SandboxLaunchButton
           label="[ VALIDATE WEAPONS ]"
           accentColor={theme.statusColor}
-          onPress={() => setDebugReport(formatWeaponValidationReport(validateWeaponRegistry()))}
+          onPress={() => setDebugReport([
+            formatWeaponValidationReport(validateWeaponRegistry()),
+            formatWeaponCombatPresentationValidationReport(),
+          ].join('\n\n'))}
         />
+        <WeaponFeedbackLabPanel mutedColor={theme.mutedColor} keyColor={theme.primaryColor} />
         <SandboxLaunchButton
           label="[ UNLOCK ALL WEAPONS ]"
           accentColor={theme.primaryColor}

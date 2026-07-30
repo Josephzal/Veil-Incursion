@@ -12,6 +12,7 @@ import CombatArenaBackground from '../components/combat/CombatArenaBackground';
 import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import { resolveArenaLayoutMode } from '../components/combat/combatEnemyBarLayout';
 import CombatJuiceHost from '../components/combat/CombatJuiceHost';
+import WeaponCombatPresentationHost from '../components/combat/WeaponCombatPresentationHost';
 import CombatParryScreenOverlay from '../components/combat/CombatParryScreenOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import ParticleOverlay from '../components/atmosphere/ParticleOverlay';
@@ -39,6 +40,7 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
+import { isDevSandboxCombatPreset } from '../types/devSandbox';
 import {
   standardKillCredits,
 } from '../data/combatCredits';
@@ -909,6 +911,7 @@ export default function CombatScreen(): React.JSX.Element {
           <View style={styles.landscapeRoot}>
             <View style={styles.landscapeColumn}>
               <CombatJuiceHost style={styles.body}>
+                <WeaponCombatPresentationHost />
                 <View style={styles.arenaPanel}>
                   <CombatArenaBackground
                     source={arenaBackgroundSource}
@@ -1048,6 +1051,10 @@ export default function CombatScreen(): React.JSX.Element {
                       activeWeaponFamilyId={combatWeaponFamilyId}
                       activeWeaponTier={activeIncursion.activeWeaponTier ?? 1}
                       simplifiedUltimateInputs={account.simplifiedUltimateInputs === true}
+                      primeUltimateAtStart={
+                        isDevSandboxCombatPreset(runState.devSandboxPreset)
+                        || runState.combatTestPreset != null
+                      }
                       playerCritChanceBonus={playerCritChanceBonus}
                       onPlayerCritImpact={handlePlayerCritImpact}
                       godModeActive={activeIncursion.godModeActive}

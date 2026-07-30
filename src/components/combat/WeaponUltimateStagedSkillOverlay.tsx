@@ -10,18 +10,21 @@ interface WeaponUltimateStagedSkillOverlayProps {
   visible: boolean;
   ultimateId: WeaponUltimateId | null;
   simplified?: boolean;
+  /** Fired when the window expires with no meaningful player input — must not commit. */
+  onCancel?: () => void;
   onComplete: (payload: { grade: WeaponUltimateGrade; stageScores: number[] }) => void;
 }
 
 /**
  * Art-independent staged hold skill for WU-4 ultimates.
  * Player holds CONFIRM through each stage; missed holds score low.
- * Timer auto-commits with whatever stage quality was earned.
+ * Timer expiry with zero interaction cancels free — never auto-commits.
  */
 export default function WeaponUltimateStagedSkillOverlay({
   visible,
   ultimateId,
   simplified = false,
+  onCancel,
   onComplete,
 }: WeaponUltimateStagedSkillOverlayProps): React.JSX.Element | null {
   const script = ultimateId ? getWu4StagedScript(ultimateId) : null;
@@ -33,8 +36,11 @@ export default function WeaponUltimateStagedSkillOverlay({
   const holdingRef = useRef(false);
   const progressRef = useRef(0);
   const stageIndexRef = useRef(0);
+  const interactedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
+  const onCancelRef = useRef(onCancel);
   onCompleteRef.current = onComplete;
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!visible || !script) {
@@ -43,6 +49,7 @@ export default function WeaponUltimateStagedSkillOverlay({
       holdingRef.current = false;
       progressRef.current = 0;
       stageIndexRef.current = 0;
+      interactedRef.current = false;
       setStageIndex(0);
       setHolding(false);
       setHoldProgress(0);
@@ -54,6 +61,7 @@ export default function WeaponUltimateStagedSkillOverlay({
     holdingRef.current = false;
     progressRef.current = 0;
     stageIndexRef.current = 0;
+    interactedRef.current = false;
     setStageIndex(0);
     setHolding(false);
     setHoldProgress(0);
@@ -70,12 +78,16 @@ export default function WeaponUltimateStagedSkillOverlay({
     const timer = setTimeout(() => {
       if (finishedRef.current) return;
       finishedRef.current = true;
-      // Credit partial hold on the live stage, then pad remaining stages as misses.
       const live = holdingRef.current ? progressRef.current : 0;
       const scores = [...scoresRef.current];
       while (scores.length < stageIndexRef.current) scores.push(0);
       if (scores.length === stageIndexRef.current) scores.push(live);
       while (scores.length < script.stages.length) scores.push(0);
+      const anyInput = interactedRef.current || scores.some((s) => s > 0.05);
+      if (!anyInput) {
+        onCancelRef.current?.();
+        return;
+      }
       onCompleteRef.current({
         grade: gradeFromStageScores(scores),
         stageScores: scores,
@@ -146,13 +158,14 @@ export default function WeaponUltimateStagedSkillOverlay({
           style={styles.holdZone}
           onPressIn={() => {
             if (finishedRef.current) return;
+            interactedRef.current = true;
             holdingRef.current = true;
             setHolding(true);
           }}
           onPressOut={() => {
             if (finishedRef.current) return;
             if (progressRef.current >= 1) return;
-            // Release early — bank partial score and advance.
+            interactedRef.current = true;
             const partial = progressRef.current;
             holdingRef.current = false;
             setHolding(false);
@@ -184,79 +197,86 @@ export default function WeaponUltimateStagedSkillOverlay({
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     zIndex: 50,
     elevation: 50,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(2, 6, 23, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   hud: {
     position: 'absolute',
-    top: 48,
+    top: 56,
     left: 16,
     right: 16,
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.45)',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
   },
   title: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#f8fafc',
+    letterSpacing: 1.2,
+  },
+  timer: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    color: '#94a3b8',
+  },
+  stageLabel: {
+    marginTop: 4,
     fontFamily: 'monospace',
     fontSize: 11,
     fontWeight: '700',
     color: '#e2e8f0',
-    letterSpacing: 1,
-  },
-  timer: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    color: '#94a3b8',
-  },
-  stageLabel: {
-    marginTop: 8,
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#f8fafc',
-    letterSpacing: 2,
   },
   instruction: {
     fontFamily: 'monospace',
-    fontSize: 9,
+    fontSize: 10,
     color: '#cbd5e1',
     textAlign: 'center',
   },
   track: {
-    marginTop: 10,
+    marginTop: 8,
     width: '70%',
     maxWidth: 280,
     height: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.55)',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderRadius: 2,
+    backgroundColor: 'rgba(51, 65, 85, 0.9)',
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: '#94a3b8',
+    backgroundColor: '#38bdf8',
   },
   scoreHint: {
+    marginTop: 4,
     fontFamily: 'monospace',
     fontSize: 8,
     color: '#64748b',
   },
   holdZone: {
-    marginTop: 120,
-    paddingHorizontal: 28,
-    paddingVertical: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.55)',
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    marginTop: 48,
+    minWidth: 220,
+    paddingVertical: 28,
+    paddingHorizontal: 36,
+    borderWidth: 2,
+    borderColor: 'rgba(56, 189, 248, 0.85)',
+    backgroundColor: 'rgba(14, 165, 233, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   holdLabel: {
     fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#f1f5f9',
+    color: '#e0f2fe',
     letterSpacing: 1,
   },
 });

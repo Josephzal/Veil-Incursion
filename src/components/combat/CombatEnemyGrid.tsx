@@ -73,6 +73,7 @@ function BacklineHitOverlay({
     >
       <View style={[styles.backlineHitInner, scaled]} pointerEvents="box-none">
         <HapticPressable
+          sfx={false}
           onPress={() => onUnitPress(unit.unitId)}
           style={[
             styles.backlineHitPressable,

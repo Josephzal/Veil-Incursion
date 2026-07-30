@@ -408,6 +408,7 @@ const spatialGlitchHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
 };
 
 const scuttlerHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
+  // Phase Scuttler only — base Scuttler dodge is the passive evadeChance roll (no reactive negate).
   if (enemy.rosterId === 'phase-scuttler' && enemy.unitId && attack.projectedHpAfter > 0) {
     const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
       evadeActive: true,
@@ -418,19 +419,7 @@ const scuttlerHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
       logLines: [`>> ${enemy.designation} PHASE SLIP — next strike suffers reduced accuracy.`],
     };
   }
-  if (enemy.rosterId !== 'scuttler' || !enemy.unitId) return { ...EMPTY_HIT, squad: ctx.squad };
-  if (attack.source !== 'STRIKE' && attack.source !== 'SLICE') return { squad: ctx.squad, logLines: [] };
-  const evadeChance = enemy.evadeChance ?? getAlphaMechanic(enemy, 'evadeChance', 0.5);
-  if (Math.random() >= evadeChance) return { squad: ctx.squad, logLines: [] };
-  const counterDmg = Math.max(4, Math.floor(enemy.baseDamage * 0.6));
-  return {
-    squad: ctx.squad,
-    logLines: [`>> ${enemy.designation} EVASIVE MANEUVER — attack dodged. Counter: ${counterDmg}.`],
-    negateDamage: true,
-    damageOverride: 0,
-    playerHpDelta: -counterDmg,
-    scuttlerCounter: true,
-  };
+  return { ...EMPTY_HIT, squad: ctx.squad };
 };
 
 const ironMaidenHitTaken: HitTakenHandler = (enemy, attack, ctx) => {

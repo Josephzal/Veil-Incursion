@@ -878,7 +878,27 @@ Canonical player-facing summaries live in `src/data/weaponPlayerFacing/` — one
 
 **Combat HUD / first-slot cards:** resting slot-0 cards show the equipped weapon's unique anchor name, AP, live damage/outcome, secondary cost (stamina / ammo / Flux / HP), target pattern, and one–two defining effects plus conditional state when live (`TEMPO ARMED`, `PRIMARY ONLY`, `CLEAN CYCLE`, `FULL PAY` / `PARTIAL PAY`, etc.). Preview numbers resolve from `weaponBasicEngine` via `weaponAnchorCardPresentation.ts` — not hardcoded duplicates. Enemy intel and turn order use spaced player-facing designations (`formatHostileDisplayName`) — never underscore registry IDs. Combat log clears on encounter start and uses the equipped chassis + weapon-specific attack name (e.g. `WARDEN'S STRIKE`, `VEILSTEP SLASH`, `NULL ARC`).
 
-First-use briefs acknowledge on `PlayerAccount.weaponBriefAcknowledged` (missing ⇒ not acknowledged; survives extraction/death/new-run). Recommendation and matchup rendering remain read-only with zero runtime weight. Deferred: VFX/SFX/feel (3M), validation expansion (3N), full alias migration (3O), numerical tuning including Nullbreach favorable-share / Lantern strained band / Rival Merc density (3P). Weapon-specific ultimates shipped WU-1→WU-6.
+First-use briefs acknowledge on `PlayerAccount.weaponBriefAcknowledged` (missing ⇒ not acknowledged; survives extraction/death/new-run). Recommendation and matchup rendering remain read-only with zero runtime weight. **Phase 3M (repair complete — ready for re-review):** weapon-specific combat feel / VFX / SFX / pose integration plus ultimate-interaction host-gate fix — see Weapon Combat Presentation (Phase 3M) below. Deferred: validation expansion (3N), full alias migration (3O), numerical tuning including Black Door favorable-share / Vambrace strained band / Rival Merc density (3P). Weapon-specific ultimates shipped WU-1→WU-6.
+
+### Weapon Combat Presentation (Phase 3M)
+
+Presentation-only layer. Combat always resolves first; feedback never recalculates damage, status, reload, or resources.
+
+**Ultimate control path (repair):** Center class-colored circles (`CombatOrbitalUltimate` — red Aegis / yellow Hex / purple Envoy) remain the only ultimate HUD controls. Activation resolves the run’s snapshotted permanent weapon ID and opens the matching interaction (`THREEFOLD BRAND` slice, `ZERO PROTOCOL` grid, `NULL CIRCUIT` sigil, or WU-4 staged overlay). `isWeaponUltimateMinigameHostActive` must include `stagedWeaponUltimateId` and `OFFENSE_SLICE` or the popup never mounts (root cause of the failed manual review). Open/cancel do not mutate combat; commit flows through existing ultimate handlers once.
+
+**Registry:** `src/data/weaponCombatPresentation/` — one profile per permanent `WeaponFamilyId` (never keyed by display name). Profiles cover motion family, palette, cue IDs, anchor + ultimate sequences, hit-stop/shake/haptic classes, and pose keys resolved through `combatPlayerPortrait.ts` + `combatPortraitCalibration.ts`.
+
+**Grammar:** Anticipation → Release → Contact → Aftermath. Restrained primitives (thin slash, tracers, breach rings, threads, crescent, refraction focus, KA/OW/Fracture overlays, contact spark). Generic mustard polygons / full-body purple outlines / opaque red silhouette fills / cyan waist blobs removed as standard weapon feedback. Outcome truth: miss/evade skip damaging impacts; multi-hit bursts share one release envelope.
+
+**Audio:** Procedural Web Audio cues in `combatPresentationAudio.ts` (unlock after gesture, mute/volume, polyphony cap, carbine dedupe, hidden-tab silence). Manual audible review still required (prior review captures had no audio track).
+
+**Bus / host:** `combatPresentationBus.ts` schedules cues + hit-stop/shake; `WeaponCombatPresentationHost` draws restrained arena overlays (`pointer-events: none`). `emitJuice` and post-`hurtEnemy` resolution feed the bus without mutating combat. Ultimate commits tag `actionKind: 'ULTIMATE'`.
+
+**Settings:** `presentationSettings.ts` — SFX mute/volume, screen shake, reduced motion, reduced flash, haptics, combat-speed timing compression.
+
+**Dev lab:** DevTest **Weapon Feedback Lab** forces idle/attack poses, anchor/ultimate, hit/miss/crit/KA/OW/break/Fracture/kill/reload/sacrifice, and accessibility toggles against the real registry.
+
+**Stop line:** Phase 3M runtime repair is in progress — **BLOCKED on manual re-review recordings**. Do not begin Phase 3N / 3O / 3P until the red / yellow / purple ultimate circles visibly open weapon interactions on the real combat screen.
 
 ## Progression Spine (Phase 1)
 
@@ -2164,7 +2184,7 @@ Stats below are base roster values. Spawned combat values can be replaced or sca
 | Ash Weeper | 102 | 14 | 2K / 2O | Backline | Siphon, Premature Ignition, Scavenge. Enrage triggers Ignition. Alpha Cinder death explosion. |
 | Miasma Tick Swarm | 44 | 8 | 1K / 0O | Frontline | Swarm Bite/Stamina Drain Leap, Strike, Scavenge. Cannot Fortify. Alpha Plague adds stronger stamina drain and bleed. |
 | Spall | 72 | 10 | 0K / 0O | Frontline | Strike. Alpha Volatile explodes and pierces defend. |
-| Scuttler | 70 | 9 | 0K / 0O | Frontline | Strike/Evade. High evade profile. |
+| Scuttler | 70 | 9 | 0K / 0O | Frontline | Strike/Evade. Passive 20% evade (Apex 30%). No reactive negate. |
 | Smog Caller | 100 | 12 | 0K / 1O | Backline disruptor | Strike/Siphon Abyssal. Alpha Suffocating increases melee stamina penalty. |
 | Resonance Caster | 88 | 14 | 0K / 1O | Backline artillery | Artillery Charge/Fire. Alpha Harmonic scales damage per turn. |
 | Tar Spitter | 86 | 12 | 0K / 0O | Backline artillery | Artillery Charge, Tar Bind, Strike. Alpha Fossilizing roots longer. |
@@ -2218,7 +2238,7 @@ Notable alpha mechanics:
 - Rabid Fracture Hound: extra attacks and shield damage.
 - Void Null Shade: AoE barrier target.
 - Paradox Spatial Glitch: stamina drain on teleport.
-- Apex Scuttler: higher evade.
+- Apex Scuttler: higher evade (30% vs 20% base).
 - Volatile Spall: explosion and pierce defend.
 - Undying Thrall: revive.
 - Siege Breacher: stamina shred.
@@ -2419,6 +2439,7 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 - **Weapon identity / WU-5 (live surfaces):** HUD gauges, combat callouts, and logs show the equipped weapon's ultimate display name. ULTIMATE-tagged boons/grafts remain compatible via legacy hook ability IDs (`EVISCERATE` / `ZERO_PROTOCOL` / `CATACLYSM_SIGIL`) while player-facing copy never emits retired class ultimate titles.
 - **Weapon identity / WU-2 (live rebind):** Longsword fires THREEFOLD BRAND (legacy EVISCERATE path); Carbine alone fires ZERO PROTOCOL; Scythe alone fires NULL CIRCUIT (legacy CATACLYSM_SIGIL). Sibling weapons retain class charge gauges and fire their own WU-4 ultimates.
 - **Weapon identity / WU-1 (live foundation):** Display names Longsword / Paired Blades / Unmaker / Revolver / Carbine / Black Door / Vambrace / Scythe / Heart's Due; Envoy starter = Vambrace; Vambrace anchor `GRAVEWEAVE` (legacy `BLACK_WICK`); combat portraits resolve from equipped weapon; `weaponUltimateRegistry` registers nine ultimates. Permanent family IDs unchanged.
+- **Weapon identity / Phase 3M (repair complete — ready for re-review):** Ultimate circle → weapon interaction popup host-gate fix; restrained weapon VFX; per-pose calibration (Scythe/Heart/Aegis); ultimate presentation tagging. Original 3M manual review did not pass. Next: 3N → 3O → 3P.
 - **Weapon identity / Phase 3L naming (superseded by WU-1 for display):** Prior 3L names (Veil Edge, Nullbreach Shotgun, Echo Lantern, etc.) are retired live strings. Nine unique weapon-specific slot-0 anchors remain; combat HUD first-slot + log resolve from equipped weapon.
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.

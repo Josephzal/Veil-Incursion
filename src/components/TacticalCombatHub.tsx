@@ -448,6 +448,11 @@ import {
   resolveWeaponUltimateInputMode,
   shouldSkipUltimateMinigame,
 } from '../data/weaponUltimateInputAdapter';
+import { isWeaponUltimateMinigameHostActive } from '../data/weaponUltimateActivationEngine';
+import {
+  createUltimateActivationToken,
+  traceUltimateActivation,
+} from '../utils/ultimateActivationTrace';
 import {
   sanitizeEnvoyCombatLoadout,
   sanitizeHexShotCombatLoadout,
@@ -460,6 +465,12 @@ import {
   triggerHaptic,
   triggerShake,
 } from '../utils/combatJuice';
+import { dispatchCombatPresentationFromJuice } from '../utils/combatPresentationBus';
+import { presentResolvedWeaponHit } from '../data/weaponCombatPresentation/presentResolvedWeaponHit';
+import {
+  playCombatPresentationCue,
+  unlockCombatPresentationAudio,
+} from '../utils/combatPresentationAudio';
 import type { UltimatePingVariant } from './combat/UltimateReadyPing';
 import CombatMagazineGauge from './combat/CombatMagazineGauge';
 import {
@@ -517,6 +528,8 @@ import {
   resolveWeaponUltimateDisplayName,
   resolveWeaponUltimateLegacyHookAbilityId,
   resolveWeaponUltimateActionTags,
+  formatWeaponUltimatePingAccessibilityLabel,
+  isWeaponUltimateActionId,
 } from '../data/weaponUltimateSurfaceEngine';
 import {
   detonateRiftSnareOnUnit,
@@ -734,6 +747,8 @@ interface TacticalCombatHubProps {
   narrativeCombatBoons?: import('../types/narrativeBonusReward').PendingNarrativeCombatBoons;
   /** Active weapon family locked at run start. */
   activeWeaponFamilyId?: WeaponFamilyId | null;
+  /** Dev combat sandbox — start with class ultimate meter charged for every weapon. */
+  primeUltimateAtStart?: boolean;
   activeWeaponTier?: WeaponTierNumber;
   /** WU-3 — Simplified Ultimate Inputs (STANDARD grade only). */
   simplifiedUltimateInputs?: boolean;
@@ -836,6 +851,7 @@ export default function TacticalCombatHub({
   activeWeaponFamilyId = null,
   activeWeaponTier = 1,
   simplifiedUltimateInputs = false,
+  primeUltimateAtStart = false,
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
   godModeActive = false,
@@ -994,6 +1010,8 @@ export default function TacticalCombatHub({
   const [cataclysmSigilVisible, setCataclysmSigilVisible] = useState(false);
   const [stagedWeaponUltimateId, setStagedWeaponUltimateId] = useState<WeaponUltimateId | null>(null);
   const stagedWeaponUltimateIdRef = useRef<WeaponUltimateId | null>(null);
+  const ultimateActivationTokenRef = useRef<string | null>(null);
+  const ultimateCommitLockRef = useRef<string | null>(null);
   const [fractureBreakUnitId, setFractureBreakUnitId] = useState<string | null>(null);
   const fractureBreakUnitIdRef = useRef<string | null>(null);
   const executeFractureBreakRef = useRef<(unitId: string) => void>(() => {});
@@ -2134,6 +2152,12 @@ export default function TacticalCombatHub({
   ) => {
     const event = buildCombatJuiceEvent(type, opts);
     recordJuiceEvent(juiceTelemetryRef.current, event);
+    // Phase 3M — juice events now drive audible/visual presentation (never mutate combat).
+    try {
+      dispatchCombatPresentationFromJuice(event);
+    } catch {
+      // Presentation must never block combat resolution.
+    }
     if (event.text) {
       // Optional: surface high-intensity juice as phase pulse without spamming.
       if (event.intensity === 'HIGH' || event.intensity === 'CRITICAL') {
@@ -3120,6 +3144,7 @@ export default function TacticalCombatHub({
         }
       }
       Vibration.vibrate([0, 32, 48, 28]);
+      playCombatPresentationCue('sfx.player.impact');
       if (!options?.skipStrikeFx) {
         playerViewportRef?.current?.triggerDamageEffect('hp');
       }
@@ -3484,6 +3509,26 @@ export default function TacticalCombatHub({
         publishSquadUi(squadRef.current);
         apparitionRef?.current?.triggerStatEvade();
         log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+        if (resolvedWeapon && source && !options?.indirectDamage && !options?.echoHit) {
+          try {
+            presentResolvedWeaponHit({
+              weaponFamilyId: resolvedWeapon.familyId,
+              abilityId: options?.abilityId,
+              targetId: evadeUnitId,
+              damage: 0,
+              critical: false,
+              killed: false,
+              evaded: true,
+              channel: options?.channel === 'OCCULT'
+                ? 'OCCULT'
+                : options?.channel === 'TRUE'
+                  ? 'TRUE'
+                  : 'KINETIC',
+            });
+          } catch {
+            // ignore presentation errors
+          }
+        }
         return false;
       }
       if (hit.ignoreDefenses && combatBuffRef.current.crimsonPactCharges > 0) {
@@ -4104,7 +4149,9 @@ export default function TacticalCombatHub({
         log('>> FOLDED — phased silhouette forced into true position.');
       }
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
-      if (source && !options?.indirectDamage && !options?.echoHit) {
+      // Prefer weapon-specific presentation; skip generic class flashes when a
+      // permanent weapon is resolving (Phase 3M repair — removes mustard/purple/red fills).
+      if (source && !options?.indirectDamage && !options?.echoHit && !resolvedWeapon) {
         const impactKind = operativeClass === 'AEGIS'
           ? 'AEGIS_SLICE' as const
           : operativeClass === 'HEX_SHOT'
@@ -4114,6 +4161,30 @@ export default function TacticalCombatHub({
         classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
       }
       Vibration.vibrate(18);
+      if (resolvedWeapon && source && !options?.indirectDamage && !options?.echoHit) {
+        try {
+          unlockCombatPresentationAudio();
+          presentResolvedWeaponHit({
+            weaponFamilyId: resolvedWeapon.familyId,
+            abilityId: options?.abilityId,
+            targetId: e.unitId,
+            damage: dmg,
+            critical,
+            killed: hp <= 0,
+            channel: options?.channel === 'OCCULT'
+              ? 'OCCULT'
+              : options?.channel === 'TRUE'
+                ? 'TRUE'
+                : operativeClass === 'HEX_SHOT'
+                  ? 'BALLISTIC'
+                  : 'KINETIC',
+            fractureApplied: (options?.fractureGain ?? 0) > 0,
+            actionKind: isWeaponUltimateActionId(options?.abilityId) ? 'ULTIMATE' : undefined,
+          });
+        } catch {
+          // Presentation must never block combat.
+        }
+      }
       if (resolvedWeapon && source === 'STRIKE' && operativeClass === 'AEGIS') {
         const hitResult = runWeaponOnMeleeHitHooks(
           { ...buildWeaponHookContext(), target: working, source, damage: { raw: dmg, channel: options?.channel, multiplier: 1 } },
@@ -6170,6 +6241,7 @@ export default function TacticalCombatHub({
     const entryAr = Math.max(
       startingAbyssalReservePercent,
       mutationModsRef.current.startingAbyssalPercent,
+      primeUltimateAtStart ? COMBAT_ACTION.ABYSSAL_RESERVE_CAP : 0,
     );
     abyssalRef.current = entryAr;
     skipRegenRef.current = false;
@@ -6291,7 +6363,10 @@ export default function TacticalCombatHub({
     playerApRef.current = entryAp;
     setPlayerActionPoints(entryAp);
     if (operativeClass === 'HEX_SHOT') {
-      applyHexShotCombatState(createInitialHexShotCombatState({
+      const primedProtocol = primeUltimateAtStart
+        ? HEX_MAGAZINE_CONFIG.maxProtocolCharges
+        : 0;
+      const hexInit = createInitialHexShotCombatState({
         hp: operativeHpRef.current,
         maxHp: maxSoulAnchor,
         stamina: staminaRef.current,
@@ -6299,7 +6374,28 @@ export default function TacticalCombatHub({
         ap: entryAp,
         ammo: maxAmmo,
         maxAmmo,
-      }));
+        protocolCharges: primedProtocol,
+      });
+      if (primeUltimateAtStart) {
+        hexInit.isUltimateAvailable = true;
+      }
+      applyHexShotCombatState(hexInit);
+    }
+    if (primeUltimateAtStart && operativeClass === 'ENVOY') {
+      const rotTarget = aliveUnits(initialSquad).find((unit) => unit.unitId);
+      if (rotTarget?.unitId) {
+        classCombatRef.current.veilRotStacks[rotTarget.unitId] = CATACLYSM_ROT_GATE;
+      }
+      const rotReady = evaluateEnvoyCataclysmReady(classCombatRef.current, initialSquad);
+      const ready = rotReady && canFireWeaponUltimate(activeWeaponFamilyId);
+      classCombatRef.current.cataclysmReady = ready;
+      cataclysmReadyPrevRef.current = ready;
+      setCataclysmReadyUi(ready);
+      setEnvoyRotStacksUi(totalVeilRotStacks(classCombatRef.current));
+      publishSquadUi(initialSquad);
+    }
+    if (primeUltimateAtStart) {
+      log('>> DEV SANDBOX — ultimate charge primed for equipped weapon.');
     }
     setSelectedAbility(null);
     setResolutionOutcome(null);
@@ -7573,6 +7669,14 @@ export default function TacticalCombatHub({
       log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
       return;
     }
+    const activationToken = createUltimateActivationToken();
+    ultimateActivationTokenRef.current = activationToken;
+    traceUltimateActivation({
+      event: 'ultimate-control-activated',
+      weaponFamilyId: activeWeaponFamilyId,
+      ultimateId: activeUltimateRecord?.id ?? null,
+      activationToken,
+    });
     const inputMode = resolveWeaponUltimateInputMode({
       simplifiedUltimateInputs: simplifiedUltimateInputs === true,
     });
@@ -7588,6 +7692,13 @@ export default function TacticalCombatHub({
       zeroProtocolActiveRef.current = true;
       setZeroProtocolVisible(true);
       combatPausedRef.current = true;
+      traceUltimateActivation({
+        event: 'ultimate-interaction-requested',
+        weaponFamilyId: activeWeaponFamilyId,
+        ultimateId: 'ZERO_PROTOCOL',
+        activationToken,
+        interactionId: 'ZERO_PROTOCOL_GRID',
+      });
       log('>> [ZERO PROTOCOL] >> Rapid execution grid online.');
       return;
     }
@@ -7600,6 +7711,13 @@ export default function TacticalCombatHub({
       }
       setCataclysmSigilVisible(true);
       combatPausedRef.current = true;
+      traceUltimateActivation({
+        event: 'ultimate-interaction-requested',
+        weaponFamilyId: activeWeaponFamilyId,
+        ultimateId: 'NULL_CIRCUIT',
+        activationToken,
+        interactionId: 'NULL_CIRCUIT_SIGIL',
+      });
       log('>> [NULL CIRCUIT] >> Trace the void pattern.');
       return;
     }
@@ -7609,6 +7727,13 @@ export default function TacticalCombatHub({
         commitThreefoldBrandSimplified();
         return;
       }
+      traceUltimateActivation({
+        event: 'ultimate-interaction-requested',
+        weaponFamilyId: activeWeaponFamilyId,
+        ultimateId: 'THREEFOLD_BRAND',
+        activationToken,
+        interactionId: 'THREEFOLD_BRAND_SLICE',
+      });
       onSlice();
       return;
     }
@@ -7629,7 +7754,15 @@ export default function TacticalCombatHub({
       }
       setStagedWeaponUltimateId(activeUltimateRecord.id);
       combatPausedRef.current = true;
-      log(`>> ${tag} >> Skill aperture open.`);
+      traceUltimateActivation({
+        event: 'ultimate-interaction-requested',
+        weaponFamilyId: activeUltimateRecord.weaponFamilyId,
+        ultimateId: activeUltimateRecord.id,
+        activationToken,
+        interactionId: 'WU4_STAGED',
+      });
+      // Interaction open only — no combat mutation / resolution commit yet.
+      log(`>> ${tag} >> Interaction ready — complete the skill aperture to commit.`);
     }
   };
 
@@ -7664,6 +7797,7 @@ export default function TacticalCombatHub({
       cycleRef.current = 'TEXT_COMBAT';
       setCycleState('TEXT_COMBAT');
       setEviscerateTargetUnitId(null);
+      combatPausedRef.current = false;
       log('>> [THREEFOLD BRAND] >> Cancelled — free. Abyssal Reserve retained.');
     }
   };
@@ -7719,8 +7853,25 @@ export default function TacticalCombatHub({
     forceStandard = false,
   ) => {
     const ultimateId = stagedWeaponUltimateIdRef.current ?? stagedWeaponUltimateId;
+    const token = ultimateActivationTokenRef.current;
+    if (token && ultimateCommitLockRef.current === token) {
+      traceUltimateActivation({
+        event: 'ultimate-commit-finished',
+        ultimateId,
+        activationToken: token,
+        detail: 'duplicate-commit-ignored',
+      });
+      return;
+    }
+    if (token) ultimateCommitLockRef.current = token;
     closeStagedWeaponUltimate();
     if (!ultimateId || !activeWeaponFamilyId) return;
+    traceUltimateActivation({
+      event: 'ultimate-commit-started',
+      weaponFamilyId: activeWeaponFamilyId,
+      ultimateId,
+      activationToken: token,
+    });
     if (!canFireWeaponUltimate(activeWeaponFamilyId)) {
       log(`[REJECTED] >> ${ultimateId} unavailable for equipped weapon.`);
       return;
@@ -8638,6 +8789,15 @@ export default function TacticalCombatHub({
     if (isCombatTerminal()) return;
     const s = sliceSessionRef.current; if (s.evaluated) return;
     s.evaluated = true; clearSliceTimers(); activeSliceRef.current = -1; setActiveSliceIndex(-1);
+    // Zero-input timeout must not spend Reserve or deal damage (Phase 3M runtime repair).
+    if (s.hitCount <= 0) {
+      cycleRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
+      combatPausedRef.current = false;
+      log('>> [THREEFOLD BRAND] >> Aperture closed — no traces locked. Abyssal Reserve retained.');
+      return;
+    }
     const resolved = resolveWeaponUltimateGrade({ hitCount: s.hitCount });
     const hits = resolved.effectiveHits ?? Math.max(1, s.hitCount);
     const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
@@ -8765,7 +8925,9 @@ export default function TacticalCombatHub({
       ?? enemyRef.current?.unitId
       ?? null;
     setEviscerateTargetUnitId(targetId);
-    cycleRef.current = 'OFFENSE_SLICE'; setCycleState('OFFENSE_SLICE'); queueSlice(0);
+    cycleRef.current = 'OFFENSE_SLICE'; setCycleState('OFFENSE_SLICE');
+    combatPausedRef.current = true;
+    queueSlice(0);
   };
   sliceHandlersRef.current = { queueNext: queueSlice, validate: validateSlice, evaluate: evaluateSlice, trigger: triggerSlice };
   useEffect(() => () => {
@@ -9440,11 +9602,16 @@ export default function TacticalCombatHub({
   const holdVictoryChrome =
     cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY';
 
-  const classMinigameActive =
-    activeReloadVisible
-    || zeroProtocolVisible
-    || cataclysmSigilVisible
-    || catalyticConsoleVisible;
+  // Must include staged WU-4 + OFFENSE_SLICE or the center ultimate circle opens state
+  // without mounting CombatMinigameOverlayHost (Phase 3M repair).
+  const classMinigameActive = isWeaponUltimateMinigameHostActive({
+    activeReloadVisible,
+    zeroProtocolVisible,
+    cataclysmSigilVisible,
+    catalyticConsoleVisible,
+    stagedWeaponUltimateId,
+    cycleState,
+  });
 
   const renderStatusFeed = () => (
     !classMinigameActive ? (
@@ -9523,8 +9690,17 @@ export default function TacticalCombatHub({
       ultimatePingDisabled: !isPlayerTurn
         || cycleState !== 'TEXT_COMBAT'
         || isExhausted
-        || combatPausedRef.current,
+        || combatPausedRef.current
+        || stagedWeaponUltimateId != null
+        || zeroProtocolVisible
+        || cataclysmSigilVisible,
       ultimatePingVariant: ultimatePingVariant,
+      ultimatePingAccessibilityLabel: formatWeaponUltimatePingAccessibilityLabel(activeWeaponFamilyId),
+      ultimatePingDisplayName: resolveWeaponUltimateDisplayName(activeWeaponFamilyId) ?? null,
+      ultimatePingInteractionOpen: stagedWeaponUltimateId != null
+        || zeroProtocolVisible
+        || cataclysmSigilVisible
+        || cycleState === 'OFFENSE_SLICE',
       masteryProgressVisible: masteryProgress.visible && isPlayerTurn && cycleState === 'TEXT_COMBAT',
       masteryProgressCurrent: masteryProgress.current,
       masteryProgressRequired: masteryProgress.required,
@@ -9554,6 +9730,10 @@ export default function TacticalCombatHub({
       parryBurstArena,
       ultimatePingReady,
       ultimatePingVariant,
+      activeWeaponFamilyId,
+      stagedWeaponUltimateId,
+      zeroProtocolVisible,
+      cataclysmSigilVisible,
       masteryProgress,
       sliceReady,
       enemyAlive,
@@ -9604,18 +9784,40 @@ export default function TacticalCombatHub({
         <ZeroProtocolGridOverlay
           visible={zeroProtocolVisible}
           onTap={handleZeroProtocolTap}
-          onComplete={(taps) => finishZeroProtocol(taps, false)}
+          onComplete={(taps) => {
+            if (taps <= 0) {
+              cancelWeaponUltimateInteraction();
+              return;
+            }
+            finishZeroProtocol(taps, false);
+          }}
         />
         <CataclysmSigilOverlay
           visible={cataclysmSigilVisible}
-          onResolve={(nodes) => handleCataclysmResolve(nodes, false)}
+          onResolve={(nodes) => {
+            if (nodes <= 0) {
+              cancelWeaponUltimateInteraction();
+              return;
+            }
+            handleCataclysmResolve(nodes, false);
+          }}
         />
         <WeaponUltimateStagedSkillOverlay
           visible={stagedWeaponUltimateId != null}
           ultimateId={stagedWeaponUltimateId}
           simplified={simplifiedUltimateInputs === true}
+          onCancel={cancelWeaponUltimateInteraction}
           onComplete={({ grade }) => commitStagedWeaponUltimate(grade, false)}
         />
+        {cycleState === 'OFFENSE_SLICE' ? (
+          <VectorSliceOverlay
+            visible
+            lines={sliceLines}
+            activeIndex={activeSliceIndex}
+            panHandlers={panResponder.panHandlers}
+            onArenaLayout={registerSliceArena}
+          />
+        ) : null}
       </WeaponUltimateHostChrome>
       <CatalyticConsoleOverlay
         visible={catalyticConsoleVisible}

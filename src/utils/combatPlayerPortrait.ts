@@ -3,6 +3,12 @@ import { Platform } from 'react-native';
 import type { ClassType } from '../types/game';
 import type { WeaponFamilyId } from '../types/weapon';
 import { STARTER_WEAPON_BY_CLASS, getWeaponFamily, isWeaponFamilyId } from '../data/weaponRegistry';
+import {
+  POSE_CALIBRATION,
+  getPoseCalibrationForFamily,
+  listPoseCalibrations,
+  type PoseCalibration,
+} from './combatPortraitCalibration';
 
 import AegisCombatAttack from '../../assets/images/character images/aegis/aegis_attacking.png';
 import AegisCombatIdle from '../../assets/images/character images/aegis/aegis_combat.png';
@@ -25,6 +31,9 @@ import EnvoyScytheAttack from '../../assets/images/character images/envoy/envoy_
 import EnvoyHeartIdle from '../../assets/images/character images/envoy/envoy_heart_idle.png';
 import EnvoyHeartAttack from '../../assets/images/character images/envoy/envoy_heart_attack.png';
 import EnvoyIcon from '../../assets/images/character images/envoy/envoy_icon.png';
+
+export type { PoseCalibration };
+export { listPoseCalibrations };
 
 type PortraitPair = { idle: ImageSourcePropType; attack: ImageSourcePropType };
 
@@ -65,58 +74,86 @@ const CLASS_BADGE_ICONS: Record<ClassType, ImageSourcePropType> = {
 export type PortraitMeta = {
   canvasW: number;
   canvasH: number;
+  /** Opaque-pixel content height (alpha-bounded). Used to lock on-screen character size. */
   contentH: number;
   feetFromBottom: number;
 };
 
 type PortraitMetaPair = { idle: PortraitMeta; attack: PortraitMeta };
 
+/**
+ * Reference idle — envoy_vambrace_idle.png (permanent ID: envoy-echo-lantern).
+ * Every idle and attack portrait scales so opaque content height matches this figure.
+ *
+ * scale = (REF.contentH * containFit(box, REF)) / pose.contentH
+ * → pose.contentH * scale === REF on-screen content height
+ */
+const ENVOY_VAMBRACE_IDLE_META: PortraitMeta = {
+  canvasW: 772,
+  canvasH: 1734,
+  contentH: 1714,
+  feetFromBottom: 0,
+};
+
+const HEX_SHOT_IDLE_META: PortraitMeta = {
+  canvasW: 592,
+  canvasH: 1254,
+  contentH: 1205,
+  feetFromBottom: 23,
+};
+
+const HEX_SHOT_ATTACK_META: PortraitMeta = {
+  canvasW: 698,
+  canvasH: 1262,
+  contentH: 1213,
+  feetFromBottom: 27,
+};
+
 /** Class-keyed meta retained for badge / legacy callers. */
 export const PORTRAIT_META: Record<ClassType, PortraitMetaPair> = {
-  ENVOY: {
-    idle: { canvasW: 450, canvasH: 1088, contentH: 1070, feetFromBottom: 0 },
-    attack: { canvasW: 824, canvasH: 1156, contentH: 1102, feetFromBottom: 19 },
-  },
   HEX_SHOT: {
-    idle: { canvasW: 592, canvasH: 1254, contentH: 1205, feetFromBottom: 23 },
-    attack: { canvasW: 698, canvasH: 1262, contentH: 1213, feetFromBottom: 27 },
+    idle: HEX_SHOT_IDLE_META,
+    attack: HEX_SHOT_ATTACK_META,
   },
   AEGIS: {
     idle: { canvasW: 400, canvasH: 1172, contentH: 1140, feetFromBottom: 19 },
     attack: { canvasW: 800, canvasH: 998, contentH: 969, feetFromBottom: 17 },
   },
+  // Envoy starter is Vambrace — match that art, not legacy envoy_idle.
+  ENVOY: {
+    idle: { canvasW: 772, canvasH: 1734, contentH: 1714, feetFromBottom: 0 },
+    attack: { canvasW: 1284, canvasH: 1578, contentH: 1469, feetFromBottom: 9 },
+  },
 };
 
+/** Measured from PNG alpha bounds — keep in sync when art is replaced. */
 const WEAPON_PORTRAIT_META: Record<WeaponFamilyId, PortraitMetaPair> = {
   'aegis-runed-longsword': PORTRAIT_META.AEGIS,
   'aegis-rift-edge': {
-    idle: { canvasW: 1384, canvasH: 1636, contentH: 1600, feetFromBottom: 20 },
-    attack: { canvasW: 1666, canvasH: 1384, contentH: 1340, feetFromBottom: 18 },
+    idle: { canvasW: 1384, canvasH: 1636, contentH: 1588, feetFromBottom: 22 },
+    attack: { canvasW: 1666, canvasH: 1384, contentH: 1340, feetFromBottom: 27 },
   },
   'aegis-claymore-blade': {
-    idle: { canvasW: 1200, canvasH: 1608, contentH: 1570, feetFromBottom: 20 },
-    attack: { canvasW: 1130, canvasH: 1626, contentH: 1590, feetFromBottom: 18 },
+    idle: { canvasW: 1200, canvasH: 1608, contentH: 1533, feetFromBottom: 23 },
+    attack: { canvasW: 1130, canvasH: 1626, contentH: 1552, feetFromBottom: 35 },
   },
   'hex-silver-core-sidearm': PORTRAIT_META.HEX_SHOT,
   'hex-pulse-rifle': {
-    idle: { canvasW: 988, canvasH: 1772, contentH: 1720, feetFromBottom: 24 },
-    attack: { canvasW: 1174, canvasH: 1724, contentH: 1670, feetFromBottom: 26 },
+    idle: { canvasW: 988, canvasH: 1772, contentH: 1705, feetFromBottom: 47 },
+    attack: { canvasW: 1174, canvasH: 1724, contentH: 1675, feetFromBottom: 15 },
   },
   'hex-void-cannon': {
-    idle: { canvasW: 682, canvasH: 1632, contentH: 1580, feetFromBottom: 22 },
-    attack: { canvasW: 1394, canvasH: 1542, contentH: 1490, feetFromBottom: 24 },
+    idle: { canvasW: 682, canvasH: 1632, contentH: 1593, feetFromBottom: 24 },
+    attack: { canvasW: 1394, canvasH: 1542, contentH: 1476, feetFromBottom: 30 },
   },
-  'envoy-echo-lantern': {
-    idle: { canvasW: 772, canvasH: 1734, contentH: 1690, feetFromBottom: 12 },
-    attack: { canvasW: 1284, canvasH: 1578, contentH: 1520, feetFromBottom: 18 },
-  },
+  'envoy-echo-lantern': PORTRAIT_META.ENVOY,
   'envoy-null-conduit': {
-    idle: { canvasW: 968, canvasH: 1698, contentH: 1650, feetFromBottom: 14 },
-    attack: { canvasW: 1962, canvasH: 1396, contentH: 1340, feetFromBottom: 16 },
+    idle: { canvasW: 968, canvasH: 1698, contentH: 1596, feetFromBottom: 18 },
+    attack: { canvasW: 1962, canvasH: 1396, contentH: 1349, feetFromBottom: 22 },
   },
   'envoy-sanguine-prism': {
-    idle: { canvasW: 856, canvasH: 1554, contentH: 1510, feetFromBottom: 12 },
-    attack: { canvasW: 2058, canvasH: 1256, contentH: 1200, feetFromBottom: 14 },
+    idle: { canvasW: 856, canvasH: 1554, contentH: 1522, feetFromBottom: 18 },
+    attack: { canvasW: 2058, canvasH: 1256, contentH: 1182, feetFromBottom: 30 },
   },
 };
 
@@ -141,56 +178,49 @@ function resolveMetaPair(
   return WEAPON_PORTRAIT_META[family] ?? PORTRAIT_META[classId];
 }
 
-function attackArtScaleForBox(idle: PortraitMeta, attack: PortraitMeta, box: FootprintBox): number {
-  const idleScale = containScale(idle, box);
-  const attackScale = containScale(attack, box);
-  return (idle.contentH * idleScale) / (attack.contentH * attackScale);
+/**
+ * Extra shrink — legacy aura helper only (does not affect idle/attack layouts).
+ */
+const ATTACK_RELATIVE_TO_IDLE = 0.94;
+
+export function getPoseCalibration(
+  classId: ClassType,
+  weaponFamilyId: WeaponFamilyId | null | undefined,
+  pose: 'idle' | 'attack',
+): PoseCalibration {
+  const family = resolvePortraitFamily(classId, weaponFamilyId);
+  return getPoseCalibrationForFamily(family, pose);
+}
+
+/** Contain-fit the Vambrace idle canvas into the art box. */
+function referenceContainScale(box: FootprintBox): number {
+  return Math.min(
+    box.width / ENVOY_VAMBRACE_IDLE_META.canvasW,
+    box.height / ENVOY_VAMBRACE_IDLE_META.canvasH,
+  );
+}
+
+/** Target on-screen opaque height — envoy-echo-lantern idle. */
+function referenceContentDisplayH(box: FootprintBox): number {
+  return ENVOY_VAMBRACE_IDLE_META.contentH * referenceContainScale(box);
 }
 
 /**
- * Extra shrink after height-matching — attack pose should read slightly smaller than idle.
- * Aegis attack canvas is much wider; without this it still feels oversized.
+ * Scale so pose opaque height matches envoy-echo-lantern idle, then apply
+ * per-pose visualScale from combatPortraitCalibration (manual art tune).
  */
-const ATTACK_RELATIVE_TO_IDLE: Record<ClassType, number> = {
-  AEGIS: 0.86,
-  HEX_SHOT: 0.94,
-  ENVOY: 0.94,
-};
-
-/**
- * Where the character body sits in the attack canvas (0 = left edge, 0.5 = center).
- * Wide melee / scythe / heart canvases keep the body under the idle pose.
- */
-const ATTACK_BODY_ANCHOR_X_BY_WEAPON: Record<WeaponFamilyId, number> = {
-  'aegis-runed-longsword': 0.30,
-  'aegis-rift-edge': 0.32,
-  'aegis-claymore-blade': 0.34,
-  'hex-silver-core-sidearm': 0.50,
-  'hex-pulse-rifle': 0.48,
-  'hex-void-cannon': 0.42,
-  'envoy-echo-lantern': 0.48,
-  'envoy-null-conduit': 0.34,
-  'envoy-sanguine-prism': 0.32,
-};
-
-const ATTACK_BODY_ANCHOR_X_BY_CLASS: Record<ClassType, number> = {
-  AEGIS: 0.30,
-  HEX_SHOT: 0.50,
-  ENVOY: 0.50,
-};
-
-/** Width-limited estimate for legacy aura sizing outside the footprint lock path. */
-function attackArtScaleEstimate(idle: PortraitMeta, attack: PortraitMeta): number {
-  return (idle.contentH / idle.canvasW) / (attack.contentH / attack.canvasW);
+function contentLockedScale(meta: PortraitMeta, box: FootprintBox): number {
+  return referenceContentDisplayH(box) / Math.max(1, meta.contentH);
 }
 
-function containScale(meta: PortraitMeta, box: FootprintBox): number {
-  return Math.min(box.width / meta.canvasW, box.height / meta.canvasH);
-}
-
-function canvasDisplaySize(meta: PortraitMeta, box: FootprintBox, boost = 1): { width: number; height: number } {
-  const scale = containScale(meta, box) * boost;
+function contentLockedDisplay(
+  meta: PortraitMeta,
+  box: FootprintBox,
+  visualScale = 1,
+): { width: number; height: number; scale: number } {
+  const scale = contentLockedScale(meta, box) * visualScale;
   return {
+    scale,
     width: meta.canvasW * scale,
     height: meta.canvasH * scale,
   };
@@ -221,23 +251,26 @@ export function computeFootprintIdleLayout(
     };
   }
 
+  const family = resolvePortraitFamily(classId, weaponFamilyId);
+  const cal = POSE_CALIBRATION[family].idle;
   const { idle } = resolveMetaPair(classId, weaponFamilyId);
-  const display = canvasDisplaySize(idle, box);
+  const display = contentLockedDisplay(idle, box, cal.visualScale);
 
   return {
     position: 'absolute',
     bottom: 0,
-    left: (box.width - display.width) / 2,
+    left: (box.width - display.width) / 2 + cal.translateX,
     width: display.width,
     height: display.height,
     backgroundColor: 'transparent',
     ...WEB_CONTAIN_BOTTOM,
+    ...(cal.translateY !== 0 ? { transform: [{ translateY: cal.translateY }] } : {}),
   };
 }
 
 /**
- * Pixel-locked attack layout — slightly smaller than idle character height,
- * body-anchored so wide melee canvases still read as lunging forward.
+ * Attack layout — Vambrace content-height lock × this pose's visualScale.
+ * Placement via attack bodyAnchorX / translate.
  */
 export function computeFootprintAttackLayout(
   box: FootprintBox,
@@ -256,16 +289,15 @@ export function computeFootprintAttackLayout(
     };
   }
 
-  const { idle, attack } = resolveMetaPair(classId, weaponFamilyId);
-  const boost = attackArtScaleForBox(idle, attack, box) * ATTACK_RELATIVE_TO_IDLE[classId];
-  const display = canvasDisplaySize(attack, box, boost);
-  const footDeltaPx = (attack.feetFromBottom - idle.feetFromBottom) * (display.width / attack.canvasW);
-  const idleCenterX = box.width / 2;
   const family = resolvePortraitFamily(classId, weaponFamilyId);
-  const bodyAnchorX = weaponFamilyId
-    ? ATTACK_BODY_ANCHOR_X_BY_WEAPON[family]
-    : ATTACK_BODY_ANCHOR_X_BY_CLASS[classId];
-  const left = idleCenterX - display.width * bodyAnchorX;
+  const attackCal = POSE_CALIBRATION[family].attack;
+  const { idle, attack } = resolveMetaPair(classId, weaponFamilyId);
+  const display = contentLockedDisplay(attack, box, attackCal.visualScale);
+  const footDeltaPx = (attack.feetFromBottom - idle.feetFromBottom)
+    * (display.width / attack.canvasW);
+  const footDeltaCapped = Math.max(-12, Math.min(12, footDeltaPx)) + attackCal.translateY;
+  const idleCenterX = box.width / 2;
+  const left = idleCenterX - display.width * attackCal.bodyAnchorX + attackCal.translateX;
 
   return {
     position: 'absolute',
@@ -275,7 +307,7 @@ export function computeFootprintAttackLayout(
     height: display.height,
     backgroundColor: 'transparent',
     ...WEB_CONTAIN_BOTTOM,
-    ...(footDeltaPx !== 0 ? { transform: [{ translateY: footDeltaPx }] } : {}),
+    ...(footDeltaCapped !== 0 ? { transform: [{ translateY: footDeltaCapped }] } : {}),
   };
 }
 
@@ -300,7 +332,8 @@ export function resolvePlayerCombatAttackArtScale(
   weaponFamilyId?: WeaponFamilyId | null,
 ): number {
   const { idle, attack } = resolveMetaPair(classId, weaponFamilyId);
-  return attackArtScaleEstimate(idle, attack) * ATTACK_RELATIVE_TO_IDLE[classId];
+  // Legacy aura helper — content-height ratio with shared attack shrink.
+  return (idle.contentH / Math.max(1, attack.contentH)) * ATTACK_RELATIVE_TO_IDLE;
 }
 
 export function playerCombatAttackArtLayerStyle(scale: number): ImageStyle {

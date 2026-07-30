@@ -52,7 +52,17 @@ export default function CombatOrbitalUltimate(): React.JSX.Element {
           <UltimateReadyPing
             ready={ui.ultimatePingReady}
             disabled={ui.ultimatePingDisabled}
+            interactionOpen={ui.ultimatePingInteractionOpen}
             variant={ui.ultimatePingVariant!}
+            accessibilityLabel={ui.ultimatePingAccessibilityLabel}
+            displayName={ui.ultimatePingDisplayName}
+            disabledReason={
+              ui.ultimatePingDisabled
+                ? (ui.ultimatePingInteractionOpen
+                  ? 'Ultimate interaction already open'
+                  : 'Ultimate unavailable this turn')
+                : null
+            }
             onPress={() => handlersRef.current.onUltimatePing()}
           />
         </View>

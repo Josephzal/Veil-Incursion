@@ -227,6 +227,7 @@ export default function CombatEnemyUnit({
 
             {onPress && !dissolving ? (
               <HapticPressable
+                sfx={false}
                 onPress={onPress}
                 style={[
                   styles.hitboxArena,

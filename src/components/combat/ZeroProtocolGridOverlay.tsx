@@ -42,6 +42,7 @@ export default function ZeroProtocolGridOverlay({
       if (finishedRef.current) return;
       finishedRef.current = true;
       setChannelActive(false);
+      // Zero taps → cancel free (do not spend Protocol / resolve damage).
       onCompleteRef.current(tapCountRef.current);
     }, ZERO_PROTOCOL_DURATION_MS);
 
@@ -76,31 +77,37 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
     elevation: 50,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(2, 6, 23, 0.7)',
   },
   hud: {
     position: 'absolute',
-    top: 48,
-    left: 0,
-    right: 0,
+    top: 56,
+    left: 16,
+    right: 16,
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
   },
   title: {
     fontFamily: 'monospace',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: '#fbbf24',
     letterSpacing: 1,
   },
   timer: {
     fontFamily: 'monospace',
-    fontSize: 8,
+    fontSize: 9,
     color: '#94a3b8',
   },
   counter: {
     fontFamily: 'monospace',
-    fontSize: 9,
+    fontSize: 14,
+    fontWeight: '700',
     color: '#f8fafc',
     marginTop: 4,
   },
