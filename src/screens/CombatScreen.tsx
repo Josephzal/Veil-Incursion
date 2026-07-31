@@ -486,7 +486,9 @@ export default function CombatScreen(): React.JSX.Element {
           ? ('aegis' as const)
           : operativeClass === 'HEX_SHOT'
             ? ('hex' as const)
-            : null
+            : operativeClass === 'ENVOY'
+              ? ('envoy' as const)
+              : null
       }
       bloodMistScale={
         combatWeaponFamilyId === 'hex-void-cannon'

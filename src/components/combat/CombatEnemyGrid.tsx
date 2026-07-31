@@ -112,7 +112,7 @@ interface CombatEnemyGridProps {
   /** Arena grid geometry — flex rows or absolute staggered 2.5D. */
   arenaGridVariant?: ArenaGridVariant;
   /** Class damage blood-shard burst on enemy center. */
-  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
   /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
   bloodMistScale?: number;
 }
@@ -132,7 +132,7 @@ interface BattlefieldSlotProps {
   onUnitDissolveComplete?: (unitId: string) => void;
   wrapperStyle?: ViewStyle;
   arenaGridVariant?: ArenaGridVariant;
-  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
   bloodMistScale?: number;
 }
 
@@ -241,7 +241,7 @@ interface EnemyUnitStackProps {
   abilityArmed?: boolean;
   accentColor: string;
   mutedColor: string;
-  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
   bloodMistScale?: number;
   onUnitPress?: (unitId: string) => void;
   onUnitDissolveComplete?: (unitId: string) => void;

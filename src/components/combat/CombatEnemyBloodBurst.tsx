@@ -1,8 +1,9 @@
 /**
- * Class damage feedback — blood shards that spawn off-center on the body,
+ * Class damage feedback — shards that spawn off-center on the body,
  * spray past the enemy bounds, and fade out just outside.
  * Aegis: red / blackish shards + deep red blood mist.
  * Hex Shot: shorter yellowish / burnt-orange shards + deep red blood mist.
+ * Envoy: Aegis-spread pink / purple / near-black shards + rising occult smoke + pink embers.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,7 +12,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import { getCombatPresentationSettings } from '../../data/weaponCombatPresentation/presentationSettings';
 
-export type EnemyBloodBurstVariant = 'aegis' | 'hex';
+export type EnemyBloodBurstVariant = 'aegis' | 'hex' | 'envoy';
 
 const BLOOD_REDS = [
   'rgba(168, 22, 28, 0.95)',
@@ -44,6 +45,31 @@ const BURNT_ORANGE = [
   'rgba(176, 78, 20, 0.88)',
 ] as const;
 
+/** Envoy shard palette — deep pink, violet, near-black occult ink. */
+const ENVOY_PINKS = [
+  'rgba(210, 42, 130, 0.95)',
+  'rgba(186, 28, 112, 0.93)',
+  'rgba(232, 64, 148, 0.9)',
+  'rgba(168, 22, 98, 0.94)',
+  'rgba(196, 48, 140, 0.92)',
+] as const;
+
+const ENVOY_PURPLES = [
+  'rgba(118, 28, 168, 0.95)',
+  'rgba(86, 18, 140, 0.93)',
+  'rgba(142, 44, 190, 0.9)',
+  'rgba(68, 12, 118, 0.94)',
+  'rgba(104, 24, 154, 0.92)',
+] as const;
+
+const ENVOY_NEAR_BLACK = [
+  'rgba(14, 4, 18, 0.95)',
+  'rgba(10, 2, 14, 0.93)',
+  'rgba(22, 6, 28, 0.9)',
+  'rgba(8, 2, 12, 0.94)',
+  'rgba(28, 8, 36, 0.88)',
+] as const;
+
 /** Deep desaturated blood — dense core vs wispy fringe. */
 const MIST_CORE = [
   'rgba(78, 4, 10, 0.72)',
@@ -63,6 +89,24 @@ const MIST_STREAK = [
   'rgba(96, 8, 14, 0.48)',
   'rgba(72, 4, 10, 0.52)',
   'rgba(118, 14, 20, 0.42)',
+] as const;
+
+/** Occult smoke — almost black violet haze. */
+const SMOKE_DARK = [
+  'rgba(12, 2, 16, 0.58)',
+  'rgba(18, 4, 24, 0.5)',
+  'rgba(8, 1, 12, 0.54)',
+  'rgba(24, 6, 32, 0.44)',
+  'rgba(16, 3, 22, 0.48)',
+] as const;
+
+/** Pink embers that lift out of the smoke and die quickly. */
+const EMBER_PINKS = [
+  'rgba(255, 96, 168, 0.95)',
+  'rgba(236, 72, 148, 0.92)',
+  'rgba(210, 48, 128, 0.9)',
+  'rgba(255, 120, 186, 0.88)',
+  'rgba(196, 40, 118, 0.9)',
 ] as const;
 
 /**
@@ -116,6 +160,30 @@ type MistSpec = {
   peakOpacity: number;
 };
 
+/** Rising occult smoke wisp or pink ember — elongated, never a hard circle. */
+type SmokeSpec = {
+  id: string;
+  kind: 'plume' | 'ember';
+  startX: number;
+  endX: number;
+  startY: number;
+  /** Negative = upward (screen Y grows downward). */
+  rise: number;
+  /** Horizontal thickness of the wisp capsule. */
+  width: number;
+  /** Vertical length — smoke reads as a rising ribbon, not a disc. */
+  height: number;
+  /** Slight lean so columns don't look mechanical. */
+  tiltDeg: number;
+  color: string;
+  delayMs: number;
+  peakOpacity: number;
+  /** Lateral billow as the wisp rises. */
+  endScaleX: number;
+  /** Vertical stretch / dissipation. */
+  endScaleY: number;
+};
+
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
@@ -126,6 +194,13 @@ function pickWidthTier(): WidthTier {
   if (roll < 0.58) return 'medium';
   if (roll < 0.82) return 'thick';
   return 'chunky';
+}
+
+function pickEnvoyShardColor(): string {
+  const roll = Math.random();
+  if (roll < 0.34) return pick(ENVOY_PINKS);
+  if (roll < 0.68) return pick(ENVOY_PURPLES);
+  return pick(ENVOY_NEAR_BLACK);
 }
 
 /** Pointy tip + broader broken base — reads as a glass/bone shard, not a line. */
@@ -151,8 +226,16 @@ function shardPolygonPoints(length: number, width: number, jagged: number): stri
 
 function buildShards(variant: EnemyBloodBurstVariant, reduced: boolean): ShardSpec[] {
   const tiers = variant === 'hex' ? HEX_WIDTH_TIERS : AEGIS_WIDTH_TIERS;
-  const primary = variant === 'hex' ? HEX_SHARD_YELLOWS : BLOOD_REDS;
-  const accent = variant === 'hex' ? BURNT_ORANGE : BLACKISH;
+  const primary = variant === 'hex'
+    ? HEX_SHARD_YELLOWS
+    : variant === 'envoy'
+      ? ENVOY_PINKS
+      : BLOOD_REDS;
+  const accent = variant === 'hex'
+    ? BURNT_ORANGE
+    : variant === 'envoy'
+      ? ENVOY_PURPLES
+      : BLACKISH;
   // 10–15 shards; reduced-motion keeps the same band but prefers the low end.
   const count = reduced
     ? 10 + Math.floor(Math.random() * 3)
@@ -166,12 +249,15 @@ function buildShards(variant: EnemyBloodBurstVariant, reduced: boolean): ShardSp
       ? (reduced ? 48 : 64) + Math.random() * (reduced ? 28 : 42)
       : (reduced ? 70 : 95) + Math.random() * (reduced ? 40 : 70);
     const endRadius = startRadius + sprayCarry;
+    const color = variant === 'envoy'
+      ? pickEnvoyShardColor()
+      : Math.random() > 0.38 ? pick(primary) : pick(accent);
     shards.push({
       id: `s-${i}-${Math.random().toString(36).slice(2, 7)}`,
       angleDeg: Math.random() * 360,
       length,
       width: tier.width,
-      color: Math.random() > 0.38 ? pick(primary) : pick(accent),
+      color,
       jagged: Math.random(),
       startRadius,
       endRadius,
@@ -270,6 +356,65 @@ function buildMist(reduced: boolean, scale = 1): MistSpec[] {
   }
 
   return mist;
+}
+
+/** Rising occult smoke + pink embers (Envoy only — replaces blood mist). */
+function buildMagicalSmoke(reduced: boolean, scale = 2): SmokeSpec[] {
+  const s = Math.max(0.5, scale);
+  const smoke: SmokeSpec[] = [];
+
+  // Dense core ribbons + fringe wisps — all seeded from portrait center.
+  const plumeCount = reduced ? 7 : 11 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < plumeCount; i += 1) {
+    const core = i < (reduced ? 3 : 5);
+    // Tight origin around silhouette center so the column stems from the body.
+    const startX = (Math.random() * 2 - 1) * (core ? 4 : 9) * s;
+    const drift = (Math.random() * 2 - 1) * (core ? 14 : 28) * s;
+    const width = ((core ? 7 : 4) + Math.random() * (core ? 8 : 6)) * s;
+    const height = width * ((core ? 2.8 : 3.4) + Math.random() * (core ? 1.6 : 2.2));
+    smoke.push({
+      id: `p-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      kind: 'plume',
+      startX,
+      endX: startX + drift,
+      startY: (Math.random() * 2 - 1) * 3 * s,
+      rise: -((reduced ? 40 : 56) + Math.random() * (reduced ? 32 : 52)) * s,
+      width,
+      height,
+      tiltDeg: (Math.random() * 2 - 1) * (core ? 12 : 22),
+      color: pick(SMOKE_DARK),
+      delayMs: Math.floor(Math.random() * (reduced ? 18 : 34)),
+      peakOpacity: core ? 0.38 + Math.random() * 0.22 : 0.22 + Math.random() * 0.2,
+      endScaleX: 1.55 + Math.random() * 0.7,
+      endScaleY: 1.7 + Math.random() * 0.85,
+    });
+  }
+
+  const emberCount = reduced ? 8 : 14 + Math.floor(Math.random() * 8);
+  for (let i = 0; i < emberCount; i += 1) {
+    const startX = (Math.random() * 2 - 1) * 6 * s;
+    const drift = (Math.random() * 2 - 1) * (reduced ? 10 : 18) * s;
+    const width = (1.2 + Math.random() * 1.6) * s;
+    const height = width * (2.2 + Math.random() * 2.4);
+    smoke.push({
+      id: `e-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      kind: 'ember',
+      startX,
+      endX: startX + drift,
+      startY: (Math.random() * 2 - 1) * 4 * s,
+      rise: -((reduced ? 44 : 62) + Math.random() * (reduced ? 30 : 48)) * s,
+      width,
+      height,
+      tiltDeg: (Math.random() * 2 - 1) * 18,
+      color: pick(EMBER_PINKS),
+      delayMs: Math.floor(Math.random() * (reduced ? 24 : 40)),
+      peakOpacity: 0.75 + Math.random() * 0.2,
+      endScaleX: 0.45 + Math.random() * 0.35,
+      endScaleY: 0.55 + Math.random() * 0.4,
+    });
+  }
+
+  return smoke;
 }
 
 function BloodShard({
@@ -484,15 +629,133 @@ function BloodMistStreak({
   );
 }
 
+function MagicalSmokeParticle({
+  smoke,
+  playToken,
+}: {
+  smoke: SmokeSpec;
+  playToken: number;
+}): React.JSX.Element {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const travel = useRef(new Animated.Value(0)).current;
+  const isEmber = smoke.kind === 'ember';
+
+  useEffect(() => {
+    opacity.stopAnimation();
+    travel.stopAnimation();
+    opacity.setValue(0);
+    travel.setValue(0);
+
+    // Embers: bright flash then rapid die-off while still rising.
+    const fadeIn = isEmber
+      ? 16 + Math.floor(Math.random() * 14)
+      : 48 + Math.floor(Math.random() * 36);
+    const hold = isEmber
+      ? 18 + Math.floor(Math.random() * 22)
+      : 80 + Math.floor(Math.random() * 70);
+    const fadeOut = isEmber
+      ? 70 + Math.floor(Math.random() * 50)
+      : 180 + Math.floor(Math.random() * 100);
+    const moveMs = fadeIn + hold + fadeOut;
+
+    Animated.parallel([
+      Animated.sequence([
+        Animated.delay(smoke.delayMs),
+        Animated.timing(opacity, {
+          toValue: smoke.peakOpacity,
+          duration: fadeIn,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.timing(opacity, {
+          toValue: isEmber ? smoke.peakOpacity * 0.55 : smoke.peakOpacity * 0.62,
+          duration: hold,
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: fadeOut,
+          easing: isEmber ? Easing.in(Easing.quad) : Easing.in(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(smoke.delayMs),
+        Animated.timing(travel, {
+          toValue: 1,
+          duration: moveMs,
+          easing: isEmber ? Easing.out(Easing.quad) : Easing.out(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
+    ]).start();
+  }, [isEmber, opacity, playToken, smoke.delayMs, smoke.peakOpacity, travel]);
+
+  const endY = smoke.startY + smoke.rise;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.smoke,
+        {
+          width: smoke.width,
+          height: smoke.height,
+          marginLeft: -smoke.width / 2,
+          marginTop: -smoke.height / 2,
+          // Capsule / ribbon — soft ends, never a filled disc.
+          borderRadius: Math.min(smoke.width, smoke.height) / 2,
+          backgroundColor: smoke.color,
+          opacity,
+          transform: [
+            {
+              translateX: travel.interpolate({
+                inputRange: [0, 1],
+                outputRange: [smoke.startX, smoke.endX],
+              }),
+            },
+            {
+              translateY: travel.interpolate({
+                inputRange: [0, 1],
+                outputRange: [smoke.startY, endY],
+              }),
+            },
+            { rotate: `${smoke.tiltDeg}deg` },
+            {
+              scaleX: travel.interpolate({
+                inputRange: [0, 0.3, 1],
+                outputRange: isEmber
+                  ? [0.75, 1, smoke.endScaleX]
+                  : [0.45, 0.95, smoke.endScaleX],
+              }),
+            },
+            {
+              scaleY: travel.interpolate({
+                inputRange: [0, 0.35, 1],
+                outputRange: isEmber
+                  ? [0.85, 1.1, smoke.endScaleY]
+                  : [0.55, 1.15, smoke.endScaleY],
+              }),
+            },
+          ],
+        },
+      ]}
+    />
+  );
+}
+
 /** Gap between Cinder Sweep pellet bursts. */
 const BURST_REPEAT_GAP_MS = 72;
 /** Keep overlapping layers mounted until shards/mist finish fading. */
 const BURST_LAYER_TTL_MS = 480;
+/** Envoy smoke rises a beat longer than blood mist. */
+const ENVOY_BURST_LAYER_TTL_MS = 640;
 
 type BurstLayer = {
   token: number;
   shards: ShardSpec[];
   mist: MistSpec[];
+  smoke: SmokeSpec[];
 };
 
 interface CombatEnemyBloodBurstProps {
@@ -532,6 +795,8 @@ export default function CombatEnemyBloodBurst({
     const gap = reduced ? Math.floor(BURST_REPEAT_GAP_MS * 0.75) : BURST_REPEAT_GAP_MS;
     // Geometry scale only — parent View transforms fight native-driver particle motion.
     const mistSize = mistScale > 0 ? mistScale : 1;
+    const isEnvoy = variant === 'envoy';
+    const layerTtl = isEnvoy ? ENVOY_BURST_LAYER_TTL_MS : BURST_LAYER_TTL_MS;
 
     for (let i = 0; i < repeats; i += 1) {
       const fireTimer = setTimeout(() => {
@@ -539,12 +804,13 @@ export default function CombatEnemyBloodBurst({
         const layer: BurstLayer = {
           token,
           shards: buildShards(variant, reduced),
-          mist: buildMist(reduced, mistSize),
+          mist: isEnvoy ? [] : buildMist(reduced, mistSize),
+          smoke: isEnvoy ? buildMagicalSmoke(reduced) : [],
         };
         setBursts((prev) => [...prev, layer]);
         const clearTimer = setTimeout(() => {
           setBursts((prev) => prev.filter((b) => b.token !== token));
-        }, BURST_LAYER_TTL_MS);
+        }, layerTtl);
         timersRef.current.push(clearTimer);
       }, i * gap);
       timersRef.current.push(fireTimer);
@@ -561,6 +827,13 @@ export default function CombatEnemyBloodBurst({
             <BloodMistStreak
               key={`${burst.token}-${particle.id}`}
               mist={particle}
+              playToken={burst.token}
+            />
+          ))}
+          {burst.smoke.map((particle) => (
+            <MagicalSmokeParticle
+              key={`${burst.token}-${particle.id}`}
+              smoke={particle}
               playToken={burst.token}
             />
           ))}
@@ -591,6 +864,12 @@ const styles = StyleSheet.create({
     top: '50%',
   },
   mist: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    zIndex: 0,
+  },
+  smoke: {
     position: 'absolute',
     left: '50%',
     top: '50%',

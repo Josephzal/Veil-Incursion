@@ -57,7 +57,7 @@ interface CombatEnemyUnitProps {
   /** Arena backline dash target offset toward operative sprite. */
   meleeDashDelta?: { x: number; y: number };
   /** Class-specific blood shard burst on damage flash. */
-  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
   /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
   bloodMistScale?: number;
   onPress?: () => void;

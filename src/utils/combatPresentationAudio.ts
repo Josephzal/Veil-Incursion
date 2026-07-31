@@ -17,6 +17,7 @@ import {
   CARBINE_BURST_SAMPLE,
   CARBINE_RELOAD_SAMPLE,
   ENVOY_DOT_SAMPLE,
+  ENVOY_HIT_IMPACT_SAMPLE,
   FRACTURE_BREAK_SAMPLE,
   HEART_ATTACK_SAMPLE,
   HEX_DOT_SAMPLE,
@@ -204,6 +205,12 @@ CUE_RECIPES['sfx.aegis.player_buff'] = {
 CUE_RECIPES['sfx.envoy.dot'] = {
   layers: [{ kind: 'sine', freq: 280, freqEnd: 140, gain: 0.07, durationMs: 90 }],
 };
+/** Vambrace / Heart's Due enemy hit impact — sample-backed, short fade. */
+CUE_RECIPES['sfx.envoy.hit_impact'] = {
+  layers: [
+    { kind: 'square', freq: 160, freqEnd: 60, gain: 0.1, durationMs: 70, noise: true },
+  ],
+};
 CUE_RECIPES['sfx.hex.dot'] = {
   layers: [{ kind: 'triangle', freq: 320, freqEnd: 160, gain: 0.07, durationMs: 80 }],
 };
@@ -293,6 +300,7 @@ const SAMPLE_SOURCES: Record<string, unknown> = {
   'sfx.aegis.ruin': AEGIS_RUIN_SAMPLE,
   'sfx.aegis.player_buff': AEGIS_PLAYER_BUFF_SAMPLE,
   'sfx.envoy.dot': ENVOY_DOT_SAMPLE,
+  'sfx.envoy.hit_impact': ENVOY_HIT_IMPACT_SAMPLE,
   'sfx.hex.dot': HEX_DOT_SAMPLE,
   'sfx.fracture.break': FRACTURE_BREAK_SAMPLE,
 };
@@ -329,6 +337,7 @@ const SAMPLE_GAIN: Record<string, number> = {
   'sfx.aegis.ruin': 1,
   'sfx.aegis.player_buff': 1,
   'sfx.envoy.dot': 1,
+  'sfx.envoy.hit_impact': 1,
   'sfx.hex.dot': 1,
   'sfx.fracture.break': 1,
 };
@@ -399,6 +408,8 @@ const SAMPLE_FADE_OUT_MS: Partial<Record<string, number>> = {
   'sfx.scythe.ultimate': 800,
   'sfx.heart.release': 10000,
   'sfx.vambrace.release': 800,
+  // Punch then die immediately — almost the whole ~260ms clip is the fade.
+  'sfx.envoy.hit_impact': 200,
 };
 
 /** Hex Shot attack/release cues blocked while the reload minigame is open. */
@@ -630,9 +641,27 @@ export function resolveCombatPresentationCueRecipe(cueId: string): CueRecipe | n
   };
 }
 
+/** Vambrace / Heart's Due only — Scythe keeps its own impact chain. */
+const ENVOY_SOFT_HIT_IMPACT_CUES = new Set([
+  'sfx.vambrace.release',
+  'sfx.heart.release',
+]);
+
+function layerEnvoyHitImpact(
+  cueId: string,
+  opts?: { force?: boolean; skipScytheImpact?: boolean; skipImpactThud?: boolean },
+): void {
+  if (opts?.skipImpactThud) return;
+  if (!ENVOY_SOFT_HIT_IMPACT_CUES.has(cueId)) return;
+  playCombatPresentationCue('sfx.envoy.hit_impact', {
+    force: true,
+    skipImpactThud: true,
+  });
+}
+
 export function playCombatPresentationCue(
   cueId: string,
-  opts?: { force?: boolean; skipScytheImpact?: boolean },
+  opts?: { force?: boolean; skipScytheImpact?: boolean; skipImpactThud?: boolean },
 ): boolean {
   const settings = getCombatPresentationSettings();
   if (settings.sfxMuted && !opts?.force) return false;
@@ -718,6 +747,7 @@ export function playCombatPresentationCue(
         playCombatPresentationCue('sfx.scythe.impact', { force: true });
       }, SCYTHE_IMPACT_DELAY_MS);
     }
+    layerEnvoyHitImpact(cueId, opts);
     return true;
   }
 
@@ -781,6 +811,7 @@ export function playCombatPresentationCue(
         playCombatPresentationCue('sfx.scythe.impact', { force: true });
       }, SCYTHE_IMPACT_DELAY_MS);
     }
+    layerEnvoyHitImpact(cueId, opts);
     return true;
   } catch {
     return false;
