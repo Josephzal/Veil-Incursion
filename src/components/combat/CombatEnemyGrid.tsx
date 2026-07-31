@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
@@ -33,6 +33,11 @@ import {
   FRONTLINE_BATTLEFIELD_LIFT_RATIO,
   SOLO_BATTLEFIELD_LIFT_RATIO,
 } from './combatEnemyBarLayout';
+import {
+  getWardenStrikeActiveTargetId,
+  isWardenStrikePresentationActive,
+  subscribeWardenStrikePresentation,
+} from '../../data/wardenStrikePresentation';
 
 const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0.35)';
 
@@ -139,6 +144,24 @@ function BattlefieldSlot({
   arenaGridVariant = 'flex',
 }: BattlefieldSlotProps): React.JSX.Element {
   const presentation = resolveSlotPresentation(slot, layoutMode, arenaGridVariant);
+  const [wardenPlane, setWardenPlane] = useState<'none' | 'target' | 'nonTarget'>('none');
+
+  useEffect(() => subscribeWardenStrikePresentation((event) => {
+    if (event.phase === 'done' || event.result.replayOnly) {
+      setWardenPlane('none');
+      return;
+    }
+    if (!isWardenStrikePresentationActive()) {
+      setWardenPlane('none');
+      return;
+    }
+    const targetId = getWardenStrikeActiveTargetId();
+    if (!unit?.unitId || targetId == null) {
+      setWardenPlane('none');
+      return;
+    }
+    setWardenPlane(unit.unitId === targetId ? 'target' : 'nonTarget');
+  }), [unit?.unitId]);
 
   const meleeDashDelta = useMemo(() => {
     if (!unit || arenaWidth <= 0 || arenaHeight <= 0) return undefined;
@@ -151,14 +174,28 @@ function BattlefieldSlot({
   }, [onUnitDissolveComplete, unit]);
 
   const dissolving = unit != null && (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
-  const zIndex = unit?.isBacklineDashing ? 50 : presentation.zIndex;
+  // Parent stacking: keep ALL enemy artwork (including the selected target) under the
+  // moving player. Brand/portrait must not print onto the Aegis. Chrome floats lift
+  // via the arena combat-UI plane, not by elevating this whole slot.
+  let zIndex = unit?.isBacklineDashing ? 50 : presentation.zIndex;
+  if (wardenPlane === 'nonTarget' || wardenPlane === 'target') {
+    zIndex = 1;
+  }
+
+  const slotStyle: ViewStyle | undefined = wrapperStyle
+    ? {
+        ...wrapperStyle,
+        zIndex,
+        elevation: wardenPlane !== 'none' ? 1 : undefined,
+      }
+    : undefined;
 
   return (
     <CombatEnemyWrapper
       width={wrapperWidth}
       scale={presentation.unitScale}
       zIndex={zIndex}
-      style={wrapperStyle}
+      style={slotStyle}
     >
       {unit ? (
         <CombatEnemyDissolveEffect

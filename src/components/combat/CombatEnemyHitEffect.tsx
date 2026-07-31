@@ -7,6 +7,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { isWardenStrikePresentationActive, WARDEN_STRIKE_VFX_LAYER_TOGGLES } from '../../data/wardenStrikePresentation';
 
 interface CombatEnemyHitEffectProps {
   hitFlashSeq?: number;
@@ -29,6 +30,10 @@ export default function CombatEnemyHitEffect({
   useEffect(() => {
     if (hitFlashSeq <= 0 || hitFlashSeq === lastSeqRef.current) return;
     lastSeqRef.current = hitFlashSeq;
+    // Warden's Strike owns its target-local steel contact — skip generic spark.
+    if (isWardenStrikePresentationActive()) return;
+    if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.hitFlashSeqVisuals) return;
+    if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.enemyHitEffect) return;
 
     flashOpacity.value = withSequence(
       withTiming(0.9, { duration: 40, easing: Easing.out(Easing.quad) }),

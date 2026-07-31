@@ -135,6 +135,10 @@ registerFamily('heart', {
 CUE_RECIPES['sfx.aegis.attack'] = {
   layers: [{ kind: 'triangle', freq: 680, freqEnd: 320, gain: 0.1, durationMs: 85 }],
 };
+/** Longsword basic impact — contact frame for Warden's Strike (not Threefold Brand). */
+CUE_RECIPES['sfx.aegis.longsword_impact'] = {
+  layers: [{ kind: 'triangle', freq: 520, freqEnd: 220, gain: 0.11, durationMs: 90 }],
+};
 CUE_RECIPES['sfx.aegis.ultimate'] = {
   layers: [{ kind: 'sawtooth', freq: 520, freqEnd: 180, gain: 0.12, durationMs: 140 }],
 };
@@ -238,6 +242,7 @@ type AudioCtxLike = {
 
 const SAMPLE_SOURCES: Record<string, unknown> = {
   'sfx.aegis.attack': AEGIS_ATTACK_SAMPLE,
+  'sfx.aegis.longsword_impact': AEGIS_ATTACK_SAMPLE,
   'sfx.aegis.ultimate': AEGIS_ULTIMATE_SAMPLE,
   'sfx.aegis.ultimate2': AEGIS_ULTIMATE2_SAMPLE,
   'sfx.aegis.parry': AEGIS_PARRY_SAMPLE,
@@ -270,6 +275,7 @@ const SAMPLE_SOURCES: Record<string, unknown> = {
 
 const SAMPLE_GAIN: Record<string, number> = {
   'sfx.aegis.attack': 1,
+  'sfx.aegis.longsword_impact': 1,
   'sfx.aegis.ultimate': 1,
   'sfx.aegis.ultimate2': 1,
   'sfx.aegis.parry': 1,

@@ -306,6 +306,9 @@ export interface CombatGridUnitSnapshot {
   statusFloatSeq?: number;
   statusFloatLabel?: string;
   statusFloatTone?: StatusFloatTone;
+  /** Numeric damage floater — separate from status/defense callouts. */
+  damageFloatSeq?: number;
+  damageFloatLabel?: string;
   /** True while a backline melee dash tween is in flight. */
   isBacklineDashing?: boolean;
   /** Increments to trigger backline melee dash-and-return VFX. */

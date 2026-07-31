@@ -8,7 +8,6 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import type { EnemyTurnPhase } from '../../utils/combatTelemetryFormat';
@@ -32,7 +31,9 @@ const IDLE_HALF_MS = IDLE_CYCLE_MS / 2;
 const IDLE_TRAVEL_Y = 1.5;
 const IDLE_SCALE_MIN = 0.99;
 const STAND_SCALE = 1.05;
-const RECOIL_X = 15;
+/** Default hit recoil (non-Warden). Warden uses stronger timed impulse. */
+const RECOIL_X = 10;
+const RECOIL_X_REDUCED = 3;
 const RETURN_EASING = Easing.out(Easing.cubic);
 
 interface CombatEnemyAnchorMotionProps {
@@ -44,6 +45,8 @@ interface CombatEnemyAnchorMotionProps {
   backlineMeleeDashSeq?: number;
   meleeDashDelta?: { x: number; y: number };
   frozen?: boolean;
+  /** CombatEnemyWrapper scale — recoil is divided so configured px lands in screen space. */
+  layoutUnitScale?: number;
 }
 
 export default function CombatEnemyAnchorMotion({
@@ -54,6 +57,7 @@ export default function CombatEnemyAnchorMotion({
   backlineMeleeDashSeq = 0,
   meleeDashDelta,
   frozen = false,
+  layoutUnitScale = 1,
 }: CombatEnemyAnchorMotionProps): React.JSX.Element {
   const lastHitRef = useRef(0);
   const lastDashRef = useRef(0);
@@ -63,28 +67,45 @@ export default function CombatEnemyAnchorMotion({
   const stepX = useSharedValue(0);
   const stepScale = useSharedValue(1);
   const recoilX = useSharedValue(0);
+  const recoilRot = useSharedValue(0);
   const meleeDashX = useSharedValue(0);
   const meleeDashY = useSharedValue(0);
   const motionLocked = useSharedValue(0);
 
+  // Don't cancel an in-flight Warden recoil when something else freezes the portrait.
   useEffect(() => {
     motionLocked.value = frozen ? 1 : 0;
     if (!frozen) return;
+
+    let wardenActive = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const wardenMod = require('../../data/wardenStrikePresentation') as {
+        isWardenStrikePresentationActive: () => boolean;
+      };
+      wardenActive = wardenMod.isWardenStrikePresentationActive();
+    } catch {
+      wardenActive = false;
+    }
 
     cancelAnimation(idlePhase);
     cancelAnimation(meleeDashX);
     cancelAnimation(meleeDashY);
     cancelAnimation(stepX);
-    cancelAnimation(recoilX);
     cancelAnimation(stepScale);
+    if (!wardenActive) {
+      cancelAnimation(recoilX);
+      cancelAnimation(recoilRot);
+      recoilX.value = 0;
+      recoilRot.value = 0;
+    }
 
     idlePhase.value = 0;
     meleeDashX.value = 0;
     meleeDashY.value = 0;
     stepX.value = 0;
-    recoilX.value = 0;
     stepScale.value = 1;
-  }, [frozen, idlePhase, meleeDashX, meleeDashY, motionLocked, recoilX, stepScale, stepX]);
+  }, [frozen, idlePhase, meleeDashX, meleeDashY, motionLocked, recoilRot, recoilX, stepScale, stepX]);
 
   useEffect(() => {
     if (turnPhase != null) {
@@ -192,13 +213,120 @@ export default function CombatEnemyAnchorMotion({
   useEffect(() => {
     if (hitFlashSeq <= 0 || hitFlashSeq === lastHitRef.current) return;
     lastHitRef.current = hitFlashSeq;
-    recoilX.value = RECOIL_X;
-    recoilX.value = withSpring(0, {
-      damping: 14,
-      stiffness: 220,
-      mass: 0.8,
-    });
-  }, [hitFlashSeq, recoilX]);
+    let reducedMotion = false;
+    let wardenActive = false;
+    let recoilPx = RECOIL_X;
+    let recoilOutMs = 50;
+    let recoilReturnMs = 100;
+    let recoilDeg = 0;
+    let wardenReducedRecoilPx = RECOIL_X_REDUCED;
+    try {
+      // Lazy — keep this file free of circular combat-presentation imports at module load.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const settingsMod = require('../../data/weaponCombatPresentation/presentationSettings') as {
+        getCombatPresentationSettings: () => { reducedMotion: boolean };
+      };
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const wardenMod = require('../../data/wardenStrikePresentation') as {
+        isWardenStrikePresentationActive: () => boolean;
+        WARDEN_STRIKE_TIMELINE_MS: {
+          enemyRecoilPx: number;
+          enemyRecoilOutMs: number;
+          enemyRecoilReturnMs: number;
+          enemyRecoilDeg: number;
+          reducedMotionRecoilPx: number;
+        };
+        WARDEN_STRIKE_VFX_LAYER_TOGGLES: { enemyRecoil: boolean };
+      };
+      reducedMotion = settingsMod.getCombatPresentationSettings().reducedMotion;
+      wardenActive = wardenMod.isWardenStrikePresentationActive();
+      if (!wardenMod.WARDEN_STRIKE_VFX_LAYER_TOGGLES.enemyRecoil && wardenActive) {
+        return;
+      }
+      if (wardenActive) {
+        recoilPx = wardenMod.WARDEN_STRIKE_TIMELINE_MS.enemyRecoilPx;
+        recoilOutMs = wardenMod.WARDEN_STRIKE_TIMELINE_MS.enemyRecoilOutMs;
+        recoilReturnMs = wardenMod.WARDEN_STRIKE_TIMELINE_MS.enemyRecoilReturnMs;
+        recoilDeg = wardenMod.WARDEN_STRIKE_TIMELINE_MS.enemyRecoilDeg;
+        wardenReducedRecoilPx = wardenMod.WARDEN_STRIKE_TIMELINE_MS.reducedMotionRecoilPx;
+      }
+    } catch {
+      reducedMotion = false;
+    }
+    if (reducedMotion) {
+      recoilPx = wardenActive ? wardenReducedRecoilPx : RECOIL_X_REDUCED;
+      recoilDeg = 0;
+      recoilOutMs = 40;
+      recoilReturnMs = 70;
+    }
+    let recoilSign = 1;
+    if (wardenActive) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const approachMod = require('../../data/wardenStrikeApproach') as {
+          getWardenRecoilSignX: () => number;
+        };
+        recoilSign = approachMod.getWardenRecoilSignX();
+      } catch {
+        recoilSign = 1;
+      }
+    }
+    cancelAnimation(recoilX);
+    cancelAnimation(recoilRot);
+    recoilX.value = 0;
+    recoilRot.value = 0;
+    // Compensate CombatEnemyWrapper layoutUnitScale so configured CSS px is final screen motion.
+    const parentScale = Math.max(0.35, layoutUnitScale || 1);
+    const screenRecoilPx = recoilPx / parentScale;
+    recoilX.value = withSequence(
+      withTiming(screenRecoilPx * recoilSign, {
+        duration: recoilOutMs,
+        easing: Easing.out(Easing.cubic),
+      }),
+      withTiming(0, {
+        duration: recoilReturnMs,
+        easing: RETURN_EASING,
+      }),
+    );
+    if (recoilDeg !== 0) {
+      recoilRot.value = withSequence(
+        withTiming(recoilDeg, {
+          duration: recoilOutMs,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withTiming(0, {
+          duration: recoilReturnMs,
+          easing: RETURN_EASING,
+        }),
+      );
+    }
+    if (
+      typeof __DEV__ !== 'undefined'
+      && __DEV__
+      && wardenActive
+    ) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const toggles = require('../../data/wardenStrikePresentation') as {
+          WARDEN_STRIKE_VFX_LAYER_TOGGLES: { recoilIsolationMode: boolean };
+        };
+        if (toggles.WARDEN_STRIKE_VFX_LAYER_TOGGLES.recoilIsolationMode) {
+          // eslint-disable-next-line no-console
+          console.info('[WARDEN RECOIL PROOF]', {
+            configuredRecoilPx: recoilPx,
+            layoutUnitScale: parentScale,
+            screenRecoilPx,
+            recoilDeg,
+            recoilOutMs,
+            recoilReturnMs,
+            recoilSign,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [hitFlashSeq, layoutUnitScale, recoilRot, recoilX]);
 
   useEffect(() => {
     if (frozen || backlineMeleeDashSeq <= 0 || backlineMeleeDashSeq === lastDashRef.current) return;
@@ -246,10 +374,12 @@ export default function CombatEnemyAnchorMotion({
 
   const motionStyle = useAnimatedStyle(() => {
     if (motionLocked.value === 1) {
+      // Keep Warden recoil visible even if hit-stop locks other motion.
       return {
         transform: [
-          { translateX: 0 },
+          { translateX: recoilX.value },
           { translateY: 0 },
+          { rotate: `${recoilRot.value}deg` },
           { scale: 1 },
         ],
       };
@@ -263,6 +393,7 @@ export default function CombatEnemyAnchorMotion({
         {
           translateY: idlePhase.value * -IDLE_TRAVEL_Y * breatheActive.value + meleeDashY.value,
         },
+        { rotate: `${recoilRot.value}deg` },
         { scale: stepScale.value * breatheScale },
       ],
     };

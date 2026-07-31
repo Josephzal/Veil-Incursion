@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import { textGlow } from '../../utils/adaptiveStyles';
 import type { StatusFloatTone } from '../../utils/combatTelemetryFormat';
+import { isWardenStrikePresentationActive } from '../../data/wardenStrikePresentation';
 
 const MONO = 'monospace';
 
@@ -43,8 +44,14 @@ export default function CombatFloatingStatusText({
     translateY.setValue(10);
     scale.setValue(0.88);
 
+    const isNumericDamage = /^\d+$/.test(label);
     const riseMs = Math.floor(durationMs * 0.55);
     const fadeMs = Math.floor(durationMs * 0.45);
+    const warden = isWardenStrikePresentationActive();
+    // Damage primary; defense callouts sit ≥20 CSS px above during Warden.
+    const peakY = isNumericDamage
+      ? (warden ? -12 : -26)
+      : (warden ? -36 : -26);
 
     Animated.parallel([
       Animated.timing(opacity, {
@@ -54,7 +61,7 @@ export default function CombatFloatingStatusText({
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
-        toValue: -26,
+        toValue: peakY,
         duration: riseMs,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: USE_NATIVE_DRIVER,
@@ -78,21 +85,23 @@ export default function CombatFloatingStatusText({
   if (!visible || !label) return null;
 
   const color = TONE_COLORS[tone];
+  const isNumericDamage = /^\d+$/.test(label);
 
   return (
     <Animated.Text
       style={[
         styles.label,
+        isNumericDamage ? styles.damageLabel : null,
         {
-          color,
+          color: isNumericDamage ? '#f1f5f9' : color,
           opacity,
           transform: [{ translateY }, { scale }],
-          ...textGlow({ color, radius: 6, offset: { width: 0, height: 0 } }),
+          ...textGlow({ color: isNumericDamage ? '#f1f5f9' : color, radius: 6, offset: { width: 0, height: 0 } }),
           pointerEvents: 'none',
         },
       ]}
     >
-      {label.toUpperCase()}
+      {isNumericDamage ? label : label.toUpperCase()}
     </Animated.Text>
   );
 }
@@ -104,5 +113,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textAlign: 'center'
+  },
+  damageLabel: {
+    fontSize: 15,
+    letterSpacing: 0.8,
+    fontWeight: '900',
   },
 });

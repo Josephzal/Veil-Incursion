@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import { textGlow } from '../../utils/adaptiveStyles';
+import { isWardenStrikePresentationActive } from '../../data/wardenStrikePresentation';
 import type { DamageChannel } from '../../types/aegisCombat';
 
 const MONO = 'monospace';
@@ -15,7 +16,11 @@ interface CombatEnemyCritLabelProps {
   channel?: DamageChannel;
 }
 
-/** Compact [ CRITICAL ] floater anchored just above the enemy hitbox. */
+/**
+ * Compact [ CRITICAL ] floater for non-Warden hits.
+ * During Warden, CombatWardenCalloutStack owns CRITICAL so remounted portals
+ * cannot republish a stale critImpactSeq onto the wrong target.
+ */
 export default function CombatEnemyCritLabel({
   critImpactSeq = 0,
   channel,
@@ -27,12 +32,19 @@ export default function CombatEnemyCritLabel({
   const [visible, setVisible] = React.useState(false);
 
   useEffect(() => {
+    if (isWardenStrikePresentationActive()) {
+      setVisible(false);
+      return;
+    }
     if (critImpactSeq <= 0 || critImpactSeq === lastSeqRef.current) return;
     lastSeqRef.current = critImpactSeq;
     setVisible(true);
     opacity.setValue(0);
     scale.setValue(0.75);
     translateY.setValue(8);
+
+    // Sit clearly above the damage number.
+    const peakY = -22;
 
     Animated.parallel([
       Animated.timing(opacity, {
@@ -48,7 +60,7 @@ export default function CombatEnemyCritLabel({
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
-        toValue: -22,
+        toValue: peakY,
         duration: 480,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: USE_NATIVE_DRIVER,
@@ -56,7 +68,7 @@ export default function CombatEnemyCritLabel({
     ]).start(() => {
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 240,
+        duration: 200,
         delay: 180,
         useNativeDriver: USE_NATIVE_DRIVER,
       }).start(() => setVisible(false));

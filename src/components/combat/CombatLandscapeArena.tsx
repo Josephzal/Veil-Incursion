@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { ApparitionViewport, type ApparitionViewportRef } from './ApparitionViewport';
@@ -6,6 +6,7 @@ import CombatOrbitalUltimate from './CombatOrbitalUltimate';
 import CombatEviscerateCinematic from './CombatEviscerateCinematic';
 import { CombatEnemyChromeLayer } from '../../context/CombatEnemyChromeContext';
 import { CombatArenaOverlayHost } from '../../context/CombatArenaOverlayContext';
+import { CombatArenaCombatUiHost } from '../../context/CombatArenaCombatUiContext';
 import { useCombatEnemyChrome } from '../../context/CombatEnemyChromeContext';
 import CombatOperativeAugmentRow from './CombatOperativeAugmentRow';
 import PlayerEntity from './PlayerEntity';
@@ -17,6 +18,8 @@ import type { ClassType } from '../../types/game';
 import type { WeaponFamilyId } from '../../types/weapon';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
 import CombatGroundContact from './ui/CombatGroundContact';
+import { WARDEN_ARENA_PLANE } from '../../data/wardenArenaPlanes';
+import { subscribeWardenStrikePresentation } from '../../data/wardenStrikePresentation';
 
 /**
  * Shared arena scale for every class/weapon.
@@ -63,6 +66,10 @@ export default function CombatLandscapeArena({
   const spriteSlotWidth = OPERATIVE_ARENA_SPRITE_WIDTH * (meleeWide ? 1.45 : 1);
   const operativeLeft = isCombatDesktop ? OTT_STAGE.playerLeftPercent : '6%';
   const { ui } = useCombatEnemyChrome();
+  const [wardenApproachLift, setWardenApproachLift] = useState(false);
+  useEffect(() => subscribeWardenStrikePresentation((event) => {
+    setWardenApproachLift(event.phase !== 'done' && event.phase !== 'idle');
+  }), []);
   const eviscerateTargetPortrait = useMemo(() => {
     if (!ui.eviscerateTargetUnitId) return null;
     return gridUnits.find((unit) => unit.unitId === ui.eviscerateTargetUnitId)?.portraitSource ?? null;
@@ -84,6 +91,7 @@ export default function CombatLandscapeArena({
         style={[
           styles.operativeZone,
           { width: spriteSlotWidth + 24 },
+          wardenApproachLift ? styles.operativeZoneApproach : null,
           isCombatDesktop ? {
             left: operativeLeft,
             width: spriteSlotWidth * operativeScale + scaleCombatSize(28),
@@ -123,6 +131,10 @@ export default function CombatLandscapeArena({
 
       <CombatEnemyChromeLayer />
 
+      <View style={styles.combatUiHost} pointerEvents="box-none">
+        <CombatArenaCombatUiHost />
+      </View>
+
       <View style={styles.overlayHost} pointerEvents="box-none">
         <CombatArenaOverlayHost />
       </View>
@@ -151,13 +163,19 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: OPERATIVE_ARENA_SPRITE_WIDTH + 24,
-    zIndex: 12,
+    zIndex: WARDEN_ARENA_PLANE.operative,
+    elevation: WARDEN_ARENA_PLANE.operative,
     flexDirection: 'column',
     justifyContent: 'flex-end',
     alignItems: 'flex-start',
     paddingLeft: OPERATIVE_ARENA_LEFT_INSET,
     paddingTop: OPERATIVE_ARENA_TOP_INSET,
     paddingBottom: 0,
+  },
+  /** Above enemy art + Brand plane so the lunge is not painted over. */
+  operativeZoneApproach: {
+    zIndex: WARDEN_ARENA_PLANE.wardenPlayer,
+    elevation: WARDEN_ARENA_PLANE.wardenPlayer,
   },
   operativeSpriteSlot: {
     width: OPERATIVE_ARENA_SPRITE_WIDTH,
@@ -172,14 +190,23 @@ const styles = StyleSheet.create({
   },
   enemyGridHost: {
     ...StyleSheet.absoluteFill,
-    zIndex: 10,
-    elevation: 10,
+    zIndex: WARDEN_ARENA_PLANE.enemyGrid,
+    elevation: WARDEN_ARENA_PLANE.enemyGrid,
     overflow: 'visible',
+  },
+  /**
+   * Combat-local UI plane — damage / response / enemy chrome above moving player,
+   * below global HUD / modal overlays.
+   */
+  combatUiHost: {
+    ...StyleSheet.absoluteFill,
+    zIndex: WARDEN_ARENA_PLANE.responseText,
+    elevation: WARDEN_ARENA_PLANE.responseText,
   },
   overlayHost: {
     ...StyleSheet.absoluteFill,
-    zIndex: 25,
-    elevation: 25,
+    zIndex: WARDEN_ARENA_PLANE.globalHud,
+    elevation: WARDEN_ARENA_PLANE.globalHud,
   },
   spriteFill: {
     flex: 1,

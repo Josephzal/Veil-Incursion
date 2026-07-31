@@ -62,6 +62,9 @@ function pose(
  */
 export const POSE_CALIBRATION: Record<WeaponFamilyId, { idle: PoseCalibration; attack: PoseCalibration }> = {
   'aegis-runed-longsword': {
+    // Combat layout for Longsword is driven by combatPoseRegistration.ts
+    // (body height + planted foot). visualScale here is unused for arena layout
+    // but retained for tooling / legacy helpers.
     idle: pose(0.79, 0.5, { releasePoint: { x: 0.58, y: 0.38 }, tipPoint: { x: 0.72, y: 0.12 } }),
     attack: pose(0.6, 0.30, { releasePoint: { x: 0.55, y: 0.40 }, tipPoint: { x: 0.82, y: 0.28 } }),
   },

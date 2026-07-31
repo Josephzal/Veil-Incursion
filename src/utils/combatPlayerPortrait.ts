@@ -9,6 +9,11 @@ import {
   listPoseCalibrations,
   type PoseCalibration,
 } from './combatPortraitCalibration';
+import {
+  computeAnatomyRegisteredLayouts,
+  usesAnatomyPoseRegistration,
+  type RegisteredPoseLayout,
+} from './combatPoseRegistration';
 
 import AegisCombatAttack from '../../assets/images/character images/aegis/aegis_attacking.png';
 import AegisCombatIdle from '../../assets/images/character images/aegis/aegis_combat.png';
@@ -233,6 +238,18 @@ const WEB_CONTAIN_BOTTOM: ImageStyle = Platform.OS === 'web'
   } as ImageStyle
   : {};
 
+function registeredPoseLayoutToImageStyle(layout: RegisteredPoseLayout): ImageStyle {
+  return {
+    position: 'absolute',
+    left: layout.left,
+    top: layout.top,
+    width: layout.width,
+    height: layout.height,
+    backgroundColor: 'transparent',
+    ...WEB_CONTAIN_BOTTOM,
+  };
+}
+
 /** Pixel-locked idle layout — canvas bottom sits on the art-box floor. */
 export function computeFootprintIdleLayout(
   box: FootprintBox,
@@ -252,6 +269,11 @@ export function computeFootprintIdleLayout(
   }
 
   const family = resolvePortraitFamily(classId, weaponFamilyId);
+  if (usesAnatomyPoseRegistration(family)) {
+    const layouts = computeAnatomyRegisteredLayouts(box);
+    if (layouts) return registeredPoseLayoutToImageStyle(layouts.idle);
+  }
+
   const cal = POSE_CALIBRATION[family].idle;
   const { idle } = resolveMetaPair(classId, weaponFamilyId);
   const display = contentLockedDisplay(idle, box, cal.visualScale);
@@ -271,6 +293,7 @@ export function computeFootprintIdleLayout(
 /**
  * Attack layout — Vambrace content-height lock × this pose's visualScale.
  * Placement via attack bodyAnchorX / translate.
+ * Longsword uses anatomy registration (body height + planted foot) instead.
  */
 export function computeFootprintAttackLayout(
   box: FootprintBox,
@@ -290,6 +313,11 @@ export function computeFootprintAttackLayout(
   }
 
   const family = resolvePortraitFamily(classId, weaponFamilyId);
+  if (usesAnatomyPoseRegistration(family)) {
+    const layouts = computeAnatomyRegisteredLayouts(box);
+    if (layouts) return registeredPoseLayoutToImageStyle(layouts.attack);
+  }
+
   const attackCal = POSE_CALIBRATION[family].attack;
   const { idle, attack } = resolveMetaPair(classId, weaponFamilyId);
   const display = contentLockedDisplay(attack, box, attackCal.visualScale);

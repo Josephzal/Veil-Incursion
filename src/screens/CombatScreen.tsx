@@ -31,6 +31,7 @@ import {
   CombatEnemyChromeProvider,
 } from '../context/CombatEnemyChromeContext';
 import { CombatArenaOverlayProvider } from '../context/CombatArenaOverlayContext';
+import { CombatArenaCombatUiProvider } from '../context/CombatArenaCombatUiContext';
 import { CombatMinigameOverlayProvider, CombatMinigameOverlayHost } from '../context/CombatMinigameOverlayContext';
 import { CombatTurnProvider } from '../context/CombatTurnContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -901,6 +902,7 @@ export default function CombatScreen(): React.JSX.Element {
       <CombatTurnProvider>
         <CombatEnemyChromeProvider>
         <CombatArenaOverlayProvider>
+        <CombatArenaCombatUiProvider>
         <CombatMinigameOverlayProvider>
         <IncursionRunLayout
           onConsumableUsed={handleConsumableUsed}
@@ -1102,6 +1104,7 @@ export default function CombatScreen(): React.JSX.Element {
           </View>
         </IncursionRunLayout>
         </CombatMinigameOverlayProvider>
+        </CombatArenaCombatUiProvider>
         </CombatArenaOverlayProvider>
         </CombatEnemyChromeProvider>
       </CombatTurnProvider>

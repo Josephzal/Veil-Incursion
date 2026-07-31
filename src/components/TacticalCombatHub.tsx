@@ -468,6 +468,18 @@ import {
 import { dispatchCombatPresentationFromJuice } from '../utils/combatPresentationBus';
 import { presentResolvedWeaponHit } from '../data/weaponCombatPresentation/presentResolvedWeaponHit';
 import {
+  beginWardenStrikePresentation,
+  cancelWardenStrikePresentation,
+  contributeWardenStrikeContactDamage,
+  isWardenStrikeInputGuarded,
+  shouldUseWardenStrikePresentation,
+  subscribeWardenStrikeContact,
+  WARDEN_STRIKE_TIMELINE_MS,
+  WARDEN_STRIKE_VFX_LAYER_TOGGLES,
+  type WardenStrikeDefenseMaterial,
+} from '../data/wardenStrikePresentation';
+import { getCombatPresentationSettings } from '../data/weaponCombatPresentation/presentationSettings';
+import {
   playCombatPresentationCue,
   setHexReloadSuppressesAttackSfx,
   unlockCombatPresentationAudio,
@@ -1074,12 +1086,36 @@ export default function TacticalCombatHub({
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
   const hitFlashSeqRef = useRef<Record<string, number>>({});
+  /** Staged display HP — authoritative HP already applied; UI reveals at Warden contact. */
+  const visualHpHoldRef = useRef<Record<string, number>>({});
+  const wardenPendingRevealRef = useRef<{
+    presentationId: string;
+    unitId: string;
+    revealHitFlash: boolean;
+    revealEvade: boolean;
+    critChannel?: 'KINETIC' | 'OCCULT' | 'TRUE';
+  } | null>(null);
+  /** Crit channel staged until Warden contact (same strike). */
+  const wardenDeferredCritChannelRef = useRef<'KINETIC' | 'OCCULT' | 'TRUE' | null>(null);
+  /** Player-intent action that owns the active Warden presentation. */
+  const wardenPlayerActionIdRef = useRef<string | null>(null);
+  /** Defense response latched to the owning presentation — published at contact only. */
+  const wardenPendingDefenseFloatRef = useRef<{
+    presentationId: string;
+    resolvedResultId: string;
+    unitId: string;
+    kind: 'armor' | 'ward';
+  } | null>(null);
+  const wardenDefenseMaterialRef = useRef<WardenStrikeDefenseMaterial>('NONE');
+  const wardenFractureAppliedRef = useRef(false);
   /** Golden shard VFX — only bumped on successful fracture breach execute. */
   const fractureShatterSeqRef = useRef<Record<string, number>>({});
   const classImpactFxRef = useRef<Record<string, { seq: number; kind: import('../utils/combatTelemetryFormat').CombatClassImpactKind }>>({});
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
   const statusFloatSeqRef = useRef<Record<string, number>>({});
+  const damageFloatSeqRef = useRef<Record<string, number>>({});
+  const damageFloatLabelsRef = useRef<Record<string, string>>({});
   const lifecycleFloatLabelsRef = useRef<Record<string, string>>({});
   const lifecycleFloatTonesRef = useRef<Record<string, import('../utils/combatTelemetryFormat').StatusFloatTone>>({});
   const skipTurnUnitIdsRef = useRef<Set<string>>(new Set());
@@ -1376,6 +1412,110 @@ export default function TacticalCombatHub({
   useEffect(() => {
     hexShotStateRef.current = hexShotState;
   }, [hexShotState]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeWardenStrikeContact((result) => {
+      if (result.replayOnly) return;
+      const pending = wardenPendingRevealRef.current;
+      if (!pending || pending.presentationId !== result.presentationId) return;
+      wardenPendingRevealRef.current = null;
+      delete visualHpHoldRef.current[pending.unitId];
+
+      // Response callouts are tied to this resolved-result + presentation instance.
+      const pendingDefense = wardenPendingDefenseFloatRef.current;
+      if (
+        pendingDefense
+        && pendingDefense.presentationId === result.presentationId
+        && pendingDefense.resolvedResultId === result.resolvedResultId
+      ) {
+        wardenPendingDefenseFloatRef.current = null;
+      } else {
+        wardenPendingDefenseFloatRef.current = null;
+      }
+
+      if (result.outcome === 'MISS' || result.outcome === 'EVADE') {
+        clearDefenseBreakFloat(pending.unitId);
+      } else if (result.defenseMaterial === 'KINETIC_ARMOR') {
+        pushDefenseBreakFloat(pending.unitId, 'armor');
+      } else if (result.defenseMaterial === 'OCCULT_WARD') {
+        pushDefenseBreakFloat(pending.unitId, 'ward');
+      }
+
+      if (pending.revealHitFlash) {
+        hitFlashSeqRef.current[pending.unitId] =
+          (hitFlashSeqRef.current[pending.unitId] ?? 0) + 1;
+      }
+      if (
+        result.outcome === 'HIT'
+        && result.damage > 0
+        && WARDEN_STRIKE_VFX_LAYER_TOGGLES.damageCritNumbers
+      ) {
+        // Publish even for Armor/Ward when authoritative HP damage > 0.
+        // Uses a dedicated channel so it does not overwrite ARMOR BROKEN / WARD.
+        const dmgLabel = String(result.damage);
+        damageFloatSeqRef.current[pending.unitId] =
+          (damageFloatSeqRef.current[pending.unitId] ?? 0) + 1;
+        damageFloatLabelsRef.current[pending.unitId] = dmgLabel;
+        setTimeout(() => {
+          if (damageFloatLabelsRef.current[pending.unitId] === dmgLabel) {
+            delete damageFloatLabelsRef.current[pending.unitId];
+          }
+        }, 900);
+      }
+      if (pending.revealEvade) {
+        evadeImpactSeqRef.current[pending.unitId] =
+          (evadeImpactSeqRef.current[pending.unitId] ?? 0) + 1;
+      }
+      if (pending.critChannel && result.critical) {
+        const prev = critImpactSeqRef.current[pending.unitId]?.seq ?? 0;
+        critImpactSeqRef.current[pending.unitId] = {
+          seq: prev + 1,
+          channel: pending.critChannel,
+        };
+      } else if (result.critical) {
+        const prev = critImpactSeqRef.current[pending.unitId]?.seq ?? 0;
+        critImpactSeqRef.current[pending.unitId] = {
+          seq: prev + 1,
+          channel: pending.critChannel ?? 'KINETIC',
+        };
+      }
+      if (result.outcome === 'HIT') {
+        try {
+          unlockCombatPresentationAudio();
+          playCombatPresentationCue('sfx.aegis.longsword_impact');
+        } catch {
+          // Presentation must never block combat.
+        }
+        const settings = getCombatPresentationSettings();
+        const hitStop = settings.reducedMotion
+          ? Math.max(20, Math.floor(WARDEN_STRIKE_TIMELINE_MS.hitStop * 0.6))
+          : WARDEN_STRIKE_TIMELINE_MS.hitStop;
+        triggerHitstop(hitStop);
+        if (!settings.reducedMotion) {
+          triggerShake('micro');
+        }
+      }
+      if (pending.critChannel && result.critical) {
+        onPlayerCritImpact?.({ unitId: pending.unitId, channel: pending.critChannel });
+      } else if (result.critical) {
+        onPlayerCritImpact?.({
+          unitId: pending.unitId,
+          channel: pending.critChannel ?? 'KINETIC',
+        });
+      }
+      publishSquadUi(squadRef.current);
+    });
+    return () => {
+      unsubscribe();
+      cancelWardenStrikePresentation();
+      visualHpHoldRef.current = {};
+      wardenPendingRevealRef.current = null;
+      wardenPendingDefenseFloatRef.current = null;
+      wardenPlayerActionIdRef.current = null;
+    };
+  // publishSquadUi is stable enough via refs; mount once per combat hub lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const syncHexShotFromHub = (): HexShotCombatState => ({
     ...hexShotStateRef.current,
@@ -1754,7 +1894,7 @@ export default function TacticalCombatHub({
           unitId,
           slot: u.gridSlot ?? 'FL_0',
           designation: u.designation,
-          currentHp: u.currentHp,
+          currentHp: visualHpHoldRef.current[unitId] ?? u.currentHp,
           maxHp: u.maxHp,
           intent: displayIntent,
           intentLabel: sensoryJammed ? 'STATIC // JAMMED' : formatIntentReadout(u.intent),
@@ -1818,6 +1958,8 @@ export default function TacticalCombatHub({
               : isSkipActor
                 ? 'neutral'
                 : getStatusFloatTone(u.intent)),
+          damageFloatSeq: damageFloatSeqRef.current[unitId] ?? 0,
+          damageFloatLabel: damageFloatLabelsRef.current[unitId],
           isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
           backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
           isBlocked: blocked,
@@ -2191,6 +2333,11 @@ export default function TacticalCombatHub({
         delete lifecycleFloatTonesRef.current[unitId];
       }
     }, 1400);
+  }, []);
+
+  const clearDefenseBreakFloat = useCallback((unitId: string) => {
+    delete lifecycleFloatLabelsRef.current[unitId];
+    delete lifecycleFloatTonesRef.current[unitId];
   }, []);
 
   const chargeAr = (amt: number, _targetFractured = false) => {
@@ -3291,6 +3438,13 @@ export default function TacticalCombatHub({
       targetId?: string;
       abilityId?: string;
       abilityTags?: readonly string[];
+      /** Nested result source (e.g. RIPOSTE cash-out tag) — ownership uses playerActionKind. */
+      actionKind?: string;
+      /** Player-intent card that owns presentation (STRIKE owns Warden even with Riposte). */
+      playerActionKind?: string;
+      playerActionId?: string;
+      /** Nested secondary damage — must not start another Warden approach. */
+      nestedPresentation?: boolean;
       /** Defaults to !indirectDamage. */
       isDirectDamage?: boolean;
       rollCrit?: boolean;
@@ -3388,6 +3542,10 @@ export default function TacticalCombatHub({
       }
     }
     let working = e;
+    if (!options?.nestedPresentation && !isWardenStrikeInputGuarded()) {
+      wardenDefenseMaterialRef.current = 'NONE';
+      wardenFractureAppliedRef.current = false;
+    }
     if (source && resolvedWeapon && operativeClass === 'HEX_SHOT') {
       const pierce = resolveWeaponArmorPressureLayers(
         resolvedWeapon.familyId,
@@ -3419,7 +3577,25 @@ export default function TacticalCombatHub({
             text: strip.broke ? 'Kinetic Armor broken' : 'Kinetic Armor hit',
           });
           if (strip.broke && working.unitId) {
-            pushDefenseBreakFloat(working.unitId, 'armor');
+            const mayOwnWarden = shouldUseWardenStrikePresentation({
+              weaponFamilyId: resolvedWeapon?.familyId,
+              abilityId: options?.abilityId,
+              actionKind: options?.actionKind,
+              playerActionKind: options?.playerActionKind,
+              nestedPresentation: options?.nestedPresentation,
+            }) && !options?.indirectDamage && !options?.echoHit;
+            if (mayOwnWarden) {
+              wardenDefenseMaterialRef.current = 'KINETIC_ARMOR';
+              // Defer ARMOR BROKEN until owning presentation contact (no stale latch on miss).
+              wardenPendingDefenseFloatRef.current = {
+                presentationId: `pending-${working.unitId}`,
+                resolvedResultId: `pending-${working.unitId}`,
+                unitId: working.unitId,
+                kind: 'armor',
+              };
+            } else {
+              pushDefenseBreakFloat(working.unitId, 'armor');
+            }
           }
           if (strip.appliedFracture) {
             emitJuice('FRACTURE_APPLIED', {
@@ -3448,7 +3624,24 @@ export default function TacticalCombatHub({
             text: strip.broke ? 'Occult Ward broken' : 'Occult Ward hit',
           });
           if (strip.broke && working.unitId) {
-            pushDefenseBreakFloat(working.unitId, 'ward');
+            const mayOwnWarden = shouldUseWardenStrikePresentation({
+              weaponFamilyId: resolvedWeapon?.familyId,
+              abilityId: options?.abilityId,
+              actionKind: options?.actionKind,
+              playerActionKind: options?.playerActionKind,
+              nestedPresentation: options?.nestedPresentation,
+            }) && !options?.indirectDamage && !options?.echoHit;
+            if (mayOwnWarden) {
+              wardenDefenseMaterialRef.current = 'OCCULT_WARD';
+              wardenPendingDefenseFloatRef.current = {
+                presentationId: `pending-${working.unitId}`,
+                resolvedResultId: `pending-${working.unitId}`,
+                unitId: working.unitId,
+                kind: 'ward',
+              };
+            } else {
+              pushDefenseBreakFloat(working.unitId, 'ward');
+            }
           }
           if (strip.appliedFracture) {
             emitJuice('FRACTURE_APPLIED', {
@@ -3560,6 +3753,50 @@ export default function TacticalCombatHub({
       );
       if (hit.evaded) {
         const evadeUnitId = working.unitId!;
+        const useWardenStrike = shouldUseWardenStrikePresentation({
+          weaponFamilyId: resolvedWeapon?.familyId,
+          abilityId: options?.abilityId,
+          actionKind: options?.actionKind,
+          playerActionKind: options?.playerActionKind,
+          nestedPresentation: options?.nestedPresentation,
+        }) && !options?.indirectDamage && !options?.echoHit;
+        if (useWardenStrike && !isWardenStrikeInputGuarded()) {
+          const playerActionId = options?.playerActionId
+            ?? wardenPlayerActionIdRef.current
+            ?? `pa-warden-${evadeUnitId}-${Date.now()}`;
+          wardenPlayerActionIdRef.current = playerActionId;
+          const presentationId = `warden-${evadeUnitId}-${Date.now()}`;
+          const resolvedResultId = `rr-${presentationId}`;
+          if (wardenPendingDefenseFloatRef.current?.unitId === evadeUnitId) {
+            // Miss/evade must not publish a prior Armor/Ward latch.
+            wardenPendingDefenseFloatRef.current = null;
+            clearDefenseBreakFloat(evadeUnitId);
+          }
+          wardenPendingRevealRef.current = {
+            presentationId,
+            unitId: evadeUnitId,
+            revealHitFlash: false,
+            revealEvade: true,
+          };
+          beginWardenStrikePresentation({
+            presentationId,
+            resolvedResultId,
+            playerActionId,
+            sourceActionKind: options?.playerActionKind ?? options?.actionKind ?? 'STRIKE',
+            sourceAbilityId: options?.abilityId ?? 'STRIKE',
+            resultSource: 'player-action-evade',
+            targetId: evadeUnitId,
+            damage: 0,
+            critical: false,
+            killed: false,
+            outcome: 'EVADE',
+            defenseMaterial: 'NONE',
+            fractureApplied: false,
+          });
+          publishSquadUi(squadRef.current);
+          log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+          return false;
+        }
         evadeImpactSeqRef.current[evadeUnitId] = (evadeImpactSeqRef.current[evadeUnitId] ?? 0) + 1;
         publishSquadUi(squadRef.current);
         apparitionRef?.current?.triggerStatEvade();
@@ -3654,10 +3891,13 @@ export default function TacticalCombatHub({
       ? scaleFractureGain(fractureGain, resolvedWeapon.statModifiers)
       : fractureGain;
     const graftPlanForFracture = activeGraftPlanRef.current;
+    wardenFractureAppliedRef.current = false;
     if (
       scaledFractureGain > 0
       && (!graftPlanForFracture || graftPlanForFracture.effectiveTags.includes('FRACTURE'))
     ) {
+      const gaugeBefore = working.fractureGauge ?? 0;
+      const fracturedBefore = isEnemyFractured(working);
       if (willFractureBreak(working, scaledFractureGain) && !fractureBreakUnitIdRef.current) {
         fractureBreakUnitIdRef.current = e.unitId;
         working = applyFractureDamage(working, scaledFractureGain, { deferBreak: true });
@@ -3671,6 +3911,9 @@ export default function TacticalCombatHub({
         working = applyFractureDamage(working, scaledFractureGain);
         patchUnit(e.unitId, working);
       }
+      wardenFractureAppliedRef.current = !fracturedBefore && (
+        (working.fractureGauge ?? 0) > gaugeBefore || isEnemyFractured(working)
+      );
     }
     let dmg = raw;
     if (source && dmg > 0) {
@@ -3905,10 +4148,34 @@ export default function TacticalCombatHub({
     if (options?.channel === 'TRUE' || bypassAllMitigation) {
       dmg = applyDamageWithFractureBonus(dmg, working);
     } else if (options?.channel) {
+      const priorDefense = wardenDefenseMaterialRef.current;
+      if (
+        !ignoreDefenses
+        && options.channel === 'KINETIC'
+        && (working.kineticArmor ?? 0) > 0
+      ) {
+        wardenDefenseMaterialRef.current = 'KINETIC_ARMOR';
+      } else if (
+        !ignoreDefenses
+        && options.channel === 'OCCULT'
+        && (working.occultWards ?? 0) > 0
+      ) {
+        wardenDefenseMaterialRef.current = 'OCCULT_WARD';
+      } else if (priorDefense === 'KINETIC_ARMOR' || priorDefense === 'OCCULT_WARD') {
+        // Keep Armor/Ward response when tags already stripped the last stack this hit.
+        wardenDefenseMaterialRef.current = priorDefense;
+      } else {
+        wardenDefenseMaterialRef.current = 'NONE';
+      }
       const hit = resolveHostileHpHit(working, dmg, options.channel, { ignoreDefenses });
       working = hit.enemy;
       dmg = hit.hpDamage;
       hit.logLines.forEach((line) => log(line));
+    } else if (
+      wardenDefenseMaterialRef.current !== 'KINETIC_ARMOR'
+      && wardenDefenseMaterialRef.current !== 'OCCULT_WARD'
+    ) {
+      wardenDefenseMaterialRef.current = 'NONE';
     }
     if (!bypassAllMitigation && (env.enemyDamageReductionPct ?? 0) > 0) {
       dmg = Math.floor(dmg * (1 - (env.enemyDamageReductionPct ?? 0) / 100));
@@ -3937,10 +4204,21 @@ export default function TacticalCombatHub({
       }
       const critChannel = options?.channel ?? 'KINETIC';
       if (e.unitId) {
-        const prev = critImpactSeqRef.current[e.unitId]?.seq ?? 0;
-        critImpactSeqRef.current[e.unitId] = { seq: prev + 1, channel: critChannel };
-        publishSquadUi(squadRef.current);
-        onPlayerCritImpact?.({ unitId: e.unitId, channel: critChannel });
+        const deferCritForWarden = shouldUseWardenStrikePresentation({
+          weaponFamilyId: resolvedWeapon?.familyId,
+          abilityId: options?.abilityId,
+          actionKind: options?.actionKind,
+          playerActionKind: options?.playerActionKind,
+          nestedPresentation: options?.nestedPresentation,
+        }) && !options?.indirectDamage && !options?.echoHit && !isWardenStrikeInputGuarded();
+        if (deferCritForWarden) {
+          wardenDeferredCritChannelRef.current = critChannel;
+        } else {
+          const prev = critImpactSeqRef.current[e.unitId]?.seq ?? 0;
+          critImpactSeqRef.current[e.unitId] = { seq: prev + 1, channel: critChannel };
+          publishSquadUi(squadRef.current);
+          onPlayerCritImpact?.({ unitId: e.unitId, channel: critChannel });
+        }
       }
       apparitionRef?.current?.triggerPlayerCritSunder(critChannel === 'OCCULT' ? 'OCCULT' : 'KINETIC');
     }
@@ -4065,6 +4343,13 @@ export default function TacticalCombatHub({
     }
     const ultimateAttackPose = isWeaponUltimateActionId(options?.abilityId)
       || source === 'EVISCERATE';
+    const skipPoseForWarden = shouldUseWardenStrikePresentation({
+      weaponFamilyId: resolvedWeapon?.familyId,
+      abilityId: options?.abilityId,
+      actionKind: options?.actionKind,
+      playerActionKind: options?.playerActionKind,
+      nestedPresentation: options?.nestedPresentation,
+    }) && !options?.indirectDamage && !options?.echoHit;
     if (
       source
       && source !== 'COUNTER'
@@ -4074,6 +4359,7 @@ export default function TacticalCombatHub({
       && !options?.indirectDamage
       && !options?.echoHit
       && options?.abilityId !== 'RUIN'
+      && !skipPoseForWarden
     ) {
       triggerPlayerAttackPose(working);
     }
@@ -4219,6 +4505,32 @@ export default function TacticalCombatHub({
         classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
       }
       Vibration.vibrate(18);
+      const useWardenStrike = shouldUseWardenStrikePresentation({
+        weaponFamilyId: resolvedWeapon?.familyId,
+        abilityId: options?.abilityId,
+        actionKind: options?.actionKind,
+        playerActionKind: options?.playerActionKind,
+        nestedPresentation: options?.nestedPresentation,
+      }) && !options?.indirectDamage && !options?.echoHit;
+      // Follow-up hits (e.g. Veil Edge rider) while presentation is locked.
+      const wardenFollowUp = useWardenStrike && isWardenStrikeInputGuarded();
+      if (useWardenStrike && !wardenFollowUp) {
+        // Undo immediate flash — contact frame owns recoil + steel impact.
+        hitFlashSeqRef.current[e.unitId] = Math.max(
+          0,
+          (hitFlashSeqRef.current[e.unitId] ?? 1) - 1,
+        );
+      }
+      if (wardenFollowUp || (options?.nestedPresentation && isWardenStrikeInputGuarded())) {
+        contributeWardenStrikeContactDamage({
+          playerActionId: options?.playerActionId ?? wardenPlayerActionIdRef.current,
+          damage: dmg,
+          critical,
+          killed: false,
+          fractureApplied: wardenFractureAppliedRef.current,
+          defenseMaterial: wardenDefenseMaterialRef.current,
+        });
+      }
       if (options?.indirectDamage && dmg > 0) {
         // Class DoT / triggered damage — exclusive cue (no weapon attack SFX).
         if (operativeClass === 'ENVOY') {
@@ -4233,6 +4545,8 @@ export default function TacticalCombatHub({
         && source
         && !options?.echoHit
         && options?.abilityId !== 'RUIN'
+        && !(useWardenStrike && !wardenFollowUp)
+        && !wardenFollowUp
       ) {
         try {
           unlockCombatPresentationAudio();
@@ -4277,6 +4591,17 @@ export default function TacticalCombatHub({
     if (source && dmg > 0 && working.rosterId === 'rival-reaver') {
       sessionExtrasRef.current.reaverDamagedThisPlayerTurn = true;
     }
+    const armWardenPresentation = shouldUseWardenStrikePresentation({
+      weaponFamilyId: resolvedWeapon?.familyId,
+      abilityId: options?.abilityId,
+      actionKind: options?.actionKind,
+      playerActionKind: options?.playerActionKind,
+      nestedPresentation: options?.nestedPresentation,
+    }) && !options?.indirectDamage && !options?.echoHit && !isWardenStrikeInputGuarded();
+    if (armWardenPresentation && e.unitId) {
+      const live = getUnitById(squadRef.current, e.unitId);
+      visualHpHoldRef.current[e.unitId] = live?.currentHp ?? e.currentHp;
+    }
     if (working.sharedBossPool && bossRuntimeRef.current) {
       bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
       syncSquad(squadRef.current.map((u) =>
@@ -4299,6 +4624,53 @@ export default function TacticalCombatHub({
           syncSquad(swap.squad);
         }
       }
+    }
+
+    if (armWardenPresentation && e.unitId) {
+      const playerActionId = options?.playerActionId
+        ?? wardenPlayerActionIdRef.current
+        ?? `pa-warden-${e.unitId}-${Date.now()}`;
+      wardenPlayerActionIdRef.current = playerActionId;
+      const presentationId = `warden-${e.unitId}-${Date.now()}`;
+      const resolvedResultId = `rr-${presentationId}`;
+      if (wardenPendingDefenseFloatRef.current?.unitId === e.unitId) {
+        wardenPendingDefenseFloatRef.current = {
+          ...wardenPendingDefenseFloatRef.current,
+          presentationId,
+          resolvedResultId,
+        };
+      }
+      wardenPendingRevealRef.current = {
+        presentationId,
+        unitId: e.unitId,
+        revealHitFlash: dmg > 0,
+        revealEvade: false,
+        critChannel: critical
+          ? (wardenDeferredCritChannelRef.current ?? undefined)
+          : undefined,
+      };
+      wardenDeferredCritChannelRef.current = null;
+      beginWardenStrikePresentation({
+        presentationId,
+        resolvedResultId,
+        playerActionId,
+        sourceActionKind: options?.playerActionKind ?? options?.actionKind ?? 'STRIKE',
+        sourceAbilityId: options?.abilityId ?? 'STRIKE',
+        resultSource: options?.actionKind === 'RIPOSTE'
+          ? 'warden-with-riposte'
+          : 'player-action',
+        targetId: e.unitId,
+        damage: dmg,
+        critical,
+        killed: hp <= 0,
+        outcome: 'HIT',
+        defenseMaterial: wardenDefenseMaterialRef.current,
+        fractureApplied: wardenFractureAppliedRef.current,
+      });
+      // Re-publish so held HP sticks after patchUnit's immediate publish.
+      publishSquadUi(squadRef.current);
+    } else {
+      wardenDeferredCritChannelRef.current = null;
     }
 
     if (
@@ -7289,6 +7661,16 @@ export default function TacticalCombatHub({
   const executeAbility = (abilityId: AegisAbilityId) => {
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand() || !enemyRef.current) return;
     if (
+      abilityId === 'STRIKE'
+      && shouldUseWardenStrikePresentation({
+        weaponFamilyId: resolvedWeapon?.familyId,
+        abilityId: 'STRIKE',
+      })
+      && isWardenStrikeInputGuarded()
+    ) {
+      return;
+    }
+    if (
       encounterUltimateDisabled
       && getAbilityTags(abilityId).includes('ULTIMATE')
     ) {
@@ -7439,6 +7821,8 @@ export default function TacticalCombatHub({
         } else if (riposte && weaponPlan) {
           log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic.`);
         }
+        const playerActionId = `pa-strike-${Date.now()}`;
+        wardenPlayerActionIdRef.current = playerActionId;
         const strikeTag = riposte
           ? '[RIPOSTE]'
           : `[${equippedAnchor?.displayName ?? "WARDEN'S STRIKE"}]`;
@@ -7446,12 +7830,19 @@ export default function TacticalCombatHub({
           channel: 'KINETIC',
           fractureGain: weaponPlan?.fractureGain ?? (riposte ? 40 : 25),
           abilityId: 'STRIKE',
+          // Riposte cash-out during Strike still owns Warden via playerActionKind.
+          actionKind: riposte ? 'RIPOSTE' : 'STRIKE',
+          playerActionKind: 'STRIKE',
+          playerActionId,
         });
         if (weaponPlan?.occultRiderDamage && weaponPlan.occultRiderDamage > 0 && !eradicated) {
           hurtEnemy(weaponPlan.occultRiderDamage, '[VEIL EDGE RIDER]', 'STRIKE', {
             channel: 'OCCULT',
             fractureGain: 0,
             abilityId: 'STRIKE',
+            playerActionKind: 'STRIKE',
+            playerActionId,
+            nestedPresentation: true,
           });
         }
         if (weaponPlan?.consumeTempo) {
@@ -7465,7 +7856,22 @@ export default function TacticalCombatHub({
             strip.logLines.forEach((line) => log(line));
             classLoopTelemetryRef.current.armorStacksRemoved += 1;
             if (strip.broke) {
-              pushDefenseBreakFloat(targetBefore.unitId, 'armor');
+              if (isWardenStrikeInputGuarded()) {
+                contributeWardenStrikeContactDamage({
+                  playerActionId,
+                  damage: 0,
+                  defenseMaterial: 'KINETIC_ARMOR',
+                });
+                wardenPendingDefenseFloatRef.current = {
+                  presentationId: wardenPendingRevealRef.current?.presentationId
+                    ?? `pending-${targetBefore.unitId}`,
+                  resolvedResultId: `pending-${targetBefore.unitId}`,
+                  unitId: targetBefore.unitId,
+                  kind: 'armor',
+                };
+              } else {
+                pushDefenseBreakFloat(targetBefore.unitId, 'armor');
+              }
             }
           }
         }

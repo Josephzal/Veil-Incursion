@@ -30,10 +30,11 @@ import {
   FRONTLINE_MELEE_SPRITE_HOLD_MS,
 } from './combatEnemyBarLayout';
 import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from './CombatPlayerAttackSprite';
+import { usesAnatomyPoseRegistration } from '../../utils/combatPoseRegistration';
 
 const SHAKE_AMPLITUDE = 10;
 const DEFAULT_LUNGE = { x: 96, y: -6 };
-/** Shrink while lunging — attack pose should read smaller than idle as they close distance. */
+/** Shrink while lunging — legacy weapons only. Longsword uses anatomy registration (no scale pop). */
 const AEGIS_LUNGE_SCALE = 0.84;
 const GLOW_PULSE_MS = 900;
 
@@ -137,12 +138,14 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       cancelAnimation(attackScale);
       cancelAnimation(lungeX);
       cancelAnimation(lungeY);
+      // Anatomy-registered Longsword keeps body scale at 1 — only translate toward the target.
+      const lungeScale = usesAnatomyPoseRegistration(weaponFamilyId) ? 1 : AEGIS_LUNGE_SCALE;
       attackScale.value = withSequence(
-        withTiming(AEGIS_LUNGE_SCALE, {
+        withTiming(lungeScale, {
           duration: FRONTLINE_MELEE_SNAP_MS,
           easing: Easing.out(Easing.cubic),
         }),
-        withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(AEGIS_LUNGE_SCALE, { duration: 0 })),
+        withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(lungeScale, { duration: 0 })),
         withTiming(1, {
           duration: FRONTLINE_MELEE_RETURN_IDLE_MS,
           easing: Easing.inOut(Easing.cubic),
@@ -196,7 +199,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         }
         glowOpacity.value = withTiming(0, { duration: GLOW_PULSE_MS });
       },
-    }), [attackScale, stationaryAttack, lungeX, lungeY, shakeX, glowOpacity]);
+    }), [attackScale, stationaryAttack, lungeX, lungeY, shakeX, glowOpacity, weaponFamilyId]);
 
     const frameAnimatedStyle = useAnimatedStyle(() => ({
       transform: [

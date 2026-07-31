@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import type { ImageSourcePropType } from 'react-native';
@@ -10,9 +10,12 @@ import CombatEnemyClassImpact from './CombatEnemyClassImpact';
 import CombatEnemyCritLabel from './CombatEnemyCritLabel';
 import CombatEnemyEvadeLabel from './CombatEnemyEvadeLabel';
 import CombatFloatingStatusText from './CombatFloatingStatusText';
+import CombatWardenCalloutStack from './CombatWardenCalloutStack';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyEvadeEffect from './CombatEnemyEvadeEffect';
+import WardenStrikeEnemyContactHost from './WardenStrikeEnemyContactHost';
+import CombatArenaUnitUiPortal from './CombatArenaUnitUiPortal';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
@@ -22,6 +25,11 @@ import TargetingBrackets from './ui/TargetingBrackets';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import { resolveArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
+import {
+  isWardenStrikePresentationActive,
+  subscribeWardenStrikePresentation,
+  WARDEN_STRIKE_VFX_LAYER_TOGGLES,
+} from '../../data/wardenStrikePresentation';
 
 const MONO = 'monospace';
 const ALPHA_CRIMSON = '#ff4444';
@@ -63,9 +71,23 @@ export default function CombatEnemyUnit({
   onDissolveComplete,
 }: CombatEnemyUnitProps): React.JSX.Element | null {
   const [portraitFrozen, setPortraitFrozen] = useState(false);
+  const [wardenCrossBelowPlayer, setWardenCrossBelowPlayer] = useState(false);
   const handleHitStopChange = useCallback((frozen: boolean) => {
     setPortraitFrozen(frozen);
   }, []);
+
+  useEffect(() => subscribeWardenStrikePresentation((event) => {
+    if (event.phase === 'done') {
+      setWardenCrossBelowPlayer(false);
+      return;
+    }
+    // All enemy artwork (including the selected target) tucks under the moving player.
+    // Brand / portrait must not print onto the Aegis. HP / floats lift via arena UI plane.
+    setWardenCrossBelowPlayer(
+      isWardenStrikePresentationActive()
+      && !event.result.replayOnly,
+    );
+  }), [unit.unitId]);
 
   const isArena = variant === 'arena';
   const isAlpha = unit.isAlpha === true;
@@ -118,6 +140,7 @@ export default function CombatEnemyUnit({
           style={[
             styles.targetCalloutPlate,
             unit.isAoeAffected ? styles.targetCalloutPlateAoe : null,
+            wardenCrossBelowPlayer ? styles.localDecalTucked : null,
           ]}
         >
           <Text
@@ -137,71 +160,86 @@ export default function CombatEnemyUnit({
         showVitals={isArena}
         vitals={<CombatEnemyOverheadBars unit={unit} intentGlyph={arenaGlyph} />}
         sprite={(
-          <CombatEnemyAnchorMotion
-            turnPhase={unit.turnPhase ?? null}
-            isBacklineDashing={unit.isBacklineDashing}
-            hitFlashSeq={unit.hitFlashSeq}
-            backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
-            meleeDashDelta={meleeDashDelta}
-            frozen={portraitFrozen || dissolving}
-          >
-            <View
-              style={[
-                styles.overlayLayer,
-                { transform: [{ scale: isAlpha ? 0.86 : 0.75 }] },
-              ]}
-              pointerEvents="none"
+          <View style={styles.spriteRoot} pointerEvents="box-none">
+            <CombatEnemyAnchorMotion
+              turnPhase={unit.turnPhase ?? null}
+              isBacklineDashing={unit.isBacklineDashing}
+              hitFlashSeq={unit.hitFlashSeq}
+              backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
+              meleeDashDelta={meleeDashDelta}
+              frozen={portraitFrozen || dissolving}
+              layoutUnitScale={layoutUnitScale}
             >
-              <CombatEnemyCritImpact
-                critImpactSeq={unit.critImpactSeq}
-                channel={unit.critImpactChannel}
-                onHitStopChange={handleHitStopChange}
+              <View
+                style={[
+                  styles.overlayLayer,
+                  { transform: [{ scale: isAlpha ? 0.86 : 0.75 }] },
+                  wardenCrossBelowPlayer ? styles.localDecalTucked : null,
+                ]}
+                pointerEvents="none"
               >
-                <CombatEnemyClassImpact
-                  impactFxSeq={unit.classImpactFxSeq}
-                  impactFxKind={unit.classImpactFxKind}
+                <CombatEnemyCritImpact
+                  critImpactSeq={unit.critImpactSeq}
+                  channel={unit.critImpactChannel}
+                  onHitStopChange={handleHitStopChange}
                 >
-                  <CombatEnemyEvadeEffect
-                    evadeImpactSeq={unit.evadeImpactSeq}
-                    portraitSource={unit.portraitSource}
+                  <CombatEnemyClassImpact
+                    impactFxSeq={unit.classImpactFxSeq}
+                    impactFxKind={unit.classImpactFxKind}
                   >
-                    <CombatEnemyHitEffect
-                      hitFlashSeq={unit.hitFlashSeq}
+                    <CombatEnemyEvadeEffect
+                      evadeImpactSeq={unit.evadeImpactSeq}
                       portraitSource={unit.portraitSource}
                     >
-                      <CombatSilhouetteShatterEffect
-                        shatterSeq={unit.fractureShatterSeq}
+                      <CombatEnemyHitEffect
+                        hitFlashSeq={unit.hitFlashSeq}
                         portraitSource={unit.portraitSource}
                       >
-                        <View style={styles.portraitDefenseStack}>
-                          <CombatEnemyPortraitSkia
-                            source={unit.portraitSource}
-                            attackSource={unit.attackPortraitSource}
-                            turnPhase={unit.turnPhase ?? null}
-                            backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
-                            isBacklineDashing={unit.isBacklineDashing === true}
-                            glow={portraitGlow}
-                            intentShimmer={unit.intentShimmer ?? null}
-                            isEnraged={unit.isEnraged === true}
-                            isSlumped={unit.isSlumped === true}
-                          />
-                          <TargetingBrackets
-                            active={showAbilityReticle || unit.isSlumped === true}
-                            color={
-                              unit.isSlumped
-                                ? OTT.terminalGreenMuted
-                                : unit.isAoeAffected
-                                  ? OTT.warningAmber
-                                  : OTT.cyanSelect
-                            }
-                          />
-                        </View>
-                      </CombatSilhouetteShatterEffect>
-                    </CombatEnemyHitEffect>
-                  </CombatEnemyEvadeEffect>
-                </CombatEnemyClassImpact>
-              </CombatEnemyCritImpact>
-            </View>
+                        <CombatSilhouetteShatterEffect
+                          shatterSeq={unit.fractureShatterSeq}
+                          portraitSource={unit.portraitSource}
+                        >
+                          <View style={styles.portraitDefenseStack}>
+                            <CombatEnemyPortraitSkia
+                              source={unit.portraitSource}
+                              attackSource={unit.attackPortraitSource}
+                              turnPhase={unit.turnPhase ?? null}
+                              backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
+                              isBacklineDashing={unit.isBacklineDashing === true}
+                              glow={portraitGlow}
+                              intentShimmer={unit.intentShimmer ?? null}
+                              isEnraged={unit.isEnraged === true}
+                              isSlumped={unit.isSlumped === true}
+                            />
+                            <TargetingBrackets
+                              active={showAbilityReticle || unit.isSlumped === true}
+                              color={
+                                unit.isSlumped
+                                  ? OTT.terminalGreenMuted
+                                  : unit.isAoeAffected
+                                    ? OTT.warningAmber
+                                    : OTT.cyanSelect
+                              }
+                            />
+                          </View>
+                        </CombatSilhouetteShatterEffect>
+                      </CombatEnemyHitEffect>
+                    </CombatEnemyEvadeEffect>
+                  </CombatEnemyClassImpact>
+                </CombatEnemyCritImpact>
+              </View>
+            </CombatEnemyAnchorMotion>
+
+            {/* Stationary: contact anchor, callouts, hitbox — only portrait recoils. */}
+            <WardenStrikeEnemyContactHost unitId={unit.unitId} />
+
+            {WARDEN_STRIKE_VFX_LAYER_TOGGLES.recoilIsolationMode
+              && isWardenStrikePresentationActive() ? (
+              <>
+                <View style={styles.recoilRootMark} pointerEvents="none" />
+                <View style={styles.recoilUiAnchorMark} pointerEvents="none" />
+              </>
+            ) : null}
 
             <View
               style={[
@@ -210,21 +248,36 @@ export default function CombatEnemyUnit({
               ]}
               pointerEvents="none"
             >
-              <CombatEnemyCritLabel
+              <CombatArenaUnitUiPortal
+                unitId={unit.unitId}
+                damageSeq={unit.damageFloatSeq}
+                damageLabel={unit.damageFloatLabel}
+                statusSeq={unit.statusFloatSeq}
+                statusLabel={unit.statusFloatLabel}
+                statusTone={unit.statusFloatTone}
                 critImpactSeq={unit.critImpactSeq}
-                channel={unit.critImpactChannel}
-              />
-              <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
-              <CombatFloatingStatusText
-                triggerSeq={unit.statusFloatSeq}
-                label={unit.statusFloatLabel}
-                tone={unit.statusFloatTone}
-              />
-              <CombatFloatingStatusText
-                triggerSeq={unit.immuneFloatSeq}
-                label={unit.immuneFloatLabel}
-                tone="neutral"
-              />
+                critImpactChannel={unit.critImpactChannel}
+                evadeImpactSeq={unit.evadeImpactSeq}
+              >
+                <CombatEnemyCritLabel
+                  critImpactSeq={unit.critImpactSeq}
+                  channel={unit.critImpactChannel}
+                />
+                <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
+                <CombatWardenCalloutStack
+                  damageSeq={unit.damageFloatSeq}
+                  damageLabel={unit.damageFloatLabel}
+                  statusSeq={unit.statusFloatSeq}
+                  statusLabel={unit.statusFloatLabel}
+                  statusTone={unit.statusFloatTone}
+                  durationMs={900}
+                />
+                <CombatFloatingStatusText
+                  triggerSeq={unit.immuneFloatSeq}
+                  label={unit.immuneFloatLabel}
+                  tone="neutral"
+                />
+              </CombatArenaUnitUiPortal>
             </View>
 
             {onPress && !dissolving ? (
@@ -239,7 +292,7 @@ export default function CombatEnemyUnit({
                 pointerEvents="auto"
               />
             ) : null}
-          </CombatEnemyAnchorMotion>
+          </View>
         )}
       />
     </View>
@@ -264,6 +317,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
+  },
+  spriteRoot: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   alphaGlow: {
     shadowColor: ALPHA_CRIMSON,
@@ -309,6 +369,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.55,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
+  },
+  localDecalTucked: {
+    zIndex: 1,
+    elevation: 1,
   },
   targetCalloutPlateAoe: {
     borderColor: 'rgba(224, 180, 90, 0.65)',
@@ -368,7 +432,31 @@ const styles = StyleSheet.create({
     top: '38%',
     width: '100%',
     alignItems: 'center',
-    zIndex: 12,
+    zIndex: 18,
+  },
+  recoilRootMark: {
+    position: 'absolute',
+    left: '50%',
+    top: '55%',
+    width: 10,
+    height: 10,
+    marginLeft: -5,
+    marginTop: -5,
+    borderWidth: 1.5,
+    borderColor: '#22d3ee',
+    backgroundColor: 'rgba(34, 211, 238, 0.25)',
+    zIndex: 40,
+  },
+  recoilUiAnchorMark: {
+    position: 'absolute',
+    left: '50%',
+    top: '20%',
+    width: 8,
+    height: 8,
+    marginLeft: -4,
+    borderRadius: 4,
+    backgroundColor: '#fbbf24',
+    zIndex: 40,
   },
   hitbox: {
     position: 'absolute',

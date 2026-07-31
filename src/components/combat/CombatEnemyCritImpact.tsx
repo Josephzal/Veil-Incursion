@@ -9,8 +9,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { DamageChannel } from '../../types/aegisCombat';
+import { shouldSuppressWardenCritImpactSlash } from '../../data/wardenStrikePresentation';
 
 const HIT_STOP_MS = 150;
+/** Kinetic crit slash — mustard amber; suppressed during Warden's Strike only. */
 const CRIT_COLORS: Record<'KINETIC' | 'OCCULT', string> = {
   KINETIC: '#fbbf24',
   OCCULT: '#7c3aed',
@@ -42,6 +44,12 @@ export default function CombatEnemyCritImpact({
   useEffect(() => {
     if (critImpactSeq <= 0 || critImpactSeq === lastSeqRef.current) return;
     lastSeqRef.current = critImpactSeq;
+
+    // Warden's Strike owns steel contact — suppress mustard horizontal slash visual only.
+    // Crit label / staged publication / lifecycle remain on critImpactSeq.
+    if (shouldSuppressWardenCritImpactSlash()) {
+      return;
+    }
 
     const color = critChannelColor(channel);
     setFlashColor(color);
