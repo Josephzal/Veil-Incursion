@@ -32,8 +32,10 @@ type AudioEl = {
   removeEventListener: (type: string, listener: () => void) => void;
 };
 
-const CRAFT_PEAK = 0.55;
-const DONE_PEAK = 0.6;
+/** Peak volumes (0–1), before master UI feedback scale. Tweak these. */
+export const FABRICATE_HOLD_SFX_VOLUME = 0.15;
+export const FABRICATE_DONE_SFX_VOLUME = 0.15;
+
 const QUICK_FADE_MS = 140;
 const COMPLETE_FADE_MS = 240;
 const FADE_TICK_MS = 16;
@@ -109,7 +111,7 @@ export function playFabricateDoneSfx(): void {
   const template = ensureDoneTemplate();
   if (!template) return;
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-  const peak = Math.max(0, Math.min(1, DONE_PEAK * getUiFeedbackVolumeScale()));
+  const peak = Math.max(0, Math.min(1, FABRICATE_DONE_SFX_VOLUME * getUiFeedbackVolumeScale()));
   if (peak <= 0.001) return;
   try {
     const node = template.cloneNode(true);
@@ -143,7 +145,7 @@ function clearFadeTimers(): void {
 }
 
 function peakVolume(): number {
-  return Math.max(0, Math.min(1, CRAFT_PEAK * getUiFeedbackVolumeScale()));
+  return Math.max(0, Math.min(1, FABRICATE_HOLD_SFX_VOLUME * getUiFeedbackVolumeScale()));
 }
 
 function hardStop(el: AudioEl | null): void {

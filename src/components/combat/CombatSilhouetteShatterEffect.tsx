@@ -121,7 +121,8 @@ function GoldenShard({
 }
 
 interface CombatSilhouetteShatterEffectProps {
-  trigger: boolean;
+  /** Increments on successful fracture breach — drives one shard burst per bump. */
+  shatterSeq?: number;
   portraitSource: ImageSourcePropType;
   onTrigger?: () => void;
   children: React.ReactNode;
@@ -129,14 +130,15 @@ interface CombatSilhouetteShatterEffectProps {
 
 /**
  * Silhouette glass shatter — golden clipped shards burst outward over the enemy sprite.
+ * Only fires when shatterSeq bumps (successful fracture breach), not merely FRACTURED state.
  */
 export default function CombatSilhouetteShatterEffect({
-  trigger,
+  shatterSeq = 0,
   portraitSource,
   onTrigger,
   children,
 }: CombatSilhouetteShatterEffectProps): React.JSX.Element {
-  const wasTriggeredRef = useRef(false);
+  const lastSeqRef = useRef(0);
   const clipNamespaceRef = useRef(`shatter-${Math.random().toString(36).slice(2, 9)}`);
   const [shardsActive, setShardsActive] = useState(false);
   const [layout, setLayout] = useState({ width: 0, height: 0 });
@@ -160,8 +162,8 @@ export default function CombatSilhouetteShatterEffect({
   };
 
   useEffect(() => {
-    if (!trigger || wasTriggeredRef.current) return;
-    wasTriggeredRef.current = true;
+    if (shatterSeq <= 0 || shatterSeq === lastSeqRef.current) return;
+    lastSeqRef.current = shatterSeq;
     onTrigger?.();
     setShardRotations(SHARD_DEFS.map(() => Math.random() * 90));
     setShardsActive(true);
@@ -194,19 +196,7 @@ export default function CombatSilhouetteShatterEffect({
 
     const hideTimer = setTimeout(() => setShardsActive(false), FADE_HOLD_MS + FADE_OUT_MS + 60);
     return () => clearTimeout(hideTimer);
-  }, [burst, fade, flashOpacity, onTrigger, shakeX, shakeY, trigger]);
-
-  useEffect(() => {
-    if (!trigger) {
-      wasTriggeredRef.current = false;
-      setShardsActive(false);
-      burst.value = 0;
-      fade.value = 1;
-      shakeX.value = 0;
-      shakeY.value = 0;
-      flashOpacity.value = 0;
-    }
-  }, [burst, fade, flashOpacity, shakeX, shakeY, trigger]);
+  }, [burst, fade, flashOpacity, onTrigger, shakeX, shakeY, shatterSeq]);
 
   const shakeStyle = useAnimatedStyle(() => ({
     // Portrait + status stay fully visible; only shards use the fade shared value.

@@ -108,6 +108,7 @@ export default function HoldToFabricateButton({
   return (
     <HapticPressable
       haptic={false}
+      sfx={false}
       disabled={disabled}
       delayLongPress={10_000}
       onPressIn={startHold}

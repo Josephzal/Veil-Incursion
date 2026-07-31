@@ -88,8 +88,9 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['AFTERMATH', 'resource_pulse', 220, 100, 'sfx.longsword.resource'],
     ]),
     ultimateSequence: seq([
-      ['ANTICIPATION', 'pose_swap', 0, 80],
-      ['RELEASE', 'directional_slash', 40, 120, 'sfx.aegis.ultimate'],
+      // longsword_ult2 leads slightly, then overlaps existing ultimate slash.
+      ['ANTICIPATION', 'pose_swap', 0, 80, 'sfx.aegis.ultimate2'],
+      ['RELEASE', 'directional_slash', 200, 120, 'sfx.aegis.ultimate'],
       ['CONTACT', 'impact_spark', 100, 80],
       ['CONTACT', 'impact_spark', 180, 80],
       ['CONTACT', 'impact_spark', 260, 100],

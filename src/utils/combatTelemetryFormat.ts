@@ -328,6 +328,8 @@ export interface CombatGridUnitSnapshot {
   immuneFloatLabel?: string;
   /** Increments when the operative deals HP damage to this unit (drives hit flash). */
   hitFlashSeq?: number;
+  /** Increments only on successful fracture breach — drives golden silhouette shatter VFX. */
+  fractureShatterSeq?: number;
   /** Direct player hit class VFX — Aegis slice, Hex bullet, Envoy burst. */
   classImpactFxSeq?: number;
   classImpactFxKind?: CombatClassImpactKind;

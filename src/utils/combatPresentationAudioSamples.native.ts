@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 export const AEGIS_ATTACK_SAMPLE = require('../../assets/audio/combat/aegis-metal-hit-woosh.wav');
 export const AEGIS_ULTIMATE_SAMPLE = require('../../assets/audio/combat/aegis-sword-slash-swoosh.mp3');
+export const AEGIS_ULTIMATE2_SAMPLE = require('../../assets/audio/combat/longsword-ult2.m4a');
 export const PLAYER_IMPACT_SAMPLE = require('../../assets/audio/combat/player-impact-blow.wav');
 export const UNMAKER_ATTACK_SAMPLE = require('../../assets/audio/combat/heavy-sword.mp3');
 export const UNMAKER_ULTIMATE_SAMPLE = require('../../assets/audio/combat/heavy-sword-ult.m4a');

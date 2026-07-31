@@ -73,7 +73,6 @@ export default function CombatEnemyUnit({
   const hitboxStyle = isArena
     ? resolveEnemyHitbox(unit.slot, layoutUnitScale, isAlpha)
     : null;
-  const fractured = unit.isFractured;
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
   const critLabelScale = layoutUnitScale > 0 ? 1 / layoutUnitScale : 1;
@@ -170,7 +169,10 @@ export default function CombatEnemyUnit({
                       hitFlashSeq={unit.hitFlashSeq}
                       portraitSource={unit.portraitSource}
                     >
-                      <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+                      <CombatSilhouetteShatterEffect
+                        shatterSeq={unit.fractureShatterSeq}
+                        portraitSource={unit.portraitSource}
+                      >
                         <View style={styles.portraitDefenseStack}>
                           <CombatEnemyPortraitSkia
                             source={unit.portraitSource}

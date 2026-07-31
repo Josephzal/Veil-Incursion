@@ -22,7 +22,8 @@ type AudioEl = {
 
 const CLICK_VOLUME = 0.45;
 const LIP_VOLUME = 0.1; // 0.55 − 25%
-const TYPING_VOLUME = 0.55;
+/** Peak volume (0–1) for contract-log / accept typing cue, before master UI scale. */
+export const CONTRACT_LOG_TYPING_SFX_VOLUME = 0.3;
 const CLICK_DEBOUNCE_MS = 28;
 
 /** User sfx × master scale from audio prefs (0–1). */
@@ -142,5 +143,5 @@ export function playScannerLipKey(): void {
 /** Contract board accept — typing confirmation. */
 export function playContractAcceptTyping(): void {
   ensureTemplates();
-  playTemplate(typingTemplate, TYPING_VOLUME);
+  playTemplate(typingTemplate, CONTRACT_LOG_TYPING_SFX_VOLUME);
 }

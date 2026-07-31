@@ -51,7 +51,6 @@ import {
   resolveBlackMarketArtwork,
 } from '../../utils/blackMarketArtwork';
 import { fabricationAudioHooks } from '../../utils/fabricationFeedbackAudio';
-import { pulseFabricationSeal } from '../../utils/hubButtonHaptics';
 import {
   formatVendorExchangeCondition,
   isVendorSelectionValid,
@@ -466,54 +465,30 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
     clearFabTimers();
     setFabRecord(snapshot);
-    setFabReceipt(null);
     setFeedback(null);
     appendHubLog(result.logLine);
-    fabricationAudioHooks.play('fabrication_accept');
-
-    const schedule = (ms: number, fn: () => void) => {
-      fabTimers.current.push(setTimeout(fn, ms));
-    };
+    // Done SFX + receipt as soon as the hold succeeds (not after the old phase timeline).
+    setFabPhase('complete');
+    fabricationAudioHooks.play('fabrication_complete');
+    setFabReceipt(buildReceipt());
+    playTxnPulse();
 
     if (reduceMotion) {
-      setFabPhase('complete');
-      fabricationAudioHooks.play('fabrication_complete');
-      setFabReceipt(buildReceipt());
       return;
     }
 
-    setFabPhase('accepted');
     Animated.timing(workspaceDim, {
       toValue: 1,
       duration: 160,
       useNativeDriver: true,
     }).start();
-
-    schedule(180, () => {
-      setFabPhase('converging');
-      fabricationAudioHooks.play('fabrication_converge');
-    });
-    schedule(520, () => {
-      setFabPhase('assembling');
-    });
-    schedule(950, () => {
-      setFabPhase('sealing');
-      fabricationAudioHooks.play('fabrication_seal');
-      pulseFabricationSeal();
-    });
-    schedule(1080, () => {
-      setFabPhase('complete');
-      fabricationAudioHooks.play('fabrication_complete');
-      setFabReceipt(buildReceipt());
-      playTxnPulse();
-    });
-    schedule(1400, () => {
+    fabTimers.current.push(setTimeout(() => {
       Animated.timing(workspaceDim, {
         toValue: 0,
         duration: 220,
         useNativeDriver: true,
       }).start();
-    });
+    }, 400));
   };
 
   const handleBuy = () => {

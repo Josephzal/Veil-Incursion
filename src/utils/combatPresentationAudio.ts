@@ -11,6 +11,7 @@ import {
   AEGIS_PARRY_SAMPLE,
   AEGIS_PLAYER_BUFF_SAMPLE,
   AEGIS_RUIN_SAMPLE,
+  AEGIS_ULTIMATE2_SAMPLE,
   AEGIS_ULTIMATE_SAMPLE,
   CARBINE_BURST_SAMPLE,
   CARBINE_RELOAD_SAMPLE,
@@ -137,6 +138,9 @@ CUE_RECIPES['sfx.aegis.attack'] = {
 CUE_RECIPES['sfx.aegis.ultimate'] = {
   layers: [{ kind: 'sawtooth', freq: 520, freqEnd: 180, gain: 0.12, durationMs: 140 }],
 };
+CUE_RECIPES['sfx.aegis.ultimate2'] = {
+  layers: [{ kind: 'triangle', freq: 400, freqEnd: 160, gain: 0.1, durationMs: 160 }],
+};
 CUE_RECIPES['sfx.aegis.contact_silent'] = { layers: [] };
 CUE_RECIPES['sfx.aegis.parry'] = {
   layers: [{ kind: 'triangle', freq: 900, freqEnd: 400, gain: 0.1, durationMs: 70 }],
@@ -235,6 +239,7 @@ type AudioCtxLike = {
 const SAMPLE_SOURCES: Record<string, unknown> = {
   'sfx.aegis.attack': AEGIS_ATTACK_SAMPLE,
   'sfx.aegis.ultimate': AEGIS_ULTIMATE_SAMPLE,
+  'sfx.aegis.ultimate2': AEGIS_ULTIMATE2_SAMPLE,
   'sfx.aegis.parry': AEGIS_PARRY_SAMPLE,
   'sfx.player.impact': PLAYER_IMPACT_SAMPLE,
   'sfx.unmaker.attack': UNMAKER_ATTACK_SAMPLE,
@@ -266,6 +271,7 @@ const SAMPLE_SOURCES: Record<string, unknown> = {
 const SAMPLE_GAIN: Record<string, number> = {
   'sfx.aegis.attack': 1,
   'sfx.aegis.ultimate': 1,
+  'sfx.aegis.ultimate2': 1,
   'sfx.aegis.parry': 1,
   'sfx.player.impact': 1,
   'sfx.unmaker.attack': 1,
@@ -354,6 +360,7 @@ export function playPairedBladesUltimateFlurry(): void {
 
 const SAMPLE_FADE_OUT_MS: Partial<Record<string, number>> = {
   'sfx.aegis.parry': 800,
+  'sfx.aegis.ultimate2': 1300,
   'sfx.scythe.release': 1200,
   'sfx.scythe.impact': 10,
   'sfx.scythe.ultimate': 800,

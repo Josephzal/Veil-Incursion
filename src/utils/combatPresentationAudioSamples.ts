@@ -4,6 +4,7 @@
  */
 export const AEGIS_ATTACK_SAMPLE: unknown = null;
 export const AEGIS_ULTIMATE_SAMPLE: unknown = null;
+export const AEGIS_ULTIMATE2_SAMPLE: unknown = null;
 export const PLAYER_IMPACT_SAMPLE: unknown = null;
 export const UNMAKER_ATTACK_SAMPLE: unknown = null;
 export const UNMAKER_ULTIMATE_SAMPLE: unknown = null;

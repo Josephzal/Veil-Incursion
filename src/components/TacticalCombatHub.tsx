@@ -607,6 +607,7 @@ import {
   ENEMY_MELEE_ANIM_MS,
   ENEMY_RANGED_ANIM_MS,
   FRONTLINE_MELEE_IMPACT_MS,
+  RANGED_ATTACK_SPRITE_IN_MS,
   playerAttackLungeDelta,
   resolveArenaLayoutMode,
   type ArenaGridVariant,
@@ -1073,6 +1074,8 @@ export default function TacticalCombatHub({
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
   const hitFlashSeqRef = useRef<Record<string, number>>({});
+  /** Golden shard VFX — only bumped on successful fracture breach execute. */
+  const fractureShatterSeqRef = useRef<Record<string, number>>({});
   const classImpactFxRef = useRef<Record<string, { seq: number; kind: import('../utils/combatTelemetryFormat').CombatClassImpactKind }>>({});
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
@@ -1830,6 +1833,7 @@ export default function TacticalCombatHub({
           immuneFloatSeq: sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0,
           immuneFloatLabel: (sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0) > 0 ? 'IMMUNE' : undefined,
           hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
+          fractureShatterSeq: fractureShatterSeqRef.current[unitId] ?? 0,
           classImpactFxSeq: classImpactFxRef.current[unitId]?.seq ?? 0,
           classImpactFxKind: classImpactFxRef.current[unitId]?.kind,
           isEnraged: u.isEnraged ?? false,
@@ -2880,7 +2884,9 @@ export default function TacticalCombatHub({
     preAppliedHpStrikeRef.current = dmg;
     pendingDmgRef.current = dmg;
     pendingUnblockRef.current = strike.unblockable;
+    // Hit SFX + haptic at the lunge / attack peak (not when HP is committed later).
     Vibration.vibrate([0, 32, 48, 28]);
+    playCombatPresentationCue('sfx.player.impact');
   };
 
   const commitPendingPlayerDamage = (unblockable = false, msg?: string, attacker?: EnemyCombatProfile) => {
@@ -2891,6 +2897,7 @@ export default function TacticalCombatHub({
     preAppliedHpStrikeRef.current = 0;
     hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg, {
       skipStrikeFx: true,
+      skipImpactSfx: true,
       attacker: attacker ?? enemyRef.current ?? undefined,
     });
     return true;
@@ -2902,6 +2909,8 @@ export default function TacticalCombatHub({
     msg?: string,
     options?: {
       skipStrikeFx?: boolean;
+      /** Impact SFX already played at enemy attack peak — don't replay on HP commit. */
+      skipImpactSfx?: boolean;
       attacker?: EnemyCombatProfile;
       rollEvade?: boolean;
       rollCrit?: boolean;
@@ -3150,8 +3159,10 @@ export default function TacticalCombatHub({
           log('[SEARING] >> Secondary burst — +8 damage.');
         }
       }
-      Vibration.vibrate([0, 32, 48, 28]);
-      playCombatPresentationCue('sfx.player.impact');
+      if (!options?.skipImpactSfx) {
+        Vibration.vibrate([0, 32, 48, 28]);
+        playCombatPresentationCue('sfx.player.impact');
+      }
       if (!options?.skipStrikeFx) {
         playerViewportRef?.current?.triggerDamageEffect('hp');
       }
@@ -3243,6 +3254,31 @@ export default function TacticalCombatHub({
       if (n <= 0) resolve(false);
       return n;
     });
+  };
+
+  /** Debounce so multi-hit ultimates only snap the attack pose once. */
+  const lastPlayerAttackPoseAtRef = useRef(0);
+  const triggerPlayerAttackPose = (target?: { gridSlot?: string | null } | null) => {
+    const now = Date.now();
+    if (now - lastPlayerAttackPoseAtRef.current < 200) return;
+    lastPlayerAttackPoseAtRef.current = now;
+    if (operativeClass === 'AEGIS') {
+      const targetSlot = (target?.gridSlot
+        ?? getUnitById(squadRef.current, selectedTargetIdRef.current ?? '')?.gridSlot
+        ?? enemyRef.current?.gridSlot
+        ?? 'FL_0') as CombatGridSlotId;
+      const arenaHeight = Math.max(windowHeight * 0.52, 200);
+      const lungeDelta = playerAttackLungeDelta(
+        targetSlot,
+        arenaLayoutModeRef.current,
+        width,
+        arenaHeight,
+        arenaGridVariant,
+      );
+      playerViewportRef?.current?.triggerAttackLunge(lungeDelta);
+    } else {
+      playerViewportRef?.current?.triggerRangedAttack();
+    }
   };
 
   const hurtEnemy = (
@@ -3630,8 +3666,6 @@ export default function TacticalCombatHub({
         triggerHitstop(200);
         triggerShake('heavy');
         setFractureBreakUnitId(e.unitId);
-        unlockCombatPresentationAudio();
-        playCombatPresentationCue('sfx.fracture.break');
         log(`>> FRACTURE BREAK — ${working.designation} stagger threshold breached.`);
       } else {
         working = applyFractureDamage(working, scaledFractureGain);
@@ -4029,33 +4063,19 @@ export default function TacticalCombatHub({
         log(`[ABYSSAL ERUPTION] >> +${mutationModsRef.current.abyssalEruptionPerHit} reserve from AoE hit.`);
       }
     }
+    const ultimateAttackPose = isWeaponUltimateActionId(options?.abilityId)
+      || source === 'EVISCERATE';
     if (
       source
       && source !== 'COUNTER'
       && dmg > 0
-      && isPlayerTurnRef.current
-      && Boolean(options?.abilityId)
+      && (isPlayerTurnRef.current || ultimateAttackPose)
+      && Boolean(options?.abilityId || ultimateAttackPose)
       && !options?.indirectDamage
       && !options?.echoHit
       && options?.abilityId !== 'RUIN'
     ) {
-      if (operativeClass === 'AEGIS') {
-        const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
-        const arenaHeight = Math.max(
-          windowHeight * 0.52,
-          200,
-        );
-        const lungeDelta = playerAttackLungeDelta(
-          targetSlot,
-          arenaLayoutModeRef.current,
-          width,
-          arenaHeight,
-          arenaGridVariant,
-        );
-        playerViewportRef?.current?.triggerAttackLunge(lungeDelta);
-      } else {
-        playerViewportRef?.current?.triggerRangedAttack();
-      }
+      triggerPlayerAttackPose(working);
     }
     const poolHp = working.sharedBossPool && bossRuntimeRef.current
       ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
@@ -5989,7 +6009,11 @@ export default function TacticalCombatHub({
             }, FRONTLINE_MELEE_IMPACT_MS);
           } else {
             animDurationMs = ENEMY_RANGED_ANIM_MS;
-            applyStrike();
+            // Align hit SFX / deck flash with ranged attack pose peak.
+            setTimeout(() => {
+              if (isCombatTerminal()) return;
+              applyStrike();
+            }, RANGED_ATTACK_SPRITE_IN_MS);
           }
         } else if (motionKind === 'melee') {
           animDurationMs = ENEMY_MELEE_ANIM_MS;
@@ -7943,6 +7967,8 @@ export default function TacticalCombatHub({
       lastPlayerAbilityRef.current = hookAbilityId;
     }
     const primary = pickPrimaryUltimateTarget();
+    // Pose on ultimate commit — not only when first damage lands (multi-hit / 0-damage edge cases).
+    triggerPlayerAttackPose(primary);
 
     if (ultimateId === 'REND_THE_VEIL') {
       if (!primary?.unitId) {
@@ -8282,6 +8308,7 @@ export default function TacticalCombatHub({
       if (plan.stunNonBoss) reduceEnemyAp(targetId, 99);
       if (plan.bossDamageReductionPct > 0) reduceEnemyAp(targetId, 1);
       plan.notes.forEach((note) => log(`>> [ZERO PROTOCOL] ${note}`));
+      triggerPlayerAttackPose(primary);
       hurtEnemy(plan.trueDamage, '[ZERO PROTOCOL]', 'STRIKE', {
         channel: 'TRUE',
         targetId,
@@ -8313,7 +8340,9 @@ export default function TacticalCombatHub({
     const traceMultiplier = cataclysmSigilTraceMultiplier(effectiveNodes);
     const damage = computeCataclysmSigilDamage(rotTotal, traceMultiplier);
     const hurtFn = buildEnvoyHurtEnemy();
-    for (const unit of aliveUnits(squadRef.current)) {
+    const alive = aliveUnits(squadRef.current);
+    triggerPlayerAttackPose(alive[0] ?? null);
+    for (const unit of alive) {
       if (!unit.unitId) continue;
       if (getVeilRotStacks(classCombatRef.current, unit.unitId) > 0) {
         runHexBreakerOnRotPurge(envoyBoons, unit, (raw, targetId) => {
@@ -8325,7 +8354,7 @@ export default function TacticalCombatHub({
         }, log);
       }
     }
-    for (const unit of aliveUnits(squadRef.current)) {
+    for (const unit of alive) {
       if (!unit.unitId) continue;
       if (damage <= 0) break;
       hurtFn(damage, '[NULL CIRCUIT]', {
@@ -8390,6 +8419,11 @@ export default function TacticalCombatHub({
       publishSquadUi(squadRef.current);
       return;
     }
+    fractureShatterSeqRef.current[unit.unitId] =
+      (fractureShatterSeqRef.current[unit.unitId] ?? 0) + 1;
+    unlockCombatPresentationAudio();
+    playCombatPresentationCue('sfx.fracture.break');
+    publishSquadUi(squadRef.current);
     const plan = planFractureBreachStrike(operativeClass, strikeStats);
     for (let i = 0; i < plan.hitCount; i += 1) {
       hurtEnemy(plan.damagePerHit, plan.tag, 'STRIKE', {
@@ -8885,6 +8919,10 @@ export default function TacticalCombatHub({
         ? `[THREEFOLD BRAND] >> PERFECT [3/3] — ${dmg} damage.`
         : `[THREEFOLD BRAND] >> ${resolved.grade} [${hits}/3] — ${dmg} damage.`,
     );
+    triggerPlayerAttackPose(
+      getUnitById(squadRef.current, eviscerateTargetUnitId ?? selectedTargetIdRef.current ?? '')
+        ?? enemyRef.current,
+    );
     const eradicated = hurtEnemy(dmg, '[THREEFOLD BRAND]', 'EVISCERATE', {
       channel: 'TRUE',
       abilityId: 'EVISCERATE',
@@ -8915,6 +8953,7 @@ export default function TacticalCombatHub({
     const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
     const dmg = Math.floor(base * (hits / 3));
     log(`[THREEFOLD BRAND] >> STANDARD simplified — ${dmg} damage.`);
+    triggerPlayerAttackPose(enemyRef.current);
     const eradicated = hurtEnemy(dmg, '[THREEFOLD BRAND]', 'EVISCERATE', {
       channel: 'TRUE',
       abilityId: 'EVISCERATE',
