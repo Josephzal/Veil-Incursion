@@ -13,6 +13,7 @@ import {
   isUnitAlive,
 } from './combatSquadEngine';
 import type { ResolvedWeaponCombatStats } from './inventory';
+import { playCombatPresentationCue } from '../utils/combatPresentationAudio';
 
 export interface HexShotAbilityHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -21,6 +22,8 @@ export interface HexShotAbilityHurtOptions {
   abilityId?: HexShotAbilityId;
   rollCrit?: boolean;
   forceCrit?: boolean;
+  /** DoT / trap / triggered damage — no weapon attack SFX. */
+  indirectDamage?: boolean;
   /** Floor for Kinetic Armor strip layers (Nullbreach innate pressure). */
   innateArmorPressureLayers?: number;
 }
@@ -242,6 +245,7 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         return { ok: false, refundAp: def.apCost };
       }
       ctx.classState.riftSnareUnits[unit.unitId] = def.baseDamage;
+      playCombatPresentationCue('sfx.hex.snare');
       ctx.log(`[RIFT-SNARE] >> Mine seeded under ${unit.designation}.`);
       return { ok: true };
     }
@@ -436,6 +440,8 @@ export function detonateRiftSnareOnUnit(
     channel: 'KINETIC',
     abilityId: 'RIFT_SNARE',
     targetId: unitId,
+    rollCrit: false,
+    indirectDamage: true,
   }, unitId);
   log(`[RIFT-SNARE] >> Mine detonated under ${designation}.`);
   return remaining;

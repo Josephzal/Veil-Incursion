@@ -23,6 +23,25 @@ import {
   unlockCombatPresentationAudio,
 } from './combatPresentationAudio';
 
+/** Scythe never stacks secondary weapon cues — only attack + delayed impact. */
+const SCYTHE_WEAPON_FAMILY: WeaponFamilyId = 'envoy-null-conduit';
+const SCYTHE_ALLOWED_CUES = new Set([
+  'sfx.scythe.release',
+  'sfx.scythe.impact',
+  'sfx.scythe.ultimate',
+]);
+
+function playWeaponFamilyCue(
+  weaponFamilyId: WeaponFamilyId,
+  cueId: string | undefined,
+): void {
+  if (!cueId) return;
+  if (weaponFamilyId === SCYTHE_WEAPON_FAMILY && !SCYTHE_ALLOWED_CUES.has(cueId)) {
+    return;
+  }
+  playCombatPresentationCue(cueId);
+}
+
 type JuiceApi = {
   triggerHitstop: (ms: number) => void;
   triggerShake: (intensity: 'micro' | 'light' | 'heavy') => void;
@@ -145,9 +164,10 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
   const profile = getWeaponCombatPresentationProfile(packet.weaponFamilyId);
 
   // Black Door: never play loaded release at zero rounds (non-lab).
+  // Requires an explicit zero — default packet ammo is 1 for normal hits.
   if (
     packet.weaponFamilyId === 'hex-void-cannon'
-    && packet.ammoRoundsConsumed <= 0
+    && packet.ammoRoundsConsumed === 0
     && packet.actionKind === 'ANCHOR'
     && !packet.labForced
   ) {
@@ -156,14 +176,16 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
     return;
   }
 
-  // Revolver reload: once per reload event.
-  if (packet.reloadOccurred) {
-    playCombatPresentationCue(profile.cues.reloadOrSacrifice ?? profile.cues.resourceLoop);
+  // Reload-only: play reload cue, never run the attack/release sequence.
+  if (packet.actionKind === 'RELOAD' || packet.reloadOccurred) {
+    playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.reloadOrSacrifice ?? profile.cues.resourceLoop);
+    packetListener?.(packet);
+    return;
   }
 
   // Heart's Due sacrifice: once per action.
   if (packet.sacrificeOccurred) {
-    playCombatPresentationCue(profile.cues.reloadOrSacrifice ?? profile.cues.resourceLoop);
+    playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.reloadOrSacrifice ?? profile.cues.resourceLoop);
   }
 
   const sequence = packet.actionKind === 'ULTIMATE'
@@ -200,8 +222,46 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
 
       // Outcome truth: no damaging flesh on miss/evade.
       if (step.stage === 'CONTACT' && firstHit) {
-        if (firstHit.outcome === 'MISS' || firstHit.outcome === 'EVADE') {
-          playCombatPresentationCue(profile.cues.travel);
+        // Scythe: release-only — skip armor/ward/crit/kill contact accents.
+        if (packet.weaponFamilyId !== SCYTHE_WEAPON_FAMILY) {
+          if (firstHit.outcome === 'MISS' || firstHit.outcome === 'EVADE') {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.travel);
+            visualListener?.({
+              id: `${packet.id}-${step.stage}-miss`,
+              weaponFamilyId: packet.weaponFamilyId,
+              primitive: 'outline_pulse',
+              palette: profile.palette,
+              stage: step.stage,
+              targetId: firstHit.targetId,
+              reducedMotion: settings.reducedMotion,
+              reducedFlash: settings.reducedFlash,
+              durationMs: duration,
+              createdAt: Date.now(),
+            });
+            return;
+          }
+          if (firstHit.defenseMaterial === 'KINETIC_ARMOR') {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.kineticArmor);
+          } else if (firstHit.defenseMaterial === 'OCCULT_WARD') {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.occultWard);
+          } else if (firstHit.damage > 0) {
+            playWeaponFamilyCue(packet.weaponFamilyId, step.cueId ?? profile.cues.fleshContact);
+          } else {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.travel);
+          }
+          if (firstHit.fullArmorBreak || firstHit.fullWardBreak) {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.defenseBreak);
+          }
+          if (firstHit.fractureApplied || firstHit.fractureExploited) {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.fracture);
+          }
+          if (firstHit.killed) {
+            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.killConfirm);
+          }
+          if (firstHit.critical) {
+            playCombatPresentationCue('sfx.critical_hit');
+          }
+        } else if (firstHit.outcome === 'MISS' || firstHit.outcome === 'EVADE') {
           visualListener?.({
             id: `${packet.id}-${step.stage}-miss`,
             weaponFamilyId: packet.weaponFamilyId,
@@ -216,31 +276,10 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
           });
           return;
         }
-        if (firstHit.defenseMaterial === 'KINETIC_ARMOR') {
-          playCombatPresentationCue(profile.cues.kineticArmor);
-        } else if (firstHit.defenseMaterial === 'OCCULT_WARD') {
-          playCombatPresentationCue(profile.cues.occultWard);
-        } else if (firstHit.damage > 0) {
-          playCombatPresentationCue(step.cueId ?? profile.cues.fleshContact);
-        } else {
-          playCombatPresentationCue(profile.cues.travel);
-        }
-        if (firstHit.fullArmorBreak || firstHit.fullWardBreak) {
-          playCombatPresentationCue(profile.cues.defenseBreak);
-        }
-        if (firstHit.fractureApplied || firstHit.fractureExploited) {
-          playCombatPresentationCue(profile.cues.fracture);
-        }
-        if (firstHit.killed) {
-          playCombatPresentationCue(profile.cues.killConfirm);
-        }
-        if (firstHit.critical) {
-          playCombatPresentationCue('sfx.critical_hit');
-        }
       } else if (step.cueId) {
-        playCombatPresentationCue(step.cueId);
+        playWeaponFamilyCue(packet.weaponFamilyId, step.cueId);
       } else if (step.stage === 'RELEASE') {
-        playCombatPresentationCue(profile.cues.release);
+        playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.release);
       }
 
       visualListener?.({
@@ -263,12 +302,14 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
     const delay = scalePresentationMs(120 + hit.order * 45);
     schedule(delay, () => {
       if (hit.outcome === 'MISS' || hit.outcome === 'EVADE') return;
-      if (hit.defenseMaterial === 'KINETIC_ARMOR') {
-        playCombatPresentationCue(profile.cues.kineticArmor);
-      } else if (hit.defenseMaterial === 'OCCULT_WARD') {
-        playCombatPresentationCue(profile.cues.occultWard);
-      } else if (hit.damage > 0) {
-        playCombatPresentationCue(profile.cues.fleshContact);
+      if (packet.weaponFamilyId !== SCYTHE_WEAPON_FAMILY) {
+        if (hit.defenseMaterial === 'KINETIC_ARMOR') {
+          playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.kineticArmor);
+        } else if (hit.defenseMaterial === 'OCCULT_WARD') {
+          playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.occultWard);
+        } else if (hit.damage > 0) {
+          playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.fleshContact);
+        }
       }
       visualListener?.({
         id: `${packet.id}-extra-${hit.order}`,

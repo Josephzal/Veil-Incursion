@@ -21,6 +21,7 @@ import {
 import { columnSlotsFor, ALL_GRID_SLOTS } from '../types/combatGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import { getAbilityDefinition, getAbilityTags } from './aegisAbilities';
+import { playCombatPresentationCue } from '../utils/combatPresentationAudio';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import { boonMatchesAction } from './boonEngine';
 import type { MutationCombatModifiers } from './boonEngine';
@@ -169,6 +170,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       let eradicated = false;
       const targets = fullGridUnits(ctx.squad);
       const hitTargets = targets.length > 0 ? targets : aliveUnits(ctx.squad);
+      playCombatPresentationCue('sfx.aegis.ruin');
       for (const unit of hitTargets) {
         if (!unit.unitId) continue;
         const instantStun = brandsSpent >= 3 && hasCombatTag(unit, 'CONCUSSED');
@@ -202,6 +204,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       if (freeWard) {
         ctx.setAshenMantleCooldown(3);
       }
+      playCombatPresentationCue('sfx.aegis.player_buff');
       ctx.log(
         `[ASHEN MANTLE] >> ${brandsSpent} Brand(s) consumed — ${duration}-turn mantle (50% damage reduction).`,
       );

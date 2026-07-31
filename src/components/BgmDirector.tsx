@@ -1,5 +1,11 @@
 /**
- * Drives hub / in-run / combat BGM from GameFlow + Veil transit state.
+ * Drives hub / in-run adaptive BGM from GameFlow + Veil transit state.
+ *
+ * Authoritative hooks:
+ * - Incursion active: BREACHING ingress, BOUND_REQUISITION…SAFEHOUSE, COMBAT
+ * - Combat: combatEntryActive || currentScreen === 'COMBAT' → drum mix
+ * - Out of combat (still in run): RUN_MUSIC_SCREENS → explore mix
+ * - Incursion end: EXTRACTING / HUB / debrief → stop beds; hub resumes on HUB
  */
 
 import { useEffect } from 'react';
@@ -9,6 +15,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useTransitionStore } from '../stores/transitionStore';
 import {
   ensureHubBgmPlaying,
+  preloadIncursionBeds,
   setBgmDesired,
   unlockBgm,
   type BgmDesired,
@@ -35,18 +42,18 @@ function resolveBgmDesired(input: {
 }): BgmDesired {
   const { currentScreen, combatEntryActive, transitionState, transitKind } = input;
 
-  // Initiate-breach portal — crossfade hub → run immediately.
+  // Initiate-breach portal — start synchronized beds (explore audible).
   if (transitionState === 'BREACHING' && transitKind === 'incursionIngress') {
     return 'run';
   }
 
-  // Extract portal: keep run silent, but start hub as soon as Veil Front mounts under the iris.
+  // Extract / abandon — stop incursion beds; hub once Veil Front mounts.
   if (transitionState === 'EXTRACTING') {
     if (currentScreen === 'HUB') return 'hub';
     return 'none';
   }
 
-  // Combat entry FX + arena — intro then loop bed.
+  // Combat entry FX + arena — crossfade to drum mix (beds keep position).
   if (combatEntryActive || currentScreen === 'COMBAT') {
     return 'combat';
   }
@@ -59,7 +66,7 @@ function resolveBgmDesired(input: {
     return 'run';
   }
 
-  // Welcome / debrief / run-complete: hold silence.
+  // Welcome / debrief / run-complete: stop beds.
   return 'none';
 }
 
@@ -67,6 +74,11 @@ export default function BgmDirector(): null {
   const { currentScreen, combatEntryActive } = useGameFlow();
   const transitionState = useTransitionStore((s) => s.transitionState);
   const transitKind = useTransitionStore((s) => s.transitKind);
+
+  useEffect(() => {
+    unlockBgm();
+    void preloadIncursionBeds();
+  }, []);
 
   useEffect(() => {
     unlockBgm();

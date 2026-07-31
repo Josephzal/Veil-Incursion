@@ -1,25 +1,46 @@
 /**
- * App background music — HTMLAudioElement with volume fades.
- * Hub / run loop. Combat plays start once, then loops the combat loop bed.
- * Never throws into game flow. Autoplay unlocks after a user gesture.
+ * App background music (module singleton — survives screen remounts).
+ *
+ * Hub: looping HTMLAudioElement.
+ * Incursion: Web Audio dual-mix (explore + combat) started together and kept
+ * sample-aligned; equal-power crossfade on combat enter/exit. Beds stop only
+ * when leaving the incursion entirely.
+ *
+ * Per-track peak volumes: `BGM_TRACK_VOLUME` defaults + `setBgmTrackVolume(s)`.
  */
 
 import {
-  COMBAT_LOOP_BGM_SAMPLE,
-  COMBAT_START_BGM_SAMPLE,
   HUB_BGM_SAMPLE,
-  RUN_BGM_SAMPLE,
+  RUN_COMBAT_BGM_SAMPLE,
+  RUN_EXPLORE_BGM_SAMPLE,
 } from './bgmAudioSamples';
 
 export type BgmTrackId = 'hub' | 'run' | 'combat';
 export type BgmDesired = BgmTrackId | 'none';
 
-const MASTER_VOLUME = 0.42;
-/** Combat bed (start + loop) — independent of hub/run master. */
-const COMBAT_VOLUME = 0.075;
+/**
+ * Per-track peak volumes (0–1).
+ * Hub uses HTMLAudio; in-run beds use Web Audio equal-power crossfade against these peaks.
+ */
+export const BGM_TRACK_VOLUME = {
+  /** main-hub.mp3 */
+  hub: 0.1,
+  /** in-run-no-drum.m4a (exploration mix) */
+  runNoDrum: 0.1,
+  /** in-run-drum.m4a (combat mix) */
+  runDrum: 0.1,
+} as const;
+
+type BgmTrackVolumeKey = keyof typeof BGM_TRACK_VOLUME;
+
+let hubTrackVolume: number = BGM_TRACK_VOLUME.hub;
+let runNoDrumTrackVolume: number = BGM_TRACK_VOLUME.runNoDrum;
+let runDrumTrackVolume: number = BGM_TRACK_VOLUME.runDrum;
+
 const DEFAULT_FADE_MS = 1400;
 const HUB_ENTER_FADE_MS = 700;
-const COMBAT_ENTER_FADE_MS = 900;
+/** Explore ↔ combat equal-power crossfade. */
+const ADAPTIVE_XFADE_MS = 420;
 
 type AudioEl = {
   src: string;
@@ -29,32 +50,88 @@ type AudioEl = {
   paused: boolean;
   preload: string;
   currentTime: number;
-  readyState: number;
   play: () => Promise<void>;
   pause: () => void;
   load: () => void;
   addEventListener: (type: string, listener: () => void) => void;
 };
 
-let hubEl: AudioEl | null = null;
-let runEl: AudioEl | null = null;
-let combatStartEl: AudioEl | null = null;
-let combatLoopEl: AudioEl | null = null;
-let hubGain = 0;
-let runGain = 0;
-let combatGain = 0;
-let desired: BgmDesired = 'none';
-let unlocked = false;
-let fadeRaf = 0;
-let gestureBound = false;
-let lastApplied: BgmDesired | null = null;
-let hubWatchdog: ReturnType<typeof setInterval> | null = null;
-/** Combat bed phase while desired === 'combat'. */
-let combatPhase: 'intro' | 'loop' = 'intro';
-let combatEndedBound = false;
+type AudioCtxLike = {
+  state: string;
+  currentTime: number;
+  destination: unknown;
+  resume: () => Promise<void>;
+  decodeAudioData: (data: ArrayBuffer) => Promise<AudioBuffer>;
+  createGain: () => GainNodeLike;
+  createBufferSource: () => BufferSourceLike;
+};
 
-function canUseDomAudio(): boolean {
-  return typeof Audio !== 'undefined';
+type GainNodeLike = {
+  gain: {
+    value: number;
+    setValueAtTime: (v: number, t: number) => void;
+    cancelScheduledValues: (t: number) => void;
+  };
+  connect: (n: unknown) => GainNodeLike;
+  disconnect: () => void;
+};
+
+type BufferSourceLike = {
+  buffer: AudioBuffer | null;
+  loop: boolean;
+  connect: (n: unknown) => void;
+  start: (when?: number) => void;
+  stop: (when?: number) => void;
+  onended: ((ev: Event) => void) | null;
+};
+
+let desired: BgmDesired = 'none';
+let lastApplied: BgmDesired | null = null;
+let unlocked = false;
+let gestureBound = false;
+
+// --- Hub (HTMLAudio) ---
+let hubEl: AudioEl | null = null;
+let hubGain = 0;
+let hubFadeRaf = 0;
+let hubWatchdog: ReturnType<typeof setInterval> | null = null;
+
+// --- Incursion dual-mix (Web Audio) ---
+let audioCtx: AudioCtxLike | null = null;
+let exploreBuffer: AudioBuffer | null = null;
+let combatBuffer: AudioBuffer | null = null;
+let buffersLoadPromise: Promise<boolean> | null = null;
+let exploreSource: BufferSourceLike | null = null;
+let combatSource: BufferSourceLike | null = null;
+let exploreGainNode: GainNodeLike | null = null;
+let combatGainNode: GainNodeLike | null = null;
+/** True while both synchronized beds are running. */
+let bedsActive = false;
+/** 0 = full explore, 1 = full combat mix. */
+let mixT = 0;
+let mixTarget = 0;
+let mixFadeRaf = 0;
+
+function isDev(): boolean {
+  try {
+    return Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
+  } catch {
+    return false;
+  }
+}
+
+function bgmLog(message: string): void {
+  if (isDev()) {
+    // eslint-disable-next-line no-console
+    console.log(`[bgm] ${message}`);
+  }
+}
+
+function bgmWarn(message: string): void {
+  if (isDev()) {
+    // eslint-disable-next-line no-console
+    console.warn(`[bgm] ${message}`);
+  }
 }
 
 function resolveSampleUri(source: unknown): string | null {
@@ -82,109 +159,313 @@ function resolveSampleUri(source: unknown): string | null {
   return null;
 }
 
-function makeAudioEl(uri: string, loop: boolean): AudioEl | null {
-  if (!canUseDomAudio()) return null;
+function getAudioContextConstructor(): (new () => AudioCtxLike) | null {
+  if (typeof globalThis === 'undefined') return null;
+  const g = globalThis as unknown as {
+    AudioContext?: new () => AudioCtxLike;
+    webkitAudioContext?: new () => AudioCtxLike;
+  };
+  return g.AudioContext ?? g.webkitAudioContext ?? null;
+}
+
+function ensureAudioContext(): AudioCtxLike | null {
+  if (audioCtx) return audioCtx;
+  const Ctor = getAudioContextConstructor();
+  if (!Ctor) return null;
   try {
-    const el = new Audio(uri) as unknown as AudioEl;
-    el.loop = loop;
-    el.preload = 'auto';
-    el.volume = 0;
-    el.muted = false;
-    el.load();
-    return el;
+    audioCtx = new Ctor();
+    return audioCtx;
   } catch {
+    audioCtx = null;
     return null;
   }
 }
 
-function bindLoopFallback(el: AudioEl, track: 'hub' | 'run' | 'combatLoop'): void {
-  el.addEventListener('ended', () => {
-    if (track === 'hub' && desired !== 'hub') return;
-    if (track === 'run' && desired !== 'run') return;
-    if (track === 'combatLoop' && (desired !== 'combat' || combatPhase !== 'loop')) return;
+async function resumeContext(): Promise<void> {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
     try {
-      el.currentTime = 0;
+      await ctx.resume();
     } catch {
       // ignore
     }
-    void tryPlay(el);
-  });
+  }
 }
 
-function bindCombatIntroEnded(): void {
-  if (!combatStartEl || combatEndedBound) return;
-  combatEndedBound = true;
-  combatStartEl.addEventListener('ended', () => {
-    if (desired !== 'combat') return;
-    combatPhase = 'loop';
-    try {
-      combatStartEl!.pause();
-    } catch {
-      // ignore
+async function fetchAndDecode(uri: string): Promise<AudioBuffer | null> {
+  const ctx = ensureAudioContext();
+  if (!ctx || typeof fetch !== 'function') return null;
+  try {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      bgmWarn(`Failed to fetch ${uri} (${response.status})`);
+      return null;
     }
-    if (combatLoopEl) {
+    const raw = await response.arrayBuffer();
+    return await ctx.decodeAudioData(raw.slice(0));
+  } catch (err) {
+    bgmWarn(`decode failed for ${uri}: ${String(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Preload both adaptive mixes. Safe to call early (hub).
+ */
+export async function preloadIncursionBeds(): Promise<boolean> {
+  if (exploreBuffer && combatBuffer) return true;
+  if (buffersLoadPromise) return buffersLoadPromise;
+
+  buffersLoadPromise = (async () => {
+    ensureAudioContext();
+    const exploreUri = resolveSampleUri(RUN_EXPLORE_BGM_SAMPLE);
+    const combatUri = resolveSampleUri(RUN_COMBAT_BGM_SAMPLE);
+    if (!exploreUri || !combatUri) {
+      bgmWarn('Incursion BGM sample URIs unavailable (Node stub or missing assets).');
+      return false;
+    }
+    const [explore, combat] = await Promise.all([
+      fetchAndDecode(exploreUri),
+      fetchAndDecode(combatUri),
+    ]);
+    if (!explore || !combat) {
+      bgmWarn('Incursion BGM buffers failed to load — adaptive music disabled.');
+      return false;
+    }
+    const durationDelta = Math.abs(explore.duration - combat.duration);
+    if (durationDelta > 0.05) {
+      bgmWarn(
+        `Adaptive mix duration mismatch: explore=${explore.duration.toFixed(3)}s `
+        + `combat=${combat.duration.toFixed(3)}s (Δ=${durationDelta.toFixed(3)}s). `
+        + 'Crossfades may drift.',
+      );
+    } else if (explore.sampleRate !== combat.sampleRate) {
+      bgmWarn(
+        `Adaptive mix sample-rate mismatch: explore=${explore.sampleRate} `
+        + `combat=${combat.sampleRate}`,
+      );
+    } else {
+      bgmLog(
+        `Incursion beds ready (${explore.duration.toFixed(2)}s @ ${explore.sampleRate}Hz)`,
+      );
+    }
+    exploreBuffer = explore;
+    combatBuffer = combat;
+    return true;
+  })();
+
+  try {
+    return await buffersLoadPromise;
+  } finally {
+    // Keep promise cached on success; clear on failure so retry is possible.
+    if (!exploreBuffer || !combatBuffer) {
+      buffersLoadPromise = null;
+    }
+  }
+}
+
+function clampVolume(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+/** User music × master mix (from audio prefs). Track peaks stay authored. */
+let musicUserMix = 1;
+let masterUserMix = 1;
+
+function userMusicScale(): number {
+  return musicUserMix * masterUserMix;
+}
+
+function applyMixGains(): void {
+  const ctx = audioCtx;
+  if (!ctx || !exploreGainNode || !combatGainNode) return;
+  const scale = userMusicScale();
+  // Equal-power: never both at full — scaled by each bed's track volume × user mix.
+  const explore = Math.cos(mixT * Math.PI / 2) * runNoDrumTrackVolume * scale;
+  const combat = Math.sin(mixT * Math.PI / 2) * runDrumTrackVolume * scale;
+  const now = ctx.currentTime;
+  try {
+    exploreGainNode.gain.cancelScheduledValues(now);
+    combatGainNode.gain.cancelScheduledValues(now);
+    exploreGainNode.gain.setValueAtTime(Math.max(0, explore), now);
+    combatGainNode.gain.setValueAtTime(Math.max(0, combat), now);
+  } catch {
+    exploreGainNode.gain.value = Math.max(0, explore);
+    combatGainNode.gain.value = Math.max(0, combat);
+  }
+}
+
+function stopMixFade(): void {
+  if (mixFadeRaf && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(mixFadeRaf);
+  }
+  mixFadeRaf = 0;
+}
+
+function setAdaptiveMixTarget(target: 0 | 1, fadeMs: number = ADAPTIVE_XFADE_MS): void {
+  mixTarget = target;
+  stopMixFade();
+  if (!bedsActive) return;
+
+  const start = mixT;
+  if (Math.abs(start - target) < 0.001) {
+    mixT = target;
+    applyMixGains();
+    return;
+  }
+
+  const duration = Math.max(80, fadeMs);
+  const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  bgmLog(target === 1 ? 'transition → combat mix' : 'transition → exploration mix');
+
+  const step = (now: number) => {
+    // If target redirected mid-fade, continue toward current mixTarget from latest mixT.
+    const goal = mixTarget;
+    const t = Math.min(1, (now - t0) / duration);
+    const e = t * t * (3 - 2 * t);
+    // Re-base each frame from original start only works for one target.
+    // For redirects: restart fade from current mixT when setAdaptiveMixTarget is called again.
+    mixT = start + (goal - start) * e;
+    applyMixGains();
+    if (t < 1 && Math.abs(mixT - goal) > 0.001) {
+      mixFadeRaf = requestAnimationFrame(step);
+      return;
+    }
+    mixT = goal;
+    applyMixGains();
+    mixFadeRaf = 0;
+  };
+
+  if (typeof requestAnimationFrame === 'function') {
+    mixFadeRaf = requestAnimationFrame(step);
+  } else {
+    mixT = target;
+    applyMixGains();
+  }
+}
+
+function stopIncursionBeds(): void {
+  stopMixFade();
+  try {
+    exploreSource?.stop();
+  } catch {
+    // ignore
+  }
+  try {
+    combatSource?.stop();
+  } catch {
+    // ignore
+  }
+  try {
+    exploreGainNode?.disconnect();
+  } catch {
+    // ignore
+  }
+  try {
+    combatGainNode?.disconnect();
+  } catch {
+    // ignore
+  }
+  exploreSource = null;
+  combatSource = null;
+  exploreGainNode = null;
+  combatGainNode = null;
+  if (bedsActive) {
+    bgmLog('incursion beds stopped/reset');
+  }
+  bedsActive = false;
+  mixT = 0;
+  mixTarget = 0;
+}
+
+async function startIncursionBeds(initialMix: 0 | 1): Promise<boolean> {
+  if (bedsActive) return true;
+  const ok = await preloadIncursionBeds();
+  if (!ok || !exploreBuffer || !combatBuffer) return false;
+
+  await resumeContext();
+  const ctx = ensureAudioContext();
+  if (!ctx) {
+    bgmWarn('No AudioContext — cannot start incursion beds.');
+    return false;
+  }
+
+  stopIncursionBeds();
+
+  exploreGainNode = ctx.createGain();
+  combatGainNode = ctx.createGain();
+  exploreGainNode.connect(ctx.destination);
+  combatGainNode.connect(ctx.destination);
+
+  exploreSource = ctx.createBufferSource();
+  combatSource = ctx.createBufferSource();
+  exploreSource.buffer = exploreBuffer;
+  combatSource.buffer = combatBuffer;
+  exploreSource.loop = true;
+  combatSource.loop = true;
+  exploreSource.connect(exploreGainNode);
+  combatSource.connect(combatGainNode);
+
+  mixT = initialMix;
+  mixTarget = initialMix;
+  applyMixGains();
+
+  const when = ctx.currentTime + 0.03;
+  try {
+    exploreSource.start(when);
+    combatSource.start(when);
+  } catch (err) {
+    bgmWarn(`Failed to start synchronized beds: ${String(err)}`);
+    stopIncursionBeds();
+    return false;
+  }
+
+  bedsActive = true;
+  bgmLog(
+    initialMix === 1
+      ? 'incursion start (combat mix audible)'
+      : 'incursion start (exploration mix audible)',
+  );
+  return true;
+}
+
+// --- Hub HTMLAudio ---
+
+function ensureHubElement(): void {
+  if (hubEl) return;
+  const uri = resolveSampleUri(HUB_BGM_SAMPLE);
+  if (!uri || typeof Audio === 'undefined') return;
+  try {
+    const el = new Audio(uri) as unknown as AudioEl;
+    el.loop = true;
+    el.preload = 'auto';
+    el.volume = 0;
+    el.load();
+    el.addEventListener('ended', () => {
+      if (desired !== 'hub') return;
       try {
-        combatLoopEl.currentTime = 0;
+        el.currentTime = 0;
       } catch {
         // ignore
       }
-      applyVolumes();
-      void tryPlay(combatLoopEl);
-    }
-  });
-}
-
-function ensureElements(): void {
-  if (!hubEl) {
-    const uri = resolveSampleUri(HUB_BGM_SAMPLE);
-    if (uri) {
-      hubEl = makeAudioEl(uri, true);
-      if (hubEl) bindLoopFallback(hubEl, 'hub');
-    }
-  }
-  if (!runEl) {
-    const uri = resolveSampleUri(RUN_BGM_SAMPLE);
-    if (uri) {
-      runEl = makeAudioEl(uri, true);
-      if (runEl) bindLoopFallback(runEl, 'run');
-    }
-  }
-  if (!combatStartEl) {
-    const uri = resolveSampleUri(COMBAT_START_BGM_SAMPLE);
-    if (uri) {
-      combatStartEl = makeAudioEl(uri, false);
-      bindCombatIntroEnded();
-    }
-  }
-  if (!combatLoopEl) {
-    const uri = resolveSampleUri(COMBAT_LOOP_BGM_SAMPLE);
-    if (uri) {
-      combatLoopEl = makeAudioEl(uri, true);
-      if (combatLoopEl) bindLoopFallback(combatLoopEl, 'combatLoop');
-    }
+      void tryPlayHub();
+    });
+    hubEl = el;
+  } catch {
+    hubEl = null;
   }
 }
 
-function applyVolumes(): void {
-  if (hubEl) hubEl.volume = Math.max(0, Math.min(1, hubGain * MASTER_VOLUME));
-  if (runEl) runEl.volume = Math.max(0, Math.min(1, runGain * MASTER_VOLUME));
-  const combatVol = Math.max(0, Math.min(1, combatGain * COMBAT_VOLUME));
-  if (combatStartEl) combatStartEl.volume = combatVol;
-  if (combatLoopEl) combatLoopEl.volume = combatVol;
+function applyHubVolume(): void {
+  if (hubEl) hubEl.volume = clampVolume(hubGain * hubTrackVolume * userMusicScale());
 }
 
-function stopFade(): void {
-  if (fadeRaf && typeof cancelAnimationFrame === 'function') {
-    cancelAnimationFrame(fadeRaf);
-  }
-  fadeRaf = 0;
-}
-
-async function tryPlay(el: AudioEl | null): Promise<boolean> {
-  if (!el) return false;
-  if (!el.paused) return true;
+async function tryPlayHub(): Promise<boolean> {
+  if (!hubEl) return false;
+  if (!hubEl.paused) return true;
   try {
-    await el.play();
+    await hubEl.play();
     unlocked = true;
     return true;
   } catch {
@@ -192,124 +473,53 @@ async function tryPlay(el: AudioEl | null): Promise<boolean> {
   }
 }
 
-function pauseIfSilent(el: AudioEl | null, gain: number): void {
-  if (!el) return;
-  if (gain <= 0.001 && !el.paused) {
+function pauseHubIfSilent(): void {
+  if (!hubEl) return;
+  if (hubGain <= 0.001 && !hubEl.paused) {
     try {
-      el.pause();
+      hubEl.pause();
     } catch {
       // ignore
     }
   }
 }
 
-function pauseCombatBeds(): void {
-  pauseIfSilent(combatStartEl, 0);
-  pauseIfSilent(combatLoopEl, 0);
-  try {
-    if (combatStartEl) combatStartEl.currentTime = 0;
-    if (combatLoopEl) combatLoopEl.currentTime = 0;
-  } catch {
-    // ignore
+function stopHubFade(): void {
+  if (hubFadeRaf && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(hubFadeRaf);
   }
+  hubFadeRaf = 0;
 }
 
-function startCombatIntroPlayback(): void {
-  combatPhase = 'intro';
-  try {
-    if (combatLoopEl) {
-      combatLoopEl.pause();
-      combatLoopEl.currentTime = 0;
-    }
-    if (combatStartEl) {
-      combatStartEl.currentTime = 0;
-    }
-  } catch {
-    // ignore
-  }
-  void tryPlay(combatStartEl);
-}
-
-function animateGains(
-  targetHub: number,
-  targetRun: number,
-  targetCombat: number,
-  fadeMs: number,
-): void {
-  stopFade();
-  const startHub = hubGain;
-  const startRun = runGain;
-  const startCombat = combatGain;
+function animateHubGain(target: number, fadeMs: number): void {
+  stopHubFade();
+  const start = hubGain;
   const duration = Math.max(80, fadeMs);
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-
-  if (targetHub > 0) void tryPlay(hubEl);
-  if (targetRun > 0) void tryPlay(runEl);
-  if (targetCombat > 0) {
-    if (combatPhase === 'intro') void tryPlay(combatStartEl);
-    else void tryPlay(combatLoopEl);
-  }
+  if (target > 0) void tryPlayHub();
 
   const step = (now: number) => {
     const t = Math.min(1, (now - t0) / duration);
     const e = t * t * (3 - 2 * t);
-    hubGain = startHub + (targetHub - startHub) * e;
-    runGain = startRun + (targetRun - startRun) * e;
-    combatGain = startCombat + (targetCombat - startCombat) * e;
-    applyVolumes();
+    hubGain = start + (target - start) * e;
+    applyHubVolume();
     if (t < 1) {
-      fadeRaf = requestAnimationFrame(step);
+      hubFadeRaf = requestAnimationFrame(step);
       return;
     }
-    hubGain = targetHub;
-    runGain = targetRun;
-    combatGain = targetCombat;
-    applyVolumes();
-    pauseIfSilent(hubEl, hubGain);
-    pauseIfSilent(runEl, runGain);
-    if (combatGain <= 0.001) {
-      pauseCombatBeds();
-    } else if (combatPhase === 'intro') {
-      void tryPlay(combatStartEl);
-      pauseIfSilent(combatLoopEl, 0);
-    } else {
-      void tryPlay(combatLoopEl);
-      pauseIfSilent(combatStartEl, 0);
-    }
-    fadeRaf = 0;
-    if (targetHub > 0) void tryPlay(hubEl);
-    if (targetRun > 0) void tryPlay(runEl);
+    hubGain = target;
+    applyHubVolume();
+    pauseHubIfSilent();
+    hubFadeRaf = 0;
+    if (target > 0) void tryPlayHub();
   };
 
   if (typeof requestAnimationFrame === 'function') {
-    fadeRaf = requestAnimationFrame(step);
+    hubFadeRaf = requestAnimationFrame(step);
   } else {
-    hubGain = targetHub;
-    runGain = targetRun;
-    combatGain = targetCombat;
-    applyVolumes();
-    pauseIfSilent(hubEl, hubGain);
-    pauseIfSilent(runEl, runGain);
-    if (combatGain <= 0.001) pauseCombatBeds();
-  }
-}
-
-function targetsFor(next: BgmDesired): { hub: number; run: number; combat: number } {
-  if (next === 'hub') return { hub: 1, run: 0, combat: 0 };
-  if (next === 'run') return { hub: 0, run: 1, combat: 0 };
-  if (next === 'combat') return { hub: 0, run: 0, combat: 1 };
-  return { hub: 0, run: 0, combat: 0 };
-}
-
-function syncActivePlayback(): void {
-  ensureElements();
-  const t = targetsFor(desired);
-  applyVolumes();
-  if (t.hub > 0) void tryPlay(hubEl);
-  if (t.run > 0) void tryPlay(runEl);
-  if (t.combat > 0) {
-    if (combatPhase === 'intro') void tryPlay(combatStartEl);
-    else void tryPlay(combatLoopEl);
+    hubGain = target;
+    applyHubVolume();
+    pauseHubIfSilent();
   }
 }
 
@@ -317,9 +527,9 @@ function startHubWatchdog(): void {
   if (hubWatchdog != null) return;
   hubWatchdog = setInterval(() => {
     if (desired !== 'hub') return;
-    if (!hubEl) ensureElements();
-    if (hubEl?.paused) void tryPlay(hubEl);
-    if (hubGain < 0.2 && fadeRaf === 0) {
+    ensureHubElement();
+    if (hubEl?.paused) void tryPlayHub();
+    if (hubGain < 0.2 && hubFadeRaf === 0) {
       lastApplied = null;
       setBgmDesired('hub', HUB_ENTER_FADE_MS);
     }
@@ -332,19 +542,6 @@ function stopHubWatchdog(): void {
   hubWatchdog = null;
 }
 
-/**
- * Mark audio as user-unlocked and resume whatever track is desired.
- */
-export function unlockBgm(): void {
-  unlocked = true;
-  ensureElements();
-  syncActivePlayback();
-  if (desired === 'hub' && (hubEl?.paused || hubGain < 0.15) && fadeRaf === 0) {
-    lastApplied = null;
-    setBgmDesired('hub', HUB_ENTER_FADE_MS);
-  }
-}
-
 function bindGestureUnlock(): void {
   if (gestureBound || typeof document === 'undefined') return;
   gestureBound = true;
@@ -355,59 +552,109 @@ function bindGestureUnlock(): void {
   document.addEventListener('touchstart', unlock, { capture: true, passive: true });
   document.addEventListener('keydown', unlock, { capture: true });
   if (typeof window !== 'undefined') {
-    window.addEventListener('focus', syncActivePlayback);
+    window.addEventListener('focus', () => {
+      void resumeContext();
+      if (desired === 'hub') void tryPlayHub();
+    });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') syncActivePlayback();
+      if (document.visibilityState === 'visible') {
+        void resumeContext();
+        if (desired === 'hub') void tryPlayHub();
+      }
     });
   }
 }
 
 /**
- * Request hub / run / combat / silence with a crossfade.
+ * Unlock autoplay / resume AudioContext. Preloads adaptive beds.
+ */
+export function unlockBgm(): void {
+  unlocked = true;
+  bindGestureUnlock();
+  ensureHubElement();
+  void resumeContext();
+  void preloadIncursionBeds();
+  if (desired === 'hub') void tryPlayHub();
+  if (bedsActive) applyMixGains();
+}
+
+/**
+ * Request hub / run (explore) / combat (drums) / silence.
+ * run ↔ combat only crossfades adaptive beds; hub/none stops and resets them.
  */
 export function setBgmDesired(next: BgmDesired, fadeMs: number = DEFAULT_FADE_MS): void {
   bindGestureUnlock();
-  ensureElements();
-  const enteringCombat = next === 'combat' && lastApplied !== 'combat';
+  ensureHubElement();
+  void resumeContext();
+  void preloadIncursionBeds();
+
+  const prev = lastApplied;
   desired = next;
+
   if (next === 'hub') startHubWatchdog();
   else stopHubWatchdog();
 
-  if (enteringCombat) {
-    startCombatIntroPlayback();
-  }
-
-  if (lastApplied === next && fadeRaf === 0) {
-    syncActivePlayback();
-    if (next === 'hub' && hubGain < 0.15) {
-      animateGains(1, 0, 0, Math.min(fadeMs, HUB_ENTER_FADE_MS));
+  const stayingOnSame = prev === next && hubFadeRaf === 0 && mixFadeRaf === 0;
+  if (stayingOnSame) {
+    if (next === 'hub') {
+      void tryPlayHub();
+      if (hubGain < 0.15) animateHubGain(1, Math.min(fadeMs, HUB_ENTER_FADE_MS));
+    } else if (next === 'run' || next === 'combat') {
+      if (!bedsActive) {
+        void startIncursionBeds(next === 'combat' ? 1 : 0);
+      } else {
+        applyMixGains();
+      }
     }
     return;
   }
+
   lastApplied = next;
-  const t = targetsFor(next);
-  const ms = next === 'combat' && enteringCombat
-    ? Math.min(fadeMs, COMBAT_ENTER_FADE_MS)
-    : fadeMs;
-  animateGains(t.hub, t.run, t.combat, ms);
+
+  if (next === 'hub') {
+    stopIncursionBeds();
+    animateHubGain(1, Math.min(fadeMs, HUB_ENTER_FADE_MS));
+    return;
+  }
+
+  if (next === 'none') {
+    stopIncursionBeds();
+    animateHubGain(0, fadeMs);
+    return;
+  }
+
+  // Incursion: run (explore) or combat (drums).
+  animateHubGain(0, Math.min(fadeMs, 600));
+  const wantCombat = next === 'combat';
+
+  if (!bedsActive) {
+    void startIncursionBeds(wantCombat ? 1 : 0).then((started) => {
+      if (!started) return;
+      // If desired flipped while loading, honor latest.
+      if (desired === 'combat') setAdaptiveMixTarget(1, ADAPTIVE_XFADE_MS);
+      else if (desired === 'run') setAdaptiveMixTarget(0, ADAPTIVE_XFADE_MS);
+      else stopIncursionBeds();
+    });
+    return;
+  }
+
+  setAdaptiveMixTarget(wantCombat ? 1 : 0, ADAPTIVE_XFADE_MS);
 }
 
 /**
  * Veil Front visible — force hub loop on.
  */
 export function ensureHubBgmPlaying(fadeMs: number = HUB_ENTER_FADE_MS): void {
-  bindGestureUnlock();
-  ensureElements();
-  unlocked = true;
+  unlockBgm();
   desired = 'hub';
   startHubWatchdog();
-  if (hubEl?.paused || hubGain < 0.85 || lastApplied !== 'hub') {
+  if (hubEl?.paused || hubGain < 0.85 || lastApplied !== 'hub' || bedsActive) {
     lastApplied = null;
     setBgmDesired('hub', fadeMs);
     return;
   }
-  applyVolumes();
-  void tryPlay(hubEl);
+  applyHubVolume();
+  void tryPlayHub();
 }
 
 export function getBgmDesired(): BgmDesired {
@@ -416,4 +663,67 @@ export function getBgmDesired(): BgmDesired {
 
 export function silenceBgm(fadeMs: number = DEFAULT_FADE_MS): void {
   setBgmDesired('none', fadeMs);
+}
+
+/** Current peak volumes for each music track. */
+export function getBgmTrackVolumes(): {
+  hub: number;
+  runNoDrum: number;
+  runDrum: number;
+} {
+  return {
+    hub: hubTrackVolume,
+    runNoDrum: runNoDrumTrackVolume,
+    runDrum: runDrumTrackVolume,
+  };
+}
+
+/**
+ * Set peak volume for one track (0–1). Applies immediately to active playback.
+ * - hub → main hub loop
+ * - runNoDrum → in-run exploration bed
+ * - runDrum → in-run combat/drums bed
+ */
+export function setBgmTrackVolume(track: BgmTrackVolumeKey, volume: number): void {
+  const next = clampVolume(volume);
+  if (track === 'hub') {
+    hubTrackVolume = next;
+    applyHubVolume();
+    return;
+  }
+  if (track === 'runNoDrum') {
+    runNoDrumTrackVolume = next;
+    if (bedsActive) applyMixGains();
+    return;
+  }
+  runDrumTrackVolume = next;
+  if (bedsActive) applyMixGains();
+}
+
+/** Set any subset of track volumes at once. */
+export function setBgmTrackVolumes(partial: Partial<{
+  hub: number;
+  runNoDrum: number;
+  runDrum: number;
+}>): void {
+  if (partial.hub != null) hubTrackVolume = clampVolume(partial.hub);
+  if (partial.runNoDrum != null) runNoDrumTrackVolume = clampVolume(partial.runNoDrum);
+  if (partial.runDrum != null) runDrumTrackVolume = clampVolume(partial.runDrum);
+  applyHubVolume();
+  if (bedsActive) applyMixGains();
+}
+
+/**
+ * User-facing music / master mix (0–1). Multiplies authored track peaks.
+ * Does not overwrite BGM_TRACK_VOLUME / setBgmTrackVolume peaks.
+ */
+export function setBgmUserMix(partial: { music?: number; master?: number }): void {
+  if (partial.music != null) musicUserMix = clampVolume(partial.music);
+  if (partial.master != null) masterUserMix = clampVolume(partial.master);
+  applyHubVolume();
+  if (bedsActive) applyMixGains();
+}
+
+export function getBgmUserMix(): { music: number; master: number } {
+  return { music: musicUserMix, master: masterUserMix };
 }

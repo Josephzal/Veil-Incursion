@@ -469,6 +469,7 @@ import { dispatchCombatPresentationFromJuice } from '../utils/combatPresentation
 import { presentResolvedWeaponHit } from '../data/weaponCombatPresentation/presentResolvedWeaponHit';
 import {
   playCombatPresentationCue,
+  setHexReloadSuppressesAttackSfx,
   unlockCombatPresentationAudio,
 } from '../utils/combatPresentationAudio';
 import type { UltimatePingVariant } from './combat/UltimateReadyPing';
@@ -1406,10 +1407,12 @@ export default function TacticalCombatHub({
     const targets = aliveUnits(squadRef.current);
     for (const unit of targets) {
       if (!unit.unitId) continue;
+      // Indirect — reload eject must not fire attack portrait / attack SFX.
       hurtEnemy(totalDamage, "[DEAD-MAN'S SWITCH]", 'STRIKE', {
         channel: 'KINETIC',
         targetId: unit.unitId,
         rollCrit: false,
+        indirectDamage: true,
       });
     }
     log(`[DEAD-MAN'S SWITCH] >> ${totalDamage} kinetic eject damage to ${targets.length} hostile(s).`);
@@ -1434,6 +1437,8 @@ export default function TacticalCombatHub({
     const ejectDamage = deadMansSwitch ? before.ammo * 10 : 0;
     const next = dispatchHexShot({ type: 'HEX_BEGIN_RELOAD', manual, deadMansSwitch });
     if (next.ap === before.ap) return false;
+    // Block Hex attack SFX for the entire reload minigame (including eject damage).
+    setHexReloadSuppressesAttackSfx(true);
     if (ejectDamage > 0) {
       resolveDeadMansEject(ejectDamage);
     }
@@ -2409,6 +2414,8 @@ export default function TacticalCombatHub({
     parryResolvedRef.current = true;
     parryTapPendingRef.current = false;
     parrySessionRef.current += 1;
+    setActiveReloadVisible(false);
+    setHexReloadSuppressesAttackSfx(false);
   };
 
   const resolve = (victory: boolean) => {
@@ -3259,6 +3266,18 @@ export default function TacticalCombatHub({
       innateArmorPressureLayers?: number;
     },
   ): boolean => {
+    // Hex Shot trap / overwatch damage is never a weapon attack presentation.
+    if (
+      operativeClass === 'HEX_SHOT'
+      && options
+      && !options.indirectDamage
+      && (
+        options.abilityId === 'RIFT_SNARE'
+        || options.abilityId === 'PANOPTICON_PROTOCOL'
+      )
+    ) {
+      options = { ...options, indirectDamage: true };
+    }
     const rawTargetId = options?.targetId
       ?? selectedTargetIdRef.current
       ?? primaryAliveUnit(squadRef.current)?.unitId;
@@ -3509,7 +3528,13 @@ export default function TacticalCombatHub({
         publishSquadUi(squadRef.current);
         apparitionRef?.current?.triggerStatEvade();
         log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
-        if (resolvedWeapon && source && !options?.indirectDamage && !options?.echoHit) {
+        if (
+          resolvedWeapon
+          && source
+          && !options?.indirectDamage
+          && !options?.echoHit
+          && options?.abilityId !== 'RUIN'
+        ) {
           try {
             presentResolvedWeaponHit({
               weaponFamilyId: resolvedWeapon.familyId,
@@ -3605,6 +3630,8 @@ export default function TacticalCombatHub({
         triggerHitstop(200);
         triggerShake('heavy');
         setFractureBreakUnitId(e.unitId);
+        unlockCombatPresentationAudio();
+        playCombatPresentationCue('sfx.fracture.break');
         log(`>> FRACTURE BREAK — ${working.designation} stagger threshold breached.`);
       } else {
         working = applyFractureDamage(working, scaledFractureGain);
@@ -4002,11 +4029,16 @@ export default function TacticalCombatHub({
         log(`[ABYSSAL ERUPTION] >> +${mutationModsRef.current.abyssalEruptionPerHit} reserve from AoE hit.`);
       }
     }
-    if (source && dmg > 0 && !options?.indirectDamage && !options?.echoHit) {
-      const rosterEntry = working.rosterId
-        ? ENEMY_ROSTER[working.rosterId as EnemyRosterId]
-        : undefined;
-      const strikeFaction = rosterEntry?.faction ?? factionForDistrict(combatDistrict);
+    if (
+      source
+      && source !== 'COUNTER'
+      && dmg > 0
+      && isPlayerTurnRef.current
+      && Boolean(options?.abilityId)
+      && !options?.indirectDamage
+      && !options?.echoHit
+      && options?.abilityId !== 'RUIN'
+    ) {
       if (operativeClass === 'AEGIS') {
         const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
         const arenaHeight = Math.max(
@@ -4020,9 +4052,9 @@ export default function TacticalCombatHub({
           arenaHeight,
           arenaGridVariant,
         );
-        playerViewportRef?.current?.triggerAttackLunge(lungeDelta, { faction: strikeFaction });
+        playerViewportRef?.current?.triggerAttackLunge(lungeDelta);
       } else {
-        playerViewportRef?.current?.triggerRangedAttack({ faction: strikeFaction });
+        playerViewportRef?.current?.triggerRangedAttack();
       }
     }
     const poolHp = working.sharedBossPool && bossRuntimeRef.current
@@ -4151,7 +4183,13 @@ export default function TacticalCombatHub({
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       // Prefer weapon-specific presentation; skip generic class flashes when a
       // permanent weapon is resolving (Phase 3M repair — removes mustard/purple/red fills).
-      if (source && !options?.indirectDamage && !options?.echoHit && !resolvedWeapon) {
+      if (
+        source
+        && !options?.indirectDamage
+        && !options?.echoHit
+        && !resolvedWeapon
+        && options?.abilityId !== 'RUIN'
+      ) {
         const impactKind = operativeClass === 'AEGIS'
           ? 'AEGIS_SLICE' as const
           : operativeClass === 'HEX_SHOT'
@@ -4161,7 +4199,21 @@ export default function TacticalCombatHub({
         classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
       }
       Vibration.vibrate(18);
-      if (resolvedWeapon && source && !options?.indirectDamage && !options?.echoHit) {
+      if (options?.indirectDamage && dmg > 0) {
+        // Class DoT / triggered damage — exclusive cue (no weapon attack SFX).
+        if (operativeClass === 'ENVOY') {
+          unlockCombatPresentationAudio();
+          playCombatPresentationCue('sfx.envoy.dot');
+        } else if (operativeClass === 'HEX_SHOT') {
+          unlockCombatPresentationAudio();
+          playCombatPresentationCue('sfx.hex.dot');
+        }
+      } else if (
+        resolvedWeapon
+        && source
+        && !options?.echoHit
+        && options?.abilityId !== 'RUIN'
+      ) {
         try {
           unlockCombatPresentationAudio();
           presentResolvedWeaponHit({
@@ -5644,7 +5696,9 @@ export default function TacticalCombatHub({
         (raw, tag, options, targetId) => hurtEnemy(raw, tag, 'STRIKE', {
           channel: options?.channel ?? 'KINETIC',
           targetId: options?.targetId ?? targetId,
-          rollCrit: options?.rollCrit,
+          abilityId: options?.abilityId as AegisAbilityId | undefined,
+          rollCrit: options?.rollCrit ?? false,
+          indirectDamage: options?.indirectDamage ?? true,
         }),
         log,
       );
@@ -5680,6 +5734,7 @@ export default function TacticalCombatHub({
         targetId: enemyId,
         abilityId: 'PANOPTICON_PROTOCOL' as AegisAbilityId,
         rollCrit: false,
+        indirectDamage: true,
       });
       log('[PANOPTICON] >> Overwatch interrupt — hostile concussed, attack cancelled.');
       log('[HEX SHOT] >> Correct Round — intent interrupted.');
@@ -6298,6 +6353,7 @@ export default function TacticalCombatHub({
     setAegisOvercharged(false);
     voidSiphonedEnteredRef.current = false;
     setActiveReloadVisible(false);
+    setHexReloadSuppressesAttackSfx(false);
     hexReloadUsedThisTurnRef.current = false;
     setHexReloadUsedThisTurn(false);
     setZeroProtocolVisible(false);
@@ -6548,6 +6604,7 @@ export default function TacticalCombatHub({
       abilityId?: HexShotAbilityId;
       rollCrit?: boolean;
       forceCrit?: boolean;
+      indirectDamage?: boolean;
       innateArmorPressureLayers?: number;
     },
     targetId?: string,
@@ -6601,6 +6658,7 @@ export default function TacticalCombatHub({
           abilityId: options?.abilityId as AegisAbilityId,
           rollCrit,
           innateArmorPressureLayers: options?.innateArmorPressureLayers,
+          indirectDamage: options?.indirectDamage,
         }) || killed;
       }
     }
@@ -6617,6 +6675,7 @@ export default function TacticalCombatHub({
             abilityId: options?.abilityId as AegisAbilityId,
             rollCrit: false,
             echoHit: true,
+            indirectDamage: options?.indirectDamage,
           },
         );
       }
@@ -6829,6 +6888,7 @@ export default function TacticalCombatHub({
               targetId: target.unitId,
               abilityId: abilityId as AegisAbilityId,
               rollCrit: false,
+              indirectDamage: true,
             });
           }
         },
@@ -8548,6 +8608,23 @@ export default function TacticalCombatHub({
         applyStamina(staminaRef.current + reloadHooks.staminaDelta);
       }
     }
+    if (
+      resolvedWeapon
+      && (
+        resolvedWeapon.familyId === 'hex-silver-core-sidearm'
+        || resolvedWeapon.familyId === 'hex-void-cannon'
+        || resolvedWeapon.familyId === 'hex-pulse-rifle'
+      )
+    ) {
+      const reloadCue = resolvedWeapon.familyId === 'hex-silver-core-sidearm'
+        ? 'sfx.revolver.reload_sacrifice'
+        : resolvedWeapon.familyId === 'hex-void-cannon'
+          ? 'sfx.blackdoor.reload_sacrifice'
+          : 'sfx.carbine.reload_sacrifice';
+      playCombatPresentationCue(reloadCue);
+    }
+    // Re-enable Hex attack SFX after reload resolves (reload cue already played).
+    setHexReloadSuppressesAttackSfx(false);
     if (isPerfect) {
       triggerHitstop(80);
       triggerHaptic('impactHeavy');
@@ -8667,6 +8744,7 @@ export default function TacticalCombatHub({
         classLoopTelemetryRef.current.damagePreventedByParry += pendingWeight;
         classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
         emitJuice('PERFECT_PARRY', { text: 'Perfect Parry' });
+        playCombatPresentationCue('sfx.aegis.parry');
         emitJuice('FRACTURE_APPLIED', { text: 'Fracture from Perfect Parry' });
         if (counter.cancelTelegraph) {
           applyObjectiveProgress(

@@ -87,7 +87,7 @@ export function buildWeaponCombatFeedbackPacket(
     intensity,
     ultimateGrade: input.ultimateGrade ?? null,
     reloadOccurred: Boolean(input.reloadOccurred),
-    ammoRoundsConsumed: Math.max(0, input.ammoRoundsConsumed ?? 0),
+    ammoRoundsConsumed: Math.max(0, input.ammoRoundsConsumed ?? 1),
     sacrificeOccurred: Boolean(input.sacrificeOccurred),
     resourceTransitions: input.resourceTransitions ?? [],
     tempoArmed: Boolean(input.tempoArmed),

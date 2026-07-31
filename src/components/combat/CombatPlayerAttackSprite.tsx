@@ -28,8 +28,6 @@ import {
 } from '../../utils/combatPlayerPortrait';
 
 const LINEAR = Easing.linear;
-const STRIKE_AURA_PEAK = 0.42;
-const STRIKE_AURA_SCALE = 1.08;
 const PRIMED_GLOW = '#ff00ff';
 
 export type CombatPlayerAttackSpriteHandle = {
@@ -42,9 +40,6 @@ interface CombatPlayerAttackSpriteProps {
   attackSource: ImageSourcePropType;
   operativeClass?: ClassType;
   weaponFamilyId?: WeaponFamilyId | null;
-  /** Faction strike aura — shares attack footprint so it sits on the attack pose. */
-  strikeAuraOpacity: SharedValue<number>;
-  strikeTint: string;
   /** Magenta primed glow — shares idle footprint. */
   primedGlowOpacity: SharedValue<number>;
 }
@@ -56,8 +51,6 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     attackSource,
     operativeClass = 'AEGIS',
     weaponFamilyId = null,
-    strikeAuraOpacity,
-    strikeTint,
     primedGlowOpacity,
   }, ref) {
     const idleOpacity = useSharedValue(1);
@@ -143,11 +136,6 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
       opacity: primedGlowOpacity.value * 0.38,
     }));
 
-    // Keep aura registered to the attack pose footprint (same box as attack art).
-    const strikeAuraStyle = useAnimatedStyle(() => ({
-      opacity: strikeAuraOpacity.value * STRIKE_AURA_PEAK,
-    }));
-
     const hasDistinctAttackArt = idleSource !== attackSource;
     const idleLayerStyle = computeFootprintIdleLayout(footprintBox, operativeClass, weaponFamilyId);
     const attackLayerStyle = computeFootprintAttackLayout(footprintBox, operativeClass, weaponFamilyId);
@@ -165,15 +153,6 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
             style={[styles.fill, styles.auraScale, { tintColor: PRIMED_GLOW }]}
           />
         </Animated.View>
-        {hasDistinctAttackArt ? (
-          <Animated.View style={[attackLayerStyle, strikeAuraStyle]} pointerEvents="none">
-            <Animated.Image
-              source={attackSource}
-              resizeMode="contain"
-              style={[styles.fill, styles.auraScale, { tintColor: strikeTint }]}
-            />
-          </Animated.View>
-        ) : null}
         <Animated.Image
           source={idleSource}
           resizeMode="contain"
@@ -209,6 +188,6 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   auraScale: {
-    transform: [{ scale: STRIKE_AURA_SCALE }],
+    transform: [{ scale: 1.08 }],
   },
 });

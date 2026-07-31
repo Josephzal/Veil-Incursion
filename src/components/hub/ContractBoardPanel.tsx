@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
+import { playContractAcceptTyping } from '../../utils/uiFeedbackAudio';
 import {
   ContractLoggedLine,
   CONTRACT_LOGGED_MESSAGE,
@@ -548,11 +549,13 @@ export default function ContractBoardPanel(): React.JSX.Element {
     if (inspected.kind === 'INDEPENDENT') {
       selectIndependentContract();
       playAcceptStamp({ kind: 'INDEPENDENT' });
+      playContractAcceptTyping();
       return;
     }
     if (inspectedContract) {
       selectContract(inspectedContract);
       playAcceptStamp({ kind: 'SPONSOR', contractId: inspectedContract.id });
+      playContractAcceptTyping();
     }
   };
 

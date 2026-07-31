@@ -8,6 +8,11 @@ import {
 import HapticPressable from '../../HapticPressable';
 import TerminalText from '../../TerminalText';
 import { pulseHubButton } from '../../../utils/hubButtonHaptics';
+import {
+  releaseFabricationHoldSfx,
+  startFabricationHoldSfx,
+  stopFabricationHoldSfx,
+} from '../../../utils/fabricationFeedbackAudio';
 import { VEIL } from '../../../theme/veilTerminalTokens';
 import { HUB_CTA_INVERSE_TEXT } from '../../../theme/hubPanelSurfaces';
 import { viewShadow } from '../../../utils/adaptiveStyles';
@@ -48,6 +53,9 @@ export default function HoldToFabricateButton({
     animRef.current?.stop();
     animRef.current = null;
     setHolding(false);
+    if (!completedRef.current) {
+      releaseFabricationHoldSfx('abort');
+    }
     if (reset && !completedRef.current) {
       Animated.timing(progress, {
         toValue: 0,
@@ -61,6 +69,7 @@ export default function HoldToFabricateButton({
     if (disabled) return;
     completedRef.current = false;
     setHolding(true);
+    startFabricationHoldSfx();
     progress.stopAnimation();
     progress.setValue(0);
     const anim = Animated.timing(progress, {
@@ -74,6 +83,7 @@ export default function HoldToFabricateButton({
       if (!finished || completedRef.current) return;
       completedRef.current = true;
       setHolding(false);
+      releaseFabricationHoldSfx('complete');
       pulseHubButton();
       onComplete();
       progress.setValue(0);
@@ -82,6 +92,7 @@ export default function HoldToFabricateButton({
 
   useEffect(() => () => {
     animRef.current?.stop();
+    stopFabricationHoldSfx();
   }, []);
 
   useEffect(() => {

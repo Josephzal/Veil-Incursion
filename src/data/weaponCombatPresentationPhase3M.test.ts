@@ -21,6 +21,7 @@ import {
   getCombatPresentationPlayedCues,
   playCombatPresentationCue,
   setCombatPresentationAudioDeterministic,
+  setHexReloadSuppressesAttackSfx,
 } from '../utils/combatPresentationAudio';
 import {
   dispatchWeaponCombatPresentation,
@@ -116,7 +117,7 @@ function run(): void {
   const sacrificeCues = getCombatPresentationPlayedCues().filter((c) => c.includes('reload_sacrifice'));
   assert.equal(sacrificeCues.length, 1);
 
-  // Reload once
+  // Reload once — reload cue only, never attack/release
   clearCombatPresentationPlayedCues();
   dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
     weaponFamilyId: 'hex-silver-core-sidearm',
@@ -131,6 +132,21 @@ function run(): void {
     getCombatPresentationPlayedCues().filter((c) => c.includes('reload_sacrifice')).length,
     1,
   );
+  assert.equal(
+    getCombatPresentationPlayedCues().filter((c) => c.includes('.release') || c.includes('.attack')).length,
+    0,
+  );
+
+  // Hex reload gate blocks attack cues even if something tries to fire them mid-reload
+  clearCombatPresentationPlayedCues();
+  setHexReloadSuppressesAttackSfx(true);
+  assert.equal(playCombatPresentationCue('sfx.revolver.release'), false);
+  assert.equal(playCombatPresentationCue('sfx.blackdoor.release'), false);
+  assert.equal(playCombatPresentationCue('sfx.carbine.release'), false);
+  assert.equal(playCombatPresentationCue('sfx.revolver.reload_sacrifice'), true);
+  assert.ok(!getCombatPresentationPlayedCues().some((c) => c.endsWith('.release')));
+  setHexReloadSuppressesAttackSfx(false);
+  assert.equal(playCombatPresentationCue('sfx.revolver.release'), true);
 
   // presentResolvedWeaponHit does not throw without mount visuals
   presentResolvedWeaponHit({

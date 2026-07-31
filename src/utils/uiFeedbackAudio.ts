@@ -1,9 +1,13 @@
 /**
- * Short UI feedback one-shots (buttons, scanner lips).
+ * Short UI feedback one-shots (buttons, scanner lips, contract accept).
  * Never throws into game flow.
  */
 
-import { SCANNER_LIP_KEY_SAMPLE, UI_CLICK_SAMPLE } from './uiFeedbackAudioSamples';
+import {
+  SCANNER_LIP_KEY_SAMPLE,
+  TYPING_SAMPLE,
+  UI_CLICK_SAMPLE,
+} from './uiFeedbackAudioSamples';
 
 type AudioEl = {
   src: string;
@@ -18,10 +22,15 @@ type AudioEl = {
 
 const CLICK_VOLUME = 0.45;
 const LIP_VOLUME = 0.1; // 0.55 − 25%
+const TYPING_VOLUME = 0.55;
 const CLICK_DEBOUNCE_MS = 28;
+
+/** User sfx × master scale from audio prefs (0–1). */
+let uiVolumeScale = 1;
 
 let clickTemplate: AudioEl | null = null;
 let lipTemplate: AudioEl | null = null;
+let typingTemplate: AudioEl | null = null;
 let lastClickAt = 0;
 let gestureBound = false;
 
@@ -72,6 +81,10 @@ function ensureTemplates(): void {
     const uri = resolveSampleUri(SCANNER_LIP_KEY_SAMPLE);
     if (uri) lipTemplate = makeTemplate(uri);
   }
+  if (!typingTemplate) {
+    const uri = resolveSampleUri(TYPING_SAMPLE);
+    if (uri) typingTemplate = makeTemplate(uri);
+  }
 }
 
 function bindGestureUnlock(): void {
@@ -89,15 +102,26 @@ function playTemplate(template: AudioEl | null, volume: number): void {
   ensureTemplates();
   if (!template) return;
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  const scaled = volume * uiVolumeScale;
+  if (scaled <= 0.001) return;
   try {
     const node = template.cloneNode(true);
-    node.volume = Math.max(0, Math.min(1, volume));
+    node.volume = Math.max(0, Math.min(1, scaled));
     node.muted = false;
     node.currentTime = 0;
     void node.play().catch(() => undefined);
   } catch {
     // ignore
   }
+}
+
+/** Scale UI one-shots by user sfx × master (0–1). */
+export function setUiFeedbackVolumeScale(scale: number): void {
+  uiVolumeScale = Math.max(0, Math.min(1, scale));
+}
+
+export function getUiFeedbackVolumeScale(): number {
+  return uiVolumeScale;
 }
 
 /** Standard UI button click (HapticPressable / CTAs). */
@@ -113,4 +137,10 @@ export function playUiClick(): void {
 export function playScannerLipKey(): void {
   ensureTemplates();
   playTemplate(lipTemplate, LIP_VOLUME);
+}
+
+/** Contract board accept — typing confirmation. */
+export function playContractAcceptTyping(): void {
+  ensureTemplates();
+  playTemplate(typingTemplate, TYPING_VOLUME);
 }

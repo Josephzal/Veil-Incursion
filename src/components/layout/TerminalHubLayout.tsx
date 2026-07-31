@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ImageBackground, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { HUB_ATMOSPHERE_BACKGROUND, HUB_ATMOSPHERE_SCRIM } from '../../constants/hubAtmosphere';
 import { LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
@@ -7,6 +7,7 @@ import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { HubLayoutProvider } from '../../context/HubLayoutContext';
 import VeilTopbar from '../hub/VeilTopbar';
+import AudioSettingsModal from '../hub/AudioSettingsModal';
 import TerminalOverlay from '../TerminalOverlay';
 import HubViewport from './HubViewport';
 import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
@@ -39,6 +40,7 @@ export default function TerminalHubLayout({
   const layout = useResponsiveLayout();
   const { safeTop, safeBottom, safeRight, panelPadding } = useLandscapeMetrics();
   const { scaleSpacing } = layout;
+  const [audioSettingsOpen, setAudioSettingsOpen] = useState(false);
   const contentTopInset = resolveHubContentTopInset(safeTop, panelPadding);
   const contentBottomInset = resolveImmersiveFooterInset(safeBottom);
   // Theater workstations fill edge-to-edge under the top bar (no HubViewport max-width).
@@ -69,7 +71,11 @@ export default function TerminalHubLayout({
       <View style={[styles.scrim, styles.scrimPointerLock]} />
       <HubLayoutProvider value={layout}>
         <View style={styles.shell}>
-          <VeilTopbar activeView={activeView} onSelectView={onSelectView} />
+          <VeilTopbar
+            activeView={activeView}
+            onSelectView={onSelectView}
+            onOpenAudioSettings={() => setAudioSettingsOpen(true)}
+          />
           <View style={[styles.main, mainPadStyle, mainStyle]}>
             <View style={styles.terminalOverlayHost} pointerEvents="none">
               <TerminalOverlay />
@@ -81,6 +87,10 @@ export default function TerminalHubLayout({
             </HubViewport>
           </View>
         </View>
+        <AudioSettingsModal
+          visible={audioSettingsOpen}
+          onDismiss={() => setAudioSettingsOpen(false)}
+        />
       </HubLayoutProvider>
     </ImageBackground>
   );

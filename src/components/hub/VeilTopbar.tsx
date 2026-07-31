@@ -14,6 +14,7 @@ import { OCCULT_NEON, OccultNeonRail } from './veilChrome';
 interface VeilTopbarProps {
   activeView: TerminalView;
   onSelectView: (view: TerminalView) => void;
+  onOpenAudioSettings?: () => void;
 }
 
 const TERMINAL = VEIL.mint;
@@ -108,6 +109,7 @@ function SecureLinkDot(): React.JSX.Element {
 export default function VeilTopbar({
   activeView,
   onSelectView,
+  onOpenAudioSettings,
 }: VeilTopbarProps): React.JSX.Element {
   const { persisted } = useWorldState();
   const { screenWidth } = useResponsiveScale();
@@ -202,6 +204,35 @@ export default function VeilTopbar({
             </HapticPressable>
           );
         })}
+        {onOpenAudioSettings ? (
+          <HapticPressable
+            onPress={onOpenAudioSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Open audio settings"
+            style={(state) => ([
+              styles.navItem,
+              { paddingHorizontal: navPadH },
+              (readPressableHover(state) || state.pressed)
+                ? styles.navItemHover
+                : null,
+            ])}
+          >
+            <View style={styles.navItemInner}>
+              <TerminalText
+                size={screenWidth <= 1250 ? 7.5 : 8}
+                letterSpacing={screenWidth <= 1250 ? 0.7 : 0.9}
+                numberOfLines={1}
+                style={{
+                  color: NAV_IDLE,
+                  fontWeight: '700',
+                }}
+              >
+                SETTINGS
+              </TerminalText>
+            </View>
+            <View style={styles.navIndicator} />
+          </HapticPressable>
+        ) : null}
       </View>
 
       <View style={styles.status}>
