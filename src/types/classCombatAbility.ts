@@ -84,8 +84,12 @@ export interface ClassCombatEncounterState {
   runicBrands: number;
   /** Envoy — Cataclysm sigil ready when total Veil Rot stacks ≥ gate. */
   cataclysmReady: boolean;
-  /** Phase 3 — Aegis Riposte Ready after perfect parry / Fracture apply. */
+  /** Aegis — Riposte stored Strike bonus (Perfect Parry). See aegisRiposteEngine. */
   riposteReady: boolean;
+  /** Player-turn number after which Riposte expires (end of that turn). */
+  riposteExpiresAfterPlayerTurn: number | null;
+  riposteGrantedBy: 'PERFECT_PARRY' | 'BOON' | 'GRAFT' | 'OTHER' | null;
+  riposteGrantId: string | null;
   /** Phase 3 — Hex Shot chamber bonus after tactical reload. */
   chamberBonusReady: boolean;
   /** Phase 3 — Envoy catalyst state (lightweight). */
@@ -112,6 +116,9 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     runicBrands: 0,
     cataclysmReady: false,
     riposteReady: false,
+    riposteExpiresAfterPlayerTurn: null,
+    riposteGrantedBy: null,
+    riposteGrantId: null,
     chamberBonusReady: false,
     currentCatalyst: null,
     previousCatalyst: null,

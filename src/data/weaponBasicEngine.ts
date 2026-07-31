@@ -86,15 +86,19 @@ function scalePct(base: number, pct: number | undefined): number {
 export function resolveAegisStrikeBasic(args: {
   weapon: ResolvedWeaponState;
   runtime: WeaponRuntimeState;
-  riposte: boolean;
+  /**
+   * @deprecated Riposte is a flat +16 attached hit (aegisRiposteEngine), not a Strike multiplier.
+   * Ignored — kept optional for call-site compatibility during migration.
+   */
+  riposte?: boolean;
   targetFractured: boolean;
 }): AegisStrikeBasicPlan {
-  const { weapon, runtime, riposte, targetFractured } = args;
+  const { weapon, runtime, targetFractured } = args;
   const profile = getWeaponIdentityProfile(weapon.familyId);
   const mods = weapon.statModifiers;
   const logLines: string[] = [];
   let kinetic = 10;
-  let fractureGain = riposte ? 40 : 25;
+  let fractureGain = 25;
   let reserveGain = 15;
   let staminaCost = 0;
   let occultRiderDamage = 0;
@@ -103,20 +107,20 @@ export function resolveAegisStrikeBasic(args: {
   switch (weapon.familyId) {
     case 'aegis-runed-longsword':
       kinetic = scalePct(12, mods.strikeDamagePct);
-      fractureGain = riposte ? 42 : scalePct(28, mods.fractureFromMeleePct);
+      fractureGain = scalePct(28, mods.fractureFromMeleePct);
       reserveGain = 15 + (mods.reserveGainFlat ?? 0);
       logLines.push('[RUNED LONGSWORD] >> Steady Fracture strike.');
       break;
     case 'aegis-claymore-blade':
       kinetic = scalePct(11, mods.strikeDamagePct);
-      fractureGain = riposte ? 48 : scalePct(38, mods.fractureFromMeleePct);
+      fractureGain = scalePct(38, mods.fractureFromMeleePct);
       staminaCost = Math.max(8, Math.floor(18 * (1 + (mods.strikeStaminaCostPct ?? 0) / 100)));
       reserveGain = 6 + (mods.reserveGainFlat ?? 0);
       logLines.push('[CLAYMORE] >> Heavy Fracture commitment.');
       break;
     case 'aegis-rift-edge':
       kinetic = scalePct(9, mods.strikeDamagePct ?? -5);
-      fractureGain = riposte ? 30 : 14;
+      fractureGain = 14;
       reserveGain = 8 + (mods.reserveGainFlat ?? 0);
       if (runtime.riftEdgeTempoArmed) {
         occultRiderDamage = Math.max(4, Math.floor(kinetic * 0.45));
@@ -133,11 +137,6 @@ export function resolveAegisStrikeBasic(args: {
     default:
       kinetic = scalePct(10, mods.strikeDamagePct);
       break;
-  }
-
-  if (riposte) {
-    const fracturedBonus = targetFractured ? 1.3 : 1.15;
-    kinetic = Math.floor(kinetic * fracturedBonus);
   }
 
   return {

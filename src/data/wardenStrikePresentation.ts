@@ -66,7 +66,8 @@ export type WardenStrikePresentationEvent = {
  * Production combat ignores these unless a layer explicitly gates on them.
  */
 export const WARDEN_STRIKE_VFX_LAYER_TOGGLES = {
-  swingTrail: true,
+  /** Authored swing smear / trail — off for longsword Warden's Strike. */
+  swingTrail: false,
   contactFx: true,
   enemyHitEffect: true,
   /** Generic CombatEnemyHitEffect spark driven by hitFlashSeq. */
@@ -82,7 +83,7 @@ export const WARDEN_STRIKE_VFX_LAYER_TOGGLES = {
    */
   critImpactSlashForceShow: false,
   /** Step 2C/2D authored PNG layers (default on). */
-  authoredSwingSmear: true,
+  authoredSwingSmear: false,
   authoredContactBurst: true,
   authoredIncision: true,
   authoredFractureCrack: true,
@@ -148,8 +149,9 @@ export const WARDEN_STRIKE_ART_CALIBRATION = {
     /** Added after facing-derived rotation. */
     rotationDeg: -4,
     mirrorX: false,
-    peakOpacity: 0.80,
-    reducedFlashPeakOpacity: 0.52,
+    /** ~12% under prior peak so the smear supports the blade instead of dominating. */
+    peakOpacity: 0.70,
+    reducedFlashPeakOpacity: 0.46,
     /** Mild brightness lift so steel reads on pale arena backgrounds. */
     brightness: 1.22,
     contrast: 1.14,
@@ -167,23 +169,34 @@ export const WARDEN_STRIKE_ART_CALIBRATION = {
     sourceAxisDeg: 45,
     offsetX: 0,
     offsetY: 0,
-    popInMs: 20,
-    holdMs: 72,
-    fadeMs: 40,
+    /**
+     * Contact impact linger — tune holdMs / fadeMs to keep the burst on-screen longer.
+     * Total visible ≈ popInMs + holdMs + fadeMs (~248 ms default).
+     */
+    popInMs: 18,
+    holdMs: 140,
+    fadeMs: 90,
     underlaySizePx: 66,
     underlayPeakOpacity: 0.4,
-    underlayFadeMs: 48,
+    underlayFadeMs: 72,
   },
   incision: {
     sourceWidth: 923,
     sourceHeight: 977,
-    logicalLengthPx: 128,
+    /** Match contact burst footprint — same place / size on tip at contact. */
+    logicalLengthPx: 204,
     peakOpacity: 0.98,
     sourceAxisDeg: 45,
-    offsetX: 14,
-    offsetY: 10,
-    delayMs: 42,
-    lifetimeMs: 200,
+    offsetX: 0,
+    offsetY: 0,
+    /** Bias slash toward vertical (beyond blade facing). */
+    rotationDeg: 35,
+    /**
+     * Incision linger — tune delayMs (start after contact) and lifetimeMs (how long it stays).
+     * Clears at delayMs + lifetimeMs (~38 + 320 = 358 ms default).
+     */
+    delayMs: 38,
+    lifetimeMs: 320,
   },
   fractureCrack: {
     sourceWidth: 501,
@@ -200,13 +213,14 @@ export const WARDEN_STRIKE_ART_CALIBRATION = {
 } as const;
 
 /**
- * Literal wrapper motion — hold at contact before returning home.
+ * Literal wrapper motion — pause in attack pose at contact, then return home.
+ * hitStop (TIMELINE) is a short freeze at the start of this hold; holdMs is the full pose linger.
  */
 export const WARDEN_STRIKE_WRAPPER_MOTION_MS = {
   homeHoldMs: 16,
   outMs: 158,
-  /** Stay on the enemy before sliding back. */
-  holdMs: 350,
+  /** Pause on the enemy in attack pose before sliding back to idle. */
+  holdMs: 500,
   returnMs: 225,
 } as const;
 
@@ -237,18 +251,22 @@ export const WARDEN_STRIKE_TIMELINE_MS = {
   releaseStart: 0,
   smearStart: 70,
   contactAt: 174,
+  /** contactAt + holdMs (500) */
   holdEnd: 674,
   returnStart: 674,
+  /** holdEnd + returnMs (225) */
   returnEnd: 899,
   recoveryStart: 899,
+  /** returnEnd + homeSettle (~16) */
   doneAt: 916,
   trailLifetime: 190,
   trailFadeAfterContactMs: 80,
   contactFxLifetime: 400,
   contactFlashMs: 32,
-  incisionLifetimeMs: 200,
+  incisionLifetimeMs: 320,
   sparkLifetimeMs: 100,
-  hitStop: 36,
+  /** Short freeze at contact start; recoil begins on release. Hold continues to holdEnd. */
+  hitStop: 70,
   enemyRecoilPx: 24,
   enemyRecoilOutMs: 50,
   enemyRecoilReturnMs: 105,
@@ -257,6 +275,7 @@ export const WARDEN_STRIKE_TIMELINE_MS = {
   enemyHitBrightMs: 30,
   anticipationOffsetPx: 0,
   anticipationRotateDeg: 0,
+  /** Restrained 2–3 px impulse; skipped when reducedMotion. */
   cameraImpulsePx: 2.5,
 } as const;
 
@@ -508,7 +527,7 @@ export function contributeWardenStrikeContactDamage(input: {
     return false;
   }
   activeMutableResult.damage += Math.max(0, input.damage);
-  if (input.critical) activeMutableResult.critical = true;
+  if (input.critical && input.damage > 0) activeMutableResult.critical = true;
   if (input.killed) activeMutableResult.killed = true;
   if (input.fractureApplied) activeMutableResult.fractureApplied = true;
   if (input.defenseMaterial && input.defenseMaterial !== 'NONE') {
@@ -944,7 +963,7 @@ export const WARDEN_STRIKE_REPLAY_FIXTURES = {
   },
   riposteCashOut: {
     outcome: 'HIT' as const,
-    damage: 19,
+    damage: 28,
     critical: false,
     fractureApplied: false,
     defenseMaterial: 'NONE' as const,

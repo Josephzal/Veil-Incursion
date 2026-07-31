@@ -31,6 +31,31 @@ const SCYTHE_ALLOWED_CUES = new Set([
   'sfx.scythe.ultimate',
 ]);
 
+const AEGIS_WEAPON_FAMILIES = new Set<WeaponFamilyId>([
+  'aegis-runed-longsword',
+  'aegis-claymore-blade',
+  'aegis-rift-edge',
+]);
+
+function isAegisWeaponFamily(weaponFamilyId: WeaponFamilyId): boolean {
+  return AEGIS_WEAPON_FAMILIES.has(weaponFamilyId);
+}
+
+function isMissOrEvadeOutcome(outcome: string | undefined): boolean {
+  return outcome === 'MISS' || outcome === 'EVADE';
+}
+
+/** Attack-like release cues that should become sfx.aegis.miss on evade. */
+function isAegisAttackLikeCue(cueId: string): boolean {
+  return (
+    cueId.includes('.attack')
+    || cueId.endsWith('.release')
+    || cueId.includes('.ultimate')
+    || cueId.includes('.ult')
+    || cueId === 'sfx.paired.ult_flurry'
+  );
+}
+
 function playWeaponFamilyCue(
   weaponFamilyId: WeaponFamilyId,
   cueId: string | undefined,
@@ -40,6 +65,43 @@ function playWeaponFamilyCue(
     return;
   }
   playCombatPresentationCue(cueId);
+}
+
+/**
+ * On Aegis miss/evade, play miss once in place of attack/release cues;
+ * suppress contact travel so the attack whoosh never fires.
+ */
+function playAegisAwareCue(input: {
+  weaponFamilyId: WeaponFamilyId;
+  cueId: string | undefined;
+  stage: string;
+  outcome: string | undefined;
+  missPlayed: { value: boolean };
+}): void {
+  const { weaponFamilyId, cueId, stage, outcome, missPlayed } = input;
+  if (
+    isAegisWeaponFamily(weaponFamilyId)
+    && isMissOrEvadeOutcome(outcome)
+  ) {
+    if (stage === 'CONTACT') {
+      return;
+    }
+    if (cueId && isAegisAttackLikeCue(cueId)) {
+      if (!missPlayed.value) {
+        missPlayed.value = true;
+        playCombatPresentationCue('sfx.aegis.miss');
+      }
+      return;
+    }
+    if (stage === 'RELEASE') {
+      if (!missPlayed.value) {
+        missPlayed.value = true;
+        playCombatPresentationCue('sfx.aegis.miss');
+      }
+      return;
+    }
+  }
+  playWeaponFamilyCue(weaponFamilyId, cueId);
 }
 
 type JuiceApi = {
@@ -206,6 +268,7 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
 
   const orderedHits = [...packet.hits].sort((a, b) => a.order - b.order);
   const firstHit = orderedHits[0];
+  const aegisMissPlayed = { value: false };
 
   for (const step of sequence) {
     const delay = scalePresentationMs(step.delayMs);
@@ -225,7 +288,13 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
         // Scythe: release-only — skip armor/ward/crit/kill contact accents.
         if (packet.weaponFamilyId !== SCYTHE_WEAPON_FAMILY) {
           if (firstHit.outcome === 'MISS' || firstHit.outcome === 'EVADE') {
-            playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.travel);
+            playAegisAwareCue({
+              weaponFamilyId: packet.weaponFamilyId,
+              cueId: profile.cues.travel,
+              stage: step.stage,
+              outcome: firstHit.outcome,
+              missPlayed: aegisMissPlayed,
+            });
             visualListener?.({
               id: `${packet.id}-${step.stage}-miss`,
               weaponFamilyId: packet.weaponFamilyId,
@@ -277,9 +346,21 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
           return;
         }
       } else if (step.cueId) {
-        playWeaponFamilyCue(packet.weaponFamilyId, step.cueId);
+        playAegisAwareCue({
+          weaponFamilyId: packet.weaponFamilyId,
+          cueId: step.cueId,
+          stage: step.stage,
+          outcome: firstHit?.outcome,
+          missPlayed: aegisMissPlayed,
+        });
       } else if (step.stage === 'RELEASE') {
-        playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.release);
+        playAegisAwareCue({
+          weaponFamilyId: packet.weaponFamilyId,
+          cueId: profile.cues.release,
+          stage: step.stage,
+          outcome: firstHit?.outcome,
+          missPlayed: aegisMissPlayed,
+        });
       }
 
       visualListener?.({

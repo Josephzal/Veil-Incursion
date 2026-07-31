@@ -1,6 +1,7 @@
 /**
  * Player-local Longsword Warden smear + tip burst.
- * Delayed incision/Fracture live on the enemy contact host — not cleared here.
+ * Delayed Fracture lives on the enemy contact host — not cleared here.
+ * Contact burst + incision share the tip plane (same place / size).
  */
 
 import {
@@ -76,6 +77,21 @@ export default function LongswordWardenStrikePlayerFx({
       const delay = scalePresentationMs(WARDEN_STRIKE_TIMELINE_MS.smearStart, motionSpeed);
       smearTimerRef.current = setTimeout(() => {
         setTrailActive(true);
+        if (!event.reducedMotion) {
+          try {
+            unlockCombatPresentationAudio();
+            const missed = event.result.outcome === 'EVADE' || event.result.outcome === 'MISS';
+            if (missed) {
+              playCombatPresentationCue('sfx.aegis.miss');
+            } else {
+              // Metal woosh + body thud together — shortly after lunge begins (smear beat).
+              playCombatPresentationCue('sfx.aegis.longsword_swing');
+              playCombatPresentationCue('sfx.aegis.longsword_body');
+            }
+          } catch {
+            // Presentation must never block combat.
+          }
+        }
         const trailLife = scalePresentationMs(WARDEN_STRIKE_TIMELINE_MS.trailLifetime, motionSpeed);
         smearClearRef.current = setTimeout(() => {
           setTrailActive(false);
@@ -98,19 +114,15 @@ export default function LongswordWardenStrikePlayerFx({
         setTipBurst(event.result);
         if (tipBurstClearRef.current) clearTimeout(tipBurstClearRef.current);
         const burst = WARDEN_STRIKE_ART_CALIBRATION.contactBurst;
-        const burstLife = scalePresentationMs(
-          burst.popInMs + burst.holdMs + burst.fadeMs + 24,
-          motionSpeed,
-        );
+        const inc = WARDEN_STRIKE_ART_CALIBRATION.incision;
+        const burstLife = burst.popInMs + burst.holdMs + burst.fadeMs + 24;
+        const incisionEnd = (inc.delayMs ?? 0) + inc.lifetimeMs + 24;
+        // Hold tip plane through incision — completes during contact hold while tip is still planted.
+        const tipLife = scalePresentationMs(Math.max(burstLife, incisionEnd), motionSpeed);
         tipBurstClearRef.current = setTimeout(() => {
           setTipBurst(null);
           tipBurstClearRef.current = null;
-        }, burstLife);
-      }
-      if (event.result.replayOnly && event.result.outcome === 'HIT'
-        && !WARDEN_STRIKE_VFX_LAYER_TOGGLES.smearIsolationMode) {
-        unlockCombatPresentationAudio();
-        playCombatPresentationCue('sfx.aegis.longsword_impact');
+        }, tipLife);
       }
     } else if (event.phase === 'release' || event.phase === 'hold' || event.phase === 'recovery') {
       if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.recoilIsolationMode) {
@@ -201,7 +213,7 @@ export default function LongswordWardenStrikePlayerFx({
             reducedMotion={reducedMotion}
             reducedFlash={reducedFlash}
             enableBurst
-            enableIncision={false}
+            enableIncision
             enableFracture={false}
           />
         </View>

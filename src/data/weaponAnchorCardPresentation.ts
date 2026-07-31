@@ -17,6 +17,7 @@ import {
   resolveHexBasicShot,
   PRISM_BRINK_FLUX_THRESHOLD,
 } from './weaponBasicEngine';
+import { AEGIS_RIPOSTE_BONUS_KINETIC } from './aegisRiposteEngine';
 import { resolveWeaponCombatCallouts } from './weaponPlayerFacing/weaponPlayerFacingEngine';
 
 export interface WeaponAnchorCardPresentation {
@@ -50,6 +51,9 @@ export interface WeaponAnchorCardContext {
   prismCanPayFullSacrifice?: boolean;
   catalogBaseDamage?: number;
   catalogFluxCost?: number;
+  /** Aegis Riposte ready — Strike preview shows base + Riposte bonus separately. */
+  riposteReady?: boolean;
+  targetFractured?: boolean;
 }
 
 function mockSquad(secondaryCount: number): EnemyCombatProfile[] {
@@ -106,15 +110,23 @@ export function resolveWeaponAnchorCardPresentation(
     const plan = resolveAegisStrikeBasic({
       weapon: ctx.weapon,
       runtime: ctx.runtime,
-      riposte: false,
-      targetFractured: false,
+      targetFractured: !!ctx.targetFractured,
     });
-    primaryOutcome = plan.occultRiderDamage > 0
-      ? `${plan.kineticDamage}+${plan.occultRiderDamage} DMG`
-      : `${plan.kineticDamage} KINETIC`;
+    const riposteBonus = ctx.riposteReady ? AEGIS_RIPOSTE_BONUS_KINETIC : 0;
+    if (riposteBonus > 0) {
+      const total = plan.kineticDamage + riposteBonus + (plan.occultRiderDamage > 0 ? plan.occultRiderDamage : 0);
+      primaryOutcome = plan.occultRiderDamage > 0
+        ? `${plan.kineticDamage}+${plan.occultRiderDamage} // +${riposteBonus} RIPOSTE // TOTAL ${total}`
+        : `${plan.kineticDamage} + ${riposteBonus} RIPOSTE`;
+      conditionalState = 'RIPOSTE READY';
+    } else {
+      primaryOutcome = plan.occultRiderDamage > 0
+        ? `${plan.kineticDamage}+${plan.occultRiderDamage} DMG`
+        : `${plan.kineticDamage} KINETIC`;
+    }
     if (plan.staminaCost > 0) secondaryCost = `${plan.staminaCost} STAM`;
     if (familyId === 'aegis-rift-edge') {
-      conditionalState = ctx.runtime.riftEdgeTempoArmed ? 'TEMPO ARMED' : null;
+      conditionalState = ctx.runtime.riftEdgeTempoArmed ? 'TEMPO ARMED' : conditionalState;
     }
     if (familyId === 'aegis-claymore-blade' && ctx.claymoreStaminaCommitted) {
       conditionalState = 'BREAK READY';

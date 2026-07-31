@@ -139,6 +139,7 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
 
     const runFrontlineMeleeCrossfade = useCallback(
       () =>
+        // Keep attack art up for the full lunge (snap + hold); fade only on return.
         runCrossfade(
           FRONTLINE_MELEE_SPRITE_IN_MS,
           FRONTLINE_MELEE_SPRITE_HOLD_MS,
@@ -275,6 +276,12 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
       const prev = lastTurnPhaseRef.current;
       lastTurnPhaseRef.current = turnPhase;
 
+      // Reading / buff = telegraph step only — never show attack art.
+      if (turnPhase === 'reading' || turnPhase === 'buff') {
+        snapIdle();
+        return;
+      }
+
       if (turnPhase === 'melee_attack' && prev !== 'melee_attack' && !isBacklineDashing) {
         void runFrontlineMeleeCrossfade();
         return;
@@ -295,7 +302,7 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
           return;
         }
         if (prev != null) {
-          void runRangedCrossfadeOut();
+          snapIdle();
         }
       }
     }, [

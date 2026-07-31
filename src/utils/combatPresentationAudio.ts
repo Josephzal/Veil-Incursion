@@ -8,6 +8,7 @@
 import { getCombatPresentationSettings } from '../data/weaponCombatPresentation/presentationSettings';
 import {
   AEGIS_ATTACK_SAMPLE,
+  AEGIS_MISS_SAMPLE,
   AEGIS_PARRY_SAMPLE,
   AEGIS_PLAYER_BUFF_SAMPLE,
   AEGIS_RUIN_SAMPLE,
@@ -135,9 +136,29 @@ registerFamily('heart', {
 CUE_RECIPES['sfx.aegis.attack'] = {
   layers: [{ kind: 'triangle', freq: 680, freqEnd: 320, gain: 0.1, durationMs: 85 }],
 };
-/** Longsword basic impact — contact frame for Warden's Strike (not Threefold Brand). */
+/** Aegis miss / evade — replaces weapon attack release when the enemy phases. */
+CUE_RECIPES['sfx.aegis.miss'] = {
+  layers: [
+    { kind: 'sine', freq: 280, freqEnd: 120, gain: 0.07, durationMs: 90 },
+    { kind: 'triangle', freq: 160, freqEnd: 70, gain: 0.05, durationMs: 110, delayMs: 20 },
+  ],
+};
+/** Longsword swing whoosh — smear / release beat for Warden's Strike. */
+CUE_RECIPES['sfx.aegis.longsword_swing'] = {
+  layers: [
+    { kind: 'sine', freq: 520, freqEnd: 240, gain: 0.06, durationMs: 70 },
+    { kind: 'triangle', freq: 380, freqEnd: 160, gain: 0.05, durationMs: 90, delayMs: 12 },
+  ],
+};
+/** Longsword sharp contact — tip burst frame. */
 CUE_RECIPES['sfx.aegis.longsword_impact'] = {
-  layers: [{ kind: 'triangle', freq: 520, freqEnd: 220, gain: 0.11, durationMs: 90 }],
+  layers: [{ kind: 'triangle', freq: 720, freqEnd: 280, gain: 0.12, durationMs: 55 }],
+};
+/** Longsword low body impact — follows sharp contact. */
+CUE_RECIPES['sfx.aegis.longsword_body'] = {
+  layers: [
+    { kind: 'square', freq: 140, freqEnd: 55, gain: 0.09, durationMs: 95, noise: true },
+  ],
 };
 CUE_RECIPES['sfx.aegis.ultimate'] = {
   layers: [{ kind: 'sawtooth', freq: 520, freqEnd: 180, gain: 0.12, durationMs: 140 }],
@@ -242,7 +263,10 @@ type AudioCtxLike = {
 
 const SAMPLE_SOURCES: Record<string, unknown> = {
   'sfx.aegis.attack': AEGIS_ATTACK_SAMPLE,
+  'sfx.aegis.miss': AEGIS_MISS_SAMPLE,
+  'sfx.aegis.longsword_swing': AEGIS_ATTACK_SAMPLE,
   'sfx.aegis.longsword_impact': AEGIS_ATTACK_SAMPLE,
+  'sfx.aegis.longsword_body': PLAYER_IMPACT_SAMPLE,
   'sfx.aegis.ultimate': AEGIS_ULTIMATE_SAMPLE,
   'sfx.aegis.ultimate2': AEGIS_ULTIMATE2_SAMPLE,
   'sfx.aegis.parry': AEGIS_PARRY_SAMPLE,
@@ -275,7 +299,10 @@ const SAMPLE_SOURCES: Record<string, unknown> = {
 
 const SAMPLE_GAIN: Record<string, number> = {
   'sfx.aegis.attack': 1,
+  'sfx.aegis.miss': 1,
+  'sfx.aegis.longsword_swing': 0.72,
   'sfx.aegis.longsword_impact': 1,
+  'sfx.aegis.longsword_body': 0.85,
   'sfx.aegis.ultimate': 1,
   'sfx.aegis.ultimate2': 1,
   'sfx.aegis.parry': 1,

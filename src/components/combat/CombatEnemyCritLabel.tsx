@@ -36,6 +36,7 @@ export default function CombatEnemyCritLabel({
       setVisible(false);
       return;
     }
+    // critImpactSeq is only advanced when critical HP damage was dealt.
     if (critImpactSeq <= 0 || critImpactSeq === lastSeqRef.current) return;
     lastSeqRef.current = critImpactSeq;
     setVisible(true);

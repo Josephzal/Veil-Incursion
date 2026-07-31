@@ -468,6 +468,16 @@ import {
 import { dispatchCombatPresentationFromJuice } from '../utils/combatPresentationBus';
 import { presentResolvedWeaponHit } from '../data/weaponCombatPresentation/presentResolvedWeaponHit';
 import {
+  AEGIS_RIPOSTE_BONUS_KINETIC,
+  abilityCarriesStrikeTag,
+  canCashOutAegisRiposte,
+  clearAegisRiposte,
+  consumeAegisRiposte,
+  expireAegisRiposteAtPlayerTurnEnd,
+  grantAegisRiposte,
+  type AegisRiposteState,
+} from '../data/aegisRiposteEngine';
+import {
   beginWardenStrikePresentation,
   cancelWardenStrikePresentation,
   contributeWardenStrikeContactDamage,
@@ -1094,7 +1104,15 @@ export default function TacticalCombatHub({
     revealHitFlash: boolean;
     revealEvade: boolean;
     critChannel?: 'KINETIC' | 'OCCULT' | 'TRUE';
+    /** Planned kinetic delta from Riposte cash-out — labeled separately at contact. */
+    riposteBonusKinetic?: number;
   } | null>(null);
+  /** Planned Riposte kinetic bonus for the next Warden contact float. */
+  const wardenRiposteBonusRef = useRef(0);
+  /** Primary target for the current Strike — Riposte only cashes vs this id. */
+  const ripostePrimaryTargetIdRef = useRef<string | null>(null);
+  /** Player action id that already cashed Riposte (one per action). */
+  const riposteCashedActionIdRef = useRef<string | null>(null);
   /** Crit channel staged until Warden contact (same strike). */
   const wardenDeferredCritChannelRef = useRef<'KINETIC' | 'OCCULT' | 'TRUE' | null>(null);
   /** Player-intent action that owns the active Warden presentation. */
@@ -1452,7 +1470,11 @@ export default function TacticalCombatHub({
       ) {
         // Publish even for Armor/Ward when authoritative HP damage > 0.
         // Uses a dedicated channel so it does not overwrite ARMOR BROKEN / WARD.
-        const dmgLabel = String(result.damage);
+        const riposteBonus = Math.max(0, pending.riposteBonusKinetic ?? 0);
+        const baseShown = riposteBonus > 0
+          ? Math.max(0, result.damage - riposteBonus)
+          : result.damage;
+        const dmgLabel = String(baseShown > 0 ? baseShown : result.damage);
         damageFloatSeqRef.current[pending.unitId] =
           (damageFloatSeqRef.current[pending.unitId] ?? 0) + 1;
         damageFloatLabelsRef.current[pending.unitId] = dmgLabel;
@@ -1461,18 +1483,33 @@ export default function TacticalCombatHub({
             delete damageFloatLabelsRef.current[pending.unitId];
           }
         }, 900);
+        if (riposteBonus > 0) {
+          const riposteLabel = `RIPOSTE +${riposteBonus}`;
+          statusFloatSeqRef.current[pending.unitId] =
+            (statusFloatSeqRef.current[pending.unitId] ?? 0) + 1;
+          lifecycleFloatLabelsRef.current[pending.unitId] = riposteLabel;
+          lifecycleFloatTonesRef.current[pending.unitId] = 'neutral';
+          setTimeout(() => {
+            if (lifecycleFloatLabelsRef.current[pending.unitId] === riposteLabel) {
+              delete lifecycleFloatLabelsRef.current[pending.unitId];
+              delete lifecycleFloatTonesRef.current[pending.unitId];
+            }
+          }, 1100);
+        }
       }
-      if (pending.revealEvade) {
+      if (
+        pending.revealEvade
+        && (result.outcome === 'EVADE' || result.outcome === 'MISS')
+        && result.damage <= 0
+      ) {
         evadeImpactSeqRef.current[pending.unitId] =
           (evadeImpactSeqRef.current[pending.unitId] ?? 0) + 1;
       }
-      if (pending.critChannel && result.critical) {
-        const prev = critImpactSeqRef.current[pending.unitId]?.seq ?? 0;
-        critImpactSeqRef.current[pending.unitId] = {
-          seq: prev + 1,
-          channel: pending.critChannel,
-        };
-      } else if (result.critical) {
+      if (
+        result.critical
+        && result.damage > 0
+        && (pending.critChannel || result.outcome === 'HIT')
+      ) {
         const prev = critImpactSeqRef.current[pending.unitId]?.seq ?? 0;
         critImpactSeqRef.current[pending.unitId] = {
           seq: prev + 1,
@@ -1480,12 +1517,6 @@ export default function TacticalCombatHub({
         };
       }
       if (result.outcome === 'HIT') {
-        try {
-          unlockCombatPresentationAudio();
-          playCombatPresentationCue('sfx.aegis.longsword_impact');
-        } catch {
-          // Presentation must never block combat.
-        }
         const settings = getCombatPresentationSettings();
         const hitStop = settings.reducedMotion
           ? Math.max(20, Math.floor(WARDEN_STRIKE_TIMELINE_MS.hitStop * 0.6))
@@ -1495,9 +1526,7 @@ export default function TacticalCombatHub({
           triggerShake('micro');
         }
       }
-      if (pending.critChannel && result.critical) {
-        onPlayerCritImpact?.({ unitId: pending.unitId, channel: pending.critChannel });
-      } else if (result.critical) {
+      if (result.critical && result.damage > 0) {
         onPlayerCritImpact?.({
           unitId: pending.unitId,
           channel: pending.critChannel ?? 'KINETIC',
@@ -1739,7 +1768,7 @@ export default function TacticalCombatHub({
     if (
       !isPlayerTurnRef.current
       && cycleRef.current === 'TEXT_COMBAT'
-      && enemyActionStageRef.current != null
+      && enemyActionStageRef.current === 'executing'
     ) {
       const actingId = resolveActingEnemyId();
       if (actingId === unitId) {
@@ -2424,22 +2453,76 @@ export default function TacticalCombatHub({
     setCounterPrepActive(false);
   };
 
-  const armRiposteReady = (reason: string) => {
+  const syncRiposteState = (next: AegisRiposteState) => {
+    classCombatRef.current.riposteReady = next.ready;
+    classCombatRef.current.riposteExpiresAfterPlayerTurn = next.expiresAfterPlayerTurn;
+    classCombatRef.current.riposteGrantedBy = next.grantedBy;
+    classCombatRef.current.riposteGrantId = next.grantId;
+    setRiposteReadyUi(next.ready);
+  };
+
+  const readRiposteState = (): AegisRiposteState => ({
+    ready: classCombatRef.current.riposteReady,
+    expiresAfterPlayerTurn: classCombatRef.current.riposteExpiresAfterPlayerTurn,
+    grantedBy: classCombatRef.current.riposteGrantedBy,
+    grantId: classCombatRef.current.riposteGrantId,
+  });
+
+  const armRiposteReady = (
+    grantedBy: 'PERFECT_PARRY' | 'BOON' | 'GRAFT' | 'OTHER' = 'PERFECT_PARRY',
+  ) => {
     if (operativeClass !== 'AEGIS') return;
-    if (classCombatRef.current.riposteReady) return;
-    classCombatRef.current.riposteReady = true;
-    setRiposteReadyUi(true);
-    classLoopTelemetryRef.current.ripostesReady += 1;
-    log(`[RIPOSTE READY] >> ${reason}`);
+    const result = grantAegisRiposte({
+      state: readRiposteState(),
+      currentPlayerTurns: Math.max(1, balanceEncounterRef.current.playerTurns),
+      grantedBy,
+      nowMs: Date.now(),
+    });
+    syncRiposteState(result.state);
+    if (!result.refreshed) {
+      classLoopTelemetryRef.current.ripostesReady += 1;
+    }
+    log(
+      result.refreshed
+        ? `[RIPOSTE READY] >> Refreshed (${grantedBy}) — expires after player turn ${result.state.expiresAfterPlayerTurn}.`
+        : `[RIPOSTE READY] >> ${grantedBy} — expires after player turn ${result.state.expiresAfterPlayerTurn}.`,
+    );
+    setPhaseAlert('PERFECT PARRY — RIPOSTE READY');
+    setTimeout(() => setPhaseAlert(null), 1600);
   };
 
   const consumeRiposteReady = (): boolean => {
-    if (!classCombatRef.current.riposteReady) return false;
-    classCombatRef.current.riposteReady = false;
-    setRiposteReadyUi(false);
+    const result = consumeAegisRiposte(readRiposteState());
+    if (!result.consumed) return false;
+    syncRiposteState(result.state);
     classLoopTelemetryRef.current.ripostesConsumed += 1;
-    emitJuice('RIPOSTE', { text: 'Riposte cash-out' });
+    emitJuice('RIPOSTE', { text: 'RIPOSTE +16' });
     return true;
+  };
+
+  const clearRiposteReady = (reason: string) => {
+    if (!classCombatRef.current.riposteReady) return;
+    syncRiposteState(clearAegisRiposte(readRiposteState()));
+    log(`[RIPOSTE] >> Cleared — ${reason}.`);
+  };
+
+  const expireRiposteIfNeeded = () => {
+    const result = expireAegisRiposteAtPlayerTurnEnd({
+      state: readRiposteState(),
+      currentPlayerTurns: Math.max(1, balanceEncounterRef.current.playerTurns),
+    });
+    if (!result.expired) return;
+    syncRiposteState(result.state);
+    log('[RIPOSTE EXPIRED] >> Unused charge faded at end of player turn.');
+    setPhaseAlert('RIPOSTE EXPIRED');
+    setTimeout(() => setPhaseAlert(null), 1400);
+  };
+
+  const signalRiposteHeld = () => {
+    if (!classCombatRef.current.riposteReady) return;
+    setPhaseAlert('RIPOSTE HELD');
+    setTimeout(() => setPhaseAlert(null), 1200);
+    log('[RIPOSTE HELD] >> Miss/evade — charge retained.');
   };
   const primeWardStrikeBonus = () => {
     wardStrikeBonusRef.current = true;
@@ -3603,7 +3686,6 @@ export default function TacticalCombatHub({
               text: 'Fracture applied',
             });
           }
-          if (operativeClass === 'AEGIS') armRiposteReady('Armor break');
           if (operativeClass === 'HEX_SHOT') {
             log('[HEX SHOT] >> Correct Round — Kinetic Armor cracked.');
             emitJuice('HEX_CORRECT_ROUND', { text: 'Correct Round — Armor' });
@@ -3795,12 +3877,28 @@ export default function TacticalCombatHub({
           });
           publishSquadUi(squadRef.current);
           log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+          if (
+            source
+            && options?.abilityId
+            && abilityCarriesStrikeTag(operativeClass, options.abilityId)
+            && !options?.nestedPresentation
+          ) {
+            signalRiposteHeld();
+          }
           return false;
         }
         evadeImpactSeqRef.current[evadeUnitId] = (evadeImpactSeqRef.current[evadeUnitId] ?? 0) + 1;
         publishSquadUi(squadRef.current);
         apparitionRef?.current?.triggerStatEvade();
         log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+        if (
+          source
+          && options?.abilityId
+          && abilityCarriesStrikeTag(operativeClass, options.abilityId)
+          && !options?.nestedPresentation
+        ) {
+          signalRiposteHeld();
+        }
         if (
           resolvedWeapon
           && source
@@ -4350,6 +4448,8 @@ export default function TacticalCombatHub({
       playerActionKind: options?.playerActionKind,
       nestedPresentation: options?.nestedPresentation,
     }) && !options?.indirectDamage && !options?.echoHit;
+    // Nested riders (Riposte +16, Veil Edge, etc.) must never start a second lunge/pose.
+    // Warden owns the single approach for Strike; skip generic attack pose entirely.
     if (
       source
       && source !== 'COUNTER'
@@ -4358,8 +4458,10 @@ export default function TacticalCombatHub({
       && Boolean(options?.abilityId || ultimateAttackPose)
       && !options?.indirectDamage
       && !options?.echoHit
+      && !options?.nestedPresentation
       && options?.abilityId !== 'RUIN'
       && !skipPoseForWarden
+      && !isWardenStrikeInputGuarded()
     ) {
       triggerPlayerAttackPose(working);
     }
@@ -4544,9 +4646,11 @@ export default function TacticalCombatHub({
         resolvedWeapon
         && source
         && !options?.echoHit
+        && !options?.nestedPresentation
         && options?.abilityId !== 'RUIN'
         && !(useWardenStrike && !wardenFollowUp)
         && !wardenFollowUp
+        && !isWardenStrikeInputGuarded()
       ) {
         try {
           unlockCombatPresentationAudio();
@@ -4571,7 +4675,13 @@ export default function TacticalCombatHub({
           // Presentation must never block combat.
         }
       }
-      if (resolvedWeapon && source === 'STRIKE' && operativeClass === 'AEGIS') {
+      if (
+        resolvedWeapon
+        && source === 'STRIKE'
+        && operativeClass === 'AEGIS'
+        && !options?.nestedPresentation
+        && !options?.indirectDamage
+      ) {
         const hitResult = runWeaponOnMeleeHitHooks(
           { ...buildWeaponHookContext(), target: working, source, damage: { raw: dmg, channel: options?.channel, multiplier: 1 } },
           critical,
@@ -4645,10 +4755,14 @@ export default function TacticalCombatHub({
         unitId: e.unitId,
         revealHitFlash: dmg > 0,
         revealEvade: false,
-        critChannel: critical
+        critChannel: critical && dmg > 0
           ? (wardenDeferredCritChannelRef.current ?? undefined)
           : undefined,
+        riposteBonusKinetic: wardenRiposteBonusRef.current > 0
+          ? wardenRiposteBonusRef.current
+          : undefined,
       };
+      wardenRiposteBonusRef.current = 0;
       wardenDeferredCritChannelRef.current = null;
       beginWardenStrikePresentation({
         presentationId,
@@ -4656,12 +4770,10 @@ export default function TacticalCombatHub({
         playerActionId,
         sourceActionKind: options?.playerActionKind ?? options?.actionKind ?? 'STRIKE',
         sourceAbilityId: options?.abilityId ?? 'STRIKE',
-        resultSource: options?.actionKind === 'RIPOSTE'
-          ? 'warden-with-riposte'
-          : 'player-action',
+        resultSource: 'player-action',
         targetId: e.unitId,
         damage: dmg,
-        critical,
+        critical: Boolean(critical && dmg > 0),
         killed: hp <= 0,
         outcome: 'HIT',
         defenseMaterial: wardenDefenseMaterialRef.current,
@@ -4671,6 +4783,81 @@ export default function TacticalCombatHub({
       publishSquadUi(squadRef.current);
     } else {
       wardenDeferredCritChannelRef.current = null;
+    }
+
+    // Riposte: attach +16 Kinetic once on successful primary-target Strike hit (not on select/miss).
+    if (
+      source
+      && e.unitId
+      && canCashOutAegisRiposte({
+        state: readRiposteState(),
+        operativeClass,
+        abilityId: options?.abilityId,
+        primaryTargetId: ripostePrimaryTargetIdRef.current,
+        hitTargetId: e.unitId,
+        successfulHit: true,
+        alreadyCashedForAction: Boolean(
+          options?.playerActionId
+          && riposteCashedActionIdRef.current === options.playerActionId,
+        ) || Boolean(
+          wardenPlayerActionIdRef.current
+          && riposteCashedActionIdRef.current === wardenPlayerActionIdRef.current,
+        ),
+        nestedPresentation: options?.nestedPresentation,
+        indirectDamage: options?.indirectDamage,
+        echoHit: options?.echoHit,
+      })
+    ) {
+      const cashActionId = options?.playerActionId
+        ?? wardenPlayerActionIdRef.current
+        ?? `pa-riposte-${e.unitId}`;
+      if (!consumeRiposteReady()) {
+        // Race / already cleared.
+      } else {
+        riposteCashedActionIdRef.current = cashActionId;
+        wardenRiposteBonusRef.current = AEGIS_RIPOSTE_BONUS_KINETIC;
+        if (wardenPendingRevealRef.current?.unitId === e.unitId) {
+          wardenPendingRevealRef.current = {
+            ...wardenPendingRevealRef.current,
+            riposteBonusKinetic: AEGIS_RIPOSTE_BONUS_KINETIC,
+          };
+        }
+        if (isWardenStrikeInputGuarded()) {
+          // Stamp owning presentation as riposte-augmented without a second approach.
+          contributeWardenStrikeContactDamage({
+            playerActionId: cashActionId,
+            damage: 0,
+          });
+        }
+        log(`[RIPOSTE +${AEGIS_RIPOSTE_BONUS_KINETIC}] >> Attached Kinetic bonus.`);
+        setPhaseAlert(`RIPOSTE +${AEGIS_RIPOSTE_BONUS_KINETIC}`);
+        setTimeout(() => setPhaseAlert(null), 1200);
+        const targetStillAlive = (() => {
+          const live = getUnitById(squadRef.current, e.unitId);
+          return live != null && isUnitAlive(live);
+        })();
+        if (targetStillAlive) {
+          // Attached bonus only — contribute into the owning Warden contact; never a second approach.
+          hurtEnemy(AEGIS_RIPOSTE_BONUS_KINETIC, '[RIPOSTE]', 'STRIKE', {
+            channel: 'KINETIC',
+            fractureGain: 0,
+            abilityId: options?.abilityId ?? 'STRIKE',
+            actionKind: 'STRIKE',
+            playerActionKind: 'STRIKE',
+            playerActionId: cashActionId,
+            nestedPresentation: true,
+            indirectDamage: false,
+            rollCrit: false,
+            targetId: e.unitId,
+          });
+        } else if (isWardenStrikeInputGuarded()) {
+          contributeWardenStrikeContactDamage({
+            playerActionId: cashActionId,
+            damage: AEGIS_RIPOSTE_BONUS_KINETIC,
+            killed: true,
+          });
+        }
+      }
     }
 
     if (
@@ -6521,6 +6708,7 @@ export default function TacticalCombatHub({
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
+    expireRiposteIfNeeded();
     // Safety: 0-HP / dissolved squads must end combat even if a prior kill path skipped victory.
     if (allUnitsDefeated(squadRef.current)) {
       for (const unit of squadRef.current) {
@@ -7796,13 +7984,12 @@ export default function TacticalCombatHub({
     switch (runtimeAbilityId) {
       case 'STRIKE': {
         const targetBefore = enemyRef.current;
-        const riposte = consumeRiposteReady();
+        const targetFractured = !!(targetBefore && isEnemyFractured(targetBefore));
         const weaponPlan = resolvedWeapon
           ? resolveAegisStrikeBasic({
             weapon: resolvedWeapon,
             runtime: weaponRuntimeRef.current,
-            riposte,
-            targetFractured: !!(targetBefore && isEnemyFractured(targetBefore)),
+            targetFractured,
           })
           : null;
         if (weaponPlan?.staminaCost && !spendStam(weaponPlan.staminaCost)) {
@@ -7813,25 +8000,21 @@ export default function TacticalCombatHub({
           return;
         }
         weaponPlan?.logLines.forEach((line) => log(line));
-        let kinetic = weaponPlan?.kineticDamage ?? (def.baseKineticDamage ?? 10);
-        if (riposte && !weaponPlan) {
-          const fracturedBonus = targetBefore && isEnemyFractured(targetBefore) ? 1.3 : 1.15;
-          kinetic = Math.floor((def.baseKineticDamage ?? 10) * fracturedBonus);
-          log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic${targetBefore && isEnemyFractured(targetBefore) ? ' (Fractured +30%)' : ' (+15%)'}.`);
-        } else if (riposte && weaponPlan) {
-          log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic.`);
-        }
+        const kinetic = weaponPlan?.kineticDamage ?? (def.baseKineticDamage ?? 10);
         const playerActionId = `pa-strike-${Date.now()}`;
         wardenPlayerActionIdRef.current = playerActionId;
-        const strikeTag = riposte
-          ? '[RIPOSTE]'
-          : `[${equippedAnchor?.displayName ?? "WARDEN'S STRIKE"}]`;
+        riposteCashedActionIdRef.current = null;
+        ripostePrimaryTargetIdRef.current = targetBefore?.unitId
+          ?? selectedTargetIdRef.current
+          ?? primaryAliveUnit(squadRef.current)?.unitId
+          ?? null;
+        wardenRiposteBonusRef.current = 0;
+        const strikeTag = `[${equippedAnchor?.displayName ?? "WARDEN'S STRIKE"}]`;
         const eradicated = hurtEnemy(kinetic, strikeTag, 'STRIKE', {
           channel: 'KINETIC',
-          fractureGain: weaponPlan?.fractureGain ?? (riposte ? 40 : 25),
+          fractureGain: weaponPlan?.fractureGain ?? 25,
           abilityId: 'STRIKE',
-          // Riposte cash-out during Strike still owns Warden via playerActionKind.
-          actionKind: riposte ? 'RIPOSTE' : 'STRIKE',
+          actionKind: 'STRIKE',
           playerActionKind: 'STRIKE',
           playerActionId,
         });
@@ -7848,41 +8031,11 @@ export default function TacticalCombatHub({
         if (weaponPlan?.consumeTempo) {
           weaponRuntimeRef.current = consumeRiftEdgeTempo(weaponRuntimeRef.current);
         }
-        if (riposte && targetBefore?.unitId) {
-          const after = getUnitById(squadRef.current, targetBefore.unitId) ?? targetBefore;
-          if ((after.kineticArmor ?? 0) > 0) {
-            const strip = stripKineticArmor(after, 1);
-            patchUnit(targetBefore.unitId, strip.enemy);
-            strip.logLines.forEach((line) => log(line));
-            classLoopTelemetryRef.current.armorStacksRemoved += 1;
-            if (strip.broke) {
-              if (isWardenStrikeInputGuarded()) {
-                contributeWardenStrikeContactDamage({
-                  playerActionId,
-                  damage: 0,
-                  defenseMaterial: 'KINETIC_ARMOR',
-                });
-                wardenPendingDefenseFloatRef.current = {
-                  presentationId: wardenPendingRevealRef.current?.presentationId
-                    ?? `pending-${targetBefore.unitId}`,
-                  resolvedResultId: `pending-${targetBefore.unitId}`,
-                  unitId: targetBefore.unitId,
-                  kind: 'armor',
-                };
-              } else {
-                pushDefenseBreakFloat(targetBefore.unitId, 'armor');
-              }
-            }
-          }
-        }
         const struck = enemyRef.current;
         chargeAr(weaponPlan?.reserveGain ?? def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
         imprintRunicBrand(def.brandsImprinted ?? 1);
         if (struck && fractureRatio(struck) > 0.5) {
           syncEnemy(addCombatTag(struck, 'CONCUSSED'));
-        }
-        if (!riposte && struck && isEnemyFractured(struck)) {
-          armRiposteReady('Fracture pressure');
         }
         applyLethalRetaliation(kinetic);
         if (eradicated) return;
@@ -9174,7 +9327,7 @@ export default function TacticalCombatHub({
         patchUnit(e.unitId, withFracturePayoff);
         log(`[VOID WARD] >> Perfect lock — ${pendingWeight} fracture reflected.`);
         log('[AEGIS] >> Perfect Parry — Lock canceled, Riposte Ready.');
-        armRiposteReady('Perfect Parry');
+        armRiposteReady('PERFECT_PARRY');
         if (resolvedWeapon?.familyId === 'aegis-rift-edge') {
           weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
           log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
@@ -9183,7 +9336,7 @@ export default function TacticalCombatHub({
         classLoopTelemetryRef.current.perfectParries += 1;
         classLoopTelemetryRef.current.damagePreventedByParry += pendingWeight;
         classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
-        emitJuice('PERFECT_PARRY', { text: 'Perfect Parry' });
+        emitJuice('PERFECT_PARRY', { text: 'PERFECT PARRY — RIPOSTE READY' });
         playCombatPresentationCue('sfx.aegis.parry');
         emitJuice('FRACTURE_APPLIED', { text: 'Fracture from Perfect Parry' });
         if (counter.cancelTelegraph) {
@@ -9200,9 +9353,12 @@ export default function TacticalCombatHub({
         if (reflectPct > 0) {
           const hpReflect = Math.floor(pendingWeight * (reflectPct / 100));
           if (hpReflect > 0) {
+            // Indirect — must not fire attack pose, Warden approach, or weapon ultimate presentation.
             hurtEnemy(hpReflect, '[SPIKED WARD]', 'STRIKE', {
               channel: 'KINETIC',
               targetId: e.unitId,
+              indirectDamage: true,
+              rollCrit: false,
             });
             log(`[SPIKED WARD] >> ${hpReflect} HP retaliation.`);
           }
@@ -9793,9 +9949,9 @@ export default function TacticalCombatHub({
       ? `AMMO: ${HEX_AMMO_META[hexShotStateRef.current.currentAmmoType].chip} — ${HEX_AMMO_META[hexShotStateRef.current.currentAmmoType].shortEffect}`
       : '';
     const riposteLine = operativeClass === 'AEGIS'
-      && abilityId === 'STRIKE'
+      && abilityCarriesStrikeTag(operativeClass, abilityId)
       && classCombatRef.current.riposteReady
-      ? 'RIPOSTE READY — cash-out vs Fractured (+30%) + strip armor.'
+      ? `RIPOSTE READY — next successful hit deals +${AEGIS_RIPOSTE_BONUS_KINETIC} Kinetic (misses hold).`
       : '';
     const catChip = operativeClass === 'ENVOY'
       ? formatCatalystChip(classCombatRef.current)
@@ -10027,6 +10183,8 @@ export default function TacticalCombatHub({
             pulseSpreadSecondaryCount: Math.max(0, living - 1),
             claymoreStaminaCommitted: !weaponRuntimeRef.current.claymoreBreakCashoutUsed,
             hexPerfectReload: false,
+            riposteReady: classCombatRef.current.riposteReady,
+            targetFractured: !!(enemyRef.current && isEnemyFractured(enemyRef.current)),
             lanternDetonationReady: operativeClass === 'ENVOY'
               && activeWeaponFamilyId === 'envoy-echo-lantern'
               && envoyRotStacksTotal > 0,
@@ -10059,6 +10217,8 @@ export default function TacticalCombatHub({
             maxOperativeHp: combatMaxSoulAnchor,
             previousCatalyst: classCombatRef.current.previousCatalyst ?? null,
             pulseSpreadSecondaryCount: Math.max(0, living - 1),
+            riposteReady: classCombatRef.current.riposteReady,
+            targetFractured: !!(enemyRef.current && isEnemyFractured(enemyRef.current)),
             lanternDetonationReady: operativeClass === 'ENVOY'
               && activeWeaponFamilyId === 'envoy-echo-lantern'
               && envoyRotStacksTotal > 0,
@@ -10100,6 +10260,17 @@ export default function TacticalCombatHub({
       }
       voidWardPrimed={voidWardPrimed}
       riposteReady={riposteReadyUi}
+      riposteStatusTitle={riposteReadyUi ? 'RIPOSTE READY — 1' : null}
+      riposteStatusShort={riposteReadyUi
+        ? (
+          classCombatRef.current.riposteExpiresAfterPlayerTurn != null
+          && balanceEncounterRef.current.playerTurns
+            >= classCombatRef.current.riposteExpiresAfterPlayerTurn
+            ? 'Your next successful STRIKE this turn deals +16 Kinetic.'
+            : 'Your next successful STRIKE before the end of your next player turn deals +16 Kinetic. Misses do not consume it.'
+        )
+        : null}
+      isStrikeAbility={(abilityId) => abilityCarriesStrikeTag(operativeClass, abilityId)}
       onVoidWardPrime={onVoidWardPrime}
       catalyticConsoleAvailable={operativeClass === 'ENVOY'}
       catalyticConsoleEnabled={

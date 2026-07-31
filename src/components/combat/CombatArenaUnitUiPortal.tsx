@@ -36,6 +36,7 @@ interface CombatArenaUnitUiPortalProps {
 type PortalGate = {
   active: boolean;
   critical: boolean;
+  damage: number;
   phase: WardenStrikePresentationPhase;
   presentationId: string | null;
   playerActionId: string | null;
@@ -61,6 +62,7 @@ export default function CombatArenaUnitUiPortal({
   const [gate, setGate] = useState<PortalGate>({
     active: false,
     critical: false,
+    damage: 0,
     phase: 'idle',
     presentationId: null,
     playerActionId: null,
@@ -81,7 +83,8 @@ export default function CombatArenaUnitUiPortal({
     setGate((prev) => {
       const next: PortalGate = {
         active: nextActive,
-        critical: event.result.critical === true,
+        critical: event.result.critical === true && event.result.damage > 0,
+        damage: event.result.damage,
         phase: event.phase,
         presentationId: event.presentationId,
         playerActionId: event.result.playerActionId ?? null,
@@ -92,6 +95,7 @@ export default function CombatArenaUnitUiPortal({
       if (
         prev.active === next.active
         && prev.critical === next.critical
+        && prev.damage === next.damage
         && prev.phase === next.phase
         && prev.presentationId === next.presentationId
       ) {
@@ -111,6 +115,7 @@ export default function CombatArenaUnitUiPortal({
     resultTargetId: unitId,
     resultCritical: gate.critical && contactOrLater,
     calloutTargetId: unitId,
+    resultDamage: gate.damage,
   });
   const publishedCritSeq = criticalAuthorized ? critImpactSeq : 0;
 
@@ -200,6 +205,7 @@ export default function CombatArenaUnitUiPortal({
     unitId,
     gate.active,
     gate.critical,
+    gate.damage,
     gate.phase,
     gate.presentationId,
     damageSeq,

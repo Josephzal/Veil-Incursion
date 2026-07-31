@@ -62,7 +62,7 @@ function avg(nums: number[]): number {
 }
 
 const LOOP_COPY: Record<ClassType, string> = {
-  AEGIS: 'Read intent → Parry/Guard → Fracture → Riposte cash-out.',
+  AEGIS: 'Read intent → Perfect Parry → Riposte READY → successful Strike +16 Kinetic.',
   HEX_SHOT: 'Read defenses/intent → load correct round → break armor/wards/interrupt → reload tempo → execution shot.',
   ENVOY: 'Prime catalyst → spell sequence → collapse wards/rituals → exploit Fracture → Catalytic/Cataclysm payoff.',
 };

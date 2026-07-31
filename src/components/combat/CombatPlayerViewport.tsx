@@ -37,6 +37,8 @@ const DEFAULT_LUNGE = { x: 96, y: -6 };
 /** Shrink while lunging — legacy weapons only. Longsword uses anatomy registration (no scale pop). */
 const AEGIS_LUNGE_SCALE = 0.84;
 const GLOW_PULSE_MS = 900;
+/** Ability-prime outline: brief flash then settle — no long purple wait. */
+const ABILITY_PRIME_OUTLINE_MS = 120;
 
 export interface PlayerAttackLungeDelta {
   x: number;
@@ -95,6 +97,15 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const primed = wardPrimed || abilityPrimed;
 
     useEffect(() => {
+      if (abilityPrimed && !wardPrimed) {
+        // Short full-body flash (~100–150 ms), then dim — do not idle inside purple.
+        glowOpacity.value = withSequence(
+          withTiming(0.72, { duration: 36, easing: Easing.out(Easing.quad) }),
+          withTiming(0.72, { duration: ABILITY_PRIME_OUTLINE_MS - 56 }),
+          withTiming(0.16, { duration: 40, easing: Easing.in(Easing.quad) }),
+        );
+        return;
+      }
       if (primed) {
         glowOpacity.value = withRepeat(
           withSequence(
@@ -107,7 +118,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         return;
       }
       glowOpacity.value = withTiming(0, { duration: 280 });
-    }, [primed, glowOpacity]);
+    }, [abilityPrimed, glowOpacity, primed, wardPrimed]);
 
     const runShake = () => {
       shakeX.value = withSequence(

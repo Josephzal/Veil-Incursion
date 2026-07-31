@@ -83,12 +83,15 @@ export function getActiveWardenCalloutReports(): WardenCalloutReport[] {
 
 /**
  * Pure truthfulness helper — a CRITICAL callout is legal only when the
- * immutable result for that target is critical.
+ * immutable result for that target is critical and dealt damage.
  */
 export function mayPublishCriticalCallout(input: {
   resultTargetId: string;
   resultCritical: boolean;
   calloutTargetId: string;
+  /** When provided, CRITICAL requires actual damage dealt. */
+  resultDamage?: number;
 }): boolean {
+  if (input.resultDamage != null && input.resultDamage <= 0) return false;
   return input.resultCritical && input.resultTargetId === input.calloutTargetId;
 }

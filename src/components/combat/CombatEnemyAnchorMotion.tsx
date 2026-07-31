@@ -220,6 +220,7 @@ export default function CombatEnemyAnchorMotion({
     let recoilReturnMs = 100;
     let recoilDeg = 0;
     let wardenReducedRecoilPx = RECOIL_X_REDUCED;
+    let hitStopMs = 0;
     try {
       // Lazy — keep this file free of circular combat-presentation imports at module load.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -235,6 +236,7 @@ export default function CombatEnemyAnchorMotion({
           enemyRecoilReturnMs: number;
           enemyRecoilDeg: number;
           reducedMotionRecoilPx: number;
+          hitStop: number;
         };
         WARDEN_STRIKE_VFX_LAYER_TOGGLES: { enemyRecoil: boolean };
       };
@@ -249,6 +251,9 @@ export default function CombatEnemyAnchorMotion({
         recoilReturnMs = wardenMod.WARDEN_STRIKE_TIMELINE_MS.enemyRecoilReturnMs;
         recoilDeg = wardenMod.WARDEN_STRIKE_TIMELINE_MS.enemyRecoilDeg;
         wardenReducedRecoilPx = wardenMod.WARDEN_STRIKE_TIMELINE_MS.reducedMotionRecoilPx;
+        hitStopMs = reducedMotion
+          ? Math.max(20, Math.floor(wardenMod.WARDEN_STRIKE_TIMELINE_MS.hitStop * 0.6))
+          : wardenMod.WARDEN_STRIKE_TIMELINE_MS.hitStop;
       }
     } catch {
       reducedMotion = false;
@@ -278,7 +283,13 @@ export default function CombatEnemyAnchorMotion({
     // Compensate CombatEnemyWrapper layoutUnitScale so configured CSS px is final screen motion.
     const parentScale = Math.max(0.35, layoutUnitScale || 1);
     const screenRecoilPx = recoilPx / parentScale;
-    recoilX.value = withSequence(
+    // Warden: freeze portrait idle through hit-stop, then recoil immediately on release.
+    if (wardenActive && hitStopMs > 0) {
+      cancelAnimation(idlePhase);
+      idlePhase.value = 0;
+      motionLocked.value = 1;
+    }
+    const recoilSequence = withSequence(
       withTiming(screenRecoilPx * recoilSign, {
         duration: recoilOutMs,
         easing: Easing.out(Easing.cubic),
@@ -288,8 +299,11 @@ export default function CombatEnemyAnchorMotion({
         easing: RETURN_EASING,
       }),
     );
+    recoilX.value = hitStopMs > 0
+      ? withDelay(hitStopMs, recoilSequence)
+      : recoilSequence;
     if (recoilDeg !== 0) {
-      recoilRot.value = withSequence(
+      const rotSequence = withSequence(
         withTiming(recoilDeg, {
           duration: recoilOutMs,
           easing: Easing.out(Easing.cubic),
@@ -299,6 +313,15 @@ export default function CombatEnemyAnchorMotion({
           easing: RETURN_EASING,
         }),
       );
+      recoilRot.value = hitStopMs > 0
+        ? withDelay(hitStopMs, rotSequence)
+        : rotSequence;
+    }
+    if (wardenActive && hitStopMs > 0) {
+      const unlockTimer = setTimeout(() => {
+        motionLocked.value = frozen ? 1 : 0;
+      }, hitStopMs);
+      return () => clearTimeout(unlockTimer);
     }
     if (
       typeof __DEV__ !== 'undefined'
@@ -326,7 +349,7 @@ export default function CombatEnemyAnchorMotion({
         // ignore
       }
     }
-  }, [hitFlashSeq, layoutUnitScale, recoilRot, recoilX]);
+  }, [frozen, hitFlashSeq, idlePhase, layoutUnitScale, motionLocked, recoilRot, recoilX]);
 
   useEffect(() => {
     if (frozen || backlineMeleeDashSeq <= 0 || backlineMeleeDashSeq === lastDashRef.current) return;

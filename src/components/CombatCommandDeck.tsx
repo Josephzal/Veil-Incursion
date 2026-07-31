@@ -71,8 +71,12 @@ interface CombatCommandDeckProps {
   voidWardEnabled?: boolean;
   voidWardPrimed?: boolean;
   onVoidWardPrime?: () => void;
-  /** Phase 3 — Aegis Riposte Ready chip. */
+  /** Phase 3 — Aegis Riposte Ready (status chip + Strike accents). Never renames Parry. */
   riposteReady?: boolean;
+  riposteStatusTitle?: string | null;
+  riposteStatusShort?: string | null;
+  /** True when ability carries the authoritative STRIKE tag. */
+  isStrikeAbility?: (ability: string) => boolean;
   catalyticConsoleAvailable?: boolean;
   catalyticConsoleEnabled?: boolean;
   catalyticConsoleRotStacks?: number;
@@ -119,6 +123,9 @@ export default function CombatCommandDeck({
   voidWardPrimed = false,
   onVoidWardPrime,
   riposteReady = false,
+  riposteStatusTitle = null,
+  riposteStatusShort = null,
+  isStrikeAbility,
   catalyticConsoleAvailable = false,
   catalyticConsoleEnabled = false,
   catalyticConsoleRotStacks = 0,
@@ -341,8 +348,11 @@ export default function CombatCommandDeck({
     const accent = getActionAccent?.(ability);
     const costImpact = getStagedCostImpact(ability);
     const isSelected = selectedAbility === ability;
+    const strikeEligible = Boolean(riposteReady && isStrikeAbility?.(ability));
     const tileBorderColor = isSelected
       ? (dashboardLayout ? OTT.cyanSelect : OTT.terminalGreen)
+      : strikeEligible
+        ? (enabled ? OTT.warningAmber : 'rgba(224, 180, 90, 0.35)')
       : enabled && accent
         ? accent
         : OTT.borderSubtle;
@@ -369,6 +379,8 @@ export default function CombatCommandDeck({
         ? 'rgba(98, 220, 229, 0.12)'
         : spectrallyLit
           ? 'rgba(69, 247, 160, 0.14)'
+          : strikeEligible
+            ? (enabled ? 'rgba(224, 180, 90, 0.1)' : 'rgba(8, 12, 14, 0.42)')
           : 'rgba(8, 12, 14, 0.42)';
       return (
         <HapticPressable
@@ -401,6 +413,17 @@ export default function CombatCommandDeck({
           <View style={styles.conceptCardPress}>
             <View style={styles.conceptCardTop}>
               <View style={styles.conceptCardTopSpacer} />
+              {strikeEligible ? (
+                <Text
+                  style={[
+                    styles.riposteBadge,
+                    { opacity: enabled ? 1 : 0.45 },
+                  ]}
+                  numberOfLines={1}
+                >
+                  RIPOSTE +16
+                </Text>
+              ) : null}
               <View style={styles.apDiamondHost}>
                 <View style={[
                   styles.apDiamond,
@@ -688,12 +711,10 @@ export default function CombatCommandDeck({
     if (!voidWardAvailable) return null;
     const primed = voidWardPrimed;
     const enabled = voidWardEnabled && !primed;
-    const accent = riposteReady
-      ? OTT.warningAmber
-      : primed || enabled
-        ? OTT.cyanSelect
-        : OTT.borderSubtle;
-    const statusLabel = riposteReady ? 'RIPOSTE' : primed ? 'PRIMED' : enabled ? 'READY' : 'LOCKED';
+    const accent = primed || enabled
+      ? OTT.cyanSelect
+      : OTT.borderSubtle;
+    const statusLabel = primed ? 'WARD PRIMED' : enabled ? 'READY' : 'LOCKED';
     if (dashboardLayout) {
       return (
         <HapticPressable
@@ -703,12 +724,12 @@ export default function CombatCommandDeck({
             styles.catalystTile,
             {
               borderColor: accent,
-              opacity: primed || enabled || riposteReady ? 1 : 0.42,
+              opacity: primed || enabled ? 1 : 0.42,
             },
           ]}
         >
           <Text style={[styles.catalystTitle, { color: accent === OTT.borderSubtle ? OTT.textSecondary : accent }]}>
-            {riposteReady ? 'RIPOSTE' : 'PARRY'}
+            PARRY
           </Text>
           <Text style={styles.catalystSub}>CLASS ACTION</Text>
           <Text style={[styles.catalystStatus, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>
@@ -724,14 +745,12 @@ export default function CombatCommandDeck({
         style={[
           styles.combatReloadBtn,
           {
-            borderColor: riposteReady
-              ? '#fbbf24'
-              : primed
-                ? '#7dd3fc'
-                : enabled
-                  ? '#38bdf8'
-                  : borderColor,
-            opacity: primed || enabled || riposteReady ? 1 : 0.4,
+            borderColor: primed
+              ? '#7dd3fc'
+              : enabled
+                ? '#38bdf8'
+                : borderColor,
+            opacity: primed || enabled ? 1 : 0.4,
             ...desktopBtnStyle,
           },
         ]}
@@ -741,20 +760,18 @@ export default function CombatCommandDeck({
             styles.combatReloadLabel,
             desktopActionLabelStyle,
             {
-              color: riposteReady
-                ? '#fde68a'
-                : primed
-                  ? '#bae6fd'
-                  : enabled
-                    ? '#38bdf8'
-                    : mutedColor,
+              color: primed
+                ? '#bae6fd'
+                : enabled
+                  ? '#38bdf8'
+                  : mutedColor,
             },
           ]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.65}
         >
-          {riposteReady ? '[ RIPOSTE ]' : primed ? '[ WARD ]' : '[ PARRY ]'}
+          {primed ? '[ WARD PRIMED ]' : '[ PARRY ]'}
         </Text>
       </HapticPressable>
     );
@@ -1035,12 +1052,12 @@ export default function CombatCommandDeck({
     if (voidWardAvailable) {
       const primed = voidWardPrimed;
       const enabled = voidWardEnabled && !primed;
-      const classAccent = riposteReady ? OTT.warningAmber : OTT.cyanSelect;
-      const accent = riposteReady || primed || enabled
+      const classAccent = OTT.cyanSelect;
+      const accent = primed || enabled
         ? classAccent
         : OTT.borderSubtle;
-      const title = riposteReady ? 'RIPOSTE' : 'PARRY';
-      const statusLabel = riposteReady ? 'RIPOSTE' : primed ? 'PRIMED' : enabled ? 'READY' : 'LOCKED';
+      const title = 'PARRY';
+      const statusLabel = primed ? 'WARD PRIMED' : enabled ? 'READY' : 'LOCKED';
       const hovered = hoveredAbility === '__CLASS_PARRY__';
       return (
         <HapticPressable
@@ -1054,12 +1071,12 @@ export default function CombatCommandDeck({
             {
               borderColor: hovered ? classAccent : accent,
               backgroundColor: hovered
-                ? (riposteReady ? 'rgba(224, 180, 90, 0.14)' : 'rgba(98, 220, 229, 0.14)')
+                ? 'rgba(98, 220, 229, 0.14)'
                 : 'rgba(8, 12, 14, 0.42)',
               shadowColor: hovered ? classAccent : 'transparent',
               shadowOpacity: hovered ? 0.5 : 0,
               shadowRadius: hovered ? 10 : 0,
-              opacity: primed || enabled || riposteReady ? 1 : 0.42,
+              opacity: primed || enabled ? 1 : 0.42,
             },
           ]}
         >
@@ -1081,13 +1098,11 @@ export default function CombatCommandDeck({
             </Text>
             <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
             <Text style={styles.conceptCardDesc} numberOfLines={3}>
-              {riposteReady
-                ? 'Counter window open.'
-                : primed
-                  ? 'Ward primed.'
-                  : enabled
-                    ? 'Prime defensive ward.'
-                    : 'Parry locked.'}
+              {primed
+                ? 'Ward primed — kinetic intercept armed.'
+                : enabled
+                  ? 'Prime for next enemy attack. Perfect Parry grants riposte on next strike.'
+                  : 'Parry locked.'}
             </Text>
             <Text style={[styles.conceptArmed, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>
               {statusLabel}
@@ -1514,6 +1529,36 @@ const styles = StyleSheet.create({
   },
   conceptCardTopSpacer: {
     flex: 1,
+  },
+  riposteBadge: {
+    fontFamily: MONO,
+    fontSize: 8,
+    letterSpacing: 0.6,
+    color: OTT.warningAmber,
+    marginRight: 4,
+    alignSelf: 'center',
+  },
+  riposteStatusChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(224, 180, 90, 0.55)',
+    backgroundColor: 'rgba(224, 180, 90, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginBottom: 6,
+    borderRadius: 2,
+  },
+  riposteStatusTitle: {
+    fontFamily: MONO,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    color: OTT.warningAmber,
+  },
+  riposteStatusShort: {
+    fontFamily: MONO,
+    fontSize: 8,
+    letterSpacing: 0.3,
+    color: 'rgba(224, 180, 90, 0.75)',
+    marginTop: 2,
   },
   conceptSlot: {
     fontFamily: MONO,

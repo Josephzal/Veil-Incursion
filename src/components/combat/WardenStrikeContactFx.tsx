@@ -41,7 +41,7 @@ interface WardenStrikeContactFxProps {
   reducedFlash?: boolean;
   /** Burst + defense marks (tip-local, short life). */
   enableBurst?: boolean;
-  /** Delayed elongated cut (enemy-local). */
+  /** Delayed cut — tip-local with burst (same place / size). */
   enableIncision?: boolean;
   /** Conditional Fracture crack (enemy-local). */
   enableFracture?: boolean;
@@ -99,7 +99,12 @@ export default function WardenStrikeContactFx({
   const showSparks = WARDEN_STRIKE_VFX_LAYER_TOGGLES.proceduralSparks;
 
   const burstRot = authoredSlashRotationDeg(facingX, facingY, burstCal.sourceAxisDeg);
-  const incisionRot = authoredSlashRotationDeg(facingX, facingY, incCal.sourceAxisDeg);
+  const incisionRot = authoredSlashRotationDeg(
+    facingX,
+    facingY,
+    incCal.sourceAxisDeg,
+    incCal.rotationDeg ?? 0,
+  );
   const fractureRot = authoredSlashRotationDeg(
     facingX,
     facingY,
@@ -250,8 +255,9 @@ export default function WardenStrikeContactFx({
 
   const burstW = burstCal.logicalWidthPx;
   const burstH = burstW * (burstCal.sourceHeight / burstCal.sourceWidth);
-  const incisionL = incCal.logicalLengthPx;
-  const incisionH = incisionL * (incCal.sourceHeight / incCal.sourceWidth);
+  // Incision shares the burst footprint (same place / size on tip).
+  const incisionL = burstW;
+  const incisionH = burstH;
   const fractureW = fxCal.logicalWidthPx;
   const fractureH = fractureW * (fxCal.sourceHeight / fxCal.sourceWidth);
 
@@ -317,8 +323,8 @@ export default function WardenStrikeContactFx({
             {
               width: incisionL,
               height: incisionH,
-              marginLeft: -incisionL / 2 + incCal.offsetX,
-              marginTop: -incisionH / 2 + incCal.offsetY,
+              marginLeft: -incisionL / 2 + burstCal.offsetX,
+              marginTop: -incisionH / 2 + burstCal.offsetY,
             },
             incisionStyle,
           ]}

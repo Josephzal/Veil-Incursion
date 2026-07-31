@@ -1,7 +1,8 @@
 /**
  * Target-local Warden contact host.
- * Registers the approach contact anchor and owns delayed incision / Fracture
+ * Registers the approach contact anchor and owns delayed Fracture
  * lifecycles that must survive player return and idle restoration.
+ * Burst + incision render tip-local with the player contact FX.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -119,7 +120,7 @@ export default function WardenStrikeEnemyContactHost({
           reducedMotion={reducedMotion}
           reducedFlash={reducedFlash}
           enableBurst={false}
-          enableIncision
+          enableIncision={false}
           enableFracture
         />
       ) : null}

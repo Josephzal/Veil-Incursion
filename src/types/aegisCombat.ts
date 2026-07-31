@@ -21,6 +21,8 @@ export type AbilityTag =
   | 'SACRIFICE'
   | 'ULTIMATE'
   | 'TRUE_DAMAGE'
+  /** Authoritative basic Strike — Riposte cash-out eligibility. */
+  | 'STRIKE'
   /** Phase 2 — intent counterplay tags */
   | 'INTERRUPT'
   | 'PARRY'

@@ -26,10 +26,11 @@ import {
 import {
   dispatchWeaponCombatPresentation,
   setCombatPresentationMounted,
+  clearCombatPresentationTimers,
 } from '../utils/combatPresentationBus';
 import { presentResolvedWeaponHit } from './weaponCombatPresentation/presentResolvedWeaponHit';
 
-function run(): void {
+async function run(): Promise<void> {
   resetCombatPresentationSettings();
   setCombatPresentationAudioDeterministic(true);
   setCombatPresentationMounted(true);
@@ -173,10 +174,56 @@ function run(): void {
     labForced: true,
   }));
 
+  // Aegis miss/evade: miss cue replaces attack release (all Aegis weapons).
+  patchCombatPresentationSettings({
+    reducedMotion: false,
+    screenShakeEnabled: true,
+    reducedFlash: false,
+  });
+  const aegisAttackByFamily: Record<string, string> = {
+    'aegis-runed-longsword': 'sfx.aegis.attack',
+    'aegis-rift-edge': 'sfx.paired.attack',
+    'aegis-claymore-blade': 'sfx.unmaker.attack',
+  };
+  for (const [familyId, attackCue] of Object.entries(aegisAttackByFamily)) {
+    clearCombatPresentationTimers();
+    clearCombatPresentationPlayedCues();
+    dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
+      weaponFamilyId: familyId as keyof typeof aegisAttackByFamily,
+      actionKind: 'ANCHOR',
+      actionId: 'STRIKE',
+      displayActionName: 'STRIKE',
+      hits: [miss],
+      labForced: true,
+    }));
+    await new Promise((r) => setTimeout(r, 280));
+    const cues = getCombatPresentationPlayedCues();
+    assert.ok(cues.includes('sfx.aegis.miss'), `${familyId} miss cue`);
+    assert.ok(!cues.includes(attackCue), `${familyId} must not play ${attackCue} on miss`);
+  }
+
+  clearCombatPresentationTimers();
+  clearCombatPresentationPlayedCues();
+  dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
+    weaponFamilyId: 'aegis-runed-longsword',
+    actionKind: 'ANCHOR',
+    actionId: 'STRIKE',
+    displayActionName: 'STRIKE',
+    hits: [hit],
+    labForced: true,
+  }));
+  await new Promise((r) => setTimeout(r, 280));
+  const hitCues = getCombatPresentationPlayedCues();
+  assert.ok(hitCues.includes('sfx.aegis.attack'), 'hit keeps attack cue');
+  assert.ok(!hitCues.includes('sfx.aegis.miss'), 'hit must not play miss');
+
   resetCombatPresentationSettings();
   setCombatPresentationAudioDeterministic(false);
   setCombatPresentationMounted(false);
   console.log('weaponCombatPresentationPhase3M.test.ts OK');
 }
 
-run();
+run().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

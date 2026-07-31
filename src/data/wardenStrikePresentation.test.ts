@@ -65,7 +65,8 @@ async function main(): Promise<void> {
     assert.equal(buf[1], 0x50);
   }
 
-  assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.authoredSwingSmear, true);
+  assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.authoredSwingSmear, false);
+  assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.swingTrail, false);
   assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.proceduralSwingComparison, false);
   assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.authoredContactBurst, true);
   assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.proceduralContactComparison, false);
@@ -409,34 +410,52 @@ async function main(): Promise<void> {
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.recoveryStart >= WARDEN_STRIKE_TIMELINE_MS.returnEnd);
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.doneAt > WARDEN_STRIKE_TIMELINE_MS.recoveryStart);
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.smearStart >= WARDEN_STRIKE_TIMELINE_MS.approachStart);
-  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.peakOpacity >= 0.78);
-  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.peakOpacity <= 0.84);
+  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.peakOpacity >= 0.66);
+  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.peakOpacity <= 0.74);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.sourceCropRight <= 0.8);
   assert.equal(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.sourceCropRight, 0.78);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.contactBurst.logicalWidthPx >= 200);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.contactBurst.logicalWidthPx <= 210);
-  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.incision.logicalLengthPx >= 100);
-  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.incision.logicalLengthPx <= 140);
-  assert.ok((WARDEN_STRIKE_ART_CALIBRATION.incision.delayMs ?? 0) >= 25);
+  const burstLife = WARDEN_STRIKE_ART_CALIBRATION.contactBurst.popInMs
+    + WARDEN_STRIKE_ART_CALIBRATION.contactBurst.holdMs
+    + WARDEN_STRIKE_ART_CALIBRATION.contactBurst.fadeMs;
+  assert.ok(burstLife >= 200);
+  assert.ok(burstLife <= 320);
+  assert.equal(
+    WARDEN_STRIKE_ART_CALIBRATION.incision.logicalLengthPx,
+    WARDEN_STRIKE_ART_CALIBRATION.contactBurst.logicalWidthPx,
+  );
+  assert.equal(WARDEN_STRIKE_ART_CALIBRATION.incision.offsetX, 0);
+  assert.equal(WARDEN_STRIKE_ART_CALIBRATION.incision.offsetY, 0);
+  assert.ok((WARDEN_STRIKE_ART_CALIBRATION.incision.delayMs ?? 0) >= 30);
+  assert.ok((WARDEN_STRIKE_ART_CALIBRATION.incision.delayMs ?? 0) <= 45);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.fractureCrack.logicalWidthPx >= 75);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.fractureCrack.delayMs >= 50);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.maxLogicalWidthPx <= 300);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.minLogicalWidthPx >= 220);
   assert.equal(WARDEN_STRIKE_WRAPPER_MOTION_MS.holdMs, 500);
+  assert.equal(WARDEN_STRIKE_TIMELINE_MS.hitStop, 70);
   const motionTotal = WARDEN_STRIKE_WRAPPER_MOTION_MS.homeHoldMs
     + WARDEN_STRIKE_WRAPPER_MOTION_MS.outMs
     + WARDEN_STRIKE_WRAPPER_MOTION_MS.holdMs
     + WARDEN_STRIKE_WRAPPER_MOTION_MS.returnMs;
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.doneAt >= motionTotal);
-  assert.equal(WARDEN_STRIKE_TIMELINE_MS.holdEnd - WARDEN_STRIKE_TIMELINE_MS.contactAt, 500);
-  assert.ok((WARDEN_STRIKE_ART_CALIBRATION.incision.delayMs ?? 0) >= 35);
+  assert.equal(
+    WARDEN_STRIKE_TIMELINE_MS.holdEnd - WARDEN_STRIKE_TIMELINE_MS.contactAt,
+    WARDEN_STRIKE_WRAPPER_MOTION_MS.holdMs,
+  );
+  assert.ok((WARDEN_STRIKE_ART_CALIBRATION.incision.delayMs ?? 0) >= 30);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.fractureCrack.delayMs >= 80);
-  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.incision.lifetimeMs >= 180);
+  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.incision.lifetimeMs >= 280);
+  assert.ok(WARDEN_STRIKE_ART_CALIBRATION.incision.lifetimeMs <= 400);
   assert.ok(WARDEN_STRIKE_ART_CALIBRATION.fractureCrack.lifetimeMs >= 240);
+  assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.swingTrail, false);
+  assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.authoredSwingSmear, false);
   assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.proceduralSwingComparison, false);
   assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.contactBoundsDebug, false);
   assert.equal(WARDEN_STRIKE_VFX_LAYER_TOGGLES.primedIdleAuraForceShow, false);
-  assert.ok(WARDEN_STRIKE_TIMELINE_MS.enemyRecoilPx >= 21);
+  assert.ok(WARDEN_STRIKE_TIMELINE_MS.enemyRecoilPx >= 20);
+  assert.ok(WARDEN_STRIKE_TIMELINE_MS.enemyRecoilPx <= 24);
   assert.ok(
     shouldSuppressWardenPrimedIdleAura === undefined
       || typeof shouldSuppressWardenPrimedIdleAura === 'function',
@@ -588,7 +607,7 @@ async function main(): Promise<void> {
       { outcome: 'HIT' as const, defenseMaterial: 'KINETIC_ARMOR' as const, damage: 8 },
       { outcome: 'HIT' as const, defenseMaterial: 'OCCULT_WARD' as const, damage: 0 },
       { outcome: 'MISS' as const, defenseMaterial: 'NONE' as const, damage: 0 },
-      { outcome: 'HIT' as const, defenseMaterial: 'NONE' as const, damage: 19, resultSource: 'warden-with-riposte' },
+      { outcome: 'HIT' as const, defenseMaterial: 'NONE' as const, damage: 28, resultSource: 'warden-with-riposte' },
     ]) {
       cancel();
       const playerActionId = `pa-same-target-${outcome.outcome}-${outcome.defenseMaterial}-${outcome.damage}`;
@@ -796,12 +815,22 @@ async function main(): Promise<void> {
       true,
       'Critical Warden result publishes CRITICAL on its own target',
     );
+    assert.equal(
+      mayPublishCriticalCallout({
+        resultTargetId: 'scuttler',
+        resultCritical: true,
+        calloutTargetId: 'scuttler',
+        resultDamage: 0,
+      }),
+      false,
+      'Critical roll with zero damage must not publish CRITICAL',
+    );
 
     assert.ok(WARDEN_STRIKE_REPLAY_FIXTURES.armorBreakNoDamage);
     assert.equal(WARDEN_STRIKE_REPLAY_FIXTURES.armorBreakNoDamage.damage, 0);
     assert.ok(WARDEN_STRIKE_REPLAY_FIXTURES.wardResponseWithDamage.damage > 0);
     assert.ok(WARDEN_STRIKE_REPLAY_FIXTURES.recoilIsolation);
-    assert.equal(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.peakOpacity, 0.80);
+    assert.equal(WARDEN_STRIKE_ART_CALIBRATION.swingSmear.peakOpacity, 0.70);
   }
 
   console.log('[warden strike] presentation tests passed (Step 2K acceptance)');
