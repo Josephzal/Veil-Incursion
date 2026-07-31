@@ -22,6 +22,7 @@ import {
   FRONTLINE_ROW_HEIGHT,
   FRONTLINE_ROW_OVERLAP_MARGIN,
   FRONTLINE_SLOTS,
+  FRONTLINE_TARGET_OVERLAY_Z_INDEX,
   type ArenaGridVariant,
   type ArenaLayoutMode,
   resolveEnemyHitbox,
@@ -41,20 +42,22 @@ import {
 
 const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0.35)';
 
-interface BacklineHitOverlayProps {
+interface SlotHitOverlayProps {
   slot: CombatGridSlotId;
   unit: CombatGridUnitView;
   layoutMode: ArenaLayoutMode;
   onUnitPress: (unitId: string) => void;
+  overlayZIndex: number;
 }
 
-/** Transparent tap layer — backline hits win over overlapping frontline sprites. */
-function BacklineHitOverlay({
+/** Transparent tap layer — lives above slot art so overlapping sprites cannot steal presses. */
+function SlotHitOverlay({
   slot,
   unit,
   layoutMode,
   onUnitPress,
-}: BacklineHitOverlayProps): React.JSX.Element {
+  overlayZIndex,
+}: SlotHitOverlayProps): React.JSX.Element {
   const presentation = resolveSlotPresentation(slot, layoutMode, 'staggered');
   const anchor = staggeredSlotStyle(slot, layoutMode);
   const hitbox = resolveEnemyHitbox(slot, presentation.unitScale, unit.isAlpha === true);
@@ -66,24 +69,24 @@ function BacklineHitOverlay({
   return (
     <View
       style={[
-        styles.backlineHitFrame,
+        styles.slotHitFrame,
         {
           bottom: anchor.bottom,
           width: `${STAGGERED_SLOT_WIDTH_PCT}%`,
-          zIndex: BACKLINE_TARGET_OVERLAY_Z_INDEX,
+          zIndex: overlayZIndex,
           ...(anchor.left != null ? { left: anchor.left } : { right: anchor.right }),
         },
       ]}
       pointerEvents="box-none"
     >
-      <View style={[styles.backlineHitInner, scaled]} pointerEvents="box-none">
+      <View style={[styles.slotHitInner, scaled]} pointerEvents="box-none">
         <HapticPressable
           sfx={false}
           onPress={() => onUnitPress(unit.unitId)}
           style={[
-            styles.backlineHitPressable,
+            styles.slotHitPressable,
             hitbox,
-            ENEMY_HITBOX_DEBUG ? styles.backlineHitDebug : null,
+            ENEMY_HITBOX_DEBUG ? styles.slotHitDebug : null,
           ]}
         />
       </View>
@@ -108,6 +111,10 @@ interface CombatEnemyGridProps {
   layoutMode?: ArenaLayoutMode;
   /** Arena grid geometry — flex rows or absolute staggered 2.5D. */
   arenaGridVariant?: ArenaGridVariant;
+  /** Class damage blood-shard burst on enemy center. */
+  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
+  bloodMistScale?: number;
 }
 
 interface BattlefieldSlotProps {
@@ -125,6 +132,8 @@ interface BattlefieldSlotProps {
   onUnitDissolveComplete?: (unitId: string) => void;
   wrapperStyle?: ViewStyle;
   arenaGridVariant?: ArenaGridVariant;
+  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  bloodMistScale?: number;
 }
 
 function BattlefieldSlot({
@@ -142,6 +151,8 @@ function BattlefieldSlot({
   onUnitDissolveComplete,
   wrapperStyle,
   arenaGridVariant = 'flex',
+  bloodBurstVariant = null,
+  bloodMistScale = 1,
 }: BattlefieldSlotProps): React.JSX.Element {
   const presentation = resolveSlotPresentation(slot, layoutMode, arenaGridVariant);
   const [wardenPlane, setWardenPlane] = useState<'none' | 'target' | 'nonTarget'>('none');
@@ -214,6 +225,8 @@ function BattlefieldSlot({
             layoutUnitScale={presentation.unitScale}
             meleeDashDelta={meleeDashDelta}
             skipDissolveEffect
+            bloodBurstVariant={bloodBurstVariant}
+            bloodMistScale={bloodMistScale}
             onPress={() => onUnitPress(unit.unitId)}
           />
         </CombatEnemyDissolveEffect>
@@ -228,6 +241,8 @@ interface EnemyUnitStackProps {
   abilityArmed?: boolean;
   accentColor: string;
   mutedColor: string;
+  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  bloodMistScale?: number;
   onUnitPress?: (unitId: string) => void;
   onUnitDissolveComplete?: (unitId: string) => void;
 }
@@ -239,6 +254,8 @@ function EnemyUnitStack({
   abilityArmed = false,
   accentColor,
   mutedColor,
+  bloodBurstVariant = null,
+  bloodMistScale = 1,
   onUnitPress,
   onUnitDissolveComplete,
 }: EnemyUnitStackProps): React.JSX.Element {
@@ -255,6 +272,8 @@ function EnemyUnitStack({
         accentColor={accentColor}
         mutedColor={mutedColor}
         variant="compact"
+        bloodBurstVariant={bloodBurstVariant}
+        bloodMistScale={bloodMistScale}
         onPress={onUnitPress ? () => onUnitPress(unit.unitId) : undefined}
         onDissolveComplete={onUnitDissolveComplete ? handleDissolveComplete : undefined}
       />
@@ -273,6 +292,8 @@ export default function CombatEnemyGrid({
   variant = 'arena',
   layoutMode = 'group',
   arenaGridVariant = 'flex',
+  bloodBurstVariant = null,
+  bloodMistScale = 1,
 }: CombatEnemyGridProps): React.JSX.Element {
   const isArena = variant === 'arena';
   const [arenaSize, setArenaSize] = useState({ width: 0, height: 0 });
@@ -306,6 +327,8 @@ export default function CombatEnemyGrid({
           abilityArmed={abilityArmed}
           accentColor={accentColor}
           mutedColor={mutedColor}
+          bloodBurstVariant={bloodBurstVariant}
+          bloodMistScale={bloodMistScale}
           onUnitPress={onUnitPress}
           onUnitDissolveComplete={onUnitDissolveComplete}
         />
@@ -330,6 +353,8 @@ export default function CombatEnemyGrid({
       onUnitPress,
       onUnitDissolveComplete,
       arenaGridVariant,
+      bloodBurstVariant,
+      bloodMistScale,
     };
 
     const arenaVerticalShiftStyle: ViewStyle | undefined =
@@ -368,17 +393,46 @@ export default function CombatEnemyGrid({
               />
             );
           })}
+          {targetingActive && layoutMode === 'solo' && soloUnit?.isTargetable
+            ? (
+              <SlotHitOverlay
+                key={`solo-target-${soloUnit.unitId}`}
+                slot={SOLO_ARENA_SLOT}
+                unit={soloUnit}
+                layoutMode={layoutMode}
+                onUnitPress={onUnitPress}
+                overlayZIndex={FRONTLINE_TARGET_OVERLAY_Z_INDEX}
+              />
+            )
+            : null}
+          {targetingActive && layoutMode === 'group'
+            ? FRONTLINE_SLOTS.map((slot) => {
+              const unit = unitForSlot(slot);
+              if (!unit?.isTargetable) return null;
+              return (
+                <SlotHitOverlay
+                  key={`fl-target-${slot}-${unit.unitId}`}
+                  slot={slot}
+                  unit={unit}
+                  layoutMode={layoutMode}
+                  onUnitPress={onUnitPress}
+                  overlayZIndex={FRONTLINE_TARGET_OVERLAY_Z_INDEX}
+                />
+              );
+            })
+            : null}
           {targetingActive && layoutMode === 'group'
             ? BACKLINE_SLOTS.map((slot) => {
               const unit = unitForSlot(slot);
               if (!unit?.isTargetable) return null;
               return (
-                <BacklineHitOverlay
+                <SlotHitOverlay
                   key={`bl-target-${slot}-${unit.unitId}`}
                   slot={slot}
                   unit={unit}
                   layoutMode={layoutMode}
                   onUnitPress={onUnitPress}
+                  overlayZIndex={BACKLINE_TARGET_OVERLAY_Z_INDEX}
                 />
               );
             })
@@ -529,23 +583,23 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 64,
   },
-  backlineHitFrame: {
+  slotHitFrame: {
     position: 'absolute',
     aspectRatio: ENEMY_WRAPPER_ASPECT_RATIO,
     justifyContent: 'flex-end',
     overflow: 'visible',
   },
-  backlineHitInner: {
+  slotHitInner: {
     width: '100%',
     height: '100%',
     position: 'relative',
     overflow: 'visible',
   },
-  backlineHitPressable: {
+  slotHitPressable: {
     position: 'absolute',
     zIndex: 10,
   },
-  backlineHitDebug: {
+  slotHitDebug: {
     backgroundColor: HITBOX_DEBUG_FILL,
   },
 });

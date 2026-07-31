@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -7,56 +7,97 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { isWardenStrikePresentationActive, WARDEN_STRIKE_VFX_LAYER_TOGGLES } from '../../data/wardenStrikePresentation';
+import {
+  subscribeWardenStrikePresentation,
+  WARDEN_STRIKE_VFX_LAYER_TOGGLES,
+  isWardenStrikePresentationActive,
+} from '../../data/wardenStrikePresentation';
+import { enemySpriteStyles } from './CombatEnemyIntentShimmer';
+
+/** Low-opacity red silhouette wash — peaks with enemy contact VFX. */
+const RED_TINT = '#b91c1c';
+const RED_PEAK = 0.28;
+const RED_FADE_IN_MS = 36;
+const RED_FADE_OUT_MS = 140;
+
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 interface CombatEnemyHitEffectProps {
   hitFlashSeq?: number;
-  /** Kept for API compatibility — full portrait tint removed (Phase 3M). */
-  portraitSource?: unknown;
+  /** When set, Warden contact-timed wash only fires for this target. */
+  unitId?: string;
+  portraitSource?: ImageSourcePropType | unknown;
+  attackPortraitSource?: ImageSourcePropType | unknown;
   children: React.ReactNode;
 }
 
 /**
- * Localized contact spark on damage — no opaque red full-character silhouette.
+ * Red damage wash clipped to the enemy portrait alpha (tinted sprite duplicate).
+ * Non-Warden: fires with hitFlashSeq. Warden: fires on contact (with burst/incision).
  */
 export default function CombatEnemyHitEffect({
   hitFlashSeq = 0,
+  unitId,
+  portraitSource,
+  attackPortraitSource,
   children,
 }: CombatEnemyHitEffectProps): React.JSX.Element {
   const lastSeqRef = useRef(0);
-  const flashOpacity = useSharedValue(0);
-  const flashScale = useSharedValue(0.6);
+  const redOpacity = useSharedValue(0);
+
+  const flashRed = () => {
+    redOpacity.value = 0;
+    redOpacity.value = withSequence(
+      withTiming(RED_PEAK, { duration: RED_FADE_IN_MS, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: RED_FADE_OUT_MS, easing: Easing.in(Easing.quad) }),
+    );
+  };
 
   useEffect(() => {
     if (hitFlashSeq <= 0 || hitFlashSeq === lastSeqRef.current) return;
     lastSeqRef.current = hitFlashSeq;
-    // Warden's Strike owns its target-local steel contact — skip generic spark.
     if (isWardenStrikePresentationActive()) return;
     if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.hitFlashSeqVisuals) return;
     if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.enemyHitEffect) return;
+    flashRed();
+  }, [hitFlashSeq, redOpacity]);
 
-    flashOpacity.value = withSequence(
-      withTiming(0.9, { duration: 40, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 140, easing: Easing.in(Easing.quad) }),
-    );
-    flashScale.value = withSequence(
-      withTiming(1.15, { duration: 50, easing: Easing.out(Easing.back(1.2)) }),
-      withTiming(0.8, { duration: 130 }),
-    );
-  }, [flashOpacity, flashScale, hitFlashSeq]);
+  useEffect(() => subscribeWardenStrikePresentation((event) => {
+    if (event.phase !== 'contact') return;
+    if (unitId && event.result.targetId !== unitId) return;
+    if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.enemyHitEffect) return;
+    if (event.result.outcome === 'EVADE' || event.result.outcome === 'MISS') return;
+    if (event.result.damage <= 0) return;
+    flashRed();
+  }), [redOpacity, unitId]);
 
-  const sparkStyle = useAnimatedStyle(() => ({
-    opacity: flashOpacity.value,
-    transform: [{ scale: flashScale.value }],
+  const redStyle = useAnimatedStyle(() => ({
+    opacity: redOpacity.value,
   }));
+
+  const idleSrc = portraitSource as ImageSourcePropType | undefined;
+  const attackSrc = (attackPortraitSource as ImageSourcePropType | undefined) ?? idleSrc;
+
+  // Hits land on the idle pose; one tinted duplicate keeps the wash silhouette-only.
+  const washSrc = idleSrc ?? attackSrc;
 
   return (
     <View style={styles.root}>
       {children}
-      <Animated.View style={[styles.sparkHost, sparkStyle]} pointerEvents="none">
-        <View style={styles.spark} />
-        <View style={styles.sparkEdge} />
-      </Animated.View>
+      {washSrc ? (
+        <View style={styles.silhouetteHost} pointerEvents="none">
+          <AnimatedImage
+            source={washSrc}
+            resizeMode="contain"
+            tintColor={RED_TINT}
+            style={[
+              enemySpriteStyles.enemySprite,
+              enemySpriteStyles.enemySpriteLayer,
+              redStyle,
+            ]}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -69,29 +110,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'visible',
   },
-  sparkHost: {
-    position: 'absolute',
-    bottom: '38%',
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
-  },
-  spark: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: 'rgba(226, 232, 240, 0.85)',
-    backgroundColor: 'transparent',
-  },
-  sparkEdge: {
-    position: 'absolute',
-    width: 18,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: 'rgba(203, 213, 225, 0.7)',
-    transform: [{ rotate: '-28deg' }],
+  silhouetteHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 6,
   },
 });

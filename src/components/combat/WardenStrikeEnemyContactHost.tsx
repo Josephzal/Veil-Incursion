@@ -1,8 +1,7 @@
 /**
  * Target-local Warden contact host.
- * Registers the approach contact anchor and owns delayed Fracture
- * lifecycles that must survive player return and idle restoration.
- * Burst + incision render tip-local with the player contact FX.
+ * Registers the approach contact anchor at portrait center and owns
+ * burst / incision / Fracture VFX on successful contact.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -67,7 +66,6 @@ export default function WardenStrikeEnemyContactHost({
         clearTimeout(clearTimerRef.current);
         clearTimerRef.current = null;
       }
-      // New action for this target — clear prior delayed FX only at the next strike start.
       setContactResult(null);
       return;
     }
@@ -83,7 +81,6 @@ export default function WardenStrikeEnemyContactHost({
     setContactResult(event.result);
 
     if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
-    // Independent of movement / idle — clear only after delayed VFX lifetimes.
     clearTimerRef.current = setTimeout(() => {
       setContactResult(null);
       clearTimerRef.current = null;
@@ -98,7 +95,7 @@ export default function WardenStrikeEnemyContactHost({
     publishAnchor();
   }, [publishAnchor]);
 
-  const showDelayed = contactResult != null
+  const showContact = contactResult != null
     && !WARDEN_STRIKE_VFX_LAYER_TOGGLES.smearIsolationMode;
 
   return (
@@ -109,7 +106,7 @@ export default function WardenStrikeEnemyContactHost({
       style={styles.host}
       pointerEvents="none"
     >
-      {showDelayed ? (
+      {showContact ? (
         <WardenStrikeContactFx
           active
           outcome={contactResult.outcome}
@@ -119,8 +116,8 @@ export default function WardenStrikeEnemyContactHost({
           facingY={AEGIS_LONGSWORD_POSE_REGISTRATION.attack.targetFacing.y}
           reducedMotion={reducedMotion}
           reducedFlash={reducedFlash}
-          enableBurst={false}
-          enableIncision={false}
+          enableBurst
+          enableIncision
           enableFracture
         />
       ) : null}
@@ -129,9 +126,10 @@ export default function WardenStrikeEnemyContactHost({
 }
 
 const styles = StyleSheet.create({
+  /** Portrait center — impact burst + incision origin. */
   host: {
     position: 'absolute',
-    bottom: '38%',
+    top: '50%',
     left: '50%',
     width: 1,
     height: 1,

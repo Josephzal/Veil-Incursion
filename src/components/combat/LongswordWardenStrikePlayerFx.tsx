@@ -1,27 +1,20 @@
 /**
- * Player-local Longsword Warden smear + tip burst.
- * Delayed Fracture lives on the enemy contact host — not cleared here.
- * Contact burst + incision share the tip plane (same place / size).
+ * Player-local Longsword Warden smear / audio.
+ * Contact burst + incision + Fracture live on the enemy portrait center host.
  */
 
 import {
-  WARDEN_STRIKE_ART_CALIBRATION,
   WARDEN_STRIKE_TIMELINE_MS,
   WARDEN_STRIKE_VFX_LAYER_TOGGLES,
-  computeSwingSmearPlacement,
   replayWardenStrikeFixture,
   subscribeWardenStrikePresentation,
   type WardenStrikePresentationPhase,
-  type WardenStrikeResolvedResult,
 } from '../../data/wardenStrikePresentation';
-import WardenStrikeContactFx from './WardenStrikeContactFx';
 import { playCombatPresentationCue, unlockCombatPresentationAudio } from '../../utils/combatPresentationAudio';
 import {
-  AEGIS_LONGSWORD_POSE_REGISTRATION,
   PLAYER_POSE_ALIGN_DEBUG,
   buildLongswordSweptBladeSamples,
   computeAnatomyRegisteredLayouts,
-  mapRegisteredSourcePointToActorBox,
   setPoseAlignDebugForcedPose,
   type PoseFootprintBox,
 } from '../../utils/combatPoseRegistration';
@@ -42,10 +35,8 @@ export default function LongswordWardenStrikePlayerFx({
   const [trailActive, setTrailActive] = useState(false);
   const [reducedFlash, setReducedFlash] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [tipBurst, setTipBurst] = useState<WardenStrikeResolvedResult | null>(null);
   const smearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const smearClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tipBurstClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fixtureLabel, setFixtureLabel] = useState<string | null>(null);
 
   const layouts = useMemo(
@@ -67,12 +58,9 @@ export default function LongswordWardenStrikePlayerFx({
     if (event.phase === 'anticipation') {
       if (smearTimerRef.current) clearTimeout(smearTimerRef.current);
       if (smearClearRef.current) clearTimeout(smearClearRef.current);
-      if (tipBurstClearRef.current) clearTimeout(tipBurstClearRef.current);
       smearTimerRef.current = null;
       smearClearRef.current = null;
-      tipBurstClearRef.current = null;
       setTrailActive(false);
-      setTipBurst(null);
       setPoseAlignDebugForcedPose('attack');
       const delay = scalePresentationMs(WARDEN_STRIKE_TIMELINE_MS.smearStart, motionSpeed);
       smearTimerRef.current = setTimeout(() => {
@@ -104,26 +92,6 @@ export default function LongswordWardenStrikePlayerFx({
       } else {
         setPoseAlignDebugForcedPose('attack');
       }
-      if (
-        !WARDEN_STRIKE_VFX_LAYER_TOGGLES.smearIsolationMode
-        && WARDEN_STRIKE_VFX_LAYER_TOGGLES.contactFx
-        && (event.result.outcome === 'HIT'
-          || event.result.defenseMaterial === 'KINETIC_ARMOR'
-          || event.result.defenseMaterial === 'OCCULT_WARD')
-      ) {
-        setTipBurst(event.result);
-        if (tipBurstClearRef.current) clearTimeout(tipBurstClearRef.current);
-        const burst = WARDEN_STRIKE_ART_CALIBRATION.contactBurst;
-        const inc = WARDEN_STRIKE_ART_CALIBRATION.incision;
-        const burstLife = burst.popInMs + burst.holdMs + burst.fadeMs + 24;
-        const incisionEnd = (inc.delayMs ?? 0) + inc.lifetimeMs + 24;
-        // Hold tip plane through incision — completes during contact hold while tip is still planted.
-        const tipLife = scalePresentationMs(Math.max(burstLife, incisionEnd), motionSpeed);
-        tipBurstClearRef.current = setTimeout(() => {
-          setTipBurst(null);
-          tipBurstClearRef.current = null;
-        }, tipLife);
-      }
     } else if (event.phase === 'release' || event.phase === 'hold' || event.phase === 'recovery') {
       if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.recoilIsolationMode) {
         setPoseAlignDebugForcedPose('attack');
@@ -140,7 +108,6 @@ export default function LongswordWardenStrikePlayerFx({
   useEffect(() => () => {
     if (smearTimerRef.current) clearTimeout(smearTimerRef.current);
     if (smearClearRef.current) clearTimeout(smearClearRef.current);
-    if (tipBurstClearRef.current) clearTimeout(tipBurstClearRef.current);
     setPoseAlignDebugForcedPose(null);
   }, []);
 
@@ -149,86 +116,52 @@ export default function LongswordWardenStrikePlayerFx({
     return buildLongswordSweptBladeSamples(layouts.idle, layouts.attack, 4);
   }, [layouts]);
 
-  const tipPoint = useMemo(() => {
-    if (!layouts) return null;
-    return mapRegisteredSourcePointToActorBox(
-      layouts.attack,
-      AEGIS_LONGSWORD_POSE_REGISTRATION.attack.weaponTip,
-    );
-  }, [layouts]);
-
   if (box.width <= 0 || box.height <= 0) return null;
 
   const showTrail = trailActive && WARDEN_STRIKE_VFX_LAYER_TOGGLES.swingTrail;
 
   return (
-    <>
-      <View style={[StyleSheet.absoluteFill, styles.smearPlane]} pointerEvents="box-none">
-        {fixtureLabel ? (
-          <Text style={styles.fixtureBanner}>{`REPLAY WS ${fixtureLabel.toUpperCase()}`}</Text>
-        ) : null}
-        {showTrail ? (
-          <LongswordSwingTrail
-            samples={bladeSamples}
-            active={showTrail}
-            reducedFlash={reducedFlash}
-            reducedMotion={reducedMotion}
-            actorBoxWidth={box.width}
-          />
-        ) : null}
-        {PLAYER_POSE_ALIGN_DEBUG ? (
-          <View style={styles.fixtureRow} pointerEvents="box-none">
-            {([
-              ['cleanHit', 'HIT'],
-              ['fractureHit', 'FX'],
-              ['miss', 'MISS'],
-              ['farTarget', 'FAR'],
-              ['smearIsolation', 'SMR'],
-            ] as const).map(([id, label]) => (
-              <Pressable
-                key={id}
-                style={styles.fixtureBtn}
-                onPress={() => {
-                  replayWardenStrikeFixture(id);
-                }}
-              >
-                <Text style={styles.fixtureBtnText}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-      </View>
-      {tipBurst && tipPoint ? (
-        <View
-          style={[styles.tipBurstPlane, { left: tipPoint.x, top: tipPoint.y }]}
-          pointerEvents="none"
-        >
-          <WardenStrikeContactFx
-            active
-            outcome={tipBurst.outcome}
-            defenseMaterial={tipBurst.defenseMaterial}
-            fractureApplied={false}
-            facingX={AEGIS_LONGSWORD_POSE_REGISTRATION.attack.targetFacing.x}
-            facingY={AEGIS_LONGSWORD_POSE_REGISTRATION.attack.targetFacing.y}
-            reducedMotion={reducedMotion}
-            reducedFlash={reducedFlash}
-            enableBurst
-            enableIncision
-            enableFracture={false}
-          />
+    <View style={[StyleSheet.absoluteFill, styles.smearPlane]} pointerEvents="box-none">
+      {fixtureLabel ? (
+        <Text style={styles.fixtureBanner}>{`REPLAY WS ${fixtureLabel.toUpperCase()}`}</Text>
+      ) : null}
+      {showTrail ? (
+        <LongswordSwingTrail
+          samples={bladeSamples}
+          active={showTrail}
+          reducedFlash={reducedFlash}
+          reducedMotion={reducedMotion}
+          actorBoxWidth={box.width}
+        />
+      ) : null}
+      {PLAYER_POSE_ALIGN_DEBUG ? (
+        <View style={styles.fixtureRow} pointerEvents="box-none">
+          {([
+            ['cleanHit', 'HIT'],
+            ['fractureHit', 'FX'],
+            ['miss', 'MISS'],
+            ['farTarget', 'FAR'],
+            ['smearIsolation', 'SMR'],
+          ] as const).map(([id, label]) => (
+            <Pressable
+              key={id}
+              style={styles.fixtureBtn}
+              onPress={() => {
+                replayWardenStrikeFixture(id);
+              }}
+            >
+              <Text style={styles.fixtureBtnText}>{label}</Text>
+            </Pressable>
+          ))}
         </View>
       ) : null}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   smearPlane: {
     zIndex: 1,
-  },
-  tipBurstPlane: {
-    position: 'absolute',
-    zIndex: 6,
   },
   fixtureBanner: {
     position: 'absolute',
@@ -257,13 +190,13 @@ const styles = StyleSheet.create({
   fixtureBtn: {
     paddingHorizontal: 4,
     paddingVertical: 2,
-    backgroundColor: 'rgba(0, 30, 24, 0.9)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 200, 150, 0.55)',
+    borderColor: 'rgba(159,245,208,0.45)',
   },
   fixtureBtnText: {
-    color: '#7dffc8',
-    fontSize: 8,
+    color: '#9ff5d0',
+    fontSize: 9,
     fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
     fontWeight: '700',
   },

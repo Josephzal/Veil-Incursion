@@ -106,6 +106,8 @@ interface CombatPlayerAttackSpriteProps {
   weaponFamilyId?: WeaponFamilyId | null;
   /** Magenta primed glow — shares idle footprint. */
   primedGlowOpacity: SharedValue<number>;
+  /** Red damage wash opacity — tinted silhouette, not a box fill. */
+  damageRedOpacity?: SharedValue<number>;
 }
 
 /** Idle/attack crossfade with a locked art box so portrait swaps never resize the frame. */
@@ -116,6 +118,7 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     operativeClass = 'AEGIS',
     weaponFamilyId = null,
     primedGlowOpacity,
+    damageRedOpacity,
   }, ref) {
     const idleOpacity = useSharedValue(1);
     const attackOpacity = useSharedValue(0);
@@ -509,6 +512,18 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
       opacity: primedAuraGate.value * primedGlowOpacity.value * 0.38,
     }));
 
+    const hasDistinctAttackArt = idleSource !== attackSource;
+
+    const damageRedIdleStyle = useAnimatedStyle(() => ({
+      opacity: (damageRedOpacity?.value ?? 0) * idleOpacity.value,
+    }));
+
+    const damageRedAttackStyle = useAnimatedStyle(() => ({
+      opacity: (damageRedOpacity?.value ?? 0) * (
+        hasDistinctAttackArt ? attackOpacity.value : idleOpacity.value
+      ),
+    }));
+
     const presentationStyle = useAnimatedStyle(() => ({
       transform: [
         { translateX: approachX.value + anticipateX.value },
@@ -517,8 +532,6 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
         { rotate: `${anticipateRot.value}deg` },
       ],
     }));
-
-    const hasDistinctAttackArt = idleSource !== attackSource;
     const idleLayerStyle = computeFootprintIdleLayout(footprintBox, operativeClass, weaponFamilyId);
     const attackLayerStyle = computeFootprintAttackLayout(footprintBox, operativeClass, weaponFamilyId);
     const showAlignOverlay = PLAYER_POSE_ALIGN_DEBUG
@@ -584,6 +597,25 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
                 style={[attackLayerStyle, attackStyle, styles.poseAttackZ]}
               />
             ) : null}
+            {/* Red damage wash — tinted silhouette only (follows pose alpha). */}
+            {damageRedOpacity ? (
+              <>
+                <Animated.Image
+                  source={idleSource}
+                  resizeMode="contain"
+                  tintColor="#b91c1c"
+                  style={[idleLayerStyle, damageRedIdleStyle, styles.damageRedZ]}
+                />
+                {hasDistinctAttackArt ? (
+                  <Animated.Image
+                    source={attackSource}
+                    resizeMode="contain"
+                    tintColor="#b91c1c"
+                    style={[attackLayerStyle, damageRedAttackStyle, styles.damageRedZ]}
+                  />
+                ) : null}
+              </>
+            ) : null}
           </Animated.View>
         </View>
         {showAlignOverlay && anatomyLayouts ? (
@@ -633,5 +665,8 @@ const styles = StyleSheet.create({
   },
   poseAttackZ: {
     zIndex: 4,
+  },
+  damageRedZ: {
+    zIndex: 5,
   },
 });

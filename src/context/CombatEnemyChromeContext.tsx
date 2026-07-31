@@ -47,6 +47,8 @@ export interface CombatEnemyChromeUIState {
   eviscerateTargetUnitId: string | null;
   sliceLines: SliceLineRender[];
   activeSliceIndex: number;
+  /** Increments when Aegis casts RUIN — drives arena eruption VFX. */
+  ruinVfxSeq: number;
 }
 
 export interface CombatEnemyChromeHandlers {
@@ -87,6 +89,7 @@ const IDLE_UI: CombatEnemyChromeUIState = {
   eviscerateTargetUnitId: null,
   sliceLines: [],
   activeSliceIndex: -1,
+  ruinVfxSeq: 0,
 };
 
 const noopParryTap = (_x: number, _y: number) => {};
@@ -146,6 +149,7 @@ function uiStateEqual(prev: CombatEnemyChromeUIState, next: CombatEnemyChromeUIS
     && prev.sliceVisible === next.sliceVisible
     && prev.eviscerateTargetUnitId === next.eviscerateTargetUnitId
     && prev.activeSliceIndex === next.activeSliceIndex
+    && prev.ruinVfxSeq === next.ruinVfxSeq
     && sliceLinesEqual(prev.sliceLines, next.sliceLines)
   );
 }
@@ -257,6 +261,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     eviscerateTargetUnitId,
     sliceLines,
     activeSliceIndex,
+    ruinVfxSeq,
     slicePanHandlers,
   } = snapshot;
 
@@ -297,6 +302,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
       eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
+      ruinVfxSeq,
     });
   }, [
     ctx,
@@ -322,6 +328,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     eviscerateTargetUnitId,
     sliceLines,
     activeSliceIndex,
+    ruinVfxSeq,
   ]);
 
   return null;

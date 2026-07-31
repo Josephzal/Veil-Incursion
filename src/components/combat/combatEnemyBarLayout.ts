@@ -23,6 +23,9 @@ export const ENEMY_HITBOX_DEBUG = false;
 /** Hit-test layer for backline — above frontline draw order without changing visuals. */
 export const BACKLINE_TARGET_OVERLAY_Z_INDEX = 30;
 
+/** Hit-test layer for frontline — above slot art so wide operative overlap cannot steal taps. */
+export const FRONTLINE_TARGET_OVERLAY_Z_INDEX = 28;
+
 function clampHitboxPercent(value: number): number {
   return Math.max(8, Math.min(92, Math.round(value)));
 }

@@ -39,9 +39,9 @@ interface WardenStrikeContactFxProps {
   facingY?: number;
   reducedMotion?: boolean;
   reducedFlash?: boolean;
-  /** Burst + defense marks (tip-local, short life). */
+  /** Burst + defense marks (enemy portrait center). */
   enableBurst?: boolean;
-  /** Delayed cut — tip-local with burst (same place / size). */
+  /** Delayed cut — enemy portrait center with burst. */
   enableIncision?: boolean;
   /** Conditional Fracture crack (enemy-local). */
   enableFracture?: boolean;

@@ -331,6 +331,10 @@ export interface CombatGridUnitSnapshot {
   immuneFloatLabel?: string;
   /** Increments when the operative deals HP damage to this unit (drives hit flash). */
   hitFlashSeq?: number;
+  /** Blood-burst pulses to fire for the latest hit flash (Cinder Sweep = 3). */
+  bloodBurstRepeats?: number;
+  /** Blood mist size multiplier for the latest hit (Black Door / Unmaker = 1.5). */
+  bloodMistScale?: number;
   /** Increments only on successful fracture breach — drives golden silhouette shatter VFX. */
   fractureShatterSeq?: number;
   /** Direct player hit class VFX — Aegis slice, Hex bullet, Envoy burst. */

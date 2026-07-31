@@ -14,13 +14,14 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
 const CANVAS_BACKDROP = '#000000';
-const DAMAGE_BLEND = 'rgba(220, 38, 38, 0.65)';
+const DAMAGE_FLASH_PEAK = 0.28;
+const DAMAGE_MS = 176;
 
-const DAMAGE_MS = 200;
 const ATTACK_MS = 320;
 const ERADICATION_MS = 800;
 const SHAKE_AMPLITUDE = 12;
@@ -79,7 +80,13 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       if (isEradicating.value > 0) return;
       shakeProgress.value = 1;
       shakePhase.value = 0;
-      if (withDamageFlash) damageFlash.value = 1;
+      if (withDamageFlash) {
+        damageFlash.value = 0;
+        damageFlash.value = withSequence(
+          withTiming(DAMAGE_FLASH_PEAK, { duration: 36, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: Math.max(80, duration - 36), easing: Easing.in(Easing.quad) }),
+        );
+      }
       shakeProgress.value = withTiming(0, {
         duration,
         easing: Easing.out(Easing.cubic),
@@ -88,12 +95,6 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
         duration,
         easing: Easing.linear,
       });
-      if (withDamageFlash) {
-        damageFlash.value = withTiming(0, {
-          duration,
-          easing: Easing.out(Easing.cubic),
-        });
-      }
       void amplitude;
     };
 
@@ -157,9 +158,11 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
                   style={styles.spriteImage}
                   resizeMode="contain"
                 />
-                <Animated.View
-                  pointerEvents="none"
-                  style={[styles.damageFlash, damageFlashStyle]}
+                <Animated.Image
+                  source={imageSource}
+                  resizeMode="contain"
+                  tintColor="#b91c1c"
+                  style={[styles.spriteImage, styles.damageFlashSilhouette, damageFlashStyle]}
                 />
               </Animated.View>
             ) : (
@@ -198,9 +201,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  damageFlash: {
+  damageFlashSilhouette: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: DAMAGE_BLEND,
   },
   placeholder: {
     alignItems: 'center',

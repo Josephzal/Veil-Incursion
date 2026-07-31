@@ -28,11 +28,14 @@ export default function PlayerEntity({
   style,
 }: PlayerEntityProps): React.JSX.Element {
   return (
-    <View style={[
-      styles.spriteContainer,
-      operativeClass === 'AEGIS' ? styles.spriteContainerMeleeWide : null,
-      style,
-    ]}>
+    <View
+      style={[
+        styles.spriteContainer,
+        operativeClass === 'AEGIS' ? styles.spriteContainerMeleeWide : null,
+        style,
+      ]}
+      pointerEvents="none"
+    >
       <CombatPlayerViewport
         ref={playerViewportRef}
         imageSource={resolvePlayerCombatIdlePortrait(operativeClass, weaponFamilyId)}

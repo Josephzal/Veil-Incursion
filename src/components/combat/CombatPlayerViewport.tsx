@@ -39,6 +39,10 @@ const AEGIS_LUNGE_SCALE = 0.84;
 const GLOW_PULSE_MS = 900;
 /** Ability-prime outline: brief flash then settle — no long purple wait. */
 const ABILITY_PRIME_OUTLINE_MS = 120;
+/** Low-opacity red wash timed with player-impact SFX. */
+const DAMAGE_RED_PEAK = 0.28;
+const DAMAGE_RED_IN_MS = 36;
+const DAMAGE_RED_OUT_MS = 140;
 
 export interface PlayerAttackLungeDelta {
   x: number;
@@ -91,10 +95,25 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const lungeY = useSharedValue(0);
     const attackScale = useSharedValue(1);
     const glowOpacity = useSharedValue(0);
+    const damageRedOpacity = useSharedValue(0);
     const attackSpriteRef = useRef<CombatPlayerAttackSpriteHandle>(null);
     const resolvedAttackSource = attackImageSource ?? imageSource;
 
     const primed = wardPrimed || abilityPrimed;
+
+    const flashDamageRed = () => {
+      damageRedOpacity.value = 0;
+      damageRedOpacity.value = withSequence(
+        withTiming(DAMAGE_RED_PEAK, {
+          duration: DAMAGE_RED_IN_MS,
+          easing: Easing.out(Easing.quad),
+        }),
+        withTiming(0, {
+          duration: DAMAGE_RED_OUT_MS,
+          easing: Easing.in(Easing.quad),
+        }),
+      );
+    };
 
     useEffect(() => {
       if (abilityPrimed && !wardPrimed) {
@@ -183,8 +202,9 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
 
     useImperativeHandle(ref, () => ({
       triggerDamageEffect: () => {
-        // Shake only — colored portrait tint overlays removed.
+        // Shake + red wash — timed with sfx.player.impact from hurtPlayer.
         runShake();
+        flashDamageRed();
       },
       triggerAttackLunge: (delta = DEFAULT_LUNGE) => {
         runTargetedLunge(delta);
@@ -210,7 +230,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         }
         glowOpacity.value = withTiming(0, { duration: GLOW_PULSE_MS });
       },
-    }), [attackScale, stationaryAttack, lungeX, lungeY, shakeX, glowOpacity, weaponFamilyId]);
+    }), [attackScale, stationaryAttack, lungeX, lungeY, shakeX, glowOpacity, damageRedOpacity, weaponFamilyId]);
 
     const frameAnimatedStyle = useAnimatedStyle(() => ({
       transform: [
@@ -223,8 +243,8 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     }));
 
     return (
-      <View style={[styles.root, style]}>
-        <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]}>
+      <View style={[styles.root, style]} pointerEvents="none">
+        <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]} pointerEvents="none">
           <View style={styles.spriteStack} pointerEvents="none">
             <CombatPlayerAttackSprite
               ref={attackSpriteRef}
@@ -233,6 +253,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
               operativeClass={operativeClass}
               weaponFamilyId={weaponFamilyId}
               primedGlowOpacity={glowOpacity}
+              damageRedOpacity={damageRedOpacity}
             />
           </View>
         </Animated.View>

@@ -4,6 +4,7 @@ import type { ImageSourcePropType } from 'react-native';
 import { ApparitionViewport, type ApparitionViewportRef } from './ApparitionViewport';
 import CombatOrbitalUltimate from './CombatOrbitalUltimate';
 import CombatEviscerateCinematic from './CombatEviscerateCinematic';
+import CombatRuinArenaVfx from './CombatRuinArenaVfx';
 import { CombatEnemyChromeLayer } from '../../context/CombatEnemyChromeContext';
 import { CombatArenaOverlayHost } from '../../context/CombatArenaOverlayContext';
 import { CombatArenaCombatUiHost } from '../../context/CombatArenaCombatUiContext';
@@ -102,6 +103,10 @@ export default function CombatLandscapeArena({
         pointerEvents="box-none"
       >
         <CombatOperativeAugmentRow icons={augmentIcons} />
+        {/*
+          Sprite is visual-only. Aegis melee-wide (esp. Paired Blades) overlaps FL_0;
+          pointerEvents none lets targeting reach the enemy grid underneath.
+        */}
         <View
           style={[
             styles.operativeSpriteSlot,
@@ -111,6 +116,7 @@ export default function CombatLandscapeArena({
               ...(Platform.OS === 'web' ? { transformOrigin: 'bottom center' } : null),
             } : null,
           ]}
+          pointerEvents="none"
         >
           <CombatGroundContact active />
           <PlayerEntity
@@ -125,11 +131,25 @@ export default function CombatLandscapeArena({
 
       <CombatOrbitalUltimate />
 
-      <View style={styles.enemyGridHost} pointerEvents="box-none">
+      {/*
+        Idle: enemy grid sits above the operative so FL_0 under a wide Paired Blades
+        sprite stays tappable (child zIndex cannot escape this host).
+        Warden approach: tuck the grid back under the moving player.
+      */}
+      <View
+        style={[
+          styles.enemyGridHost,
+          wardenApproachLift ? styles.enemyGridHostUnderWarden : styles.enemyGridHostSelectable,
+        ]}
+        pointerEvents="box-none"
+      >
         {enemySquadPanel}
       </View>
 
       <CombatEnemyChromeLayer />
+
+      {/* Above operative so RUIN eruption reads in front of the player sprite. */}
+      <CombatRuinArenaVfx />
 
       <View style={styles.combatUiHost} pointerEvents="box-none">
         <CombatArenaCombatUiHost />
@@ -190,9 +210,15 @@ const styles = StyleSheet.create({
   },
   enemyGridHost: {
     ...StyleSheet.absoluteFill,
+    overflow: 'visible',
+  },
+  enemyGridHostSelectable: {
+    zIndex: WARDEN_ARENA_PLANE.operative + 1,
+    elevation: WARDEN_ARENA_PLANE.operative + 1,
+  },
+  enemyGridHostUnderWarden: {
     zIndex: WARDEN_ARENA_PLANE.enemyGrid,
     elevation: WARDEN_ARENA_PLANE.enemyGrid,
-    overflow: 'visible',
   },
   /**
    * Combat-local UI plane — damage / response / enemy chrome above moving player,

@@ -13,6 +13,7 @@ import CombatFloatingStatusText from './CombatFloatingStatusText';
 import CombatWardenCalloutStack from './CombatWardenCalloutStack';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
+import CombatEnemyBloodBurst from './CombatEnemyBloodBurst';
 import CombatEnemyEvadeEffect from './CombatEnemyEvadeEffect';
 import WardenStrikeEnemyContactHost from './WardenStrikeEnemyContactHost';
 import CombatArenaUnitUiPortal from './CombatArenaUnitUiPortal';
@@ -55,6 +56,10 @@ interface CombatEnemyUnitProps {
   skipDissolveEffect?: boolean;
   /** Arena backline dash target offset toward operative sprite. */
   meleeDashDelta?: { x: number; y: number };
+  /** Class-specific blood shard burst on damage flash. */
+  bloodBurstVariant?: 'aegis' | 'hex' | null;
+  /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
+  bloodMistScale?: number;
   onPress?: () => void;
   onDissolveComplete?: () => void;
 }
@@ -67,6 +72,8 @@ export default function CombatEnemyUnit({
   layoutUnitScale = 1,
   skipDissolveEffect = false,
   meleeDashDelta,
+  bloodBurstVariant = null,
+  bloodMistScale = 1,
   onPress,
   onDissolveComplete,
 }: CombatEnemyUnitProps): React.JSX.Element | null {
@@ -193,7 +200,9 @@ export default function CombatEnemyUnit({
                     >
                       <CombatEnemyHitEffect
                         hitFlashSeq={unit.hitFlashSeq}
+                        unitId={unit.unitId}
                         portraitSource={unit.portraitSource}
+                        attackPortraitSource={unit.attackPortraitSource}
                       >
                         <CombatSilhouetteShatterEffect
                           shatterSeq={unit.fractureShatterSeq}
@@ -220,6 +229,13 @@ export default function CombatEnemyUnit({
                                     ? OTT.warningAmber
                                     : OTT.cyanSelect
                               }
+                            />
+                            <CombatEnemyBloodBurst
+                              hitFlashSeq={unit.hitFlashSeq}
+                              enabled={bloodBurstVariant != null}
+                              variant={bloodBurstVariant ?? 'aegis'}
+                              burstRepeats={unit.bloodBurstRepeats ?? 1}
+                              mistScale={Math.max(unit.bloodMistScale ?? 1, bloodMistScale)}
                             />
                           </View>
                         </CombatSilhouetteShatterEffect>
@@ -324,6 +340,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    overflow: 'visible',
   },
   alphaGlow: {
     shadowColor: ALPHA_CRIMSON,
@@ -421,11 +438,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     zIndex: 1,
+    overflow: 'visible',
   },
   portraitDefenseStack: {
     width: '100%',
     height: '100%',
     position: 'relative',
+    overflow: 'visible',
   },
   statusAnchor: {
     position: 'absolute',

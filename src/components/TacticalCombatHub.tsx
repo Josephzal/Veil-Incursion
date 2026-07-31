@@ -1011,6 +1011,7 @@ export default function TacticalCombatHub({
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
   const enemyActionStageRef = useRef<EnemyActionStage>(null);
   const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
+  const [ruinVfxSeq, setRuinVfxSeq] = useState(0);
   const [currentAmmo, setCurrentAmmo] = useState(DEFAULT_MAGAZINE_SIZE);
   const [hexShotState, setHexShotState] = useState<HexShotCombatState>(() => createInitialHexShotCombatState({
     hp: initialOperativeHp,
@@ -1096,6 +1097,10 @@ export default function TacticalCombatHub({
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
   const hitFlashSeqRef = useRef<Record<string, number>>({});
+  /** Blood-burst pulse count latched with the latest hitFlash (Hex Cinder Sweep = 3). */
+  const bloodBurstRepeatsRef = useRef<Record<string, number>>({});
+  /** Blood mist size latched with the latest hitFlash (Black Door / Unmaker = 1.5). */
+  const bloodMistScaleRef = useRef<Record<string, number>>({});
   /** Staged display HP — authoritative HP already applied; UI reveals at Warden contact. */
   const visualHpHoldRef = useRef<Record<string, number>>({});
   const wardenPendingRevealRef = useRef<{
@@ -2004,6 +2009,8 @@ export default function TacticalCombatHub({
           immuneFloatSeq: sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0,
           immuneFloatLabel: (sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0) > 0 ? 'IMMUNE' : undefined,
           hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
+          bloodBurstRepeats: bloodBurstRepeatsRef.current[unitId] ?? 1,
+          bloodMistScale: bloodMistScaleRef.current[unitId] ?? 1,
           fractureShatterSeq: fractureShatterSeqRef.current[unitId] ?? 0,
           classImpactFxSeq: classImpactFxRef.current[unitId]?.seq ?? 0,
           classImpactFxKind: classImpactFxRef.current[unitId]?.kind,
@@ -4300,7 +4307,9 @@ export default function TacticalCombatHub({
           log(`>> [${classGraftCrit.graftName.toUpperCase()}] — AP refund blocked (encounter cap reached).`);
         }
       }
-      const critChannel = options?.channel ?? 'KINETIC';
+      const critChannel = options?.abilityId === 'VEIL_PIERCER'
+        ? 'KINETIC'
+        : (options?.channel ?? 'KINETIC');
       if (e.unitId) {
         const deferCritForWarden = shouldUseWardenStrikePresentation({
           weaponFamilyId: resolvedWeapon?.familyId,
@@ -4543,29 +4552,27 @@ export default function TacticalCombatHub({
         publishSquadUi(squadRef.current);
       }
 
-      if (deathLifecycle.enterSlump) {
-        // Slump is not eradication — unit remains "alive" on a revive timer.
-        patchUnit(e.unitId, working);
-        return false;
-      }
+      // Thrall slump is not eradication — keep the unit mounted and fall through so
+      // Warden / weapon attack presentation still arms (early return skipped the strike).
+      if (!deathLifecycle.enterSlump) {
+        if (deathLifecycle.ashTokenSlot) {
+          sessionExtrasRef.current.ashTokens = {
+            ...sessionExtrasRef.current.ashTokens,
+            [deathLifecycle.ashTokenSlot]: { turnsRemaining: 1 },
+          };
+        }
 
-      if (deathLifecycle.ashTokenSlot) {
-        sessionExtrasRef.current.ashTokens = {
-          ...sessionExtrasRef.current.ashTokens,
-          [deathLifecycle.ashTokenSlot]: { turnsRemaining: 1 },
-        };
-      }
-
-      if (deathLifecycle.triggerRetributionParry) {
-        pendingDissolveRef.current = { unitId: e.unitId, profile: working, hp: 0 };
-        retributionParryRef.current = deathLifecycle.triggerRetributionParry;
-        pendingDmgRef.current = deathLifecycle.triggerRetributionParry.occultDamage;
-        pendingUnblockRef.current = false;
-        cycleRef.current = 'DEFEND_PARRY';
-        setCycleState('DEFEND_PARRY');
-        startParryRing();
-        patchUnit(e.unitId, { ...working, currentHp: 0 });
-        return true;
+        if (deathLifecycle.triggerRetributionParry) {
+          pendingDissolveRef.current = { unitId: e.unitId, profile: working, hp: 0 };
+          retributionParryRef.current = deathLifecycle.triggerRetributionParry;
+          pendingDmgRef.current = deathLifecycle.triggerRetributionParry.occultDamage;
+          pendingUnblockRef.current = false;
+          cycleRef.current = 'DEFEND_PARRY';
+          setCycleState('DEFEND_PARRY');
+          startParryRing();
+          patchUnit(e.unitId, { ...working, currentHp: 0 });
+          return true;
+        }
       }
     }
 
@@ -4589,6 +4596,34 @@ export default function TacticalCombatHub({
         log('>> FOLDED — phased silhouette forced into true position.');
       }
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
+      // Multi-pulse blood burst: Carbine RANGED ×3, Paired Blades ×2.
+      const burstAbilityId = options?.abilityId ?? lastPlayerAbilityRef.current;
+      const burstTags = options?.abilityTags?.length
+        ? options.abilityTags
+        : resolveOperativeAbilityTags(burstAbilityId);
+      const directWeaponHit = Boolean(
+        resolvedWeapon
+        && !options?.indirectDamage
+        && !options?.echoHit,
+      );
+      const carbineRangedBurst = Boolean(
+        directWeaponHit
+        && resolvedWeapon?.familyId === 'hex-pulse-rifle'
+        && burstTags.includes('RANGED'),
+      );
+      const pairedBladesBurst = Boolean(
+        directWeaponHit
+        && resolvedWeapon?.familyId === 'aegis-rift-edge',
+      );
+      bloodBurstRepeatsRef.current[e.unitId] = carbineRangedBurst
+        ? 3
+        : pairedBladesBurst
+          ? 2
+          : 1;
+      bloodMistScaleRef.current[e.unitId] = (
+        resolvedWeapon?.familyId === 'hex-void-cannon'
+        || resolvedWeapon?.familyId === 'aegis-claymore-blade'
+      ) ? 1.5 : 1;
       // Prefer weapon-specific presentation; skip generic class flashes when a
       // permanent weapon is resolving (Phase 3M repair — removes mustard/purple/red fills).
       if (
@@ -4660,7 +4695,8 @@ export default function TacticalCombatHub({
             targetId: e.unitId,
             damage: dmg,
             critical,
-            killed: hp <= 0,
+            // Thrall slump is not a true kill — skip kill-confirm SFX.
+            killed: hp <= 0 && !working.isSlumped,
             channel: options?.channel === 'OCCULT'
               ? 'OCCULT'
               : options?.channel === 'TRUE'
@@ -4709,8 +4745,9 @@ export default function TacticalCombatHub({
       nestedPresentation: options?.nestedPresentation,
     }) && !options?.indirectDamage && !options?.echoHit && !isWardenStrikeInputGuarded();
     if (armWardenPresentation && e.unitId) {
-      const live = getUnitById(squadRef.current, e.unitId);
-      visualHpHoldRef.current[e.unitId] = live?.currentHp ?? e.currentHp;
+      // Hold the pre-hit snapshot from `e` — thrall slump death patches may already
+      // have zeroed the live squad unit before presentation arms.
+      visualHpHoldRef.current[e.unitId] = e.currentHp;
     }
     if (working.sharedBossPool && bossRuntimeRef.current) {
       bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
@@ -4774,7 +4811,8 @@ export default function TacticalCombatHub({
         targetId: e.unitId,
         damage: dmg,
         critical: Boolean(critical && dmg > 0),
-        killed: hp <= 0,
+        // Thrall slump keeps the unit mounted — not a true kill for presentation.
+        killed: hp <= 0 && !working.isSlumped,
         outcome: 'HIT',
         defenseMaterial: wardenDefenseMaterialRef.current,
         fractureApplied: wardenFractureAppliedRef.current,
@@ -5092,7 +5130,8 @@ export default function TacticalCombatHub({
       }
     }
 
-    if (hp <= 0) {
+    // True death only — thrall slump keeps the unit "alive" and must not cash kill boons.
+    if (hp <= 0 && !working.isSlumped) {
       if (encounterModifierRuntimeRef.current) {
         const mirrored = resolveMirroredKillPulse(encounterModifierRuntimeRef.current);
         encounterModifierRuntimeRef.current = mirrored.runtime;
@@ -8175,6 +8214,9 @@ export default function TacticalCombatHub({
             markPlayerDefendedRef.current();
           },
         });
+        if (result.ok && abilityId === 'RUIN') {
+          setRuinVfxSeq((n) => n + 1);
+        }
         if (
           result.ok
           && boonMatchesAction(leyLineMutations, 'VENOMOUS_RUIN', abilityId)
@@ -10036,7 +10078,10 @@ export default function TacticalCombatHub({
   }, [abyssalWardActive, onWardPrimedChange]);
 
   useEffect(() => {
-    onAbilityPrimedChange?.(selectedAbility != null);
+    // Veil-Piercer keeps occult damage rules but must not show the purple primed aura.
+    onAbilityPrimedChange?.(
+      selectedAbility != null && selectedAbility !== 'VEIL_PIERCER',
+    );
   }, [selectedAbility, onAbilityPrimedChange]);
 
   const envoyRotStacksTotal = operativeClass === 'ENVOY'
@@ -10416,6 +10461,7 @@ export default function TacticalCombatHub({
       eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
+      ruinVfxSeq,
       slicePanHandlers: panResponder.panHandlers as Record<string, unknown>,
     }),
     [
@@ -10439,6 +10485,7 @@ export default function TacticalCombatHub({
       eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
+      ruinVfxSeq,
       onUltimatePing,
       onParryTap,
       panResponder.panHandlers,

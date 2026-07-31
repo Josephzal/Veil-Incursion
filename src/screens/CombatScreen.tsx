@@ -481,6 +481,19 @@ export default function CombatScreen(): React.JSX.Element {
       onUnitDissolveComplete={handleUnitDissolveComplete}
       accentColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
+      bloodBurstVariant={
+        operativeClass === 'AEGIS'
+          ? ('aegis' as const)
+          : operativeClass === 'HEX_SHOT'
+            ? ('hex' as const)
+            : null
+      }
+      bloodMistScale={
+        combatWeaponFamilyId === 'hex-void-cannon'
+        || combatWeaponFamilyId === 'aegis-claymore-blade'
+          ? 1.5 // keep in sync with TacticalCombatHub bloodMistScaleRef
+          : 1
+      }
     />
   );
 

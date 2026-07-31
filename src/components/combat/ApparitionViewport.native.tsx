@@ -29,13 +29,15 @@ import {
   runOnJS,
   useDerivedValue,
   useSharedValue,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
 const CANVAS_BACKDROP = '#000000';
-const DAMAGE_BLEND = '#dc2626';
+const DAMAGE_BLEND = '#b91c1c';
+const DAMAGE_FLASH_PEAK = 0.28;
 
-const DAMAGE_MS = 200;
+const DAMAGE_MS = 176;
 const ATTACK_MS = 320;
 const ERADICATION_MS = 800;
 const SHAKE_AMPLITUDE = 12;
@@ -95,7 +97,13 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       if (isEradicating.value > 0) return;
       shakeProgress.value = 1;
       shakePhase.value = 0;
-      if (withDamageFlash) damageFlash.value = 1;
+      if (withDamageFlash) {
+        damageFlash.value = 0;
+        damageFlash.value = withSequence(
+          withTiming(1, { duration: 36, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: Math.max(80, duration - 36), easing: Easing.in(Easing.quad) }),
+        );
+      }
       shakeProgress.value = withTiming(0, {
         duration,
         easing: Easing.out(Easing.cubic),
@@ -104,12 +112,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
         duration,
         easing: Easing.linear,
       });
-      if (withDamageFlash) {
-        damageFlash.value = withTiming(0, {
-          duration,
-          easing: Easing.out(Easing.cubic),
-        });
-      }
+      void amplitude;
     };
 
     useImperativeHandle(
@@ -155,7 +158,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
 
     const spriteOpacity = useDerivedValue(() => eradicateOpacity.value);
 
-    const damageBlendOpacity = useDerivedValue(() => damageFlash.value * 0.65);
+    const damageBlendOpacity = useDerivedValue(() => damageFlash.value * DAMAGE_FLASH_PEAK);
 
     const hasLayout = layout.width > 0 && layout.height > 0;
     const hasRasterSource = imageSource != null;
