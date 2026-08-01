@@ -1,9 +1,31 @@
-import React from 'react';
-import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Platform,
+  StyleSheet,
+  Text,
+  Vibration,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import HapticPressable from '../HapticPressable';
 import FieldPlate from '../runField/FieldPlate';
+import SpectralSelectAura, {
+  type SpectralAuraPhase,
+} from '../runField/SpectralSelectAura';
 import { RUN_FIELD } from '../../theme/runFieldTokens';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
+import { pulseHubButton } from '../../utils/hubButtonHaptics';
+import {
+  releaseBoonHoldSfx,
+  startBoonHoldSfx,
+  stopBoonHoldSfx,
+} from '../../utils/boonSelectionFeedbackAudio';
 import { readPressableHover } from '../../utils/terminalHoverStyle';
+
+const HOLD_MS = 1000;
+const HOLD_SHAKE_MS = 70;
 
 export interface RunEventChoiceCardProps {
   tierTag: string;
@@ -22,6 +44,7 @@ export interface RunEventChoiceCardProps {
   mutedColor: string;
   fontScale: number;
   scaleFont: (base: number) => number;
+  /** Fires after a successful 1s hold-to-bind. */
   onPress: () => void;
   /** Occult offer variant — magenta haze when selected. */
   occult?: boolean;
@@ -42,7 +65,7 @@ function offerNameStyle(scaleFont: (base: number) => number): object {
 
 /**
  * Shared offer / choice card for boons, requisitions, and similar selections.
- * Idle / hover / selected / locked share the field-plate interaction language.
+ * Hover wakes a spectral purple aura; hold 1s to bind (vibrate + burst).
  */
 export default function RunEventChoiceCard({
   tierTag,
@@ -54,7 +77,7 @@ export default function RunEventChoiceCard({
   cardPadding,
   isDesktop,
   isSelected,
-  isDimmed: _isDimmed,
+  isDimmed,
   disabled,
   fontScale,
   scaleFont,
@@ -62,6 +85,189 @@ export default function RunEventChoiceCard({
   occult = false,
   lockReason,
 }: RunEventChoiceCardProps): React.JSX.Element {
+  const [holding, setHolding] = useState(false);
+  /** Local bind latch so selected glow never dips for a frame before parent isSelected. */
+  const [ritualBound, setRitualBound] = useState(isSelected);
+  const [burstToken, setBurstToken] = useState(0);
+  const holdAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const shakeLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const completedRef = useRef(false);
+  const holdProgress = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+  const selectFlash = useRef(new Animated.Value(0)).current;
+  const breath = useRef(new Animated.Value(0)).current;
+  const shakeX = useRef(new Animated.Value(0)).current;
+  const hapticTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const breathLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  const effectivelySelected = isSelected || ritualBound;
+  const interactiveLocked = disabled || isDimmed || effectivelySelected;
+
+  useEffect(() => {
+    if (isSelected) {
+      setRitualBound(true);
+      holdProgress.setValue(1);
+    }
+  }, [holdProgress, isSelected]);
+
+  /** Light breath only after bind — during hold the glow just grows with charge. */
+  useEffect(() => {
+    breathLoopRef.current?.stop();
+    breathLoopRef.current = null;
+    if (!effectivelySelected) {
+      breath.stopAnimation();
+      breath.setValue(0);
+      return;
+    }
+    breath.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+        Animated.timing(breath, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    breathLoopRef.current = loop;
+    loop.start();
+    return () => {
+      breathLoopRef.current?.stop();
+      breathLoopRef.current = null;
+    };
+  }, [breath, effectivelySelected]);
+
+  const stopHaptics = () => {
+    if (hapticTimerRef.current) {
+      clearInterval(hapticTimerRef.current);
+      hapticTimerRef.current = null;
+    }
+  };
+
+  const stopShake = () => {
+    shakeLoopRef.current?.stop();
+    shakeLoopRef.current = null;
+    shakeX.stopAnimation();
+    shakeX.setValue(0);
+  };
+
+  const cancelHold = (resetProgress: boolean) => {
+    holdAnimRef.current?.stop();
+    holdAnimRef.current = null;
+    setHolding(false);
+    stopShake();
+    stopHaptics();
+    if (!completedRef.current) {
+      releaseBoonHoldSfx('abort');
+    }
+    if (resetProgress && !completedRef.current && !ritualBound) {
+      Animated.timing(holdProgress, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  const startHold = () => {
+    if (interactiveLocked) return;
+    completedRef.current = false;
+    setHolding(true);
+    holdProgress.stopAnimation();
+    // Seed a faint hover glow, then ramp — no snap from zero.
+    holdProgress.setValue(0.12);
+    startBoonHoldSfx();
+
+    stopShake();
+    const shake = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shakeX, {
+          toValue: 1.6,
+          duration: HOLD_SHAKE_MS,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.timing(shakeX, {
+          toValue: -1.6,
+          duration: HOLD_SHAKE_MS,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.timing(shakeX, {
+          toValue: 0.8,
+          duration: HOLD_SHAKE_MS,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.timing(shakeX, {
+          toValue: 0,
+          duration: HOLD_SHAKE_MS,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
+    );
+    shakeLoopRef.current = shake;
+    shake.start();
+
+    stopHaptics();
+    Vibration.vibrate(12);
+    hapticTimerRef.current = setInterval(() => {
+      Vibration.vibrate(10);
+    }, 160);
+
+    const anim = Animated.timing(holdProgress, {
+      toValue: 1,
+      duration: HOLD_MS,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    });
+    holdAnimRef.current = anim;
+    anim.start(({ finished }) => {
+      holdAnimRef.current = null;
+      if (!finished || completedRef.current) return;
+      completedRef.current = true;
+      // Latch selected visuals before clearing hold so glow never dips.
+      setRitualBound(true);
+      holdProgress.setValue(1);
+      setHolding(false);
+      stopShake();
+      stopHaptics();
+      releaseBoonHoldSfx('complete');
+      setBurstToken((n) => n + 1);
+      selectFlash.stopAnimation();
+      selectFlash.setValue(0);
+      Animated.timing(selectFlash, {
+        toValue: 1,
+        duration: 860,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+      pulseHubButton();
+      Vibration.vibrate([0, 18, 30, 22]);
+      onPress();
+    });
+  };
+
+  useEffect(() => () => {
+    holdAnimRef.current?.stop();
+    stopShake();
+    stopHaptics();
+    stopBoonHoldSfx();
+  }, []);
+
+  useEffect(() => {
+    if (interactiveLocked) cancelHold(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lock edge only
+  }, [interactiveLocked]);
+
   const cardFrameStyle: ViewStyle = {
     ...(isDesktop && typeof cardWidth === 'number' ? { width: cardWidth } : { width: '100%' }),
     flex: 1,
@@ -84,141 +290,299 @@ export default function RunEventChoiceCard({
   /** Hover/selected title always reads mint — occult supplies haze only, never the accent text color. */
   const hotColor = RUN_FIELD.mint;
 
+  /** Perimeter glow grows with hold charge; after bind, breath modulates it lightly. */
+  const edgeGlowOpacity = Animated.multiply(
+    holdProgress.interpolate({
+      inputRange: [0, 0.12, 1],
+      outputRange: [0, 0.28, 1],
+    }),
+    breath.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0.78],
+    }),
+  );
+  const edgeHaloOpacity = Animated.multiply(
+    holdProgress.interpolate({
+      inputRange: [0, 0.12, 1],
+      outputRange: [0, 0.18, 0.95],
+    }),
+    breath.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0.72],
+    }),
+  );
+  const edgeShadowRadius = Animated.add(
+    holdProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [8, 24],
+    }),
+    breath.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 6],
+    }),
+  );
+  /** Select-only purple outline: bursts outward then fully fades. */
+  const flashOpacity = selectFlash.interpolate({
+    inputRange: [0, 0.1, 0.4, 1],
+    outputRange: [0, 1, 0.45, 0],
+  });
+  const flashScale = selectFlash.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.28],
+  });
+  const flashGlowOpacity = selectFlash.interpolate({
+    inputRange: [0, 0.12, 0.5, 1],
+    outputRange: [0, 0.75, 0.28, 0],
+  });
+
   return (
-    <HapticPressable
-      onPress={() => !disabled && onPress()}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected, disabled }}
-      style={(pressState) => {
-        const hovered = !disabled && (readPressableHover(pressState) || pressState.pressed);
-        return [
-          cardFrameStyle,
-          styles.pressableFill,
-          hovered && !isSelected ? styles.hoverLift : null,
-        ];
-      }}
+    <View
+      style={[
+        cardFrameStyle,
+        styles.pressableFill,
+        isDimmed ? styles.dimmed : null,
+      ]}
     >
-      {(pressState) => {
-        const hovered = !disabled && !isSelected
-          && (readPressableHover(pressState) || pressState.pressed);
-        const plateState = disabled
-          ? 'locked'
-          : isSelected
-            ? 'selected'
-            : hovered
+      <HapticPressable
+        haptic={false}
+        sfx={!interactiveLocked}
+        disabled={interactiveLocked}
+        delayLongPress={10_000}
+        onPressIn={startHold}
+        onPressOut={() => cancelHold(true)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: effectivelySelected, disabled: interactiveLocked }}
+        accessibilityHint={
+          effectivelySelected
+            ? 'Offer bound'
+            : 'Press and hold for one second to bind this offer'
+        }
+        style={(pressState) => {
+          const hovered = !interactiveLocked
+            && (readPressableHover(pressState) || pressState.pressed || holding);
+          return [
+            styles.pressableFill,
+            hovered && !effectivelySelected ? styles.hoverLift : null,
+          ];
+        }}
+      >
+        {(pressState) => {
+          const hovered = !interactiveLocked
+            && (readPressableHover(pressState) || pressState.pressed || holding);
+          // Keep FieldPlate off the mint "selected" fill — purple edge/aura carry the bind look.
+          const plateState = interactiveLocked && !effectivelySelected
+            ? 'locked'
+            : holding || hovered || effectivelySelected
               ? 'hover'
               : 'idle';
 
-        const resolvedTitleColor = isSelected || hovered ? hotColor : RUN_FIELD.text;
+          const auraPhase: SpectralAuraPhase = effectivelySelected
+            ? 'selected'
+            : holding
+              ? 'holding'
+              : hovered
+                ? 'hover'
+                : 'idle';
 
-        return (
-          <FieldPlate
-            density="standard"
-            tone={occult ? 'occult' : 'neutral'}
-            state={plateState}
-            showSelectedMark={isSelected}
-            style={styles.plate}
-            contentStyle={[styles.content, { padding: Math.min(cardPadding, 16) }]}
-          >
-            <View style={styles.tierRow}>
-              <Text
-                style={[
-                  styles.tier,
-                  { fontSize: classificationSize, color: RUN_FIELD.textSecondary },
-                ]}
-                numberOfLines={1}
-              >
-                {tierTag}
-              </Text>
-              {hovered ? (
-                <Text style={[styles.selectHint, { fontSize: classificationSize }]}>
-                  SELECT
-                </Text>
+          const resolvedTitleColor = effectivelySelected || hovered || holding
+            ? hotColor
+            : RUN_FIELD.text;
+
+          const hint = effectivelySelected
+            ? 'BOUND'
+            : holding
+              ? 'BINDING…'
+              : hovered
+                ? 'HOLD'
+                : null;
+
+          const showGlow = holding || effectivelySelected || (hovered && !interactiveLocked);
+          const hoverOnly = hovered && !holding && !effectivelySelected;
+
+          return (
+            <View style={styles.plateHost}>
+              {/* Aura stays anchored — only the plate vibrates while holding. */}
+              <SpectralSelectAura
+                phase={auraPhase}
+                charge={holdProgress}
+                burstToken={burstToken}
+              />
+              {showGlow ? (
+                <>
+                  {/* Outer halo + edge glow — grow with hold, breathe once bound. */}
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.edgeHalo,
+                      hoverOnly
+                        ? styles.edgeHaloHover
+                        : {
+                            opacity: edgeHaloOpacity,
+                            shadowRadius: edgeShadowRadius,
+                          },
+                    ]}
+                  />
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.edgeRing,
+                      hoverOnly
+                        ? styles.edgeRingHover
+                        : { opacity: edgeGlowOpacity },
+                    ]}
+                  />
+                  {/* Bind confirm: purple outline bursts then fades; sustained glow remains. */}
+                  {effectivelySelected ? (
+                    <>
+                      <Animated.View
+                        pointerEvents="none"
+                        style={[
+                          styles.selectFlashGlow,
+                          {
+                            opacity: flashGlowOpacity,
+                            transform: [{ scale: flashScale }],
+                          },
+                        ]}
+                      />
+                      <Animated.View
+                        pointerEvents="none"
+                        style={[
+                          styles.selectFlashRing,
+                          {
+                            opacity: flashOpacity,
+                            transform: [{ scale: flashScale }],
+                          },
+                        ]}
+                      />
+                    </>
+                  ) : null}
+                </>
               ) : null}
-            </View>
-            <View style={styles.copyBand}>
-              <View style={[styles.nameSlot, { height: nameSlotHeight }]}>
-                <Text
-                  style={[
-                    styles.name,
-                    offerNameStyle(scaleFont),
-                    { color: resolvedTitleColor },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {name}
-                </Text>
-              </View>
-              <View style={[styles.taglineSlot, { height: taglineSlotHeight }]}>
-                {tagline ? (
+              <Animated.View
+                style={[
+                  styles.plateShakeHost,
+                  { transform: [{ translateX: shakeX }] },
+                ]}
+              >
+              <FieldPlate
+                density="standard"
+                tone={occult || hovered || holding || effectivelySelected ? 'occult' : 'neutral'}
+                state={plateState}
+                showSelectedMark={effectivelySelected}
+                style={[
+                  styles.plate,
+                  (effectivelySelected || holding) ? styles.plateSelectedSpectral : null,
+                ]}
+                contentStyle={[styles.content, { padding: Math.min(cardPadding, 16) }]}
+              >
+                <View style={styles.tierRow}>
                   <Text
                     style={[
-                      styles.tagline,
+                      styles.tier,
+                      { fontSize: classificationSize, color: RUN_FIELD.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tierTag}
+                  </Text>
+                  {hint ? (
+                    <Text
+                      style={[
+                        styles.selectHint,
+                        { fontSize: classificationSize },
+                        holding || effectivelySelected ? styles.selectHintHot : null,
+                      ]}
+                    >
+                      {hint}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={styles.copyBand}>
+                  <View style={[styles.nameSlot, { height: nameSlotHeight }]}>
+                    <Text
+                      style={[
+                        styles.name,
+                        offerNameStyle(scaleFont),
+                        { color: resolvedTitleColor },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {name}
+                    </Text>
+                  </View>
+                  <View style={[styles.taglineSlot, { height: taglineSlotHeight }]}>
+                    {tagline ? (
+                      <Text
+                        style={[
+                          styles.tagline,
+                          {
+                            fontSize: descriptorSize,
+                            lineHeight: taglineLineHeight,
+                            color: RUN_FIELD.textSecondary,
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {tagline}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={[styles.visualWell, { height: visualHeight }]}>
+                  <View
+                    style={[
+                      styles.sigil,
+                      occult || hovered || holding || effectivelySelected
+                        ? styles.sigilOccult
+                        : styles.sigilMint,
+                      (effectivelySelected || hovered || holding) ? styles.sigilOccultHot : null,
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.effectSurface}>
+                  <Text
+                    style={[
+                      styles.effect,
                       {
-                        fontSize: descriptorSize,
-                        lineHeight: taglineLineHeight,
-                        color: RUN_FIELD.textSecondary,
+                        fontSize: effectSize,
+                        lineHeight: Math.round(effectSize * 1.4),
+                        color: RUN_FIELD.text,
                       },
                     ]}
-                    numberOfLines={2}
+                    numberOfLines={6}
                   >
-                    {tagline}
+                    {effectSummary}
+                  </Text>
+                  {tradeoffSummary ? (
+                    <Text
+                      style={[
+                        styles.tradeoff,
+                        {
+                          fontSize: metaSize,
+                          lineHeight: Math.round(metaSize * 1.35),
+                          color: RUN_FIELD.textSecondary,
+                        },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {tradeoffSummary}
+                    </Text>
+                  ) : null}
+                </View>
+                {disabled && lockReason ? (
+                  <Text style={[styles.lockReason, { fontSize: metaSize }]} numberOfLines={2}>
+                    {lockReason}
                   </Text>
                 ) : null}
-              </View>
+              </FieldPlate>
+              </Animated.View>
             </View>
-
-            <View style={[styles.visualWell, { height: visualHeight }]}>
-              <View
-                style={[
-                  styles.sigil,
-                  occult ? styles.sigilOccult : styles.sigilMint,
-                  (isSelected || hovered) && !occult ? styles.sigilHot : null,
-                  (isSelected || hovered) && occult ? styles.sigilOccultHot : null,
-                ]}
-              />
-            </View>
-
-            <View style={styles.effectSurface}>
-              <Text
-                style={[
-                  styles.effect,
-                  {
-                    fontSize: effectSize,
-                    lineHeight: Math.round(effectSize * 1.4),
-                    color: RUN_FIELD.text,
-                  },
-                ]}
-                numberOfLines={6}
-              >
-                {effectSummary}
-              </Text>
-              {tradeoffSummary ? (
-                <Text
-                  style={[
-                    styles.tradeoff,
-                    {
-                      fontSize: metaSize,
-                      lineHeight: Math.round(metaSize * 1.35),
-                      color: RUN_FIELD.textSecondary,
-                    },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {tradeoffSummary}
-                </Text>
-              ) : null}
-            </View>
-            {disabled && lockReason ? (
-              <Text style={[styles.lockReason, { fontSize: metaSize }]} numberOfLines={2}>
-                {lockReason}
-              </Text>
-            ) : null}
-          </FieldPlate>
-        );
-      }}
-    </HapticPressable>
+          );
+        }}
+      </HapticPressable>
+    </View>
   );
 }
 
@@ -227,13 +591,90 @@ const styles = StyleSheet.create({
     flex: 1,
     alignSelf: 'stretch',
   },
+  dimmed: {
+    opacity: 0.42,
+  },
   hoverLift: {
     transform: [{ translateY: -1 }],
+  },
+  plateHost: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  plateShakeHost: {
+    flex: 1,
+    width: '100%',
+    zIndex: 1,
+  },
+  edgeHalo: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    zIndex: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(230, 130, 210, 0.55)',
+    shadowColor: 'rgb(245, 130, 215)',
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  edgeHaloHover: {
+    opacity: 0.22,
+    shadowRadius: 10,
+    borderColor: 'rgba(210, 110, 195, 0.4)',
+  },
+  edgeRing: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 3,
+    borderWidth: 2,
+    borderColor: 'rgba(248, 150, 220, 0.92)',
+    shadowColor: 'rgb(245, 120, 210)',
+    shadowOpacity: 0.95,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  edgeRingHover: {
+    opacity: 0.36,
+    borderWidth: 1.5,
+    borderColor: 'rgba(232, 128, 210, 0.7)',
+  },
+  selectFlashGlow: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 4,
+    borderWidth: 0,
+    backgroundColor: 'rgba(200, 70, 170, 0.06)',
+    shadowColor: 'rgb(255, 150, 230)',
+    shadowOpacity: 1,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  selectFlashRing: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
+    borderWidth: 2,
+    borderColor: 'rgba(240, 150, 220, 0.95)',
+    backgroundColor: 'transparent',
+    shadowColor: 'rgb(255, 140, 220)',
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
   },
   plate: {
     width: '100%',
     flex: 1,
     overflow: 'visible',
+    zIndex: 1,
+  },
+  plateSelectedSpectral: {
+    borderColor: 'rgba(226, 120, 204, 0.85)',
+    shadowColor: 'rgb(210, 90, 190)',
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
   content: {
     flex: 1,
@@ -259,8 +700,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.8,
     textTransform: 'uppercase',
-    color: RUN_FIELD.mint,
+    color: 'rgba(210, 120, 200, 0.92)',
     flexShrink: 0,
+  },
+  selectHintHot: {
+    color: 'rgba(232, 160, 220, 1)',
   },
   copyBand: {
     flexShrink: 0,
@@ -313,8 +757,8 @@ const styles = StyleSheet.create({
     backgroundColor: RUN_FIELD.mintSoft,
   },
   sigilOccultHot: {
-    borderColor: 'rgba(190, 82, 164, 0.72)',
-    backgroundColor: 'rgba(190, 82, 164, 0.16)',
+    borderColor: 'rgba(210, 110, 200, 0.85)',
+    backgroundColor: 'rgba(190, 82, 164, 0.22)',
   },
   effectSurface: {
     flexGrow: 1,

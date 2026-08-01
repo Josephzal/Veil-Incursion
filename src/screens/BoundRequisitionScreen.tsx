@@ -124,13 +124,14 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
                         isDesktop={isDesktop}
                         isSelected={selectedId === offer.id}
                         isDimmed={selectedId != null && selectedId !== offer.id}
-                        disabled={confirming}
+                        disabled={confirming || (selectedId != null && selectedId !== offer.id)}
                         borderColor={theme.borderColor}
                         textColor={theme.primaryColor}
                         mutedColor={theme.mutedColor}
                         fontScale={fontScale}
                         scaleFont={scaleFont}
                         onPress={() => setSelectedId(offer.id)}
+                        occult
                       />
                     </View>
                   );

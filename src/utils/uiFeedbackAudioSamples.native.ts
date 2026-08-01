@@ -9,3 +9,7 @@ export const TYPING_SAMPLE = require('../../assets/audio/ui/typing.wav');
 export const CRAFT_SAMPLE = require('../../assets/audio/ui/craft.m4a');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 export const FABRICATE_DONE_SAMPLE = require('../../assets/audio/ui/fabricate-done.m4a');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+export const BOON_HOLD_SAMPLE = require('../../assets/audio/ui/boon-hold.m4a');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+export const BOON_SELECT_SAMPLE = require('../../assets/audio/ui/boon-select.m4a');

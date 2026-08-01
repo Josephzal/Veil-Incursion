@@ -179,7 +179,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
                       isDesktop={isDesktop}
                       isSelected={selectedBoonId === offer.id}
                       isDimmed={selectedBoonId != null && selectedBoonId !== offer.id}
-                      disabled={selectingRef.current}
+                      disabled={selectingRef.current || (selectedBoonId != null && selectedBoonId !== offer.id)}
                       borderColor={theme.borderColor}
                       textColor={theme.primaryColor}
                       mutedColor={theme.mutedColor}
