@@ -34,7 +34,7 @@ export function resetCargoInstanceCounter(): void {
   instanceCounter = 0;
 }
 
-/** Run-start cargo with God Mode, Spectral Salt, and Bitch Potion locked to starter grid slots. */
+/** Run-start cargo with debug potions locked to starter grid slots. */
 export function createStarterCargoRunState(): CargoRunState {
   return applyIncursionStarterCargo(createDefaultCargoRunState());
 }
@@ -43,6 +43,7 @@ const INCURSION_STARTER_CARGO: ReadonlyArray<{ itemId: CargoItemId; row: number;
   { itemId: 'god-mode', row: 0, col: 0 },
   { itemId: 'spectral-salt', row: 0, col: 1 },
   { itemId: 'bitch-potion', row: 0, col: 2 },
+  { itemId: 'crit-potion', row: 1, col: 0 },
 ];
 
 function stripCatalogItemsFromCargo(cargo: CargoRunState, itemIds: readonly CargoItemId[]): CargoRunState {
@@ -95,7 +96,7 @@ export function placeCatalogItemAtCell(
   };
 }
 
-/** Ensures God Mode, Spectral Salt, and Bitch Potion occupy starter cargo grid cells. */
+/** Ensures debug starter potions occupy fixed cargo grid cells. */
 export function applyIncursionStarterCargo(cargo: CargoRunState): CargoRunState {
   const starterIds = INCURSION_STARTER_CARGO.map((entry) => entry.itemId);
   let working = stripCatalogItemsFromCargo(cargo, starterIds);
@@ -854,6 +855,8 @@ export function combatConsumableDescription(itemId: CargoItemId): string {
       return 'Overclocks operative systems — every attack deals 1000 true damage (armor bypass, guaranteed hit), resources locked at max. Free deploy.';
     case 'set_hp_to_one':
       return 'Reduces Soul Anchor integrity to 1. Free deploy.';
+    case 'full_crit':
+      return 'Locks operative targeting to 100% critical strike chance. Free deploy.';
     default:
       return 'Field deployment protocols pending operative clearance.';
   }

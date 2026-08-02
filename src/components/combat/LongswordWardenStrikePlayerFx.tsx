@@ -92,7 +92,12 @@ export default function LongswordWardenStrikePlayerFx({
       } else {
         setPoseAlignDebugForcedPose('attack');
       }
-    } else if (event.phase === 'release' || event.phase === 'hold' || event.phase === 'recovery') {
+    } else if (
+      event.phase === 'release'
+      || event.phase === 'feedback'
+      || event.phase === 'hold'
+      || event.phase === 'recovery'
+    ) {
       if (!WARDEN_STRIKE_VFX_LAYER_TOGGLES.recoilIsolationMode) {
         setPoseAlignDebugForcedPose('attack');
       }

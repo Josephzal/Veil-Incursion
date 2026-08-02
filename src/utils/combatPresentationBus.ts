@@ -269,6 +269,7 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
   const orderedHits = [...packet.hits].sort((a, b) => a.order - b.order);
   const firstHit = orderedHits[0];
   const aegisMissPlayed = { value: false };
+  const critStingPlayed = { value: false };
 
   for (const step of sequence) {
     const delay = scalePresentationMs(step.delayMs);
@@ -327,9 +328,6 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
           if (firstHit.killed) {
             playWeaponFamilyCue(packet.weaponFamilyId, profile.cues.killConfirm);
           }
-          if (firstHit.critical) {
-            playCombatPresentationCue('sfx.critical_hit');
-          }
         } else if (firstHit.outcome === 'MISS' || firstHit.outcome === 'EVADE') {
           visualListener?.({
             id: `${packet.id}-${step.stage}-miss`,
@@ -344,6 +342,17 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
             createdAt: Date.now(),
           });
           return;
+        }
+        // Crit sting once per packet (including Scythe release-only contact).
+        if (
+          !critStingPlayed.value
+          && firstHit.critical
+          && firstHit.damage > 0
+          && firstHit.outcome !== 'MISS'
+          && firstHit.outcome !== 'EVADE'
+        ) {
+          critStingPlayed.value = true;
+          playCombatPresentationCue('sfx.critical_hit');
         }
       } else if (step.cueId) {
         playAegisAwareCue({

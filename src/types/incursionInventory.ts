@@ -36,6 +36,8 @@ export interface IncursionConsumableUseResult {
   /** Spall-Weave — deal this damage to attacker when vest breaks. */
   spallShrapnelDamage?: number;
   enableGodMode?: boolean;
+  /** Crit Potion — force 100% player crit chance for the remainder of the run/combat. */
+  enableFullCrit?: boolean;
   /** Force Soul Anchor integrity to this absolute value (combat + run state). */
   setSoulAnchorTo?: number;
   apCost?: number;

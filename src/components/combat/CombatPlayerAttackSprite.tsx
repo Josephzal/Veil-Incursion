@@ -204,8 +204,8 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
         setWardenHideIdlePortrait(owns && suppressAura && event.phase !== 'done');
 
         if (event.phase === 'anticipation' || event.phase === 'release'
-          || event.phase === 'contact' || event.phase === 'hold'
-          || event.phase === 'recovery') {
+          || event.phase === 'feedback' || event.phase === 'contact'
+          || event.phase === 'hold' || event.phase === 'recovery') {
           primedAuraGate.value = (suppressAura || shouldSuppressWardenPrimedIdleAura()) ? 0 : 1;
         }
 

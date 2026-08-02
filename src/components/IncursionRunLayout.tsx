@@ -75,12 +75,10 @@ export default function IncursionRunLayout({
     }
   }, [cargoEnabled, cargoOpen]);
 
+  // Include debug/sandbox combats so CARGO / STATUS / ITEMS match regular arenas.
   const showRunOverlays = useMemo(
-    () => runState.runActive
-      && activeIncursion.isRunActive
-      && runState.combatTestPreset == null
-      && runState.devSandboxPreset == null,
-    [activeIncursion.isRunActive, runState.combatTestPreset, runState.devSandboxPreset, runState.runActive],
+    () => runState.runActive && activeIncursion.isRunActive,
+    [activeIncursion.isRunActive, runState.runActive],
   );
 
   const handleUseCombatConsumable = useCallback((itemId: CargoItemId) => {

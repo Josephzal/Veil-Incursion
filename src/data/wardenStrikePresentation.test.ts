@@ -406,6 +406,9 @@ async function main(): Promise<void> {
   );
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.doneAt <= 950);
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.approachEnd <= WARDEN_STRIKE_TIMELINE_MS.contactAt);
+  assert.ok(WARDEN_STRIKE_TIMELINE_MS.smearStart <= WARDEN_STRIKE_TIMELINE_MS.critStingAt);
+  assert.ok(WARDEN_STRIKE_TIMELINE_MS.critStingAt <= WARDEN_STRIKE_TIMELINE_MS.feedbackAt);
+  assert.ok(WARDEN_STRIKE_TIMELINE_MS.feedbackAt <= WARDEN_STRIKE_TIMELINE_MS.contactAt);
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.returnStart >= WARDEN_STRIKE_TIMELINE_MS.holdEnd);
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.recoveryStart >= WARDEN_STRIKE_TIMELINE_MS.returnEnd);
   assert.ok(WARDEN_STRIKE_TIMELINE_MS.doneAt > WARDEN_STRIKE_TIMELINE_MS.recoveryStart);

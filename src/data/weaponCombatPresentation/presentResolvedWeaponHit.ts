@@ -60,17 +60,20 @@ export function presentResolvedWeaponHit(input: {
 
   // Multi-hit burst: keep one release envelope; only contact accents afterward.
   if (inBurst && !input.evaded) {
-    // Scythe stays release-only — no burst contact accents / crit beeps.
-    if (input.weaponFamilyId === 'envoy-null-conduit') return;
-    if (input.defenseMaterial === 'KINETIC_ARMOR') {
-      playCombatPresentationCue(profile.cues.kineticArmor);
-    } else if (input.defenseMaterial === 'OCCULT_WARD') {
-      playCombatPresentationCue(profile.cues.occultWard);
-    } else if (input.damage > 0) {
-      playCombatPresentationCue(profile.cues.fleshContact);
+    // Scythe stays release-only for contact accents — still play crit sting.
+    if (input.weaponFamilyId !== 'envoy-null-conduit') {
+      if (input.defenseMaterial === 'KINETIC_ARMOR') {
+        playCombatPresentationCue(profile.cues.kineticArmor);
+      } else if (input.defenseMaterial === 'OCCULT_WARD') {
+        playCombatPresentationCue(profile.cues.occultWard);
+      } else if (input.damage > 0) {
+        playCombatPresentationCue(profile.cues.fleshContact);
+      }
+      if (input.killed) playCombatPresentationCue(profile.cues.killConfirm);
     }
-    if (input.killed) playCombatPresentationCue(profile.cues.killConfirm);
-    if (input.critical) playCombatPresentationCue('sfx.critical_hit');
+    if (input.critical && input.damage > 0) {
+      playCombatPresentationCue('sfx.critical_hit');
+    }
     return;
   }
 

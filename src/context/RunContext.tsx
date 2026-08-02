@@ -2333,6 +2333,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       nodesCleared: 4,
       currentDistrict: 2 as const,
       mapMode: 'NODE_ENGAGED',
+      // Match regular runs — debug potions available in sandbox cargo.
+      cargo: createStarterCargoRunState(),
     };
     activeIncursionRef.current = resetIncursion;
     setActiveIncursion(resetIncursion);
@@ -6542,6 +6544,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         result.setSoulAnchorTo = 1;
         logLine = '>> BITCH POTION — Soul Anchor collapsed to 1.';
         break;
+      case 'full_crit':
+        result.enableFullCrit = true;
+        logLine = '>> CRIT POTION — Critical strike chance locked at 100%.';
+        break;
       default:
         return null;
     }
@@ -6554,6 +6560,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ? true
           : prev.spectralWeaponImbued,
         godModeActive: def.combatEffect === 'god_mode' ? true : prev.godModeActive,
+        fullCritActive: def.combatEffect === 'full_crit' ? true : prev.fullCritActive,
       };
       activeIncursionRef.current = next;
       return next;

@@ -27,6 +27,7 @@ export const AEGIS_RUIN_SAMPLE: unknown = null;
 export const AEGIS_PLAYER_BUFF_SAMPLE: unknown = null;
 export const ENVOY_DOT_SAMPLE: unknown = null;
 export const ENVOY_HIT_IMPACT_SAMPLE: unknown = null;
+export const CRITICAL_HIT_SAMPLE: unknown = null;
 export const HEX_DOT_SAMPLE: unknown = null;
 export const FRACTURE_BREAK_SAMPLE: unknown = null;
 export const PAIRED_ULT1_SAMPLE: unknown = null;

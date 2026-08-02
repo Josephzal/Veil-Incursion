@@ -62,6 +62,12 @@ export default function CombatEnemyAnchorMotion({
   const lastHitRef = useRef(0);
   const lastDashRef = useRef(0);
   const lastTurnPhaseRef = useRef<EnemyTurnPhase | null>(null);
+  const frozenRef = useRef(frozen);
+  const backlineDashRef = useRef(isBacklineDashing);
+  const turnPhaseRef = useRef(turnPhase);
+  frozenRef.current = frozen;
+  backlineDashRef.current = isBacklineDashing;
+  turnPhaseRef.current = turnPhase;
   const idlePhase = useSharedValue(0);
   const breatheActive = useSharedValue(1);
   const stepX = useSharedValue(0);
@@ -71,6 +77,29 @@ export default function CombatEnemyAnchorMotion({
   const meleeDashX = useSharedValue(0);
   const meleeDashY = useSharedValue(0);
   const motionLocked = useSharedValue(0);
+  const resumeIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearResumeIdleTimer = () => {
+    if (resumeIdleTimerRef.current != null) {
+      clearTimeout(resumeIdleTimerRef.current);
+      resumeIdleTimerRef.current = null;
+    }
+  };
+
+  const startIdleBreathe = () => {
+    if (frozenRef.current || backlineDashRef.current || turnPhaseRef.current != null) return;
+    cancelAnimation(idlePhase);
+    idlePhase.value = 0;
+    breatheActive.value = 1;
+    idlePhase.value = withRepeat(
+      withTiming(1, {
+        duration: IDLE_HALF_MS,
+        easing: Easing.inOut(Easing.sin),
+      }),
+      -1,
+      true,
+    );
+  };
 
   // Don't cancel an in-flight Warden recoil when something else freezes the portrait.
   useEffect(() => {
@@ -88,6 +117,7 @@ export default function CombatEnemyAnchorMotion({
       wardenActive = false;
     }
 
+    clearResumeIdleTimer();
     cancelAnimation(idlePhase);
     cancelAnimation(meleeDashX);
     cancelAnimation(meleeDashY);
@@ -120,21 +150,18 @@ export default function CombatEnemyAnchorMotion({
 
   useEffect(() => {
     if (frozen || isBacklineDashing || turnPhase != null) {
+      clearResumeIdleTimer();
       cancelAnimation(idlePhase);
       return;
     }
 
-    idlePhase.value = 0;
-    idlePhase.value = withRepeat(
-      withTiming(1, {
-        duration: IDLE_HALF_MS,
-        easing: Easing.inOut(Easing.sin),
-      }),
-      -1,
-      true,
-    );
-
-    return () => cancelAnimation(idlePhase);
+    startIdleBreathe();
+    return () => {
+      clearResumeIdleTimer();
+      cancelAnimation(idlePhase);
+    };
+    // startIdleBreathe closes over frozen/dash/turnPhase — deps match those gates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frozen, idlePhase, isBacklineDashing, turnPhase]);
 
   useEffect(() => {
@@ -278,6 +305,7 @@ export default function CombatEnemyAnchorMotion({
     }
     cancelAnimation(recoilX);
     cancelAnimation(recoilRot);
+    clearResumeIdleTimer();
     recoilX.value = 0;
     recoilRot.value = 0;
     // Compensate CombatEnemyWrapper layoutUnitScale so configured CSS px is final screen motion.
@@ -317,11 +345,21 @@ export default function CombatEnemyAnchorMotion({
         ? withDelay(hitStopMs, rotSequence)
         : rotSequence;
     }
+    // Resume breathing after hit-stop + recoil settle (hit VFX window).
+    const resumeIdleMs = hitStopMs + recoilOutMs + recoilReturnMs + 16;
+    resumeIdleTimerRef.current = setTimeout(() => {
+      resumeIdleTimerRef.current = null;
+      startIdleBreathe();
+    }, resumeIdleMs);
+
     if (wardenActive && hitStopMs > 0) {
       const unlockTimer = setTimeout(() => {
         motionLocked.value = frozen ? 1 : 0;
       }, hitStopMs);
-      return () => clearTimeout(unlockTimer);
+      return () => {
+        clearTimeout(unlockTimer);
+        clearResumeIdleTimer();
+      };
     }
     if (
       typeof __DEV__ !== 'undefined'
@@ -349,6 +387,9 @@ export default function CombatEnemyAnchorMotion({
         // ignore
       }
     }
+    return () => {
+      clearResumeIdleTimer();
+    };
   }, [frozen, hitFlashSeq, idlePhase, layoutUnitScale, motionLocked, recoilRot, recoilX]);
 
   useEffect(() => {

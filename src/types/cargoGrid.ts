@@ -22,6 +22,7 @@ export type CargoCombatEffect =
   | 'veil_ash_grenade'
   | 'god_mode'
   | 'set_hp_to_one'
+  | 'full_crit'
   | 'unimplemented';
 
 import type { ResourceItemId } from './resourceItem';
@@ -71,7 +72,8 @@ export type LegacyCargoItemId =
   | 'null-key'
   | 'hazmat-shielding'
   | 'god-mode'
-  | 'bitch-potion';
+  | 'bitch-potion'
+  | 'crit-potion';
 
 export type CargoItemId = LegacyCargoItemId | ResourceItemId;
 
@@ -665,6 +667,18 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT', 'DEBUG'],
     usableInCombat: true,
     combatEffect: 'set_hp_to_one',
+    apCost: 0,
+  },
+  'crit-potion': {
+    id: 'crit-potion',
+    name: 'Crit Potion',
+    width: 1,
+    height: 1,
+    baseValue: 0,
+    resonanceWeight: 0,
+    tags: ['CONSUMABLE', 'COMBAT', 'DEBUG'],
+    usableInCombat: true,
+    combatEffect: 'full_crit',
     apCost: 0,
   },
   'smoke-ampoule': {

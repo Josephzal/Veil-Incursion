@@ -18,6 +18,7 @@ import {
   CARBINE_RELOAD_SAMPLE,
   ENVOY_DOT_SAMPLE,
   ENVOY_HIT_IMPACT_SAMPLE,
+  CRITICAL_HIT_SAMPLE,
   FRACTURE_BREAK_SAMPLE,
   HEART_ATTACK_SAMPLE,
   HEX_DOT_SAMPLE,
@@ -301,6 +302,7 @@ const SAMPLE_SOURCES: Record<string, unknown> = {
   'sfx.aegis.player_buff': AEGIS_PLAYER_BUFF_SAMPLE,
   'sfx.envoy.dot': ENVOY_DOT_SAMPLE,
   'sfx.envoy.hit_impact': ENVOY_HIT_IMPACT_SAMPLE,
+  'sfx.critical_hit': CRITICAL_HIT_SAMPLE,
   'sfx.hex.dot': HEX_DOT_SAMPLE,
   'sfx.fracture.break': FRACTURE_BREAK_SAMPLE,
 };
@@ -338,6 +340,7 @@ const SAMPLE_GAIN: Record<string, number> = {
   'sfx.aegis.player_buff': 1,
   'sfx.envoy.dot': 1,
   'sfx.envoy.hit_impact': 1,
+  'sfx.critical_hit': 5,
   'sfx.hex.dot': 1,
   'sfx.fracture.break': 1,
 };

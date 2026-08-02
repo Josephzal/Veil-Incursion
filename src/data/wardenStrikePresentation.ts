@@ -16,6 +16,7 @@ export type WardenStrikePresentationPhase =
   | 'idle'
   | 'anticipation'
   | 'release'
+  | 'feedback'
   | 'contact'
   | 'hold'
   | 'recovery'
@@ -250,6 +251,15 @@ export const WARDEN_STRIKE_TIMELINE_MS = {
   approachEnd: 174,
   releaseStart: 0,
   smearStart: 70,
+  /**
+   * Crit sting slightly ahead of float/callout reveal — still after smear starts.
+   */
+  critStingAt: 100,
+  /**
+   * Damage floats / CRITICAL callouts — earlier than authored contact VFX so
+   * readout lands closer to the swing kickoff.
+   */
+  feedbackAt: 120,
   contactAt: 174,
   /** contactAt + holdMs (500) */
   holdEnd: 674,
@@ -582,7 +592,7 @@ export function subscribeWardenStrikePresentation(
   };
 }
 
-/** Fires once at contact — hub uses this for deferred hitFlash / HP reveal. */
+/** Fires once at feedback — hub uses this for deferred hitFlash / HP / float reveal. */
 export function subscribeWardenStrikeContact(
   listener: (result: WardenStrikeResolvedResult) => void,
 ): () => void {
@@ -717,6 +727,8 @@ export function beginWardenStrikePresentation(
     anticipationEnd: t(WARDEN_STRIKE_TIMELINE_MS.anticipationEnd),
     releaseStart: t(WARDEN_STRIKE_TIMELINE_MS.releaseStart),
     smearStart: t(WARDEN_STRIKE_TIMELINE_MS.smearStart),
+    critStingAt: t(WARDEN_STRIKE_TIMELINE_MS.critStingAt),
+    feedbackAt: t(WARDEN_STRIKE_TIMELINE_MS.feedbackAt),
     contactAt: t(WARDEN_STRIKE_TIMELINE_MS.contactAt),
     holdEnd: t(WARDEN_STRIKE_TIMELINE_MS.holdEnd),
     recoveryStart: t(WARDEN_STRIKE_TIMELINE_MS.recoveryStart),
@@ -795,17 +807,50 @@ export function beginWardenStrikePresentation(
     emit({ ...base, phase: 'release', atMs: timeline.releaseStart });
   });
 
-  schedule(timeline.contactAt, () => {
+  // Crit sting slightly before floats/callouts (hub may also no-op if already played).
+  schedule(timeline.critStingAt, () => {
     if (gen !== generation) return;
-    const contactResult = activeMutableResult ?? owned;
-    emit({ ...base, result: contactResult, phase: 'contact', atMs: timeline.contactAt });
+    const early = activeMutableResult ?? owned;
+    if (
+      early.critical
+      && early.damage > 0
+      && early.outcome !== 'MISS'
+      && early.outcome !== 'EVADE'
+      && !early.replayOnly
+    ) {
+      try {
+        // Soft require keeps presentation tests free of audio module side effects.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const audio = require('../utils/combatPresentationAudio') as {
+          unlockCombatPresentationAudio: () => void;
+          playCombatPresentationCue: (cueId: string) => boolean;
+        };
+        audio.unlockCombatPresentationAudio();
+        audio.playCombatPresentationCue('sfx.critical_hit');
+      } catch {
+        // optional
+      }
+    }
+  });
+
+  // Floats / CRITICAL callouts ahead of authored contact burst.
+  schedule(timeline.feedbackAt, () => {
+    if (gen !== generation) return;
+    const feedbackResult = activeMutableResult ?? owned;
+    emit({ ...base, result: feedbackResult, phase: 'feedback', atMs: timeline.feedbackAt });
     contactListeners.forEach((fn) => {
       try {
-        fn(contactResult);
+        fn(feedbackResult);
       } catch {
         // ignore
       }
     });
+  });
+
+  schedule(timeline.contactAt, () => {
+    if (gen !== generation) return;
+    const contactResult = activeMutableResult ?? owned;
+    emit({ ...base, result: contactResult, phase: 'contact', atMs: timeline.contactAt });
   });
 
   schedule(timeline.holdEnd, () => {

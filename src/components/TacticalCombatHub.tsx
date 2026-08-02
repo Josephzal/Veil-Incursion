@@ -785,6 +785,8 @@ interface TacticalCombatHubProps {
   }) => void;
   /** God Mode consumable — 1000 STRIKE damage and locked max resources. */
   godModeActive?: boolean;
+  /** Crit Potion — force 100% player critical strike chance. */
+  fullCritActive?: boolean;
   /** Run-scoped Veil-Grafts keyed by loadout ability. */
   abilityGrafts?: import('../types/veilGraft').AbilityGraftMap;
   hexShotAbilityGrafts?: HexShotAbilityGraftMap;
@@ -879,6 +881,7 @@ export default function TacticalCombatHub({
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
   godModeActive = false,
+  fullCritActive = false,
   abilityGrafts = {},
   hexShotAbilityGrafts = {},
   envoyAbilityGrafts = {},
@@ -1413,6 +1416,8 @@ export default function TacticalCombatHub({
 
   const godModeRef = useRef(godModeActive);
   godModeRef.current = godModeActive;
+  const fullCritRef = useRef(fullCritActive);
+  fullCritRef.current = fullCritActive;
 
   const setMagazineAmmo = (next: number) => {
     const clamped = Math.max(0, Math.min(next, maxAmmo));
@@ -1532,6 +1537,7 @@ export default function TacticalCombatHub({
         }
       }
       if (result.critical && result.damage > 0) {
+        // Crit sting is scheduled slightly earlier in wardenStrikePresentation.
         onPlayerCritImpact?.({
           unitId: pending.unitId,
           channel: pending.critChannel ?? 'KINETIC',
@@ -3052,6 +3058,9 @@ export default function TacticalCombatHub({
       godModeRef.current = true;
       applyGodModeResources();
     }
+    if (result.enableFullCrit) {
+      fullCritRef.current = true;
+    }
     if (result.setSoulAnchorTo != null) {
       const nextHp = Math.max(1, Math.min(result.setSoulAnchorTo, getEffectiveMaxSoulAnchor()));
       operativeHpRef.current = nextHp;
@@ -3835,6 +3844,8 @@ export default function TacticalCombatHub({
             && Math.round(veilFluxRef.current) === 1
               ? 100
               : 0
+          ) + (
+            fullCritRef.current ? 100 : 0
           ),
           hasShatterPoint: hasMutation(leyLineMutations, 'SHATTER_POINT'),
           guaranteedCrits: combatBuffRef.current.crimsonPactCharges,

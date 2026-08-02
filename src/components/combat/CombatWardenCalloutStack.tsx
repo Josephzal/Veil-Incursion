@@ -47,44 +47,70 @@ function useFloatVisibility(
   seq: number,
   label: string,
   durationMs: number,
-): { visible: boolean; opacity: Animated.Value; scale: Animated.Value } {
+): {
+  visible: boolean;
+  opacity: Animated.Value;
+  scale: Animated.Value;
+  translateY: Animated.Value;
+} {
   const lastSeq = useRef(0);
   const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.88)).current;
+  const scale = useRef(new Animated.Value(0.92)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (seq <= 0 || seq === lastSeq.current || !label) return;
     lastSeq.current = seq;
+    animRef.current?.stop();
     setVisible(true);
     opacity.setValue(0);
-    scale.setValue(0.88);
-    const riseMs = Math.floor(durationMs * 0.55);
-    const fadeMs = Math.floor(durationMs * 0.45);
-    Animated.parallel([
-      Animated.timing(opacity, {
+    scale.setValue(0.92);
+    translateY.setValue(0);
+    const fadeInMs = 90;
+    const fadeOutMs = Math.max(180, Math.floor(durationMs * 0.35));
+    const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
+    // One continuous rise — no mid-flight easing swap (avoids hitch/jitter).
+    const anim = Animated.parallel([
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: fadeInMs,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.delay(holdMs),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: fadeOutMs,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
+      Animated.timing(scale, {
         toValue: 1,
-        duration: Math.min(120, riseMs),
+        duration: 160,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
-      Animated.timing(scale, {
-        toValue: 1,
-        duration: riseMs,
-        easing: Easing.out(Easing.back(1.15)),
+      Animated.timing(translateY, {
+        toValue: -56,
+        duration: durationMs,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
-    ]).start(() => {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: fadeMs,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start(() => setVisible(false));
+    ]);
+    animRef.current = anim;
+    anim.start(({ finished }) => {
+      if (finished) setVisible(false);
     });
-  }, [durationMs, label, opacity, scale, seq]);
+    return () => {
+      anim.stop();
+    };
+  }, [durationMs, label, opacity, scale, seq, translateY]);
 
-  return { visible, opacity, scale };
+  return { visible, opacity, scale, translateY };
 }
 
 /** Estimated rendered metrics after font size / weight (CSS px). */
@@ -112,16 +138,19 @@ export default function CombatWardenCalloutStack({
   );
 
   const isNumericDamage = /^\d+$/.test(damageLabel);
-  const showDamage = damage.visible && isNumericDamage && damageLabel.length > 0;
-  const showDefense = status.visible && statusLabel.length > 0
-    && !/^\d+$/.test(statusLabel);
-  const showCritical = critical.visible && critImpactSeq > 0;
+  // Lane plan from content intent — not animated visibility — so lanes never reflow mid-float.
+  const intendDamage = isNumericDamage && damageLabel.length > 0 && damageSeq > 0;
+  const intendDefense = statusLabel.length > 0 && !/^\d+$/.test(statusLabel) && statusSeq > 0;
+  const intendCritical = critImpactSeq > 0;
+  const showDamage = damage.visible && intendDamage;
+  const showDefense = status.visible && intendDefense;
+  const showCritical = critical.visible && intendCritical;
 
   const plan = useMemo(
     () => resolveWardenCalloutLanes({
-      hasDamage: showDamage,
-      hasDefense: showDefense,
-      hasCritical: showCritical,
+      hasDamage: intendDamage,
+      hasDefense: intendDefense,
+      hasCritical: intendCritical,
       damageSize: DAMAGE_METRICS,
       defenseSize: DEFENSE_METRICS,
       criticalSize: CRITICAL_METRICS,
@@ -129,7 +158,7 @@ export default function CombatWardenCalloutStack({
       hotspotAvoidOffsetX: WARDEN_CALLOUT_HOTSPOT_AVOID_X,
       hotspotAvoidOffsetY: WARDEN_CALLOUT_HOTSPOT_AVOID_Y,
     }),
-    [showCritical, showDamage, showDefense],
+    [intendCritical, intendDamage, intendDefense],
   );
 
   if (!showDamage && !showDefense && !showCritical) return null;
@@ -150,7 +179,7 @@ export default function CombatWardenCalloutStack({
               top: plan.critical.top,
               width: plan.critical.width,
               height: plan.critical.height,
-              transform: [{ scale: critical.scale }],
+              transform: [{ translateY: critical.translateY }, { scale: critical.scale }],
               ...textGlow({ color: critTint, radius: 8, offset: { width: 0, height: 0 } }),
             },
           ]}
@@ -169,7 +198,7 @@ export default function CombatWardenCalloutStack({
               top: plan.defense.top,
               width: plan.defense.width,
               height: plan.defense.height,
-              transform: [{ scale: status.scale }],
+              transform: [{ translateY: status.translateY }, { scale: status.scale }],
               ...textGlow({ color: TONE_COLORS[statusTone], radius: 6, offset: { width: 0, height: 0 } }),
             },
           ]}
@@ -187,7 +216,7 @@ export default function CombatWardenCalloutStack({
               top: plan.damage.top,
               width: plan.damage.width,
               height: plan.damage.height,
-              transform: [{ scale: damage.scale }],
+              transform: [{ translateY: damage.translateY }, { scale: damage.scale }],
               ...textGlow({ color: '#f1f5f9', radius: 6, offset: { width: 0, height: 0 } }),
             },
           ]}

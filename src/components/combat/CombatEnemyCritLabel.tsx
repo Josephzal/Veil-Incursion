@@ -28,7 +28,7 @@ export default function CombatEnemyCritLabel({
   const lastSeqRef = useRef(0);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.85)).current;
-  const translateY = useRef(new Animated.Value(6)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
   const [visible, setVisible] = React.useState(false);
 
   useEffect(() => {
@@ -40,39 +40,48 @@ export default function CombatEnemyCritLabel({
     if (critImpactSeq <= 0 || critImpactSeq === lastSeqRef.current) return;
     lastSeqRef.current = critImpactSeq;
     setVisible(true);
+    opacity.stopAnimation();
+    scale.stopAnimation();
+    translateY.stopAnimation();
     opacity.setValue(0);
-    scale.setValue(0.75);
-    translateY.setValue(8);
+    scale.setValue(0.92);
+    translateY.setValue(0);
 
-    // Sit clearly above the damage number.
-    const peakY = -22;
+    const durationMs = 860;
+    const fadeInMs = 70;
+    const fadeOutMs = 220;
+    const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
 
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 70,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: fadeInMs,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.delay(holdMs),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: fadeOutMs,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
       Animated.timing(scale, {
-        toValue: 1.08,
+        toValue: 1.06,
         duration: 160,
-        easing: Easing.out(Easing.back(1.6)),
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
-        toValue: peakY,
-        duration: 480,
-        easing: Easing.out(Easing.cubic),
+        toValue: -56,
+        duration: durationMs,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
-    ]).start(() => {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 200,
-        delay: 180,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start(() => setVisible(false));
+    ]).start(({ finished }) => {
+      if (finished) setVisible(false);
     });
   }, [channel, critImpactSeq, opacity, scale, translateY]);
 

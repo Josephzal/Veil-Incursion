@@ -30,44 +30,55 @@ export default function CombatFloatingFeedback({
   const [visible, setVisible] = useState<FloatingFeedbackKind | null>(null);
   const opacity = React.useRef(new Animated.Value(0)).current;
   const scale = React.useRef(new Animated.Value(0.85)).current;
-  const translateY = React.useRef(new Animated.Value(8)).current;
+  const translateY = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!event || event.kind === 'PLAYER_CRIT' || event.kind === 'ENEMY_EVADE') return;
     setVisible(event.kind);
+    opacity.stopAnimation();
+    scale.stopAnimation();
+    translateY.stopAnimation();
     opacity.setValue(0);
-    scale.setValue(0.9);
-    translateY.setValue(10);
+    scale.setValue(0.92);
+    translateY.setValue(0);
+
+    const durationMs = 900;
+    const fadeInMs = 100;
+    const fadeOutMs = 260;
+    const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
 
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 120,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: fadeInMs,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.delay(holdMs),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: fadeOutMs,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
       Animated.timing(scale, {
         toValue: 1,
-        duration: 180,
-        easing: Easing.out(Easing.back(1.2)),
+        duration: 160,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
-        toValue: -6,
-        duration: 420,
-        easing: Easing.out(Easing.cubic),
+        toValue: -52,
+        duration: durationMs,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
-    ]).start(() => {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 280,
-        delay: 320,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start(() => {
-        setVisible(null);
-        onComplete?.();
-      });
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      setVisible(null);
+      onComplete?.();
     });
   }, [event, onComplete, opacity, scale, translateY]);
 

@@ -28,6 +28,7 @@ export const AEGIS_RUIN_SAMPLE = require('../../assets/audio/combat/ruin.m4a');
 export const AEGIS_PLAYER_BUFF_SAMPLE = require('../../assets/audio/combat/player-buff.m4a');
 export const ENVOY_DOT_SAMPLE = require('../../assets/audio/combat/envoy-dot.m4a');
 export const ENVOY_HIT_IMPACT_SAMPLE = require('../../assets/audio/combat/envoy-hit-impact.m4a');
+export const CRITICAL_HIT_SAMPLE = require('../../assets/audio/combat/crit.m4a');
 export const HEX_DOT_SAMPLE = require('../../assets/audio/combat/hexshot-dot.m4a');
 export const FRACTURE_BREAK_SAMPLE = require('../../assets/audio/combat/fracture.m4a');
 export const PAIRED_ULT1_SAMPLE = require('../../assets/audio/combat/paired-ult1.m4a');

@@ -108,7 +108,8 @@ export default function CombatArenaUnitUiPortal({
     }
   }), [unitId]);
 
-  const contactOrLater = gate.phase === 'contact'
+  const contactOrLater = gate.phase === 'feedback'
+    || gate.phase === 'contact'
     || gate.phase === 'hold'
     || gate.phase === 'recovery';
   const criticalAuthorized = mayPublishCriticalCallout({

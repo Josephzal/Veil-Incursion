@@ -1075,6 +1075,7 @@ export default function CombatScreen(): React.JSX.Element {
                       playerCritChanceBonus={playerCritChanceBonus}
                       onPlayerCritImpact={handlePlayerCritImpact}
                       godModeActive={activeIncursion.godModeActive}
+                      fullCritActive={activeIncursion.fullCritActive}
                       abilityGrafts={activeIncursion.abilityGrafts}
                       hexShotAbilityGrafts={activeIncursion.hexShotAbilityGrafts}
                       envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}

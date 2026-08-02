@@ -19,7 +19,7 @@ export default function CombatCenterStatusFloat({
 }: CombatCenterStatusFloatProps): React.JSX.Element | null {
   const lastSeqRef = useRef(0);
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.88)).current;
   const [visible, setVisible] = React.useState(false);
 
@@ -27,39 +27,47 @@ export default function CombatCenterStatusFloat({
     if (triggerSeq <= 0 || triggerSeq === lastSeqRef.current || !label) return;
     lastSeqRef.current = triggerSeq;
     setVisible(true);
+    opacity.stopAnimation();
+    translateY.stopAnimation();
+    scale.stopAnimation();
     opacity.setValue(0);
-    translateY.setValue(10);
-    scale.setValue(0.88);
+    translateY.setValue(0);
+    scale.setValue(0.92);
 
-    const riseMs = Math.floor(durationMs * 0.55);
-    const fadeMs = Math.floor(durationMs * 0.45);
+    const fadeInMs = 90;
+    const fadeOutMs = Math.max(180, Math.floor(durationMs * 0.35));
+    const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
 
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: Math.min(120, riseMs),
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: fadeInMs,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+        Animated.delay(holdMs),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: fadeOutMs,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }),
+      ]),
       Animated.timing(translateY, {
-        toValue: -18,
-        duration: riseMs,
-        easing: Easing.out(Easing.cubic),
+        toValue: -56,
+        duration: durationMs,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1,
-        duration: riseMs,
-        easing: Easing.out(Easing.back(1.12)),
+        duration: 160,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
-    ]).start(() => {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: fadeMs,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start(() => setVisible(false));
+    ]).start(({ finished }) => {
+      if (finished) setVisible(false);
     });
   }, [durationMs, label, opacity, scale, translateY, triggerSeq]);
 

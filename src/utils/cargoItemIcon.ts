@@ -30,6 +30,7 @@ const CARGO_ITEM_IMAGES: Partial<Record<CargoItemId, ImageSourcePropType>> = {
   'veil-shard': VeilShardImage,
   'god-mode': VeilShardImage,
   'bitch-potion': SoulCoreImage,
+  'crit-potion': EclipseFlareImage,
   'target-fragment': TargetFragmentImage,
   'spectral-salt': SpectralSaltImage,
   'coagulation-stitch': CoagulationStitchImage,
