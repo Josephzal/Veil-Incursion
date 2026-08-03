@@ -41,7 +41,7 @@ const EXPECTED_ULTIMATE_BY_FAMILY: Record<string, WeaponUltimateId> = {
 };
 
 const EXPECTED_DISPLAY: Record<WeaponUltimateId, string> = {
-  THREEFOLD_BRAND: 'THREEFOLD BRAND',
+  THREEFOLD_BRAND: 'ABYSSAL VERDICT',
   REND_THE_VEIL: 'REND THE VEIL',
   GRAVEFALL: 'GRAVEFALL',
   SIXTH_SEAL: 'SIXTH SEAL',
@@ -181,7 +181,7 @@ export function validateWeaponUltimates(): WeaponValidationIssue[] {
     pushIssues(issues, ['Vambrace must not fire legacy CATACLYSM_SIGIL']);
   }
   if (!canFireLegacyClassUltimate('EVISCERATE', 'aegis-runed-longsword')) {
-    pushIssues(issues, ['Longsword must own THREEFOLD BRAND / EVISCERATE hook']);
+    pushIssues(issues, ['Longsword must own ABYSSAL VERDICT (THREEFOLD_BRAND / EVISCERATE) hook']);
   }
   if (!canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-pulse-rifle')) {
     pushIssues(issues, ['Carbine must own ZERO PROTOCOL']);

@@ -151,11 +151,11 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
   },
   EVISCERATE: {
     id: 'EVISCERATE',
-    label: '[ THREEFOLD BRAND ]',
+    label: '[ ABYSSAL VERDICT ]',
     apCost: 0,
     staminaCost: 0,
     requiresFullAbyssal: true,
-    description: 'Longsword ultimate at 100% Reserve — 0 AP. Flush Reserve. 3-slice true damage. Sunder armor on survivors.',
+    description: 'Longsword ultimate at 100% Reserve — 0 AP. Flush Reserve. True-damage brand. Sunder armor on survivors.',
     tags: ['ULTIMATE', 'TRUE_DAMAGE', 'MELEE', 'DEBUFF', 'EXECUTE', 'FINISHER'],
     unlockCost: { 'anomalous-core': 1, 'ossified-ley-knot': 1 },
   },

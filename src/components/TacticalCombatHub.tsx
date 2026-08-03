@@ -488,6 +488,16 @@ import {
   WARDEN_STRIKE_VFX_LAYER_TOGGLES,
   type WardenStrikeDefenseMaterial,
 } from '../data/wardenStrikePresentation';
+import {
+  ABYSSAL_VERDICT_DISPLAY_NAME,
+  ABYSSAL_VERDICT_TIMELINE_MS,
+  beginAbyssalVerdictPresentation,
+  cancelAbyssalVerdictPresentation,
+  isAbyssalVerdictInputGuarded,
+  shouldUseAbyssalVerdictPresentation,
+  subscribeAbyssalVerdictDone,
+  subscribeAbyssalVerdictImpact,
+} from '../data/abyssalVerdictPresentation';
 import { getCombatPresentationSettings } from '../data/weaponCombatPresentation/presentationSettings';
 import {
   playCombatPresentationCue,
@@ -1115,6 +1125,28 @@ export default function TacticalCombatHub({
     /** Planned kinetic delta from Riposte cash-out — labeled separately at contact. */
     riposteBonusKinetic?: number;
   } | null>(null);
+  /** ABYSSAL VERDICT — deferred reveal / death / turn advance until IMPACT + DONE. */
+  const abyssalPendingRef = useRef<{
+    presentationId: string;
+    unitId: string;
+    affectedTargetIds: string[];
+    evadedTargetIds: string[];
+    damage: number;
+    critical: boolean;
+    killed: boolean;
+    pendingDissolve: boolean;
+    impactResolved: boolean;
+    deferredLogLines: string[];
+  } | null>(null);
+  /** When set, combat log lines are buffered until ABYSSAL VERDICT impact. */
+  const abyssalLogBufferRef = useRef<string[] | null>(null);
+  /** Resolved hurt outcome for deferred ABYSSAL VERDICT presentation (hit vs evade). */
+  const abyssalDeferredOutcomeRef = useRef<{
+    unitId: string;
+    evaded: boolean;
+    damageApplied: number;
+    killed: boolean;
+  } | null>(null);
   /** Planned Riposte kinetic bonus for the next Warden contact float. */
   const wardenRiposteBonusRef = useRef(0);
   /** Primary target for the current Strike — Riposte only cashes vs this id. */
@@ -1240,6 +1272,7 @@ export default function TacticalCombatHub({
     && !cataclysmSigilVisible
     && !catalyticConsoleVisible
     && fractureBreakUnitId == null
+    && !isAbyssalVerdictInputGuarded()
     && (isPlayerTurnRef.current || voidAmbushWindowRef.current != null);
 
   const buildPlayerAIState = (): PlayerAIState => ({
@@ -1322,7 +1355,15 @@ export default function TacticalCombatHub({
   const isBuffOrDefendAbility = (abilityId: AegisAbilityId) =>
     DEFEND_ABILITIES.includes(abilityId) || BUFF_ABILITIES.includes(abilityId);
 
-  const log = (t: string) => onTerminalLog?.(t);
+  const terminalLogRef = useRef(onTerminalLog);
+  terminalLogRef.current = onTerminalLog;
+  const log = (t: string) => {
+    if (abyssalLogBufferRef.current) {
+      abyssalLogBufferRef.current.push(t);
+      return;
+    }
+    terminalLogRef.current?.(t);
+  };
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
   const counterReady = operativeClass === 'AEGIS' && voidWardPrimed;
@@ -1545,13 +1586,116 @@ export default function TacticalCombatHub({
       }
       publishSquadUi(squadRef.current);
     });
+
+    const unsubAbyssalImpact = subscribeAbyssalVerdictImpact((result) => {
+      const pending = abyssalPendingRef.current;
+      if (!pending || pending.presentationId !== result.presentationId || pending.impactResolved) {
+        return;
+      }
+      pending.impactResolved = true;
+      // Publish buffered combat-log outcome only at IMPACT (slash arrival / pass).
+      for (const line of pending.deferredLogLines) {
+        terminalLogRef.current?.(line);
+      }
+      const hitIds = pending.affectedTargetIds.filter(
+        (id) => id && !pending.evadedTargetIds.includes(id),
+      );
+      const evadeIds = pending.evadedTargetIds.filter(Boolean);
+      for (const unitId of hitIds) {
+        delete visualHpHoldRef.current[unitId];
+      }
+      for (const unitId of evadeIds) {
+        delete visualHpHoldRef.current[unitId];
+        evadeImpactSeqRef.current[unitId] = (evadeImpactSeqRef.current[unitId] ?? 0) + 1;
+        apparitionRef?.current?.triggerStatEvade();
+      }
+      // Primary cinematic target owns major hit FX; secondaries (none for single-target) get smaller bursts.
+      const primaryId = pending.unitId;
+      const successfulHit = pending.damage > 0 && hitIds.includes(primaryId);
+      if (successfulHit) {
+        // Hit flash drives blood / flash only — recoil is suppressed while Abyssal is active.
+        hitFlashSeqRef.current[primaryId] = (hitFlashSeqRef.current[primaryId] ?? 0) + 1;
+        damageFloatSeqRef.current[primaryId] = (damageFloatSeqRef.current[primaryId] ?? 0) + 1;
+        lifecycleFloatLabelsRef.current[primaryId] = String(pending.damage);
+        lifecycleFloatTonesRef.current[primaryId] = 'neutral';
+        bloodBurstRepeatsRef.current[primaryId] = 1;
+        bloodMistScaleRef.current[primaryId] = 1;
+        const prevImpact = classImpactFxRef.current[primaryId]?.seq ?? 0;
+        classImpactFxRef.current[primaryId] = {
+          seq: prevImpact + 1,
+          kind: 'AEGIS_SLICE',
+        };
+        Vibration.vibrate(18);
+        if (pending.critical) {
+          const prev = critImpactSeqRef.current[primaryId]?.seq ?? 0;
+          critImpactSeqRef.current[primaryId] = {
+            seq: prev + 1,
+            channel: 'TRUE',
+          };
+          onPlayerCritImpact?.({ unitId: primaryId, channel: 'TRUE' });
+        }
+      }
+      for (const unitId of hitIds) {
+        if (unitId === primaryId) continue;
+        hitFlashSeqRef.current[unitId] = (hitFlashSeqRef.current[unitId] ?? 0) + 1;
+        const prevImpact = classImpactFxRef.current[unitId]?.seq ?? 0;
+        classImpactFxRef.current[unitId] = {
+          seq: prevImpact + 1,
+          kind: 'AEGIS_SLICE',
+        };
+      }
+      const settings = getCombatPresentationSettings();
+      if (successfulHit) {
+        const hitStop = settings.reducedMotion
+          ? Math.max(20, Math.floor(ABYSSAL_VERDICT_TIMELINE_MS.hitStopMs * 0.45))
+          : ABYSSAL_VERDICT_TIMELINE_MS.hitStopMs;
+        triggerHitstop(hitStop);
+        // No screen shake — keeps the planted enemy visually still.
+      }
+      if (pending.pendingDissolve && successfulHit) {
+        const unit = getUnitById(squadRef.current, pending.unitId);
+        if (unit && !isUnitAlive(unit)) {
+          beginDissolveForUnit(pending.unitId, unit, unit.currentHp);
+        }
+      }
+      publishSquadUi(squadRef.current);
+      if (successfulHit) {
+        try {
+          unlockCombatPresentationAudio();
+          playCombatPresentationCue('sfx.aegis.ultimate');
+        } catch {
+          // optional
+        }
+      }
+    });
+
+    const unsubAbyssalDone = subscribeAbyssalVerdictDone((result) => {
+      const pending = abyssalPendingRef.current;
+      if (!pending || pending.presentationId !== result.presentationId) return;
+      const killed = pending.killed;
+      abyssalPendingRef.current = null;
+      combatPausedRef.current = false;
+      cycleRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
+      if (!killed) {
+        passToEnemy(false);
+      }
+    });
+
     return () => {
       unsubscribe();
+      unsubAbyssalImpact();
+      unsubAbyssalDone();
       cancelWardenStrikePresentation();
+      cancelAbyssalVerdictPresentation();
       visualHpHoldRef.current = {};
       wardenPendingRevealRef.current = null;
       wardenPendingDefenseFloatRef.current = null;
       wardenPlayerActionIdRef.current = null;
+      abyssalPendingRef.current = null;
+      abyssalDeferredOutcomeRef.current = null;
+      abyssalLogBufferRef.current = null;
     };
   // publishSquadUi is stable enough via refs; mount once per combat hub lifetime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3551,8 +3695,15 @@ export default function TacticalCombatHub({
       /** Burn/bleed/DoT — skip operative attack pose; still flash the damaged unit. */
       indirectDamage?: boolean;
       ignoreDefenses?: boolean;
+      /** When false, skip enemy evade rolls (ABYSSAL VERDICT cannot be evaded). */
+      rollEvade?: boolean;
       /** Floor for Kinetic Armor strip (Nullbreach innate pressure). */
       innateArmorPressureLayers?: number;
+      /**
+       * ABYSSAL VERDICT cinematic — apply HP now, hold HUD / floats / death
+       * until the named IMPACT beat.
+       */
+      deferAbyssalVerdict?: boolean;
     },
   ): boolean => {
     // Hex Shot trap / overwatch damage is never a weapon attack presentation.
@@ -3822,8 +3973,13 @@ export default function TacticalCombatHub({
       critical = true;
       ignoreDefenses = true;
     } else if (source && source !== 'COUNTER' && !options?.echoHit && options?.rollCrit !== false) {
+      const skipEvade = options?.rollEvade === false || options?.deferAbyssalVerdict === true;
       const hit = resolvePlayerAttackHit(
-        { defender: working, bypassPostureEvade: bypassAllMitigation },
+        {
+          defender: working,
+          bypassPostureEvade: bypassAllMitigation || skipEvade,
+          bypassAllEvade: skipEvade,
+        },
         {
           abilityId: options?.abilityId,
           target: working,
@@ -3893,6 +4049,26 @@ export default function TacticalCombatHub({
             defenseMaterial: 'NONE',
             fractureApplied: false,
           });
+          publishSquadUi(squadRef.current);
+          log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+          if (
+            source
+            && options?.abilityId
+            && abilityCarriesStrikeTag(operativeClass, options.abilityId)
+            && !options?.nestedPresentation
+          ) {
+            signalRiposteHeld();
+          }
+          return false;
+        }
+        // ABYSSAL VERDICT: resolve evade now, reveal EVADED floater / motion at IMPACT pass.
+        if (options?.deferAbyssalVerdict) {
+          abyssalDeferredOutcomeRef.current = {
+            unitId: evadeUnitId,
+            evaded: true,
+            damageApplied: 0,
+            killed: false,
+          };
           publishSquadUi(squadRef.current);
           log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
           if (
@@ -4482,6 +4658,7 @@ export default function TacticalCombatHub({
       && options?.abilityId !== 'RUIN'
       && !skipPoseForWarden
       && !isWardenStrikeInputGuarded()
+      && !options?.deferAbyssalVerdict
     ) {
       triggerPlayerAttackPose(working);
     }
@@ -4606,53 +4783,59 @@ export default function TacticalCombatHub({
         patchUnit(e.unitId, { evadeActive: false, evadeTurnsRemaining: 0 });
         log('>> FOLDED — phased silhouette forced into true position.');
       }
-      hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
-      // Multi-pulse blood burst: Carbine RANGED ×3, Paired Blades ×2.
-      const burstAbilityId = options?.abilityId ?? lastPlayerAbilityRef.current;
-      const burstTags = options?.abilityTags?.length
-        ? options.abilityTags
-        : resolveOperativeAbilityTags(burstAbilityId);
-      const directWeaponHit = Boolean(
-        resolvedWeapon
-        && !options?.indirectDamage
-        && !options?.echoHit,
-      );
-      const carbineRangedBurst = Boolean(
-        directWeaponHit
-        && resolvedWeapon?.familyId === 'hex-pulse-rifle'
-        && burstTags.includes('RANGED'),
-      );
-      const pairedBladesBurst = Boolean(
-        directWeaponHit
-        && resolvedWeapon?.familyId === 'aegis-rift-edge',
-      );
-      bloodBurstRepeatsRef.current[e.unitId] = carbineRangedBurst
-        ? 3
-        : pairedBladesBurst
-          ? 2
-          : 1;
-      bloodMistScaleRef.current[e.unitId] = (
-        resolvedWeapon?.familyId === 'hex-void-cannon'
-        || resolvedWeapon?.familyId === 'aegis-claymore-blade'
-      ) ? 1.5 : 1;
-      // Prefer weapon-specific presentation; skip generic class flashes when a
-      // permanent weapon is resolving (Phase 3M repair — removes mustard/purple/red fills).
-      if (
-        source
-        && !options?.indirectDamage
-        && !options?.echoHit
-        && !resolvedWeapon
-        && options?.abilityId !== 'RUIN'
-      ) {
-        const impactKind = operativeClass === 'AEGIS'
-          ? 'AEGIS_SLICE' as const
-          : operativeClass === 'HEX_SHOT'
-            ? 'HEX_BULLET' as const
-            : 'ENVOY_BURST' as const;
-        const prevImpact = classImpactFxRef.current[e.unitId]?.seq ?? 0;
-        classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
+      const deferAbyssalHitFx = options?.deferAbyssalVerdict === true;
+      if (!deferAbyssalHitFx) {
+        hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       }
-      Vibration.vibrate(18);
+      // Multi-pulse blood burst: Carbine RANGED ×3, Paired Blades ×2.
+      // ABYSSAL VERDICT owns hit FX at the delayed IMPACT beat.
+      if (!deferAbyssalHitFx) {
+        const burstAbilityId = options?.abilityId ?? lastPlayerAbilityRef.current;
+        const burstTags = options?.abilityTags?.length
+          ? options.abilityTags
+          : resolveOperativeAbilityTags(burstAbilityId);
+        const directWeaponHit = Boolean(
+          resolvedWeapon
+          && !options?.indirectDamage
+          && !options?.echoHit,
+        );
+        const carbineRangedBurst = Boolean(
+          directWeaponHit
+          && resolvedWeapon?.familyId === 'hex-pulse-rifle'
+          && burstTags.includes('RANGED'),
+        );
+        const pairedBladesBurst = Boolean(
+          directWeaponHit
+          && resolvedWeapon?.familyId === 'aegis-rift-edge',
+        );
+        bloodBurstRepeatsRef.current[e.unitId] = carbineRangedBurst
+          ? 3
+          : pairedBladesBurst
+            ? 2
+            : 1;
+        bloodMistScaleRef.current[e.unitId] = (
+          resolvedWeapon?.familyId === 'hex-void-cannon'
+          || resolvedWeapon?.familyId === 'aegis-claymore-blade'
+        ) ? 1.5 : 1;
+        // Prefer weapon-specific presentation; skip generic class flashes when a
+        // permanent weapon is resolving (Phase 3M repair — removes mustard/purple/red fills).
+        if (
+          source
+          && !options?.indirectDamage
+          && !options?.echoHit
+          && !resolvedWeapon
+          && options?.abilityId !== 'RUIN'
+        ) {
+          const impactKind = operativeClass === 'AEGIS'
+            ? 'AEGIS_SLICE' as const
+            : operativeClass === 'HEX_SHOT'
+              ? 'HEX_BULLET' as const
+              : 'ENVOY_BURST' as const;
+          const prevImpact = classImpactFxRef.current[e.unitId]?.seq ?? 0;
+          classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
+        }
+        Vibration.vibrate(18);
+      }
       const useWardenStrike = shouldUseWardenStrikePresentation({
         weaponFamilyId: resolvedWeapon?.familyId,
         abilityId: options?.abilityId,
@@ -4694,9 +4877,11 @@ export default function TacticalCombatHub({
         && !options?.echoHit
         && !options?.nestedPresentation
         && options?.abilityId !== 'RUIN'
+        && !options?.deferAbyssalVerdict
         && !(useWardenStrike && !wardenFollowUp)
         && !wardenFollowUp
         && !isWardenStrikeInputGuarded()
+        && !isAbyssalVerdictInputGuarded()
       ) {
         try {
           unlockCombatPresentationAudio();
@@ -4755,7 +4940,16 @@ export default function TacticalCombatHub({
       playerActionKind: options?.playerActionKind,
       nestedPresentation: options?.nestedPresentation,
     }) && !options?.indirectDamage && !options?.echoHit && !isWardenStrikeInputGuarded();
-    if (armWardenPresentation && e.unitId) {
+    const armAbyssalVerdict = options?.deferAbyssalVerdict === true && !!e.unitId;
+    if (armAbyssalVerdict && e.unitId) {
+      abyssalDeferredOutcomeRef.current = {
+        unitId: e.unitId,
+        evaded: false,
+        damageApplied: dmg,
+        killed: hp <= 0 && !working.isSlumped,
+      };
+    }
+    if ((armWardenPresentation || armAbyssalVerdict) && e.unitId) {
       // Hold the pre-hit snapshot from `e` — thrall slump death patches may already
       // have zeroed the live squad unit before presentation arms.
       visualHpHoldRef.current[e.unitId] = e.currentHp;
@@ -4768,13 +4962,18 @@ export default function TacticalCombatHub({
       if (hp <= 0 && e.unitId) {
         const latest = getUnitById(squadRef.current, e.unitId) ?? { ...working, currentHp: hp };
         // Never dissolve a valid thrall slump; dissolve only when truly dead.
-        if (!isUnitAlive(latest)) beginDissolveForUnit(e.unitId, latest, latest.currentHp);
+        // ABYSSAL VERDICT defers death presentation until IMPACT.
+        if (!isUnitAlive(latest) && !armAbyssalVerdict) {
+          beginDissolveForUnit(e.unitId, latest, latest.currentHp);
+        }
       }
     } else {
       patchUnit(e.unitId, syncRosterCombatState({ ...working, currentHp: hp }));
       if (hp <= 0 && e.unitId) {
         const latest = getUnitById(squadRef.current, e.unitId) ?? { ...working, currentHp: hp };
-        if (!isUnitAlive(latest)) beginDissolveForUnit(e.unitId, latest, latest.currentHp);
+        if (!isUnitAlive(latest) && !armAbyssalVerdict) {
+          beginDissolveForUnit(e.unitId, latest, latest.currentHp);
+        }
       } else if (e.unitId && source && dmg > 0 && working.isRivalMerc) {
         const swap = tryRivalEmergencySwap(squadRef.current, e.unitId);
         if (swap.logLine) {
@@ -4782,6 +4981,9 @@ export default function TacticalCombatHub({
           syncSquad(swap.squad);
         }
       }
+    }
+    if (armAbyssalVerdict && e.unitId) {
+      publishSquadUi(squadRef.current);
     }
 
     if (armWardenPresentation && e.unitId) {
@@ -5388,7 +5590,7 @@ export default function TacticalCombatHub({
     if (mods.corruptedBloodDamage > 0) {
       log('[CORRUPTED BLOOD] >> Survivors marked for void bleed.');
     }
-    log('[THREEFOLD BRAND] >> Reserve vented — survivor armor shattered.');
+    log(`[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Reserve vented — survivor armor shattered.`);
   };
 
   const applyTetanusGlitch = () => {
@@ -8419,7 +8621,7 @@ export default function TacticalCombatHub({
     }
     if (sliceReady) {
       if (skipMinigame) {
-        log('>> [THREEFOLD BRAND] >> Simplified inputs — STANDARD grade commit.');
+        log(`>> [${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Simplified inputs — STANDARD grade commit.`);
         commitThreefoldBrandSimplified();
         return;
       }
@@ -8494,7 +8696,7 @@ export default function TacticalCombatHub({
       setCycleState('TEXT_COMBAT');
       setEviscerateTargetUnitId(null);
       combatPausedRef.current = false;
-      log('>> [THREEFOLD BRAND] >> Cancelled — free. Abyssal Reserve retained.');
+      log(`>> [${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Cancelled — free. Abyssal Reserve retained.`);
     }
   };
 
@@ -9102,7 +9304,7 @@ export default function TacticalCombatHub({
       log('[REJECTED] >> Threefold Brand requires 100% Abyssal Reserve.');
       return;
     }
-    log('[THREEFOLD BRAND] >> Execution aperture open.');
+    log(`[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Execution aperture open.`);
     triggerSlice();
   };
 
@@ -9512,6 +9714,149 @@ export default function TacticalCombatHub({
     })(tapX, tapY, session);
   };
 
+  const commitAbyssalVerdictDamage = (input: {
+    dmg: number;
+    gradeLabel: string;
+    targetHint?: { gridSlot?: string | null } | null;
+  }): void => {
+    const useCinematic = shouldUseAbyssalVerdictPresentation({
+      operativeClass,
+      weaponFamilyId: activeWeaponFamilyId,
+      abilityId: 'EVISCERATE',
+      actionKind: 'ULTIMATE',
+    });
+    // Selected intent — then the same intercept resolver hurtEnemy uses.
+    const selectedTargetId = eviscerateTargetUnitId
+      ?? selectedTargetIdRef.current
+      ?? enemyRef.current?.unitId
+      ?? null;
+    const resolvedTargetId = selectedTargetId
+      ? resolveClassWardenInterceptTarget(
+        squadRef.current,
+        operativeClass,
+        'EVISCERATE',
+        selectedTargetId,
+      )
+      : null;
+
+    if (!useCinematic) {
+      triggerPlayerAttackPose(input.targetHint ?? enemyRef.current);
+      const eradicated = hurtEnemy(input.dmg, `[${ABYSSAL_VERDICT_DISPLAY_NAME}]`, 'EVISCERATE', {
+        channel: 'TRUE',
+        abilityId: 'EVISCERATE',
+        actionKind: 'ULTIMATE',
+        targetId: resolvedTargetId ?? undefined,
+        rollEvade: false,
+      });
+      if (!eradicated) applyEviscerateAftermath();
+      if (eradicated) return;
+      cycleRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
+      combatPausedRef.current = false;
+      passToEnemy(false);
+      return;
+    }
+
+    combatPausedRef.current = true;
+    const presentationId = `abyssal-${Date.now()}`;
+    abyssalLogBufferRef.current = [];
+    abyssalDeferredOutcomeRef.current = null;
+    const eradicated = hurtEnemy(input.dmg, `[${ABYSSAL_VERDICT_DISPLAY_NAME}]`, 'EVISCERATE', {
+      channel: 'TRUE',
+      abilityId: 'EVISCERATE',
+      actionKind: 'ULTIMATE',
+      targetId: resolvedTargetId ?? undefined,
+      deferAbyssalVerdict: true,
+      rollEvade: false,
+    });
+    // hurtEnemy mutates the ref; read past CFA narrowing from the null assignment above.
+    type AbyssalDeferredOutcome = {
+      unitId: string;
+      evaded: boolean;
+      damageApplied: number;
+      killed: boolean;
+    };
+    const deferredOutcome = abyssalDeferredOutcomeRef.current as AbyssalDeferredOutcome | null;
+    abyssalDeferredOutcomeRef.current = null;
+    // Reserve flush / brands once at commit — not again at impact.
+    if (!eradicated) applyEviscerateAftermath();
+    const deferredLogLines = abyssalLogBufferRef.current ?? [];
+    abyssalLogBufferRef.current = null;
+
+    // Prefer the unit hurtEnemy actually resolved (post-intercept).
+    const finalizedTargetId = deferredOutcome?.unitId
+      ?? resolvedTargetId
+      ?? selectedTargetId
+      ?? enemyRef.current?.unitId
+      ?? '';
+    if (!finalizedTargetId) {
+      for (const line of deferredLogLines) terminalLogRef.current?.(line);
+      combatPausedRef.current = false;
+      cycleRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
+      if (!eradicated) passToEnemy(false);
+      return;
+    }
+
+    // ABYSSAL VERDICT cannot be evaded — presentation always treats as a landed hit.
+    const damage = deferredOutcome?.damageApplied ?? input.dmg;
+    const killed = eradicated;
+    const affectedTargetIds = damage > 0 ? [finalizedTargetId] : [];
+    const evadedTargetIds: string[] = [];
+
+    abyssalPendingRef.current = {
+      presentationId,
+      unitId: finalizedTargetId,
+      affectedTargetIds,
+      evadedTargetIds,
+      damage,
+      critical: false,
+      killed,
+      pendingDissolve: killed,
+      impactResolved: false,
+      deferredLogLines,
+    };
+
+    try {
+      unlockCombatPresentationAudio();
+      playCombatPresentationCue('sfx.aegis.ultimate2');
+    } catch {
+      // optional charge cue
+    }
+
+    const started = beginAbyssalVerdictPresentation({
+      presentationId,
+      targetId: finalizedTargetId,
+      affectedTargetIds,
+      evadedTargetIds,
+      damage,
+      killed,
+      critical: false,
+      grade: input.gradeLabel,
+      deferredLogLines,
+    });
+
+    if (!started) {
+      // Asset / re-entry failure — reveal immediately, never soft-lock.
+      const pending = abyssalPendingRef.current;
+      abyssalPendingRef.current = null;
+      for (const line of deferredLogLines) terminalLogRef.current?.(line);
+      if (pending) delete visualHpHoldRef.current[pending.unitId];
+      if (eradicated && pending) {
+        const unit = getUnitById(squadRef.current, pending.unitId);
+        if (unit && !isUnitAlive(unit)) beginDissolveForUnit(pending.unitId, unit, unit.currentHp);
+      }
+      publishSquadUi(squadRef.current);
+      combatPausedRef.current = false;
+      cycleRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
+      if (!eradicated) passToEnemy(false);
+    }
+  };
+
   const evaluateSlice = () => {
     if (isCombatTerminal()) return;
     const s = sliceSessionRef.current; if (s.evaluated) return;
@@ -9522,7 +9867,7 @@ export default function TacticalCombatHub({
       setCycleState('TEXT_COMBAT');
       setEviscerateTargetUnitId(null);
       combatPausedRef.current = false;
-      log('>> [THREEFOLD BRAND] >> Aperture closed — no traces locked. Abyssal Reserve retained.');
+      log(`>> [${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Aperture closed — no traces locked. Abyssal Reserve retained.`);
       return;
     }
     const resolved = resolveWeaponUltimateGrade({ hitCount: s.hitCount });
@@ -9531,51 +9876,42 @@ export default function TacticalCombatHub({
     const dmg = hits >= 3 ? base : Math.floor(base * (hits / 3));
     log(
       resolved.grade === 'PERFECT'
-        ? `[THREEFOLD BRAND] >> PERFECT [3/3] — ${dmg} damage.`
-        : `[THREEFOLD BRAND] >> ${resolved.grade} [${hits}/3] — ${dmg} damage.`,
+        ? `[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> PERFECT [3/3] — ${dmg} damage.`
+        : `[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> ${resolved.grade} [${hits}/3] — ${dmg} damage.`,
     );
-    triggerPlayerAttackPose(
-      getUnitById(squadRef.current, eviscerateTargetUnitId ?? selectedTargetIdRef.current ?? '')
-        ?? enemyRef.current,
-    );
-    const eradicated = hurtEnemy(dmg, '[THREEFOLD BRAND]', 'EVISCERATE', {
-      channel: 'TRUE',
-      abilityId: 'EVISCERATE',
+    commitAbyssalVerdictDamage({
+      dmg,
+      gradeLabel: resolved.grade,
+      targetHint: getUnitById(
+        squadRef.current,
+        eviscerateTargetUnitId ?? selectedTargetIdRef.current ?? '',
+      ) ?? enemyRef.current,
     });
-    if (!eradicated) applyEviscerateAftermath();
-    if (eradicated) return;
-    cycleRef.current = 'TEXT_COMBAT';
-    setCycleState('TEXT_COMBAT');
-    setEviscerateTargetUnitId(null);
-    passToEnemy(false);
   };
 
   const commitThreefoldBrandSimplified = () => {
     if (!canFireLegacyClassUltimate('EVISCERATE', activeWeaponFamilyId)) {
-      log('[REJECTED] >> Threefold Brand requires the Longsword.');
+      log(`[REJECTED] >> ${ABYSSAL_VERDICT_DISPLAY_NAME} requires the Longsword.`);
       return;
     }
     if (isExhausted) {
-      log('[REJECTED] >> Exhausted — Threefold Brand offline.');
+      log(`[REJECTED] >> Exhausted — ${ABYSSAL_VERDICT_DISPLAY_NAME} offline.`);
       return;
     }
     if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) {
-      log('[REJECTED] >> Threefold Brand requires 100% Abyssal Reserve.');
+      log(`[REJECTED] >> ${ABYSSAL_VERDICT_DISPLAY_NAME} requires 100% Abyssal Reserve.`);
       return;
     }
     const resolved = resolveWeaponUltimateGrade(buildSimplifiedUltimateRawResult('THREEFOLD_BRAND'));
     const hits = resolved.effectiveHits ?? 1;
     const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
     const dmg = Math.floor(base * (hits / 3));
-    log(`[THREEFOLD BRAND] >> STANDARD simplified — ${dmg} damage.`);
-    triggerPlayerAttackPose(enemyRef.current);
-    const eradicated = hurtEnemy(dmg, '[THREEFOLD BRAND]', 'EVISCERATE', {
-      channel: 'TRUE',
-      abilityId: 'EVISCERATE',
+    log(`[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> STANDARD simplified — ${dmg} damage.`);
+    commitAbyssalVerdictDamage({
+      dmg,
+      gradeLabel: resolved.grade,
+      targetHint: enemyRef.current,
     });
-    if (!eradicated) applyEviscerateAftermath();
-    if (eradicated) return;
-    passToEnemy(false);
   };
 
   const queueSlice = (idx: number) => {
@@ -10527,7 +10863,7 @@ export default function TacticalCombatHub({
               : stagedWeaponUltimateId
                 ? `[ ${getWeaponUltimateById(stagedWeaponUltimateId).displayName} ]`
                 : cycleState === 'OFFENSE_SLICE'
-                  ? '[ THREEFOLD BRAND ]'
+                  ? `[ ${ABYSSAL_VERDICT_DISPLAY_NAME} ]`
                   : '[ WEAPON ULTIMATE ]'
         }
         onCancel={cancelWeaponUltimateInteraction}

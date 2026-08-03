@@ -242,6 +242,7 @@ export default function CombatEnemyAnchorMotion({
     lastHitRef.current = hitFlashSeq;
     let reducedMotion = false;
     let wardenActive = false;
+    let abyssalActive = false;
     let recoilPx = RECOIL_X;
     let recoilOutMs = 50;
     let recoilReturnMs = 100;
@@ -267,8 +268,17 @@ export default function CombatEnemyAnchorMotion({
         };
         WARDEN_STRIKE_VFX_LAYER_TOGGLES: { enemyRecoil: boolean };
       };
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const abyssalMod = require('../../data/abyssalVerdictPresentation') as {
+        isAbyssalVerdictPresentationActive: () => boolean;
+      };
       reducedMotion = settingsMod.getCombatPresentationSettings().reducedMotion;
       wardenActive = wardenMod.isWardenStrikePresentationActive();
+      abyssalActive = abyssalMod.isAbyssalVerdictPresentationActive();
+      // ABYSSAL VERDICT: plant the enemy — blood/flash still fire, no positional recoil.
+      if (abyssalActive) {
+        return;
+      }
       if (!wardenMod.WARDEN_STRIKE_VFX_LAYER_TOGGLES.enemyRecoil && wardenActive) {
         return;
       }

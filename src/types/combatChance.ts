@@ -57,6 +57,8 @@ export interface EnemyEvadeContext {
   defender: EnemyCombatProfile;
   /** Overcharged boon — posture evade does not apply. */
   bypassPostureEvade?: boolean;
+  /** Skip all enemy evade (stat + posture) — guaranteed contact. */
+  bypassAllEvade?: boolean;
 }
 
 export interface CombatHitResolution {

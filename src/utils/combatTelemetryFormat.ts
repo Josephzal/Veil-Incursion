@@ -139,7 +139,7 @@ export function formatAegisReserveLabel(
   if (options.riposteReady) tags.push('RIPOSTE');
   if (options.overcharged) tags.push('OVERCHARGED');
   const ultimateLabel = options.ultimateReadyLabel
-    ?? (options.eviscerateReady ? 'THREEFOLD BRAND' : null);
+    ?? (options.eviscerateReady ? 'ABYSSAL VERDICT' : null);
   if (ultimateLabel) tags.push(ultimateLabel);
   const suffix = tags.length > 0 ? ` • ${tags.join(' • ')}` : '';
   return `AR // ${capLabel}${suffix}`;

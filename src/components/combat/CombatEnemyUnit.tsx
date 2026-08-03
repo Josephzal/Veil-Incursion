@@ -16,6 +16,7 @@ import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyBloodBurst from './CombatEnemyBloodBurst';
 import CombatEnemyEvadeEffect from './CombatEnemyEvadeEffect';
 import WardenStrikeEnemyContactHost from './WardenStrikeEnemyContactHost';
+import AbyssalVerdictTargetFx from './AbyssalVerdictTargetFx';
 import CombatArenaUnitUiPortal from './CombatArenaUnitUiPortal';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
@@ -31,6 +32,7 @@ import {
   subscribeWardenStrikePresentation,
   WARDEN_STRIKE_VFX_LAYER_TOGGLES,
 } from '../../data/wardenStrikePresentation';
+import { subscribeAbyssalVerdictPresentation } from '../../data/abyssalVerdictPresentation';
 
 const MONO = 'monospace';
 const ALPHA_CRIMSON = '#ff4444';
@@ -79,6 +81,8 @@ export default function CombatEnemyUnit({
 }: CombatEnemyUnitProps): React.JSX.Element | null {
   const [portraitFrozen, setPortraitFrozen] = useState(false);
   const [wardenCrossBelowPlayer, setWardenCrossBelowPlayer] = useState(false);
+  const [abyssalUnitOpacity, setAbyssalUnitOpacity] = useState(1);
+  const [abyssalMotionFrozen, setAbyssalMotionFrozen] = useState(false);
   const handleHitStopChange = useCallback((frozen: boolean) => {
     setPortraitFrozen(frozen);
   }, []);
@@ -94,6 +98,20 @@ export default function CombatEnemyUnit({
       isWardenStrikePresentationActive()
       && !event.result.replayOnly,
     );
+  }), [unit.unitId]);
+
+  useEffect(() => subscribeAbyssalVerdictPresentation((event) => {
+    if (event.phase === 'idle' || event.phase === 'done') {
+      setAbyssalUnitOpacity(1);
+      setAbyssalMotionFrozen(false);
+      return;
+    }
+    // Freeze idle bob / turn steps for the whole cinematic — enemy stays planted.
+    setAbyssalMotionFrozen(true);
+    const isPrimary = event.result.targetId === unit.unitId
+      || event.result.affectedTargetIds.includes(unit.unitId)
+      || event.result.evadedTargetIds.includes(unit.unitId);
+    setAbyssalUnitOpacity(isPrimary ? 1 : event.nonTargetEnemyOpacity);
   }), [unit.unitId]);
 
   const isArena = variant === 'arena';
@@ -130,9 +148,12 @@ export default function CombatEnemyUnit({
         styles.imageShell,
         isArena ? styles.imageShellArena : styles.imageShellCompact,
         {
-          opacity: breachTarget
-            ? 1
-            : unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
+          opacity: Math.min(
+            abyssalUnitOpacity,
+            breachTarget
+              ? 1
+              : unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
+          ),
         },
       ]}
       pointerEvents={dissolving ? 'none' : 'box-none'}
@@ -174,7 +195,7 @@ export default function CombatEnemyUnit({
               hitFlashSeq={unit.hitFlashSeq}
               backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
               meleeDashDelta={meleeDashDelta}
-              frozen={portraitFrozen || dissolving}
+              frozen={portraitFrozen || dissolving || abyssalMotionFrozen}
               layoutUnitScale={layoutUnitScale}
             >
               <View
@@ -237,6 +258,7 @@ export default function CombatEnemyUnit({
                               burstRepeats={unit.bloodBurstRepeats ?? 1}
                               mistScale={Math.max(unit.bloodMistScale ?? 1, bloodMistScale)}
                             />
+                            <AbyssalVerdictTargetFx unitId={unit.unitId} />
                           </View>
                         </CombatSilhouetteShatterEffect>
                       </CombatEnemyHitEffect>

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import { resolveArenaDefenseState } from '../../data/combatArenaDefenseTelegraphEngine';
@@ -7,6 +7,7 @@ import CombatArenaDefensePips from './CombatArenaDefensePips';
 import CombatArenaIntentGlyph from './CombatArenaIntentGlyph';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
+import { subscribeAbyssalVerdictPresentation } from '../../data/abyssalVerdictPresentation';
 
 interface CombatEnemyOverheadBarsProps {
   unit: Pick<
@@ -37,6 +38,10 @@ export default function CombatEnemyOverheadBars({
   unit,
   intentGlyph = null,
 }: CombatEnemyOverheadBarsProps): React.JSX.Element {
+  const [cinematicBarOpacity, setCinematicBarOpacity] = useState(1);
+  useEffect(() => subscribeAbyssalVerdictPresentation((event) => {
+    setCinematicBarOpacity(event.hpBarOpacity);
+  }), []);
   const slumped = unit.isSlumped === true;
   const hpRatio = unit.maxHp > 0 ? unit.currentHp / unit.maxHp : 1;
   const fractureMax = unit.fractureMax ?? 100;
@@ -67,7 +72,7 @@ export default function CombatEnemyOverheadBars({
     : 0;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, cinematicBarOpacity < 1 ? { opacity: cinematicBarOpacity } : null]}>
       {intentGlyph && !slumped ? (
         <View style={styles.intentRow} pointerEvents="none">
           <CombatArenaIntentGlyph glyph={intentGlyph} compact />

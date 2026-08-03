@@ -47,7 +47,7 @@ const EXPECTED: Array<{
   displayName: string;
   controller: string;
 }> = [
-  { weaponFamilyId: 'aegis-runed-longsword', displayName: 'THREEFOLD BRAND', controller: 'THREEFOLD_BRAND_SLICE' },
+  { weaponFamilyId: 'aegis-runed-longsword', displayName: 'ABYSSAL VERDICT', controller: 'THREEFOLD_BRAND_SLICE' },
   { weaponFamilyId: 'aegis-rift-edge', displayName: 'REND THE VEIL', controller: 'WU4_STAGED' },
   { weaponFamilyId: 'aegis-claymore-blade', displayName: 'GRAVEFALL', controller: 'WU4_STAGED' },
   { weaponFamilyId: 'hex-silver-core-sidearm', displayName: 'SIXTH SEAL', controller: 'WU4_STAGED' },

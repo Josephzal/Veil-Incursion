@@ -8,6 +8,8 @@ interface CombatTacticalDashboardProps {
   commandDeck: React.ReactNode;
   /** Soft-dim the console during end-of-encounter resolution (no solid black wash). */
   resolutionDimmed?: boolean;
+  /** ABYSSAL VERDICT peripheral HUD dim (does not scale with world camera). */
+  cinematicOpacity?: number;
 }
 
 /**
@@ -18,11 +20,17 @@ export default function CombatTacticalDashboard({
   operativeStatus,
   commandDeck,
   resolutionDimmed = false,
+  cinematicOpacity = 1,
 }: CombatTacticalDashboardProps): React.JSX.Element {
+  const dimmed = resolutionDimmed || cinematicOpacity < 0.5;
   return (
     <View
-      style={[styles.dashboard, resolutionDimmed ? styles.dashboardDimmed : null]}
-      pointerEvents={resolutionDimmed ? 'none' : 'box-none'}
+      style={[
+        styles.dashboard,
+        resolutionDimmed ? styles.dashboardDimmed : null,
+        !resolutionDimmed && cinematicOpacity < 1 ? { opacity: cinematicOpacity } : null,
+      ]}
+      pointerEvents={dimmed ? 'none' : 'box-none'}
     >
       {resolutionDimmed ? null : <CombatConsoleDockFade />}
       <View

@@ -32,7 +32,7 @@ assert.deepEqual(auditWeaponUltimatePlayerFacingCatalogs(), []);
 assert.equal(listWeaponUltimates().filter((u) => u.status === 'WIRED').length, 9);
 
 // Catalog labels are weapon ultimate names, not retired class titles.
-assert.equal(AEGIS_ABILITY_CATALOG.EVISCERATE.label, '[ THREEFOLD BRAND ]');
+assert.equal(AEGIS_ABILITY_CATALOG.EVISCERATE.label, '[ ABYSSAL VERDICT ]');
 assert.ok(!AEGIS_ABILITY_CATALOG.EVISCERATE.label.includes('EVISCERATE'));
 assert.equal(HEX_SHOT_ABILITY_CATALOG.ZERO_PROTOCOL.label, '[ ZERO PROTOCOL ]');
 assert.ok(!HEX_SHOT_ABILITY_CATALOG.ZERO_PROTOCOL.label.includes('ZERO-PROTOCOL'));

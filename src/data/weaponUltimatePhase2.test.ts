@@ -46,7 +46,7 @@ assert.equal(getWeaponUltimate('envoy-sanguine-prism').status, 'WIRED');
 
 assert.equal(
   resolveUltimateFromLegacyClassId('EVISCERATE', 'aegis-runed-longsword')?.displayName,
-  'THREEFOLD BRAND',
+  'ABYSSAL VERDICT',
 );
 assert.equal(
   getCanonicalWeaponUltimateDisplayName('hex-pulse-rifle'),
@@ -58,7 +58,7 @@ assert.equal(
 );
 
 // Player-facing labels no longer emit retired class ultimate names on wired weapons
-assert.equal(AEGIS_ABILITY_CATALOG.EVISCERATE.label, '[ THREEFOLD BRAND ]');
+assert.equal(AEGIS_ABILITY_CATALOG.EVISCERATE.label, '[ ABYSSAL VERDICT ]');
 assert.ok(!AEGIS_ABILITY_CATALOG.EVISCERATE.label.includes('EVISCERATE'));
 assert.equal(HEX_SHOT_ABILITY_CATALOG.ZERO_PROTOCOL.label, '[ ZERO PROTOCOL ]');
 assert.ok(!HEX_SHOT_ABILITY_CATALOG.ZERO_PROTOCOL.label.includes('ZERO-PROTOCOL'));

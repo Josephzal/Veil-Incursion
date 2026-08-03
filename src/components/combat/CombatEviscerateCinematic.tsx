@@ -7,8 +7,8 @@ interface CombatEviscerateCinematicProps {
 }
 
 /**
- * Threefold Brand cinematic backdrop while the real slice interaction
- * runs in CombatMinigameOverlayHost (VectorSliceOverlay).
+ * ABYSSAL VERDICT slice-minigame backdrop while VectorSliceOverlay runs.
+ * The post-commit pose cinematic is AbyssalVerdictCinematic.
  * Portrait is optional — never gate the ultimate on portrait availability.
  */
 export default function CombatEviscerateCinematic({

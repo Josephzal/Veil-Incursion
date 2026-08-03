@@ -203,24 +203,24 @@ function pickEnvoyShardColor(): string {
   return pick(ENVOY_NEAR_BLACK);
 }
 
-/** Pointy tip + broader broken base — reads as a glass/bone shard, not a line. */
+/** Soft diamond with slight irregularity — not perfect geometry, not amorphous shards. */
 function shardPolygonPoints(length: number, width: number, jagged: number): string {
-  const mid = width / 2;
+  const midY = width / 2;
+  const tipBias = (jagged - 0.5) * width * 0.1;
+  const waist = 0.48 + jagged * 0.06;
   const tipX = length;
-  const tipY = mid + (jagged - 0.5) * width * 0.18;
-  const baseTop = Math.max(0.4, mid * (0.15 + jagged * 0.2));
-  const baseBot = Math.min(width - 0.4, mid + mid * (0.55 + jagged * 0.35));
-  const shoulderX = length * (0.42 + jagged * 0.12);
-  const notchX = length * (0.18 + jagged * 0.08);
-  const notchY = mid + (0.5 - jagged) * width * 0.22;
+  const leftX = 0;
+  const midX = length * waist;
+  const topY = Math.max(0.35, midY * (0.08 + jagged * 0.12));
+  const botY = Math.min(width - 0.35, midY + midY * (0.78 - jagged * 0.1));
+  // Four-point diamond: left → top → tip → bottom, with a soft waist notch.
   return [
-    `0,${baseTop}`,
-    `${notchX},${Math.max(0.3, notchY - width * 0.12)}`,
-    `${shoulderX},0`,
-    `${tipX},${tipY}`,
-    `${shoulderX},${width}`,
-    `${notchX},${Math.min(width - 0.3, notchY + width * 0.12)}`,
-    `0,${baseBot}`,
+    `${leftX},${midY + tipBias * 0.4}`,
+    `${midX * 0.55},${topY}`,
+    `${midX},${Math.max(0.25, topY - width * 0.04)}`,
+    `${tipX},${midY + tipBias}`,
+    `${midX},${Math.min(width - 0.25, botY + width * 0.04)}`,
+    `${midX * 0.55},${botY}`,
   ].join(' ');
 }
 
@@ -438,8 +438,20 @@ function BloodShard({
     travel.setValue(0);
 
     const fadeIn = 36 + Math.floor(Math.random() * 24);
-    const hold = 50 + Math.floor(Math.random() * 36);
-    const fadeOut = 80 + Math.floor(Math.random() * 45);
+    let hold = 50 + Math.floor(Math.random() * 36);
+    let fadeOut = 80 + Math.floor(Math.random() * 45);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const abyssalMod = require('../../data/abyssalVerdictPresentation') as {
+        isAbyssalVerdictPresentationActive: () => boolean;
+      };
+      if (abyssalMod.isAbyssalVerdictPresentationActive()) {
+        hold += 70;
+        fadeOut += 90;
+      }
+    } catch {
+      // ignore
+    }
     const moveMs = fadeIn + hold + fadeOut;
 
     Animated.parallel([
@@ -540,8 +552,20 @@ function BloodMistStreak({
     travel.setValue(0);
 
     const fadeIn = 28 + Math.floor(Math.random() * 24);
-    const hold = 40 + Math.floor(Math.random() * 50);
-    const fadeOut = 140 + Math.floor(Math.random() * 100);
+    let hold = 40 + Math.floor(Math.random() * 50);
+    let fadeOut = 140 + Math.floor(Math.random() * 100);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const abyssalMod = require('../../data/abyssalVerdictPresentation') as {
+        isAbyssalVerdictPresentationActive: () => boolean;
+      };
+      if (abyssalMod.isAbyssalVerdictPresentationActive()) {
+        hold += 60;
+        fadeOut += 80;
+      }
+    } catch {
+      // ignore
+    }
     const moveMs = fadeIn + hold + fadeOut;
 
     Animated.parallel([
@@ -748,6 +772,8 @@ function MagicalSmokeParticle({
 const BURST_REPEAT_GAP_MS = 72;
 /** Keep overlapping layers mounted until shards/mist finish fading. */
 const BURST_LAYER_TTL_MS = 480;
+/** Brief linger so shards remain as Abyssal Verdict HUD restores. */
+const ABYSSAL_BURST_LAYER_TTL_MS = 720;
 /** Envoy smoke rises a beat longer than blood mist. */
 const ENVOY_BURST_LAYER_TTL_MS = 640;
 
@@ -796,7 +822,21 @@ export default function CombatEnemyBloodBurst({
     // Geometry scale only — parent View transforms fight native-driver particle motion.
     const mistSize = mistScale > 0 ? mistScale : 1;
     const isEnvoy = variant === 'envoy';
-    const layerTtl = isEnvoy ? ENVOY_BURST_LAYER_TTL_MS : BURST_LAYER_TTL_MS;
+    let abyssalActive = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const abyssalMod = require('../../data/abyssalVerdictPresentation') as {
+        isAbyssalVerdictPresentationActive: () => boolean;
+      };
+      abyssalActive = abyssalMod.isAbyssalVerdictPresentationActive();
+    } catch {
+      abyssalActive = false;
+    }
+    const layerTtl = isEnvoy
+      ? ENVOY_BURST_LAYER_TTL_MS
+      : abyssalActive
+        ? ABYSSAL_BURST_LAYER_TTL_MS
+        : BURST_LAYER_TTL_MS;
 
     for (let i = 0; i < repeats; i += 1) {
       const fireTimer = setTimeout(() => {

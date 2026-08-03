@@ -92,6 +92,7 @@ import CombatOperativeHud, {
   type CombatOperativeTelemetry,
 } from '../components/combat/CombatOperativeHud';
 import { OTT } from '../constants/occultTacticalTerminalTheme';
+import { subscribeAbyssalVerdictPresentation } from '../data/abyssalVerdictPresentation';
 import { resolveWeaponState } from '../data/weaponProgressionEngine';
 import { resolveClassCompatibleWeaponFamily } from '../data/weaponRunState';
 import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
@@ -203,6 +204,10 @@ export default function CombatScreen(): React.JSX.Element {
   const [wardPrimed, setWardPrimed] = useState(false);
   const [abilityPrimed, setAbilityPrimed] = useState(false);
   const [resolutionPanel, setResolutionPanel] = useState<CombatResolutionPanelState | null>(null);
+  const [abyssalHudOpacity, setAbyssalHudOpacity] = useState(1);
+  useEffect(() => subscribeAbyssalVerdictPresentation((event) => {
+    setAbyssalHudOpacity(event.hudOpacity);
+  }), []);
   const resolutionDismissRef = useRef<() => void>(() => {});
   const victoryCreditRewardRef = useRef<number | null>(null);
   const apparitionRef = useRef<ApparitionViewportRef>(null);
@@ -945,34 +950,42 @@ export default function CombatScreen(): React.JSX.Element {
                     <CombatHudAtmosphereOverlay />
                     <CombatTopDockFade />
 
-                    <CombatMissionReadout
-                      depthLabel={missionDepthLabel}
-                      sectorLabel={missionSectorLabel}
-                      objectiveLabel={missionObjective ? String(missionObjective).replace(/_/g, ' ') : null}
-                      questLog={combatQuestLog}
-                    />
+                    <View
+                      style={[
+                        styles.abyssalHudLayer,
+                        abyssalHudOpacity < 1 ? { opacity: abyssalHudOpacity } : null,
+                      ]}
+                      pointerEvents={abyssalHudOpacity < 0.5 ? 'none' : 'box-none'}
+                    >
+                      <CombatMissionReadout
+                        depthLabel={missionDepthLabel}
+                        sectorLabel={missionSectorLabel}
+                        objectiveLabel={missionObjective ? String(missionObjective).replace(/_/g, ' ') : null}
+                        questLog={combatQuestLog}
+                      />
 
-                    <TurnOrderTopBar
-                      turnOrder={squadUi?.turnOrder}
-                      gridUnits={gridUnits}
-                      operativeClass={operativeClass}
-                      primaryColor={OTT.cyanSelect}
-                      mutedColor={OTT.textMuted}
-                      selectedUnitId={selectedEnemyUnit?.unitId}
-                      onHostilePress={handleTurnOrderHostilePress}
-                    />
+                      <TurnOrderTopBar
+                        turnOrder={squadUi?.turnOrder}
+                        gridUnits={gridUnits}
+                        operativeClass={operativeClass}
+                        primaryColor={OTT.cyanSelect}
+                        mutedColor={OTT.textMuted}
+                        selectedUnitId={selectedEnemyUnit?.unitId}
+                        onHostilePress={handleTurnOrderHostilePress}
+                      />
 
-                    <CombatRightRail
-                      combatLog={<CombatDashboardMacroLog />}
-                      hostileIntel={(
-                        <HostileIntelView
-                          enemy={selectedEnemyUnit}
-                          enemies={gridUnits}
-                          mutedColor={OTT.textSecondary}
-                          onSelectEnemy={handleTurnOrderHostilePress}
-                        />
-                      )}
-                    />
+                      <CombatRightRail
+                        combatLog={<CombatDashboardMacroLog />}
+                        hostileIntel={(
+                          <HostileIntelView
+                            enemy={selectedEnemyUnit}
+                            enemies={gridUnits}
+                            mutedColor={OTT.textSecondary}
+                            onSelectEnemy={handleTurnOrderHostilePress}
+                          />
+                        )}
+                      />
+                    </View>
 
                     <ParticleOverlay biomeId={combatBiomeId} />
 
@@ -995,6 +1008,7 @@ export default function CombatScreen(): React.JSX.Element {
 
                 <CombatTacticalDashboard
                   resolutionDimmed={resolutionActive}
+                  cinematicOpacity={resolutionActive ? 1 : abyssalHudOpacity}
                   operativeStatus={(
                     operativeTelemetry ? (
                       <CombatOperativeHud
@@ -1162,5 +1176,11 @@ const styles = StyleSheet.create({
   },
   arenaForegroundDimmed: {
     opacity: 0.28,
+  },
+  /** Absolute host so CombatRightRail (position:absolute) keeps full arena bounds. */
+  abyssalHudLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 2,
+    pointerEvents: 'box-none',
   },
 });

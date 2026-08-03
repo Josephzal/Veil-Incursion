@@ -40,13 +40,13 @@ export interface WeaponUltimateRecord {
 export const WEAPON_ULTIMATE_BY_FAMILY: Record<WeaponFamilyId, WeaponUltimateRecord> = {
   'aegis-runed-longsword': {
     id: 'THREEFOLD_BRAND',
-    displayName: 'THREEFOLD BRAND',
+    displayName: 'ABYSSAL VERDICT',
     weaponFamilyId: 'aegis-runed-longsword',
     weaponDisplayName: 'Longsword',
     classId: 'AEGIS',
     legacyClassUltimateIds: ['EVISCERATE'],
     status: 'WIRED',
-    interactionSummary: 'Aegis three-slash / Eviscerate path rebound onto Longsword only.',
+    interactionSummary: 'Aegis Longsword ultimate cinematic (ABYSSAL VERDICT) — stable id THREEFOLD_BRAND / EVISCERATE.',
   },
   'aegis-rift-edge': {
     id: 'REND_THE_VEIL',
