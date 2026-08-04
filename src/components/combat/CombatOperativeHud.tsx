@@ -23,6 +23,8 @@ import WeaponCombatCalloutStrip from './WeaponCombatCalloutStrip';
 import { resolveWeaponCombatCallouts } from '../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 import ResourceRail from './ui/ResourceRail';
+import AbyssalVerdictUltimateModule from './AbyssalVerdictUltimateModule';
+import type { AbyssalVerdictHudSnapshot } from '../../data/abyssalVerdictReadyUi';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
@@ -87,6 +89,10 @@ interface CombatOperativeHudProps {
   arenaOverlay?: boolean;
   /** Bottom-console operative status (Occult Tactical Terminal). */
   consolePanel?: boolean;
+  /** Aegis Longsword ultimate module (replaces floating center ping). */
+  abyssalVerdictUi?: AbyssalVerdictHudSnapshot | null;
+  onAbyssalVerdictPrime?: () => void;
+  onAbyssalVerdictCancel?: () => void;
 }
 
 export default function CombatOperativeHud({
@@ -98,6 +104,9 @@ export default function CombatOperativeHud({
   dashboardCompact = false,
   arenaOverlay = false,
   consolePanel = false,
+  abyssalVerdictUi = null,
+  onAbyssalVerdictPrime,
+  onAbyssalVerdictCancel,
 }: CombatOperativeHudProps): React.JSX.Element {
   const { isCombatDesktop, fontScale, scaleCombatSize } = useCombatDesktopLayout();
   const desktopArena = arenaOverlay && isCombatDesktop;
@@ -217,49 +226,63 @@ export default function CombatOperativeHud({
       : operativeClass === 'HEX_SHOT'
         ? OTT.terminalGreenMuted
         : '#9BB0B8';
+    const showAbyssalModule = operativeClass === 'AEGIS' && abyssalVerdictUi != null;
     return (
-      <View style={styles.rootConsole} pointerEvents="none">
-        <Text style={styles.consoleClass}>{className}</Text>
-        <Text style={styles.consoleSubtitle}>VEIL RUNNER</Text>
-        <ResourceRail
-          label="HP"
-          valueLabel={`${operativeHp}/${effectiveMax} HP`}
-          ratio={soulAnchorRatio}
-          fillColor={OTT.soulRed}
-        />
-        <ResourceRail
-          label={secondaryLabel}
-          valueLabel={`${secondaryValue} ${secondaryLabel}`}
-          ratio={secondaryRatio}
-          fillColor={secondaryColor}
-        />
-        {operativeClass === 'AEGIS' ? (
-          <CombatRunicBrandGauge currentBrands={runicBrands} maxBrands={runicBrandCap} variant="compact" />
-        ) : null}
-        {operativeClass === 'HEX_SHOT' ? (
-          <CombatMagazineGauge
-            currentAmmo={currentAmmo}
-            maxAmmo={maxAmmo}
-            overchargeMultiplier={overchargeMultiplier}
-            markReady={ultimateReady}
-            readyUltimateLabel={ultimateLabel}
-            labelColor={OTT.warningAmber}
-            variant="compact"
-            ammoType={hexAmmoType}
-            protocolCharges={hexProtocolCharges}
-            maxProtocolCharges={hexMaxProtocolCharges}
-            nextShotOvercharged={hexNextShotOvercharged}
+      <View style={styles.rootConsole} pointerEvents="box-none">
+        <Text style={styles.consoleClass} pointerEvents="none">{className}</Text>
+        <Text style={styles.consoleSubtitle} pointerEvents="none">VEIL RUNNER</Text>
+        <View pointerEvents="none">
+          <ResourceRail
+            label="HP"
+            valueLabel={`${operativeHp}/${effectiveMax} HP`}
+            ratio={soulAnchorRatio}
+            fillColor={OTT.soulRed}
+          />
+          <ResourceRail
+            label={secondaryLabel}
+            valueLabel={`${secondaryValue} ${secondaryLabel}`}
+            ratio={secondaryRatio}
+            fillColor={secondaryColor}
+          />
+          {operativeClass === 'AEGIS' ? (
+            <CombatRunicBrandGauge currentBrands={runicBrands} maxBrands={runicBrandCap} variant="compact" />
+          ) : null}
+          {operativeClass === 'HEX_SHOT' ? (
+            <CombatMagazineGauge
+              currentAmmo={currentAmmo}
+              maxAmmo={maxAmmo}
+              overchargeMultiplier={overchargeMultiplier}
+              markReady={ultimateReady}
+              readyUltimateLabel={ultimateLabel}
+              labelColor={OTT.warningAmber}
+              variant="compact"
+              ammoType={hexAmmoType}
+              protocolCharges={hexProtocolCharges}
+              maxProtocolCharges={hexMaxProtocolCharges}
+              nextShotOvercharged={hexNextShotOvercharged}
+            />
+          ) : null}
+          {operativeClass === 'ENVOY' ? (
+            <CombatVeilRotGauge
+              totalStacks={veilRotStacksTotal}
+              variant="compact"
+              ultimateReady={ultimateReady}
+              readyUltimateLabel={ultimateLabel}
+            />
+          ) : null}
+          {!showAbyssalModule ? <WeaponCombatCalloutStrip callouts={weaponCallouts} /> : null}
+        </View>
+        {showAbyssalModule ? (
+          <AbyssalVerdictUltimateModule
+            state={abyssalVerdictUi.state}
+            reserve={abyssalVerdictUi.reserve}
+            cap={abyssalVerdictUi.cap}
+            disabled={!abyssalVerdictUi.canInteract}
+            reducedMotion={abyssalVerdictUi.reducedMotion}
+            onPrime={() => onAbyssalVerdictPrime?.()}
+            onCancel={() => onAbyssalVerdictCancel?.()}
           />
         ) : null}
-        {operativeClass === 'ENVOY' ? (
-          <CombatVeilRotGauge
-            totalStacks={veilRotStacksTotal}
-            variant="compact"
-            ultimateReady={ultimateReady}
-            readyUltimateLabel={ultimateLabel}
-          />
-        ) : null}
-        <WeaponCombatCalloutStrip callouts={weaponCallouts} />
       </View>
     );
   }

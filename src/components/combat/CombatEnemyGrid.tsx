@@ -47,6 +47,8 @@ interface SlotHitOverlayProps {
   unit: CombatGridUnitView;
   layoutMode: ArenaLayoutMode;
   onUnitPress: (unitId: string) => void;
+  onUnitHoverIn?: (unitId: string) => void;
+  onUnitHoverOut?: (unitId: string) => void;
   overlayZIndex: number;
 }
 
@@ -56,6 +58,8 @@ function SlotHitOverlay({
   unit,
   layoutMode,
   onUnitPress,
+  onUnitHoverIn,
+  onUnitHoverOut,
   overlayZIndex,
 }: SlotHitOverlayProps): React.JSX.Element {
   const presentation = resolveSlotPresentation(slot, layoutMode, 'staggered');
@@ -65,6 +69,9 @@ function SlotHitOverlay({
     presentation.unitScale !== 1
       ? { transform: [{ scale: presentation.unitScale }] as ViewStyle['transform'] }
       : undefined;
+
+  const hoverIn = () => onUnitHoverIn?.(unit.unitId);
+  const hoverOut = () => onUnitHoverOut?.(unit.unitId);
 
   return (
     <View
@@ -83,6 +90,12 @@ function SlotHitOverlay({
         <HapticPressable
           sfx={false}
           onPress={() => onUnitPress(unit.unitId)}
+          onHoverIn={hoverIn}
+          onHoverOut={hoverOut}
+          {...({
+            onMouseEnter: hoverIn,
+            onMouseLeave: hoverOut,
+          } as object)}
           style={[
             styles.slotHitPressable,
             hitbox,
@@ -130,6 +143,8 @@ interface BattlefieldSlotProps {
   mutedColor: string;
   onUnitPress: (unitId: string) => void;
   onUnitDissolveComplete?: (unitId: string) => void;
+  /** Hovered via SlotHitOverlay (covers unit hitboxes while targeting). */
+  reticleHovered?: boolean;
   wrapperStyle?: ViewStyle;
   arenaGridVariant?: ArenaGridVariant;
   bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
@@ -149,6 +164,7 @@ function BattlefieldSlot({
   mutedColor,
   onUnitPress,
   onUnitDissolveComplete,
+  reticleHovered = false,
   wrapperStyle,
   arenaGridVariant = 'flex',
   bloodBurstVariant = null,
@@ -227,6 +243,7 @@ function BattlefieldSlot({
             skipDissolveEffect
             bloodBurstVariant={bloodBurstVariant}
             bloodMistScale={bloodMistScale}
+            reticleHovered={reticleHovered}
             onPress={() => onUnitPress(unit.unitId)}
           />
         </CombatEnemyDissolveEffect>
@@ -297,6 +314,18 @@ export default function CombatEnemyGrid({
 }: CombatEnemyGridProps): React.JSX.Element {
   const isArena = variant === 'arena';
   const [arenaSize, setArenaSize] = useState({ width: 0, height: 0 });
+  const [hoveredUnitId, setHoveredUnitId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!targetingActive) setHoveredUnitId(null);
+  }, [targetingActive]);
+
+  const handleUnitHoverIn = useCallback((unitId: string) => {
+    setHoveredUnitId(unitId);
+  }, []);
+  const handleUnitHoverOut = useCallback((unitId: string) => {
+    setHoveredUnitId((prev) => (prev === unitId ? null : prev));
+  }, []);
 
   const handleArenaLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -357,6 +386,11 @@ export default function CombatEnemyGrid({
       bloodMistScale,
     };
 
+    const hoverOverlayProps = {
+      onUnitHoverIn: handleUnitHoverIn,
+      onUnitHoverOut: handleUnitHoverOut,
+    };
+
     const arenaVerticalShiftStyle: ViewStyle | undefined =
       arenaSize.height > 0
         ? { transform: [{ translateY: arenaSize.height * ENEMY_ARENA_VERTICAL_SHIFT_RATIO }] }
@@ -389,6 +423,7 @@ export default function CombatEnemyGrid({
                 slot={slot}
                 unit={slotUnit}
                 wrapperStyle={slotStyle}
+                reticleHovered={slotUnit != null && hoveredUnitId === slotUnit.unitId}
                 {...slotProps}
               />
             );
@@ -402,6 +437,7 @@ export default function CombatEnemyGrid({
                 layoutMode={layoutMode}
                 onUnitPress={onUnitPress}
                 overlayZIndex={FRONTLINE_TARGET_OVERLAY_Z_INDEX}
+                {...hoverOverlayProps}
               />
             )
             : null}
@@ -417,6 +453,7 @@ export default function CombatEnemyGrid({
                   layoutMode={layoutMode}
                   onUnitPress={onUnitPress}
                   overlayZIndex={FRONTLINE_TARGET_OVERLAY_Z_INDEX}
+                  {...hoverOverlayProps}
                 />
               );
             })
@@ -433,6 +470,7 @@ export default function CombatEnemyGrid({
                   layoutMode={layoutMode}
                   onUnitPress={onUnitPress}
                   overlayZIndex={BACKLINE_TARGET_OVERLAY_Z_INDEX}
+                  {...hoverOverlayProps}
                 />
               );
             })

@@ -24,6 +24,7 @@ import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
 import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
 import TargetingBrackets from './ui/TargetingBrackets';
+import AbyssalVerdictTargetBrackets from './AbyssalVerdictTargetBrackets';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import { resolveArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
@@ -33,6 +34,7 @@ import {
   WARDEN_STRIKE_VFX_LAYER_TOGGLES,
 } from '../../data/wardenStrikePresentation';
 import { subscribeAbyssalVerdictPresentation } from '../../data/abyssalVerdictPresentation';
+import { getCombatPresentationSettings } from '../../data/weaponCombatPresentation/presentationSettings';
 
 const MONO = 'monospace';
 const ALPHA_CRIMSON = '#ff4444';
@@ -62,6 +64,8 @@ interface CombatEnemyUnitProps {
   bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
   /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
   bloodMistScale?: number;
+  /** Hovered via the grid SlotHitOverlay (covers the unit while targeting). */
+  reticleHovered?: boolean;
   onPress?: () => void;
   onDissolveComplete?: () => void;
 }
@@ -76,6 +80,7 @@ export default function CombatEnemyUnit({
   meleeDashDelta,
   bloodBurstVariant = null,
   bloodMistScale = 1,
+  reticleHovered = false,
   onPress,
   onDissolveComplete,
 }: CombatEnemyUnitProps): React.JSX.Element | null {
@@ -83,6 +88,8 @@ export default function CombatEnemyUnit({
   const [wardenCrossBelowPlayer, setWardenCrossBelowPlayer] = useState(false);
   const [abyssalUnitOpacity, setAbyssalUnitOpacity] = useState(1);
   const [abyssalMotionFrozen, setAbyssalMotionFrozen] = useState(false);
+  const [abyssalHovered, setAbyssalHovered] = useState(false);
+  const [abilityHovered, setAbilityHovered] = useState(false);
   const handleHitStopChange = useCallback((frozen: boolean) => {
     setPortraitFrozen(frozen);
   }, []);
@@ -130,7 +137,17 @@ export default function CombatEnemyUnit({
   const showAbilityReticle = abilityArmed
     && unit.isTargetable
     && !unit.isBlocked
+    && !breachTarget
+    && unit.abyssalVerdictTargetable !== true;
+  const showAbyssalReticle = abilityArmed
+    && unit.abyssalVerdictTargetable === true
     && !breachTarget;
+  useEffect(() => {
+    if (!showAbyssalReticle) setAbyssalHovered(false);
+  }, [showAbyssalReticle]);
+  useEffect(() => {
+    if (!showAbilityReticle) setAbilityHovered(false);
+  }, [showAbilityReticle]);
   const arenaGlyph = isArena
     ? resolveArenaIntentGlyph({
         intent: unit.intent,
@@ -163,30 +180,14 @@ export default function CombatEnemyUnit({
           [ TAP TO BREACH ]
         </Text>
       ) : null}
-      {showAbilityReticle ? (
-        <View
-          style={[
-            styles.targetCalloutPlate,
-            unit.isAoeAffected ? styles.targetCalloutPlateAoe : null,
-            wardenCrossBelowPlayer ? styles.localDecalTucked : null,
-          ]}
-        >
-          <Text
-            style={[
-              styles.targetCallout,
-              unit.isAoeAffected ? styles.targetCalloutAoe : null,
-            ]}
-            numberOfLines={1}
-          >
-            {unit.isAoeAffected ? '[ AOE ]' : unit.isSlumped ? '[ EXECUTES ]' : '[ TARGET ]'}
-          </Text>
-        </View>
-      ) : null}
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
 
       <EnemyEntity
         showVitals={isArena}
-        vitals={<CombatEnemyOverheadBars unit={unit} intentGlyph={arenaGlyph} />}
+        vitals={<CombatEnemyOverheadBars
+          unit={unit}
+          intentGlyph={arenaGlyph}
+        />}
         sprite={(
           <View style={styles.spriteRoot} pointerEvents="box-none">
             <CombatEnemyAnchorMotion
@@ -241,16 +242,6 @@ export default function CombatEnemyUnit({
                               isEnraged={unit.isEnraged === true}
                               isSlumped={unit.isSlumped === true}
                             />
-                            <TargetingBrackets
-                              active={showAbilityReticle || unit.isSlumped === true}
-                              color={
-                                unit.isSlumped
-                                  ? OTT.terminalGreenMuted
-                                  : unit.isAoeAffected
-                                    ? OTT.warningAmber
-                                    : OTT.cyanSelect
-                              }
-                            />
                             <CombatEnemyBloodBurst
                               hitFlashSeq={unit.hitFlashSeq}
                               enabled={bloodBurstVariant != null}
@@ -267,6 +258,29 @@ export default function CombatEnemyUnit({
                 </CombatEnemyCritImpact>
               </View>
             </CombatEnemyAnchorMotion>
+
+            {/* Brackets outside VFX stack so hover glow is not clipped by effect layers. */}
+            <View style={styles.bracketHost} pointerEvents="none">
+              <TargetingBrackets
+                active={showAbilityReticle || unit.isSlumped === true}
+                focused={reticleHovered || abilityHovered}
+                contentScale={isAlpha ? 0.86 : 0.75}
+                color={
+                  unit.isSlumped
+                    ? OTT.terminalGreenMuted
+                    : unit.isAoeAffected
+                      ? OTT.warningAmber
+                      : OTT.cyanSelect
+                }
+              />
+              <AbyssalVerdictTargetBrackets
+                active={showAbyssalReticle}
+                focused={reticleHovered || abyssalHovered}
+                contentScale={isAlpha ? 0.86 : 0.75}
+                collapsing={unit.abyssalVerdictCollapsing === true}
+                reducedMotion={getCombatPresentationSettings().reducedMotion === true}
+              />
+            </View>
 
             {/* Stationary: contact anchor, callouts, hitbox — only portrait recoils. */}
             <WardenStrikeEnemyContactHost unitId={unit.unitId} />
@@ -319,16 +333,41 @@ export default function CombatEnemyUnit({
             </View>
 
             {onPress && !dissolving ? (
-              <HapticPressable
-                sfx={false}
-                onPress={onPress}
+              <View
                 style={[
                   styles.hitboxArena,
-                  isArena && hitboxStyle ? hitboxStyle : (isBacklineSlot ? styles.hitbox : styles.hitboxFrontline),
+                  isArena && hitboxStyle
+                    ? hitboxStyle
+                    : (isBacklineSlot ? styles.hitbox : styles.hitboxFrontline),
                   ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
                 ]}
+                {...({
+                  onMouseEnter: () => {
+                    if (showAbyssalReticle) setAbyssalHovered(true);
+                    if (showAbilityReticle) setAbilityHovered(true);
+                  },
+                  onMouseLeave: () => {
+                    setAbyssalHovered(false);
+                    setAbilityHovered(false);
+                  },
+                } as object)}
                 pointerEvents="auto"
-              />
+              >
+                <HapticPressable
+                  sfx={false}
+                  onPress={onPress}
+                  onHoverIn={() => {
+                    if (showAbyssalReticle) setAbyssalHovered(true);
+                    if (showAbilityReticle) setAbilityHovered(true);
+                  }}
+                  onHoverOut={() => {
+                    setAbyssalHovered(false);
+                    setAbilityHovered(false);
+                  }}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="auto"
+                />
+              </View>
             ) : null}
           </View>
         )}
@@ -391,42 +430,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: '#67e8f9',
   },
-  targetCalloutPlate: {
-    position: 'absolute',
-    top: -62,
-    left: '8%',
-    right: '8%',
-    zIndex: 22,
-    alignItems: 'center',
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(98, 220, 229, 0.55)',
-    backgroundColor: 'rgba(5, 10, 12, 0.72)',
-    shadowColor: OTT.cyanSelect,
-    shadowOpacity: 0.55,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-  },
   localDecalTucked: {
     zIndex: 1,
     elevation: 1,
-  },
-  targetCalloutPlateAoe: {
-    borderColor: 'rgba(224, 180, 90, 0.65)',
-    shadowColor: OTT.warningAmber,
-  },
-  targetCallout: {
-    textAlign: 'center',
-    fontFamily: MONO,
-    fontSize: COMBAT_HUD_TYPE.body,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: OTT.cyanSelect,
-  },
-  targetCalloutAoe: {
-    color: OTT.warningAmber,
   },
   eliteBadge: {
     position: 'absolute',
@@ -460,6 +466,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     zIndex: 1,
+    overflow: 'visible',
+  },
+  bracketHost: {
+    position: 'absolute',
+    width: '120%',
+    height: '120%',
+    top: '-10%',
+    left: '-10%',
+    zIndex: 16,
     overflow: 'visible',
   },
   portraitDefenseStack: {

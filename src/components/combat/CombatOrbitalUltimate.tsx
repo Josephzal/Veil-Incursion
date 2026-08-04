@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import UltimateReadyPing from './UltimateReadyPing';
 import { useCombatEnemyChrome } from '../../context/CombatEnemyChromeContext';
+import { shouldShowOrbitalUltimatePing } from '../../data/abyssalVerdictReadyUi';
 import { subscribeWardenStrikePresentation } from '../../data/wardenStrikePresentation';
 import { WARDEN_ARENA_PLANE } from '../../data/wardenArenaPlanes';
 
@@ -19,7 +20,9 @@ export default function CombatOrbitalUltimate(): React.JSX.Element {
   }), []);
 
   const showDots = ui.masteryProgressVisible && ui.masteryProgressRequired > 0;
-  const showPing = ui.ultimatePingVisible && ui.ultimatePingVariant != null;
+  // Aegis Longsword uses the Reserve-panel module — never the center-screen red circle.
+  const showPing = ui.ultimatePingVisible
+    && shouldShowOrbitalUltimatePing(ui.ultimatePingVariant);
   const accent = ui.masteryProgressAccent;
 
   const dotAngles = useMemo(() => {
@@ -85,9 +88,9 @@ export default function CombatOrbitalUltimate(): React.JSX.Element {
             onPress={() => handlersRef.current.onUltimatePing()}
           />
         </View>
-      ) : (
+      ) : showDots ? (
         <View style={styles.idleOrb} pointerEvents="none" />
-      )}
+      ) : null}
     </View>
   );
 }

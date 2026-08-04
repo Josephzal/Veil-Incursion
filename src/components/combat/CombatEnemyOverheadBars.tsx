@@ -27,6 +27,8 @@ interface CombatEnemyOverheadBarsProps {
     | 'slumpGraceThisPlayerTurn'
   >;
   intentGlyph?: ArenaIntentGlyph | null;
+  /** Dried-crimson HP rail while Abyssal Verdict targeting is active. */
+  abyssalVerdictTint?: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ interface CombatEnemyOverheadBarsProps {
 export default function CombatEnemyOverheadBars({
   unit,
   intentGlyph = null,
+  abyssalVerdictTint = false,
 }: CombatEnemyOverheadBarsProps): React.JSX.Element {
   const [cinematicBarOpacity, setCinematicBarOpacity] = useState(1);
   useEffect(() => subscribeAbyssalVerdictPresentation((event) => {
@@ -78,15 +81,22 @@ export default function CombatEnemyOverheadBars({
           <CombatArenaIntentGlyph glyph={intentGlyph} compact />
         </View>
       ) : null}
-      <View style={[styles.plate, slumped ? styles.plateSlumped : null]}>
+      <View style={[
+        styles.plate,
+        slumped ? styles.plateSlumped : null,
+        abyssalVerdictTint ? styles.plateAbyssal : null,
+      ]}>
         <View style={styles.nameRow}>
-          <Text style={[styles.name, { color: nameColor }]} numberOfLines={1}>
+          <Text style={[
+            styles.name,
+            { color: abyssalVerdictTint ? '#E4D8C4' : nameColor },
+          ]} numberOfLines={1}>
             {unit.designation.toUpperCase()}
           </Text>
           {slumped ? (
             <Text style={styles.slumpBadge} numberOfLines={1}>SLUMPED</Text>
           ) : (
-            <Text style={styles.hpNum} numberOfLines={1}>
+            <Text style={[styles.hpNum, abyssalVerdictTint ? styles.hpNumAbyssal : null]} numberOfLines={1}>
               {`${unit.currentHp}/${unit.maxHp}`}
             </Text>
           )}
@@ -114,8 +124,12 @@ export default function CombatEnemyOverheadBars({
           </>
         ) : (
           <>
-            <View style={styles.hpTrack}>
-              <View style={[styles.hpFill, { width: `${Math.max(0, Math.min(1, hpRatio)) * 100}%` }]} />
+            <View style={[styles.hpTrack, abyssalVerdictTint ? styles.hpTrackAbyssal : null]}>
+              <View style={[
+                styles.hpFill,
+                abyssalVerdictTint ? styles.hpFillAbyssal : null,
+                { width: `${Math.max(0, Math.min(1, hpRatio)) * 100}%` },
+              ]} />
             </View>
             {fractureRatio > 0.02 ? (
               <View style={styles.fractureTrack}>
@@ -163,6 +177,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(196, 90, 174, 0.55)',
     backgroundColor: 'rgba(12, 4, 14, 0.72)',
   },
+  plateAbyssal: {
+    borderColor: 'rgba(160, 40, 55, 0.7)',
+    backgroundColor: 'rgba(8, 5, 6, 0.78)',
+  },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -182,6 +200,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
     color: OTT.soulRed,
+  },
+  hpNumAbyssal: {
+    color: '#E4D8C4',
   },
   slumpBadge: {
     fontFamily: OTT.mono,
@@ -220,9 +241,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     overflow: 'hidden',
   },
+  hpTrackAbyssal: {
+    backgroundColor: 'rgba(20, 6, 8, 0.7)',
+  },
   hpFill: {
     height: '100%',
     backgroundColor: OTT.soulRed,
+  },
+  hpFillAbyssal: {
+    backgroundColor: '#8B1E2D',
   },
   fractureTrack: {
     height: 1,

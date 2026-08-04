@@ -37,8 +37,6 @@ const DEFAULT_LUNGE = { x: 96, y: -6 };
 /** Shrink while lunging — legacy weapons only. Longsword uses anatomy registration (no scale pop). */
 const AEGIS_LUNGE_SCALE = 0.84;
 const GLOW_PULSE_MS = 900;
-/** Ability-prime outline: brief flash then settle — no long purple wait. */
-const ABILITY_PRIME_OUTLINE_MS = 120;
 /** Low-opacity red wash timed with player-impact SFX. */
 const DAMAGE_RED_PEAK = 0.28;
 const DAMAGE_RED_IN_MS = 36;
@@ -99,7 +97,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const attackSpriteRef = useRef<CombatPlayerAttackSpriteHandle>(null);
     const resolvedAttackSource = attackImageSource ?? imageSource;
 
-    const primed = wardPrimed || abilityPrimed;
+    const primed = wardPrimed;
 
     const flashDamageRed = () => {
       damageRedOpacity.value = 0;
@@ -116,13 +114,9 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     };
 
     useEffect(() => {
+      // Ability selection must never paint the magenta/purple player aura.
       if (abilityPrimed && !wardPrimed) {
-        // Short full-body flash (~100–150 ms), then dim — do not idle inside purple.
-        glowOpacity.value = withSequence(
-          withTiming(0.72, { duration: 36, easing: Easing.out(Easing.quad) }),
-          withTiming(0.72, { duration: ABILITY_PRIME_OUTLINE_MS - 56 }),
-          withTiming(0.16, { duration: 40, easing: Easing.in(Easing.quad) }),
-        );
+        glowOpacity.value = withTiming(0, { duration: 120 });
         return;
       }
       if (primed) {

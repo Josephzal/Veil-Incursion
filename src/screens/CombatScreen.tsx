@@ -93,6 +93,8 @@ import CombatOperativeHud, {
 } from '../components/combat/CombatOperativeHud';
 import { OTT } from '../constants/occultTacticalTerminalTheme';
 import { subscribeAbyssalVerdictPresentation } from '../data/abyssalVerdictPresentation';
+import type { AbyssalVerdictHudSnapshot } from '../data/abyssalVerdictReadyUi';
+import AbyssalVerdictReadyBanner from '../components/combat/AbyssalVerdictReadyBanner';
 import { resolveWeaponState } from '../data/weaponProgressionEngine';
 import { resolveClassCompatibleWeaponFamily } from '../data/weaponRunState';
 import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
@@ -205,9 +207,52 @@ export default function CombatScreen(): React.JSX.Element {
   const [abilityPrimed, setAbilityPrimed] = useState(false);
   const [resolutionPanel, setResolutionPanel] = useState<CombatResolutionPanelState | null>(null);
   const [abyssalHudOpacity, setAbyssalHudOpacity] = useState(1);
+  const [abyssalVerdictUi, setAbyssalVerdictUi] = useState<AbyssalVerdictHudSnapshot | null>(null);
+  const abyssalVerdictHandlersRef = useRef<{
+    prime: () => void;
+    cancel: () => void;
+  } | null>(null);
   useEffect(() => subscribeAbyssalVerdictPresentation((event) => {
     setAbyssalHudOpacity(event.hudOpacity);
   }), []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const cancelIfTargeting = () => {
+      if (abyssalVerdictUi?.state === 'targeting') {
+        abyssalVerdictHandlersRef.current?.cancel();
+        return true;
+      }
+      return false;
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === 'Esc') {
+        if (cancelIfTargeting()) event.preventDefault();
+        return;
+      }
+      if (
+        (event.key === 'u' || event.key === 'U')
+        && abyssalVerdictUi?.state === 'ready'
+        && abyssalVerdictUi.canInteract
+      ) {
+        event.preventDefault();
+        abyssalVerdictHandlersRef.current?.prime();
+      }
+    };
+    const onContextMenu = (event: MouseEvent) => {
+      if (cancelIfTargeting()) event.preventDefault();
+    };
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button === 2) cancelIfTargeting();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('mousedown', onMouseDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('mousedown', onMouseDown);
+    };
+  }, [abyssalVerdictUi]);
   const resolutionDismissRef = useRef<() => void>(() => {});
   const victoryCreditRewardRef = useRef<number | null>(null);
   const apparitionRef = useRef<ApparitionViewportRef>(null);
@@ -974,6 +1019,11 @@ export default function CombatScreen(): React.JSX.Element {
                         onHostilePress={handleTurnOrderHostilePress}
                       />
 
+                      <AbyssalVerdictReadyBanner
+                        notifySeq={abyssalVerdictUi?.notifySeq ?? 0}
+                        reducedMotion={abyssalVerdictUi?.reducedMotion === true}
+                      />
+
                       <CombatRightRail
                         combatLog={<CombatDashboardMacroLog />}
                         hostileIntel={(
@@ -1015,6 +1065,9 @@ export default function CombatScreen(): React.JSX.Element {
                         telemetry={operativeTelemetry}
                         primaryColor={OTT.terminalGreenMuted}
                         consolePanel
+                        abyssalVerdictUi={abyssalVerdictUi}
+                        onAbyssalVerdictPrime={() => abyssalVerdictHandlersRef.current?.prime()}
+                        onAbyssalVerdictCancel={() => abyssalVerdictHandlersRef.current?.cancel()}
                       />
                     ) : null
                   )}
@@ -1031,6 +1084,10 @@ export default function CombatScreen(): React.JSX.Element {
                       registerCanDeployCargoHandler={registerCanDeployCargoHandler}
                       registerTargetHandler={registerTargetHandler}
                       registerIntelTargetHandler={registerIntelTargetHandler}
+                      onAbyssalVerdictUiChange={setAbyssalVerdictUi}
+                      registerAbyssalVerdictHandlers={(handlers) => {
+                        abyssalVerdictHandlersRef.current = handlers;
+                      }}
                       onSquadUiChange={handleSquadUiChange}
                       onOperativeTelemetryChange={handleOperativeTelemetryChange}
                       enemySquad={combatSquad}

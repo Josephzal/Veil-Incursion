@@ -296,6 +296,19 @@ export interface CombatGridUnitSnapshot {
   isTargetable: boolean;
   /** AoE footprint highlight — ability hits the whole group, not a single pick. */
   isAoeAffected?: boolean;
+  /** ABYSSAL VERDICT targeting — eligible for ultimate commit. */
+  abyssalVerdictTargetable?: boolean;
+  /** Dimmed while Abyssal targeting is active and this unit is ineligible / non-focus. */
+  abyssalVerdictDimmed?: boolean;
+  /** Canonical Abyssal Verdict damage preview while hovering/focusing this unit. */
+  abyssalVerdictPreview?: {
+    damage: number;
+    remainingHp: number;
+    remainingArmor: number;
+    lethal: boolean;
+  } | null;
+  /** Brackets collapsing inward just before cinematic commit. */
+  abyssalVerdictCollapsing?: boolean;
   isFocused: boolean;
   /** True while this unit is the active enemy-turn actor (wind-up or execute). */
   isActingEnemy?: boolean;
@@ -436,6 +449,8 @@ export interface CombatSquadUiSnapshot {
   targetingActive: boolean;
   /** True while a staged ability needs hostile picks (SINGLE / ALL). */
   abilityTargetingActive?: boolean;
+  /** True while ABYSSAL VERDICT is primed and waiting for a target click. */
+  abyssalVerdictTargetingActive?: boolean;
   squadSize: number;
   stagedAbilityId?: string | null;
   turnOrder?: CombatTurnOrderSnapshot;
@@ -500,6 +515,7 @@ export function buildInitialSquadUiSnapshot(
     units,
     targetingActive: false,
     abilityTargetingActive: false,
+    abyssalVerdictTargetingActive: false,
     squadSize: units.filter((u) => !u.isDead).length,
     stagedAbilityId: null,
   };

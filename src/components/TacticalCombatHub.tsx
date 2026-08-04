@@ -498,6 +498,15 @@ import {
   subscribeAbyssalVerdictDone,
   subscribeAbyssalVerdictImpact,
 } from '../data/abyssalVerdictPresentation';
+import {
+  ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS,
+  isAbyssalVerdictEnemyEligible,
+  previewAbyssalVerdictDamage,
+  resolveAbyssalVerdictCommitDamage,
+  resolveAbyssalVerdictPresentationState,
+  shouldFireAbyssalVerdictReadyNotification,
+  type AbyssalVerdictHudSnapshot,
+} from '../data/abyssalVerdictReadyUi';
 import { getCombatPresentationSettings } from '../data/weaponCombatPresentation/presentationSettings';
 import {
   playCombatPresentationCue,
@@ -706,6 +715,13 @@ interface TacticalCombatHubProps {
   registerTargetHandler?: (handler: (unitId: string) => void) => void;
   /** Registers intel-only hostile focus (turn order / scouting). */
   registerIntelTargetHandler?: (handler: (unitId: string) => void) => void;
+  /** ABYSSAL VERDICT ready/targeting HUD snapshot for CombatScreen chrome. */
+  onAbyssalVerdictUiChange?: (ui: import('../data/abyssalVerdictReadyUi').AbyssalVerdictHudSnapshot | null) => void;
+  /** Registers prime / cancel handlers for the Abyssal Verdict module. */
+  registerAbyssalVerdictHandlers?: (handlers: {
+    prime: () => void;
+    cancel: () => void;
+  } | null) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
   onResolutionPanelChange?: (
     panel: {
@@ -854,6 +870,8 @@ export default function TacticalCombatHub({
   registerCanDeployCargoHandler,
   registerTargetHandler,
   registerIntelTargetHandler,
+  onAbyssalVerdictUiChange,
+  registerAbyssalVerdictHandlers,
   onResolutionPanelChange,
   onCombatComplete,
   onLethalEnemyStrike,
@@ -1024,6 +1042,17 @@ export default function TacticalCombatHub({
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
   const enemyActionStageRef = useRef<EnemyActionStage>(null);
   const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
+  /** Primed Abyssal Verdict — waiting for enemy click. Does not consume Reserve. */
+  const [abyssalVerdictPrimed, setAbyssalVerdictPrimed] = useState(false);
+  const abyssalVerdictPrimedRef = useRef(false);
+  const abyssalReadyLatchedRef = useRef(false);
+  const [abyssalReadyNotifySeq, setAbyssalReadyNotifySeq] = useState(0);
+  const [abyssalCollapsingUnitId, setAbyssalCollapsingUnitId] = useState<string | null>(null);
+  const abyssalCollapsingUnitIdRef = useRef<string | null>(null);
+  const abyssalCommitLockRef = useRef(false);
+  const commitAbyssalVerdictOnTargetRef = useRef<((unitId: string) => void) | null>(null);
+  const primeAbyssalVerdictRef = useRef<() => void>(() => undefined);
+  const publishSquadUiRef = useRef<(squad: EnemyCombatProfile[]) => void>(() => undefined);
   const [ruinVfxSeq, setRuinVfxSeq] = useState(0);
   const [currentAmmo, setCurrentAmmo] = useState(DEFAULT_MAGAZINE_SIZE);
   const [hexShotState, setHexShotState] = useState<HexShotCombatState>(() => createInitialHexShotCombatState({
@@ -1371,6 +1400,24 @@ export default function TacticalCombatHub({
     && abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP
     && !isExhausted
     && canFireLegacyClassUltimate('EVISCERATE', activeWeaponFamilyId);
+
+  useEffect(() => {
+    abyssalVerdictPrimedRef.current = abyssalVerdictPrimed;
+  }, [abyssalVerdictPrimed]);
+
+  useEffect(() => {
+    if (shouldFireAbyssalVerdictReadyNotification(abyssalReadyLatchedRef.current, sliceReady)) {
+      setAbyssalReadyNotifySeq((n) => n + 1);
+    }
+    abyssalReadyLatchedRef.current = sliceReady;
+    if (!sliceReady) {
+      setAbyssalVerdictPrimed(false);
+      abyssalVerdictPrimedRef.current = false;
+      setAbyssalCollapsingUnitId(null);
+      abyssalCommitLockRef.current = false;
+    }
+  }, [sliceReady]);
+
   const zeroProtocolReady = operativeClass === 'HEX_SHOT'
     && hexShotState.isUltimateAvailable
     && !isExhausted
@@ -2008,20 +2055,30 @@ export default function TacticalCombatHub({
     }
     if (!onSquadUiChange) return;
     if (nextSquad.length === 0) return;
-    const staged = selectedAbility;
+    const staged = selectedAbilityRef.current;
     const targetMode = staged ? classAbilityTargetMode(operativeClass, staged) : 'NONE';
     const playerSelecting = canPlayerCommand();
     const fractureBreachActive = fractureBreakUnitIdRef.current != null;
-    const abilityTargeting = staged != null && (targetMode === 'SINGLE' || targetMode === 'ALL');
-    const targetingActive = playerSelecting || abilityTargeting || fractureBreachActive;
+    const abyssalTargeting = abyssalVerdictPrimedRef.current === true
+      && playerSelecting
+      && !fractureBreachActive;
+    const abilityTargeting = staged != null
+      && !abyssalTargeting
+      && (targetMode === 'SINGLE' || targetMode === 'ALL');
+    const targetingActive = playerSelecting || abilityTargeting || fractureBreachActive || abyssalTargeting;
     const validTargets = staged && abilityTargeting
       ? validTargetsForClassAbility(operativeClass, nextSquad, staged)
       : [];
     const validIds = new Set(validTargets.map((u) => u.unitId));
+    const inputMode = resolveWeaponUltimateInputMode({
+      simplifiedUltimateInputs: simplifiedUltimateInputs === true,
+    });
+    const simplified = shouldSkipUltimateMinigame(inputMode);
     onSquadUiChange({
       squadSize: aliveUnits(nextSquad).length,
       targetingActive,
-      abilityTargetingActive: abilityTargeting,
+      abilityTargetingActive: abilityTargeting || abyssalTargeting,
+      abyssalVerdictTargetingActive: abyssalTargeting,
       stagedAbilityId: staged,
       turnOrder: buildCombatTurnOrder({
         squad: nextSquad,
@@ -2044,14 +2101,28 @@ export default function TacticalCombatHub({
           delete dissolveSeqRef.current[unitId];
           dissolvedHiddenRef.current.delete(unitId);
         }
+        const abyssalEligible = abyssalTargeting && isAbyssalVerdictEnemyEligible({
+          alive,
+          dissolveHidden: dissolvedHiddenRef.current.has(unitId),
+        });
         const targetable = fractureBreachActive
           ? (alive && isFractureBreachTarget)
-          : targetingActive && alive && (
-            !staged || !abilityTargeting || validIds.has(u.unitId!) || hookValid
-          );
+          : abyssalTargeting
+            ? abyssalEligible
+            : targetingActive && alive && (
+              !staged || !abilityTargeting || validIds.has(u.unitId!) || hookValid
+            );
         const blocked = staged != null && abilityTargeting && targetMode === 'SINGLE'
           && isUnitBlockedForClassAbility(operativeClass, nextSquad, staged, unitId)
           && !hookValid;
+        const abyssalPreview = abyssalEligible
+          ? previewAbyssalVerdictDamage({
+            currentHp: u.currentHp,
+            kineticArmor: u.kineticArmor,
+            simplifiedInputs: simplified,
+            sliceDamagePenalty,
+          })
+          : null;
         const motionOptions = { arenaLayout: true, gridSlot: u.gridSlot ?? null };
         const isActiveActor = (
           skipTurnUnitIdsRef.current.has(unitId)
@@ -2123,6 +2194,17 @@ export default function TacticalCombatHub({
               || focusedUnitIdRef.current === u.unitId),
           isTargetable: targetable,
           isAoeAffected: targetMode === 'ALL' && targetable,
+          abyssalVerdictTargetable: abyssalEligible === true,
+          abyssalVerdictDimmed: abyssalTargeting && !abyssalEligible,
+          abyssalVerdictPreview: abyssalPreview
+            ? {
+              damage: abyssalPreview.damage,
+              remainingHp: abyssalPreview.remainingHp,
+              remainingArmor: abyssalPreview.remainingArmor,
+              lethal: abyssalPreview.lethal,
+            }
+            : null,
+          abyssalVerdictCollapsing: abyssalCollapsingUnitIdRef.current === unitId,
           isFocused: focusedUnitIdRef.current === u.unitId,
           isActingEnemy: isActiveActor,
           isExecutingAttack: isActiveActor
@@ -2174,6 +2256,7 @@ export default function TacticalCombatHub({
       }),
     });
   };
+  publishSquadUiRef.current = publishSquadUi;
 
   const allDeadUnitsDissolved = (squad: EnemyCombatProfile[]) =>
     squad.every((u) => {
@@ -2407,6 +2490,12 @@ export default function TacticalCombatHub({
     if (!canPlayerCommand()) return;
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit || !isUnitAlive(unit)) return;
+
+    // ABYSSAL VERDICT targeting — full enemy region commits; no Reserve until cinematic path.
+    if (abyssalVerdictPrimedRef.current) {
+      commitAbyssalVerdictOnTargetRef.current?.(unitId);
+      return;
+    }
 
     const staged = selectedAbilityRef.current;
     const targetMode = staged
@@ -8620,19 +8709,8 @@ export default function TacticalCombatHub({
       return;
     }
     if (sliceReady) {
-      if (skipMinigame) {
-        log(`>> [${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Simplified inputs — STANDARD grade commit.`);
-        commitThreefoldBrandSimplified();
-        return;
-      }
-      traceUltimateActivation({
-        event: 'ultimate-interaction-requested',
-        weaponFamilyId: activeWeaponFamilyId,
-        ultimateId: 'THREEFOLD_BRAND',
-        activationToken,
-        interactionId: 'THREEFOLD_BRAND_SLICE',
-      });
-      onSlice();
+      // Center-screen ping removed — U / legacy ping primes the Reserve-panel module.
+      primeAbyssalVerdictRef.current();
       return;
     }
     if (stagedUltimateReady && activeUltimateRecord) {
@@ -8666,6 +8744,15 @@ export default function TacticalCombatHub({
 
   const cancelWeaponUltimateInteraction = () => {
     // Free cancel — never spends Protocol / Rot / Abyssal Reserve.
+    if (abyssalVerdictPrimedRef.current) {
+      setAbyssalVerdictPrimed(false);
+      abyssalVerdictPrimedRef.current = false;
+      setAbyssalCollapsingUnitId(null);
+      abyssalCommitLockRef.current = false;
+      publishSquadUiRef.current(squadRef.current);
+      log(`>> [${ABYSSAL_VERDICT_DISPLAY_NAME}] >> Targeting cancelled — free. Abyssal Reserve retained.`);
+      return;
+    }
     if (zeroProtocolVisible || zeroProtocolActiveRef.current) {
       zeroProtocolActiveRef.current = false;
       setZeroProtocolVisible(false);
@@ -9914,6 +10001,179 @@ export default function TacticalCombatHub({
     });
   };
 
+  const abyssalVerdictCanInteract = isPlayerTurn
+    && cycleState === 'TEXT_COMBAT'
+    && !isExhausted
+    && !combatPausedRef.current
+    && stagedWeaponUltimateId == null
+    && !zeroProtocolVisible
+    && !cataclysmSigilVisible
+    && !encounterUltimateDisabled;
+
+  const cancelAbyssalVerdictTargeting = useCallback(() => {
+    if (!abyssalVerdictPrimedRef.current) return;
+    setAbyssalVerdictPrimed(false);
+    abyssalVerdictPrimedRef.current = false;
+    setAbyssalCollapsingUnitId(null);
+    abyssalCommitLockRef.current = false;
+    publishSquadUiRef.current(squadRef.current);
+  }, []);
+
+  const primeAbyssalVerdict = useCallback(() => {
+    if (!sliceReady) return;
+    if (!(
+      isPlayerTurn
+      && cycleState === 'TEXT_COMBAT'
+      && !isExhausted
+      && !combatPausedRef.current
+      && stagedWeaponUltimateId == null
+      && !zeroProtocolVisible
+      && !cataclysmSigilVisible
+      && !encounterUltimateDisabled
+    )) {
+      return;
+    }
+    if (abyssalVerdictPrimedRef.current) return;
+    // Mutual exclusion with staged abilities — same as arming any other ability.
+    if (selectedAbilityRef.current) {
+      selectedAbilityRef.current = null;
+      setSelectedAbility(null);
+    }
+    setAbyssalVerdictPrimed(true);
+    abyssalVerdictPrimedRef.current = true;
+    publishSquadUiRef.current(squadRef.current);
+  }, [
+    cataclysmSigilVisible,
+    cycleState,
+    encounterUltimateDisabled,
+    isExhausted,
+    isPlayerTurn,
+    sliceReady,
+    stagedWeaponUltimateId,
+    zeroProtocolVisible,
+  ]);
+
+  const commitAbyssalVerdictOnTarget = useCallback((unitId: string) => {
+    if (abyssalCommitLockRef.current) return;
+    if (!sliceReady || !abyssalVerdictPrimedRef.current) return;
+    if (!canPlayerCommand()) return;
+    const unit = getUnitById(squadRef.current, unitId);
+    if (
+      !unit
+      || !isAbyssalVerdictEnemyEligible({
+        alive: isUnitAlive(unit),
+        dissolveHidden: dissolvedHiddenRef.current.has(unitId),
+      })
+    ) {
+      return;
+    }
+
+    abyssalCommitLockRef.current = true;
+    abyssalCollapsingUnitIdRef.current = unitId;
+    setAbyssalCollapsingUnitId(unitId);
+    publishSquadUiRef.current(squadRef.current);
+
+    const finish = () => {
+      setAbyssalVerdictPrimed(false);
+      abyssalVerdictPrimedRef.current = false;
+      abyssalCollapsingUnitIdRef.current = null;
+      setAbyssalCollapsingUnitId(null);
+      selectedTargetIdRef.current = unitId;
+      setSelectedTargetId(unitId);
+      focusedUnitIdRef.current = unitId;
+      enemyRef.current = unit;
+      setEnemy(unit);
+      setEviscerateTargetUnitId(unitId);
+
+      const inputMode = resolveWeaponUltimateInputMode({
+        simplifiedUltimateInputs: simplifiedUltimateInputs === true,
+      });
+      const resolved = resolveAbyssalVerdictCommitDamage({
+        simplifiedInputs: shouldSkipUltimateMinigame(inputMode),
+        sliceDamagePenalty,
+      });
+      log(
+        resolved.gradeLabel === 'PERFECT'
+          ? `[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> PERFECT [3/3] — ${resolved.damage} damage.`
+          : `[${ABYSSAL_VERDICT_DISPLAY_NAME}] >> ${resolved.gradeLabel} — ${resolved.damage} damage.`,
+      );
+      commitAbyssalVerdictDamage({
+        dmg: resolved.damage,
+        gradeLabel: resolved.gradeLabel,
+        targetHint: unit,
+      });
+      abyssalCommitLockRef.current = false;
+    };
+
+    const collapseMs = getCombatPresentationSettings().reducedMotion
+      ? 0
+      : ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS;
+    if (collapseMs <= 0) {
+      finish();
+      return;
+    }
+    setTimeout(finish, collapseMs);
+  }, [
+    log,
+    sliceDamagePenalty,
+    sliceReady,
+    simplifiedUltimateInputs,
+  ]);
+
+  commitAbyssalVerdictOnTargetRef.current = commitAbyssalVerdictOnTarget;
+  primeAbyssalVerdictRef.current = primeAbyssalVerdict;
+
+  useEffect(() => {
+    if (!onAbyssalVerdictUiChange) return;
+    if (operativeClass !== 'AEGIS') {
+      onAbyssalVerdictUiChange(null);
+      return;
+    }
+    const settings = getCombatPresentationSettings();
+    const snapshot: AbyssalVerdictHudSnapshot = {
+      state: resolveAbyssalVerdictPresentationState({
+        ultimateReady: sliceReady,
+        primed: abyssalVerdictPrimed,
+      }),
+      reserve: abyssalReserve,
+      cap: COMBAT_ACTION.ABYSSAL_RESERVE_CAP,
+      notifySeq: abyssalReadyNotifySeq,
+      canInteract: abyssalVerdictCanInteract,
+      collapsingUnitId: abyssalCollapsingUnitId,
+      reducedMotion: settings.reducedMotion === true,
+    };
+    onAbyssalVerdictUiChange(snapshot);
+  }, [
+    abyssalCollapsingUnitId,
+    abyssalReadyNotifySeq,
+    abyssalReserve,
+    abyssalVerdictCanInteract,
+    abyssalVerdictPrimed,
+    onAbyssalVerdictUiChange,
+    operativeClass,
+    sliceReady,
+  ]);
+
+  useEffect(() => {
+    if (!registerAbyssalVerdictHandlers) return;
+    registerAbyssalVerdictHandlers({
+      prime: primeAbyssalVerdict,
+      cancel: cancelAbyssalVerdictTargeting,
+    });
+    return () => registerAbyssalVerdictHandlers(null);
+  }, [
+    cancelAbyssalVerdictTargeting,
+    primeAbyssalVerdict,
+    registerAbyssalVerdictHandlers,
+  ]);
+
+  useEffect(() => () => {
+    abyssalVerdictPrimedRef.current = false;
+    abyssalCollapsingUnitIdRef.current = null;
+    abyssalCommitLockRef.current = false;
+    onAbyssalVerdictUiChange?.(null);
+  }, [onAbyssalVerdictUiChange]);
+
   const queueSlice = (idx: number) => {
     if (isCombatTerminal()) return;
     if (idx >= 3) { evaluateSlice(); return; }
@@ -10387,6 +10647,13 @@ export default function TacticalCombatHub({
   };
 
   const stageAbility = (abilityId: string) => {
+    // Mutual exclusion with Abyssal Verdict targeting.
+    if (abyssalVerdictPrimedRef.current) {
+      abyssalVerdictPrimedRef.current = false;
+      setAbyssalVerdictPrimed(false);
+      setAbyssalCollapsingUnitId(null);
+      abyssalCommitLockRef.current = false;
+    }
     const mode = classAbilityTargetMode(operativeClass, abilityId);
     if (mode === 'ALL') {
       selectedTargetIdRef.current = null;
@@ -10401,11 +10668,15 @@ export default function TacticalCombatHub({
         }
       }
     }
+    selectedAbilityRef.current = abilityId;
     setSelectedAbility(abilityId);
+    publishSquadUiRef.current(squadRef.current);
   };
 
   const abortStagedAbility = () => {
+    selectedAbilityRef.current = null;
     setSelectedAbility(null);
+    publishSquadUiRef.current(squadRef.current);
   };
 
   useEffect(() => {
@@ -10425,10 +10696,8 @@ export default function TacticalCombatHub({
   }, [abyssalWardActive, onWardPrimedChange]);
 
   useEffect(() => {
-    // Veil-Piercer keeps occult damage rules but must not show the purple primed aura.
-    onAbilityPrimedChange?.(
-      selectedAbility != null && selectedAbility !== 'VEIL_PIERCER',
-    );
+    // Selecting an ability must never paint the magenta/purple primed aura on the player.
+    onAbilityPrimedChange?.(false);
   }, [selectedAbility, onAbilityPrimedChange]);
 
   const envoyRotStacksTotal = operativeClass === 'ENVOY'
@@ -10771,8 +11040,9 @@ export default function TacticalCombatHub({
 
   const chromeSnapshot = useMemo(
     () => ({
-      ultimatePingVisible: ultimatePingReady && enemyAlive,
-      ultimatePingReady: ultimatePingReady && enemyAlive,
+      // Aegis Longsword never uses the center-screen red ping — Reserve module only.
+      ultimatePingVisible: ultimatePingReady && enemyAlive && ultimatePingVariant !== 'eviscerate',
+      ultimatePingReady: ultimatePingReady && enemyAlive && ultimatePingVariant !== 'eviscerate',
       ultimatePingDisabled: !isPlayerTurn
         || cycleState !== 'TEXT_COMBAT'
         || isExhausted

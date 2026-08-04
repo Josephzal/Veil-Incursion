@@ -1,3 +1,8 @@
+/**
+ * ABYSSAL VERDICT targeting brackets — crimson SVG L-corners.
+ * Hover glow tuned in `data/reticleHoverGlow.ts` (shared with ability brackets).
+ */
+
 import React, { useEffect, useId, useState } from 'react';
 import { LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -10,30 +15,34 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
-import { OTT } from '../../../constants/occultTacticalTerminalTheme';
+import {
+  ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS,
+  ABYSSAL_VERDICT_UI_COLORS as C,
+} from '../../data/abyssalVerdictReadyUi';
 import {
   RETICLE_HOVER_GLOW as GLOW,
   reticleHoverWebGlowStyle,
-} from '../../../data/reticleHoverGlow';
+} from '../../data/reticleHoverGlow';
 
-interface TargetingBracketsProps {
+export interface AbyssalVerdictTargetBracketsProps {
   active?: boolean;
-  color?: string;
   focused?: boolean;
-  /** Match enemy portrait scale while keeping the glow host untransformed. */
+  collapsing?: boolean;
+  reducedMotion?: boolean;
   contentScale?: number;
 }
 
 const ARM = 0.22;
 
-/** Occult scanner lock — SVG L-corners. Hover glow tuned in `data/reticleHoverGlow.ts`. */
-export default function TargetingBrackets({
+export default function AbyssalVerdictTargetBrackets({
   active = true,
-  color = OTT.cyanSelect,
   focused = false,
+  collapsing = false,
+  reducedMotion = false,
   contentScale = 1,
-}: TargetingBracketsProps): React.JSX.Element | null {
+}: AbyssalVerdictTargetBracketsProps): React.JSX.Element | null {
   const pulse = useSharedValue(0.7);
+  const collapse = useSharedValue(0);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const reactId = useId();
   const filterSafeId = reactId.replace(/:/g, '');
@@ -41,12 +50,31 @@ export default function TargetingBrackets({
   useEffect(() => {
     if (!active) {
       cancelAnimation(pulse);
+      cancelAnimation(collapse);
       pulse.value = 0.7;
+      collapse.value = 0;
+      return;
+    }
+    if (collapsing) {
+      cancelAnimation(pulse);
+      if (reducedMotion) {
+        collapse.value = 1;
+        return;
+      }
+      collapse.value = withTiming(1, {
+        duration: ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS,
+        easing: Easing.in(Easing.cubic),
+      });
+      return;
+    }
+    collapse.value = 0;
+    if (reducedMotion) {
+      pulse.value = focused ? 1 : 0.78;
       return;
     }
     pulse.value = withRepeat(
       withSequence(
-        withTiming(focused ? 1 : 0.92, {
+        withTiming(focused ? 1 : 0.95, {
           duration: focused ? 700 : 1200,
           easing: Easing.inOut(Easing.quad),
         }),
@@ -58,11 +86,15 @@ export default function TargetingBrackets({
       -1,
       false,
     );
-    return () => cancelAnimation(pulse);
-  }, [active, focused, pulse]);
+    return () => {
+      cancelAnimation(pulse);
+      cancelAnimation(collapse);
+    };
+  }, [active, collapsing, collapse, focused, pulse, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
-    opacity: focused ? 1 : pulse.value,
+    opacity: (focused ? 1 : pulse.value) * (1 - collapse.value * 0.4),
+    transform: [{ scale: 1 - collapse.value * 0.28 }],
   }));
 
   if (!active) return null;
@@ -74,6 +106,7 @@ export default function TargetingBrackets({
     setSize({ w: width, h: height });
   };
 
+  const color = focused ? C.crimsonBright : '#A02837';
   const inset = 3;
   const w = size.w;
   const h = size.h;
@@ -149,7 +182,7 @@ const styles = StyleSheet.create({
     right: '6%',
     bottom: '4%',
     left: '6%',
-    zIndex: 16,
+    zIndex: 17,
     overflow: 'visible',
   },
   glowHost: {
