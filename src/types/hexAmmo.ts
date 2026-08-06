@@ -3,8 +3,9 @@
  *
  * Ammo type is **combat state**, not a consumable inventory. The Hex Shot chooses
  * one of three ammo types on every Phase-Shift Reload; BALLISTIC abilities inherit
- * the current ammo type. Perfect reloads build Protocol Charges (spent by Zero
- * Protocol) and prime an Overcharged first shot.
+ * the current ammo type. Perfect reloads build Protocol Charges (spent by Hex
+ * weapon ultimates) and prime an Overcharged first shot (+20%). Class-wide Chamber
+ * +15% is retired (H.1a).
  *
  * This module is pure/data-only — no run-state mutation, no React.
  */
@@ -34,7 +35,7 @@ export const HEX_MAGAZINE_CONFIG = {
   silverFractureBonusPct: 25,
   /** Wraithglass tuning. */
   wraithglassOccultConversionPct: 40,
-  wraithglassFlatOccult: 6,
+  wraithglassFlatOccult: 3,
   wraithglassBacklineDamagePct: 15,
   wraithglassVoidMarkTurns: 2,
   /** Stasis-Lock tuning. */

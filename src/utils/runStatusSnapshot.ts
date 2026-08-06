@@ -138,14 +138,6 @@ function escalationEntries(inc: ActiveIncursionState): RunStatusEntry[] {
       category: 'RESONANCE',
     });
   }
-  if (esc.veilStalkerHuntActive) {
-    entries.push({
-      id: 'esc-veil-stalker',
-      label: 'Veil Stalker Hunt',
-      description: 'Apex predator tracking the operative — sanctuary and market nodes compromised.',
-      category: 'RESONANCE',
-    });
-  }
   if (esc.vectorSeveredTriggered) {
     entries.push({
       id: 'esc-vector-severed',

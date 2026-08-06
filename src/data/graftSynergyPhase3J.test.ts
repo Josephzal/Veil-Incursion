@@ -41,7 +41,9 @@ import {
   isSanctuaryGraftGrantEnabled,
   rollClassGraftOffers,
 } from './classGraftEngine';
+import { buildWeaponActionGraftCastPlan } from './aegisWeaponActionGraftEngine';
 import { buildGraftCastPlan } from './veilGraftEngine';
+import { isAegisWeaponActionCatalogId } from './aegisWeaponActionCatalog';
 import {
   CLASS_RANK_MAX,
   classRankXpProgress,
@@ -147,11 +149,15 @@ import { WEAPON_DRAWBACK_RECORDS } from './weaponDrawbackEngine';
     sanctuarySessionActive: true,
     residueBalance: residue,
     sanctuaryOffers: offers,
+    aegisSurface: {
+      weaponFamilyId: 'aegis-runed-longsword',
+      techniques: ['VEIL_PIERCER', 'ASHEN_MANTLE', 'RUIN'],
+    },
   });
   assert.equal(first.ok, true);
   assert.equal(first.cost, graft.cost);
   residue -= first.cost;
-  assert.equal(first.proposedMap.VEIL_PIERCER, 'NEUTRON_GRAFT');
+  assert.equal(first.proposedMap['TECH:VEIL_PIERCER'], 'NEUTRON_GRAFT');
 
   // Replacement attempt that fails (duplicate ID onto another ability while already used)
   const failDup = validateSanctuaryGraftApplication({
@@ -163,11 +169,15 @@ import { WEAPON_DRAWBACK_RECORDS } from './weaponDrawbackEngine';
     sanctuarySessionActive: true,
     residueBalance: residue,
     sanctuaryOffers: offers,
+    aegisSurface: {
+      weaponFamilyId: 'aegis-runed-longsword',
+      techniques: ['VEIL_PIERCER', 'ASHEN_MANTLE', 'RUIN'],
+    },
   });
   assert.equal(failDup.ok, false);
   assert.ok(failDup.rejections.includes('DUPLICATE_GRAFT_ID'));
   assert.equal(failDup.cost, 0);
-  assert.equal(failDup.proposedMap.VEIL_PIERCER, 'NEUTRON_GRAFT');
+  assert.equal(failDup.proposedMap['TECH:VEIL_PIERCER'], 'NEUTRON_GRAFT');
   assert.equal(residue, 100 - graft.cost); // unchanged
 
   // Legal swap on same ability (replace neutron with flayer)
@@ -180,9 +190,13 @@ import { WEAPON_DRAWBACK_RECORDS } from './weaponDrawbackEngine';
     sanctuarySessionActive: true,
     residueBalance: residue,
     sanctuaryOffers: offers,
+    aegisSurface: {
+      weaponFamilyId: 'aegis-runed-longsword',
+      techniques: ['VEIL_PIERCER', 'ASHEN_MANTLE', 'RUIN'],
+    },
   });
   assert.equal(swap.ok, true);
-  assert.equal(swap.proposedMap.VEIL_PIERCER, 'FLAYER_GRAFT');
+  assert.equal(swap.proposedMap['TECH:VEIL_PIERCER'], 'FLAYER_GRAFT');
 }
 
 // Offer filter respects Apex lock
@@ -259,7 +273,7 @@ import { WEAPON_DRAWBACK_RECORDS } from './weaponDrawbackEngine';
 
 // Graft transforms reach combat
 {
-  const aegis = buildGraftCastPlan('STRIKE', 'ECHO_GRAFT');
+  const aegis = buildWeaponActionGraftCastPlan('UNMAKER_STRIKE', 'ECHO_GRAFT');
   assert.ok(!aegis.effectiveTags.includes('FRACTURE'));
   const hex = buildClassGraftCastPlan('HEX_SHOT', 'ASH_JACKET_SALVO', 'WIDOW_CHOKE_GRAFT');
   assert.ok(hex.effectiveTags.includes('SINGLE_TARGET') || !hex.effectiveTags.includes('AOE'));
@@ -271,15 +285,15 @@ import { WEAPON_DRAWBACK_RECORDS } from './weaponDrawbackEngine';
   const ungrafted = buildLoadoutTagLayers({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-claymore-blade',
-    equippedAbilityIds: ['STRIKE', 'DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
+    equippedAbilityIds: ['UNMAKER_STRIKE', 'DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
   });
   assert.ok(ungrafted.finalTransformedTags.includes('FRACTURE') || ungrafted.runtimeBasicTags.includes('FRACTURE'));
 
   const grafted = buildLoadoutTagLayers({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-claymore-blade',
-    equippedAbilityIds: ['STRIKE', 'DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
-    abilityGrafts: { STRIKE: 'ECHO_GRAFT' },
+    equippedAbilityIds: ['UNMAKER_STRIKE', 'DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
+    abilityGrafts: { 'WA:UNMAKER_STRIKE': 'ECHO_GRAFT' },
   });
   assert.ok(grafted.graftRemovedTags.includes('FRACTURE'));
 }
@@ -352,7 +366,11 @@ import { WEAPON_DRAWBACK_RECORDS } from './weaponDrawbackEngine';
         map[a.abilityId] = a.graftId;
         totalResidue += getClassGraftDefinition(p.classId, a.graftId).cost;
         if (p.classId === 'AEGIS') {
-          assert.ok(buildGraftCastPlan(a.abilityId as never, a.graftId as never).effectiveTags != null);
+          if (isAegisWeaponActionCatalogId(a.abilityId)) {
+            assert.ok(buildWeaponActionGraftCastPlan(a.abilityId, a.graftId as never).effectiveTags != null);
+          } else {
+            assert.ok(buildGraftCastPlan(a.abilityId as never, a.graftId as never).effectiveTags != null);
+          }
         } else {
           assert.ok(buildClassGraftCastPlan(p.classId, a.abilityId, a.graftId as never).effectiveTags != null);
         }

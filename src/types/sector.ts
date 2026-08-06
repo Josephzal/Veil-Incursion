@@ -65,9 +65,7 @@ export const RESONANCE_TIER_VOLATILE = 30;
 /** Cargo data-bleed begins when entering Alert zone. */
 export const RESONANCE_TIER_DATA_BLEED = 41;
 export const RESONANCE_TIER_HOSTILE = 41;
-/** Critical zone — terminal blind + veil stalker hunt. */
+/** Critical zone — terminal blind. */
 export const RESONANCE_TIER_CRITICAL = 76;
 export const RESONANCE_TIER_VECTOR_SEVERED = 76;
 export const TERMINAL_BLIND_NODE_COUNT = 2;
-export const VEIL_STALKER_RESONANCE_THRESHOLD = 76;
-export const VEIL_STALKER_AMBUSH_CHANCE = 0.4;

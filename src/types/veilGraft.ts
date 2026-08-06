@@ -18,8 +18,12 @@ export type VeilGraftId =
   | 'NULL_SPACE_GRAFT'
   | 'APEX_GRAFT';
 
-/** Run-scoped graft applied to one loadout slot ability. */
-export type AbilityGraftMap = Partial<Record<AegisAbilityId, VeilGraftId>>;
+/**
+ * Run-scoped Aegis graft map.
+ * Phase D keys are encoded: `WA:<weaponActionId>` | `TECH:<techniqueId>`.
+ * Legacy bare ability IDs may appear only as hydration input and are dropped/coerced at sanitize.
+ */
+export type AbilityGraftMap = Partial<Record<string, VeilGraftId>>;
 
 export type GraftDamageScale = 'RESERVE_CONSUMED';
 

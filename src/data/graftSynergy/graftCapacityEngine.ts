@@ -130,19 +130,42 @@ export function classifyAbilitySocket(
   abilityId: string,
 ): GraftSocketCategory {
   if (classId === 'AEGIS') {
-    if (abilityId === 'STRIKE') return 'FIXED_BASIC_SIGNATURE';
-    if (abilityId === 'EVISCERATE' || abilityId === 'WRAITH_PARRY') return 'ULTIMATE';
+    // Strip encoded WA:/TECH: prefixes for socket classification.
+    const bare = abilityId.startsWith('WA:') || abilityId.startsWith('TECH:')
+      ? abilityId.slice(abilityId.indexOf(':') + 1)
+      : abilityId;
+    // Family Strike fixed-basics (Phase D) — never a generic STRIKE graft target.
     if (
-      abilityId === 'THREEFOLD_BRAND'
-      || abilityId === 'REND_THE_VEIL'
-      || abilityId === 'GRAVEFALL'
+      bare === 'WARDENS_STRIKE'
+      || bare === 'PAIRED_BLADES_STRIKE'
+      || bare === 'UNMAKER_STRIKE'
+    ) {
+      return 'FIXED_BASIC_SIGNATURE';
+    }
+    // Legacy generic STRIKE is not a live graftable socket.
+    if (bare === 'STRIKE') return 'FIXED_BASIC_SIGNATURE';
+    if (
+      bare === 'EVISCERATE'
+      || bare === 'WRAITH_PARRY'
+      || bare === 'ABYSSAL_VERDICT'
+      || bare === 'REND_THE_VEIL'
+      || bare === 'GRAVEFALL'
     ) {
       return 'ULTIMATE';
     }
+    // THREEFOLD_BRAND is retired — not a live Ultimate classification.
     return 'STANDARD_ABILITY';
   }
   if (classId === 'HEX_SHOT') {
-    if (abilityId === 'SILVER_CORE_SIDEARM') return 'FIXED_BASIC_SIGNATURE';
+    // W.2–W.4 — live fixed-basics; SILVER_CORE_SIDEARM remains the legacy signature.
+    if (
+      abilityId === 'SILVER_CORE_SIDEARM'
+      || abilityId === 'QUICKDRAW'
+      || abilityId === 'CENTER_MASS'
+      || abilityId === 'DOOR_KNOCKER'
+    ) {
+      return 'FIXED_BASIC_SIGNATURE';
+    }
     if (
       abilityId === 'ZERO_PROTOCOL'
       || abilityId === 'SIXTH_SEAL'

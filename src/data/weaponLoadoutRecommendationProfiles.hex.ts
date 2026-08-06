@@ -25,7 +25,7 @@ export const HEX_SIDEARM: WeaponLoadoutRecommendationProfile = {
       abilityId: 'SILVER_CORE_SIDEARM',
       role: 'IDENTITY_ANCHOR',
       coreTier: 'CORE',
-      playerFacingReason: 'Fixed weapon basic — efficient ST shot with execute window.',
+      playerFacingReason: 'Fixed weapon basic (Quickdraw on Sidearm kit) — efficient ST shot with execute window.',
       exactMechanicalInteraction: 'resolveHexBasicShot PRECISION delivery; reload feeds Protocol Charges.',
       dependsOnEvent: 'WEAPON_BASIC',
       tagsInvolved: ['BALLISTIC', 'KINETIC', 'RELOAD'],
@@ -133,9 +133,8 @@ export const HEX_SIDEARM: WeaponLoadoutRecommendationProfile = {
     sample({
       kind: 'IDENTITY_FORWARD',
       label: 'Precision Protocol cadence',
-      slots: ['SILVER_CORE_SIDEARM', 'REVENANTS_ECHO', 'RIFT_SNARE', 'ASTRAL_TARGET_LOCK'],
+      slots: ['REVENANTS_ECHO', 'RIFT_SNARE', 'ASTRAL_TARGET_LOCK'],
       abilityJobs: [
-        { abilityId: 'SILVER_CORE_SIDEARM', job: 'Efficient weapon basic' },
         { abilityId: 'REVENANTS_ECHO', job: 'Execute complement' },
         { abilityId: 'RIFT_SNARE', job: 'Tactical control without Ash primary' },
         { abilityId: 'ASTRAL_TARGET_LOCK', job: 'Priority mark for clean shots' },
@@ -147,9 +146,8 @@ export const HEX_SIDEARM: WeaponLoadoutRecommendationProfile = {
     sample({
       kind: 'ALTERNATE_COVERAGE',
       label: 'Disrupt-and-survive',
-      slots: ['SILVER_CORE_SIDEARM', 'PHOSPHORUS_HEX', 'NULL_SPACE_CLOAK', 'RIFT_SNARE'],
+      slots: ['PHOSPHORUS_HEX', 'NULL_SPACE_CLOAK', 'RIFT_SNARE'],
       abilityJobs: [
-        { abilityId: 'SILVER_CORE_SIDEARM', job: 'Weapon basic' },
         { abilityId: 'PHOSPHORUS_HEX', job: 'Blind coverage' },
         { abilityId: 'NULL_SPACE_CLOAK', job: 'Reload defense' },
         { abilityId: 'RIFT_SNARE', job: 'Trap control' },
@@ -165,16 +163,16 @@ export const HEX_NULLBREACH: WeaponLoadoutRecommendationProfile = {
   weaponFamilyId: 'hex-void-cannon',
   classId: 'HEX_SHOT',
   validationState: 'VALIDATED',
-  identitySummary: 'Deliberate ST armor pressure, small mag, high commitment — worse than Ash vs groups.',
+  identitySummary: 'Door Knocker armor pressure; Fatal Funnel lane blast; Threshold reaction; Deadbolt primed after reload.',
   recommendations: [
     rec({
       abilityId: 'SILVER_CORE_SIDEARM',
       role: 'IDENTITY_ANCHOR',
       coreTier: 'CORE',
-      playerFacingReason: 'Fixed slot resolves Nullbreach BREACH basic (innate KA pressure).',
-      exactMechanicalInteraction: 'resolveHexBasicShot BREACH + resolveWeaponArmorPressureLayers floor.',
+      playerFacingReason: 'Fixed Black Door basic is Door Knocker — ST breach with KA pressure.',
+      exactMechanicalInteraction: 'DOOR_KNOCKER via resolveHexBasicShot BREACH; historical signature maps to Door Knocker.',
       dependsOnEvent: 'WEAPON_BASIC',
-      tagsInvolved: ['BALLISTIC', 'ARMOR_PIERCE', 'HEAVY'],
+      tagsInvolved: ['BALLISTIC', 'HEAVY', 'ARMOR_BREAK'],
       meterInteraction: 'Stamina + ammo; small mag forces reload planning.',
       addresses: 'Strength — Kinetic Armor pressure',
       importantTradeoff: 'Overcommit vs unarmored trash.',
@@ -279,15 +277,14 @@ export const HEX_NULLBREACH: WeaponLoadoutRecommendationProfile = {
     sample({
       kind: 'IDENTITY_FORWARD',
       label: 'Breach priority package',
-      slots: ['SILVER_CORE_SIDEARM', 'SINGULARITY_SLUG', 'ASTRAL_TARGET_LOCK', 'PANOPTICON_PROTOCOL'],
+      slots: ['SINGULARITY_SLUG', 'ASTRAL_TARGET_LOCK', 'PANOPTICON_PROTOCOL'],
       abilityJobs: [
-        { abilityId: 'SILVER_CORE_SIDEARM', job: 'Nullbreach armor-pressure basic' },
         { abilityId: 'SINGULARITY_SLUG', job: 'Committed armor crush' },
         { abilityId: 'ASTRAL_TARGET_LOCK', job: 'Mark the right body' },
         { abilityId: 'PANOPTICON_PROTOCOL', job: 'Complementary interrupt/trap' },
       ],
       availability: 'STANDARD',
-      earlyAlternativeSlots: ['SILVER_CORE_SIDEARM', 'SINGULARITY_SLUG', 'ASTRAL_TARGET_LOCK', 'RIFT_SNARE'],
+      earlyAlternativeSlots: ['SINGULARITY_SLUG', 'ASTRAL_TARGET_LOCK', 'RIFT_SNARE'],
       earlyAlternativeNote: 'Use RIFT_SNARE until PANOPTICON is unlocked.',
       preservesDrawback: 'Still single-target and mag-hungry; Panopticon is complement, not overwatch identity.',
       playerFacingSummary: 'Lock → breach → crush — priority deletion.',
@@ -295,9 +292,8 @@ export const HEX_NULLBREACH: WeaponLoadoutRecommendationProfile = {
     sample({
       kind: 'ALTERNATE_COVERAGE',
       label: 'Reload-safe breach',
-      slots: ['SILVER_CORE_SIDEARM', 'SINGULARITY_SLUG', 'NULL_SPACE_CLOAK', 'RIFT_SNARE'],
+      slots: ['SINGULARITY_SLUG', 'NULL_SPACE_CLOAK', 'RIFT_SNARE'],
       abilityJobs: [
-        { abilityId: 'SILVER_CORE_SIDEARM', job: 'Breach basic' },
         { abilityId: 'SINGULARITY_SLUG', job: 'Armor commitment' },
         { abilityId: 'NULL_SPACE_CLOAK', job: 'Survive empty mag' },
         { abilityId: 'RIFT_SNARE', job: 'Soft swarm brake' },
@@ -313,21 +309,21 @@ export const HEX_PULSE: WeaponLoadoutRecommendationProfile = {
   weaponFamilyId: 'hex-pulse-rifle',
   classId: 'HEX_SHOT',
   validationState: 'VALIDATED',
-  identitySummary: 'Spread basic for clusters; Ash-Jacket Salvo stays distinct concentrated burst; isolated fights stay weak.',
+  identitySummary: 'Center Mass + Firing Solution mark; cluster pressure via Contact Front / flex; Ash-Jacket Salvo stays distinct burst.',
   recommendations: [
     rec({
       abilityId: 'SILVER_CORE_SIDEARM',
       role: 'IDENTITY_ANCHOR',
       coreTier: 'CORE',
-      playerFacingReason: 'Fixed slot resolves Ash-pattern spread basic (primary + ≤2 adjacent).',
-      exactMechanicalInteraction: 'resolveHexBasicShot SPREAD — missing splash never redirects to primary.',
+      playerFacingReason: 'Fixed Carbine basic is Center Mass — ST mark that feeds Firing Solution accuracy.',
+      exactMechanicalInteraction: 'CENTER_MASS 9 Kinetic; hit establishes Firing Solution (+15 accuracy). Historical signature maps to Center Mass.',
       dependsOnEvent: 'WEAPON_BASIC',
-      tagsInvolved: ['BALLISTIC', 'AOE', 'RELOAD'],
+      tagsInvolved: ['BALLISTIC', 'KINETIC', 'RELOAD'],
       meterInteraction: 'Ammo-hungry; frequent reload / Protocol.',
-      addresses: 'Strength — multi-target spread',
-      importantTradeoff: 'Isolated targets stay inefficient.',
+      addresses: 'Strength — marked follow-up accuracy',
+      importantTradeoff: 'No longer an implicit splash basic.',
       availableWhenWeaponUnlocks: true,
-      interactionHooks: ['WEAPON_BASIC', 'SPREAD_CLUSTER', 'RELOAD_PROTOCOL'],
+      interactionHooks: ['WEAPON_BASIC', 'RELOAD_PROTOCOL'],
     }),
     rec({
       abilityId: 'ASH_JACKET_SALVO',
@@ -427,9 +423,8 @@ export const HEX_PULSE: WeaponLoadoutRecommendationProfile = {
     sample({
       kind: 'IDENTITY_FORWARD',
       label: 'Cluster spread + distinct Salvo',
-      slots: ['SILVER_CORE_SIDEARM', 'ASH_JACKET_SALVO', 'PHOSPHORUS_HEX', 'RIFT_SNARE'],
+      slots: ['ASH_JACKET_SALVO', 'PHOSPHORUS_HEX', 'RIFT_SNARE'],
       abilityJobs: [
-        { abilityId: 'SILVER_CORE_SIDEARM', job: 'Spread basic' },
         { abilityId: 'ASH_JACKET_SALVO', job: 'Concentrated multi-hit burst (distinct)' },
         { abilityId: 'PHOSPHORUS_HEX', job: 'Shape/blind clusters' },
         { abilityId: 'RIFT_SNARE', job: 'Hold adjacency' },
@@ -441,9 +436,8 @@ export const HEX_PULSE: WeaponLoadoutRecommendationProfile = {
     sample({
       kind: 'ALTERNATE_COVERAGE',
       label: 'Spread with leftover execute',
-      slots: ['SILVER_CORE_SIDEARM', 'ASH_JACKET_SALVO', 'REVENANTS_ECHO', 'NULL_SPACE_CLOAK'],
+      slots: ['ASH_JACKET_SALVO', 'REVENANTS_ECHO', 'NULL_SPACE_CLOAK'],
       abilityJobs: [
-        { abilityId: 'SILVER_CORE_SIDEARM', job: 'Spread basic' },
         { abilityId: 'ASH_JACKET_SALVO', job: 'Focused burst' },
         { abilityId: 'REVENANTS_ECHO', job: 'Finish isolated leftovers' },
         { abilityId: 'NULL_SPACE_CLOAK', job: 'Reload defense' },

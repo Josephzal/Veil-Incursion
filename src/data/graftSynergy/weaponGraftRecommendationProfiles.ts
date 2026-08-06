@@ -35,7 +35,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         abilityId: 'VEIL_PIERCER',
         graftId: 'FLAYER_GRAFT',
         role: 'IDENTITY_ANCHOR',
-        exactRuntimeInteraction: 'Armor pressure complement while STRIKE keeps Fracture',
+        exactRuntimeInteraction: 'Armor pressure complement while Warden\'s Strike keeps Fracture',
         tagsAdded: [],
         tagsRemoved: [],
         tagsReplaced: [],
@@ -80,10 +80,10 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
     antiSynergies: [
       app({
         weaponFamilyId: 'aegis-runed-longsword',
-        abilityId: 'STRIKE',
+        abilityId: 'WARDENS_STRIKE',
         graftId: 'ECHO_GRAFT',
         role: 'ANTI_SYNERGY',
-        exactRuntimeInteraction: 'Removes FRACTURE from Strike — deletes identity setup',
+        exactRuntimeInteraction: 'Removes FRACTURE from Warden\'s Strike — deletes identity setup',
         tagsAdded: [],
         tagsRemoved: ['FRACTURE'],
         tagsReplaced: [],
@@ -99,7 +99,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         availableWhenWeaponUnlocks: true,
         abilityInPhase3HSample: true,
         validationState: 'VALIDATED',
-        playerFacingReason: 'Echo on Strike strips Fracture — hard identity anti-synergy.',
+        playerFacingReason: 'Echo on Warden\'s Strike strips Fracture — hard identity anti-synergy.',
       }),
     ],
     configurations: [
@@ -117,7 +117,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
           },
         ],
         preservesDrawback: 'Still single-target melee; no Claymore break cashout',
-        playerFacingSummary: 'One early pierce graft; Fracture stays on ungrafted STRIKE.',
+        playerFacingSummary: 'One early pierce graft; Fracture stays on ungrafted Warden\'s Strike.',
       },
       {
         kind: 'MATURE_ALTERNATE',
@@ -127,15 +127,15 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         assignments: [
           {
             abilityId: 'GRAVE_BIND',
-            graftId: 'GRID_HACKER_GRAFT',
+            graftId: 'IRON_LUNG_GRAFT',
             job: 'Control coverage',
-            tradeoff: 'Grid-hacker cost/tradeoff',
+            tradeoff: 'Cooldown tax on bind',
           },
           {
             abilityId: 'ASHEN_MANTLE',
-            graftId: 'IRON_LUNG_GRAFT',
+            graftId: 'NULL_SPACE_GRAFT',
             job: 'Sustain flex',
-            tradeoff: 'Pure-stat survivor noted for redesign',
+            tradeoff: 'Reserve generation halved',
           },
         ],
         preservesDrawback: 'No AoE conversion of basic; still not Claymore',
@@ -178,7 +178,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
     antiSynergies: [
       app({
         weaponFamilyId: 'aegis-rift-edge',
-        abilityId: 'STRIKE',
+        abilityId: 'PAIRED_BLADES_STRIKE',
         graftId: 'DENSITY_GRAFT',
         role: 'ANTI_SYNERGY',
         exactRuntimeInteraction: 'Unconditional damage amp flattens tempo decision',
@@ -197,7 +197,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         availableWhenWeaponUnlocks: true,
         abilityInPhase3HSample: true,
         validationState: 'NEEDS_REVIEW',
-        playerFacingReason: 'Density on Strike risks erasing tempo as the decision.',
+        playerFacingReason: 'Density on Paired Strike risks erasing tempo as the decision.',
       }),
     ],
     configurations: [
@@ -209,13 +209,13 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         assignments: [
           {
             abilityId: 'SHADOW_STEP',
-            graftId: 'CONDUIT_GRAFT',
+            graftId: 'NULL_SPACE_GRAFT',
             job: 'Tempo approach tool',
-            tradeoff: 'Conduit graft downside',
+            tradeoff: 'Reserve generation halved',
           },
         ],
         preservesDrawback: 'Occult rider still requires armed tempo',
-        playerFacingSummary: 'Graft mobility; leave Strike ungrafted for tempo consume.',
+        playerFacingSummary: 'Graft mobility; leave Paired Strike ungrafted for tempo consume.',
       },
       {
         kind: 'MATURE_ALTERNATE',
@@ -225,19 +225,19 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         assignments: [
           {
             abilityId: 'CRIMSON_PACT',
-            graftId: 'SANGUINE_GRAFT',
-            job: 'HP-tax execute amplify',
-            tradeoff: 'HP drain',
+            graftId: 'IRON_LUNG_GRAFT',
+            job: 'Reserve pacing for execute window',
+            tradeoff: 'Cooldown on pact',
           },
           {
-            abilityId: 'SHADOW_STEP',
-            graftId: 'NULL_SPACE_GRAFT',
-            job: 'Tempo window',
-            tradeoff: 'Graft cost',
+            abilityId: 'SEVERANCE',
+            graftId: 'FLAYER_GRAFT',
+            job: 'Tempo finisher pressure',
+            tradeoff: 'Self bleed',
           },
         ],
         preservesDrawback: 'No permanent unconditional Occult rider',
-        playerFacingSummary: 'Sanguine pact + null-space step — alternate execute line.',
+        playerFacingSummary: 'Iron-lung pact + flayer Severance — alternate execute line.',
       },
     ],
     unresolvedGaps: ['No graft that explicitly arms riftEdgeTempo'],
@@ -276,10 +276,10 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
     antiSynergies: [
       app({
         weaponFamilyId: 'aegis-claymore-blade',
-        abilityId: 'STRIKE',
+        abilityId: 'UNMAKER_STRIKE',
         graftId: 'ECHO_GRAFT',
         role: 'ANTI_SYNERGY',
-        exactRuntimeInteraction: 'Removes FRACTURE from heavy basic',
+        exactRuntimeInteraction: 'Removes FRACTURE from Unmaker Strike',
         tagsAdded: [],
         tagsRemoved: ['FRACTURE'],
         tagsReplaced: [],
@@ -295,7 +295,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         availableWhenWeaponUnlocks: true,
         abilityInPhase3HSample: true,
         validationState: 'VALIDATED',
-        playerFacingReason: 'Echo Strike on Claymore is a hard anti-synergy.',
+        playerFacingReason: 'Echo on Unmaker Strike is a hard anti-synergy.',
       }),
     ],
     configurations: [
@@ -328,7 +328,7 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
             tradeoff: 'Shrapnel downside',
           },
           {
-            abilityId: 'BLOOD_BOUND_CARAPACE',
+            abilityId: 'RUNEBOUND_CARAPACE',
             graftId: 'MARTYR_GRAFT',
             job: 'Committed defense',
             tradeoff: 'Max HP tax (reversibility gap noted)',

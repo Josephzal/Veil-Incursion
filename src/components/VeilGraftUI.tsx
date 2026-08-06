@@ -1,3 +1,8 @@
+/**
+ * @deprecated Phase D — dead four-slot Aegis graft UI.
+ * Live Sanctuary surface is `ClassGraftUI` (4 weapon actions + 3 techniques).
+ * Do not wire this component; kept only as quarantined legacy.
+ */
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';

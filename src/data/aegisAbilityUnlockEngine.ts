@@ -1,16 +1,23 @@
-import type { AegisAbilityId, AbilityUnlockCost } from '../types/aegisCombat';
-import { DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
+import type { AegisAbilityId, AbilityUnlockCost, AegisTechniqueId } from '../types/aegisCombat';
+import { ALL_AEGIS_TECHNIQUES } from '../types/aegisCombat';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import { getStashCount } from './resourceStashEngine';
 import { AEGIS_ABILITY_CATALOG, getAbilityDefinition } from './aegisAbilities';
 import { RESOURCE_REGISTRY } from './resourceRegistry';
+import { listAegisTechniques } from './aegisTechniqueCatalog';
 
-/** Always available without an unlock transaction. */
-export const ALWAYS_UNLOCKED_ABILITIES: readonly AegisAbilityId[] = ['STRIKE'];
+/**
+ * Phase A: technique unlock economy removed — all twelve techniques are available.
+ * Legacy always-unlocked strike kept for combat compatibility references only.
+ */
+export const ALWAYS_UNLOCKED_ABILITIES: readonly AegisAbilityId[] = [
+  'STRIKE',
+  ...ALL_AEGIS_TECHNIQUES,
+];
 
-/** Seeded on new accounts so the default combat loadout is valid. */
+/** @deprecated Unlock economy removed — equals full technique pool. */
 export const STARTER_UNLOCKED_ABILITIES: readonly AegisAbilityId[] = [
-  ...DEFAULT_AEGIS_LOADOUT,
+  ...ALL_AEGIS_TECHNIQUES,
 ];
 
 export function isUnlockCostEmpty(cost: AbilityUnlockCost): boolean {
@@ -49,26 +56,20 @@ export function deductAbilityUnlockCost(
 }
 
 export function isAbilityUnlocked(
-  unlocked: readonly AegisAbilityId[],
-  abilityId: AegisAbilityId,
+  _unlocked: readonly AegisAbilityId[],
+  abilityId: AegisAbilityId | AegisTechniqueId,
 ): boolean {
-  if ((ALWAYS_UNLOCKED_ABILITIES as readonly string[]).includes(abilityId)) return true;
-  return unlocked.includes(abilityId);
+  // Phase A — no technique unlock gate.
+  if ((ALL_AEGIS_TECHNIQUES as readonly string[]).includes(abilityId)) return true;
+  if (abilityId === 'STRIKE' || abilityId === 'WRAITH_PARRY') return true;
+  return true;
 }
 
 export function normalizeUnlockedAegisAbilities(
-  stored: readonly AegisAbilityId[] | undefined,
-  loadout: readonly AegisAbilityId[],
+  _stored: readonly AegisAbilityId[] | undefined,
+  _loadout: readonly string[],
 ): AegisAbilityId[] {
-  const set = new Set<AegisAbilityId>([
-    ...ALWAYS_UNLOCKED_ABILITIES,
-    ...STARTER_UNLOCKED_ABILITIES,
-  ]);
-  stored?.forEach((id) => set.add(id));
-  loadout.forEach((id) => {
-    if (id !== 'EVISCERATE') set.add(id);
-  });
-  return [...set];
+  return [...ALWAYS_UNLOCKED_ABILITIES];
 }
 
 export function formatAbilityUnlockCost(cost: AbilityUnlockCost): string {
@@ -93,9 +94,12 @@ export function abilityHasTag(
   return getAbilityDefinition(abilityId).tags.includes(tag);
 }
 
-export function getAssignableAbilities(): AegisAbilityId[] {
-  // Flex pool only — STRIKE is the fixed weapon-basic slot (see AEGIS_ANCHOR).
-  return (Object.keys(AEGIS_ABILITY_CATALOG) as AegisAbilityId[]).filter(
-    (id) => id !== 'EVISCERATE' && id !== 'WRAITH_PARRY' && id !== 'STRIKE',
-  );
+/** Assignable techniques — all twelve; no unlock economy. */
+export function getAssignableAbilities(): AegisTechniqueId[] {
+  return [...listAegisTechniques()];
+}
+
+/** True when catalog still has a combat definition (including legacy). */
+export function isLegacyCombatCatalogId(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(AEGIS_ABILITY_CATALOG, id);
 }

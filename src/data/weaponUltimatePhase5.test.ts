@@ -1,5 +1,7 @@
 /**
  * WU-5 — HUD / log / telemetry surfaces + boon/graft compatibility.
+ * Phase D / E.1d.1: Aegis ultimates stay ungraftable even with allowUltimate: true.
+ * Hex/Envoy ultimate graft paths remain allowUltimate-gated.
  * Run: npx tsx src/data/weaponUltimatePhase5.test.ts
  */
 import assert from 'node:assert/strict';
@@ -93,8 +95,14 @@ assert.equal(
   true,
 );
 
-assert.equal(canGraftClassAbility('AEGIS', 'REND_THE_VEIL', { allowUltimate: true }), true);
+// Phase D / E.1d.1 — Aegis ultimates remain ungraftable even when rank-15 allowUltimate is true.
+// Hex/Envoy ultimate graft paths are unchanged.
+assert.equal(canGraftClassAbility('AEGIS', 'REND_THE_VEIL', { allowUltimate: true }), false);
 assert.equal(canGraftClassAbility('AEGIS', 'REND_THE_VEIL', { allowUltimate: false }), false);
+assert.equal(canGraftClassAbility('AEGIS', 'ABYSSAL_VERDICT', { allowUltimate: true }), false);
+assert.equal(canGraftClassAbility('AEGIS', 'GRAVEFALL', { allowUltimate: true }), false);
+assert.equal(canGraftClassAbility('AEGIS', 'THREEFOLD_BRAND', { allowUltimate: true }), false);
+assert.equal(canGraftClassAbility('AEGIS', 'EVISCERATE', { allowUltimate: true }), false);
 assert.equal(canGraftClassAbility('HEX_SHOT', 'LAST_KNOCK', { allowUltimate: true }), true);
 assert.equal(canGraftClassAbility('ENVOY', 'CRIMSON_REFRACTION', { allowUltimate: true }), true);
 

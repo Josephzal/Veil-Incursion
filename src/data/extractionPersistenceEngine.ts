@@ -1,5 +1,5 @@
 import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
-import type { AegisLoadout } from '../types/aegisCombat';
+import type { AegisTechniqueLoadout } from '../types/aegisCombat';
 import type { PlayerAccount } from '../types/game';
 import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import { countVeilResidueInCargo, stripVeilResidueFromCargo } from './cargoGridEngine';
@@ -7,9 +7,10 @@ import { isResourceItemId } from './resourceRegistry';
 import type { ResourceItemId } from '../types/resourceItem';
 import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
 import { addToResourceStash } from './resourceStashEngine';
+import { sanitizeAegisTechniqueLoadout } from './aegisMigration';
 
 export interface RunExtractionLoadouts {
-  aegisLoadout: AegisLoadout;
+  aegisTechniqueLoadout: AegisTechniqueLoadout;
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
 }
@@ -17,7 +18,7 @@ export interface RunExtractionLoadouts {
 export interface RunExtractionDeposit {
   resourceStash: PlayerAccount['resourceStash'];
   hubCraftedConsumables: PlayerAccount['hubCraftedConsumables'];
-  aegisLoadout: AegisLoadout;
+  aegisTechniqueLoadout: AegisTechniqueLoadout;
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
 }
@@ -65,7 +66,7 @@ export function depositAllCargoToHubAccount(
   cargo: CargoRunState,
   account: Pick<
     PlayerAccount,
-    'resourceStash' | 'hubCraftedConsumables' | 'aegisLoadout' | 'hexShotLoadout' | 'envoyLoadout'
+    'resourceStash' | 'hubCraftedConsumables' | 'aegisTechniqueLoadout' | 'hexShotLoadout' | 'envoyLoadout'
   >,
   loadouts: RunExtractionLoadouts,
   opts?: {
@@ -95,7 +96,7 @@ export function depositAllCargoToHubAccount(
   return {
     resourceStash,
     hubCraftedConsumables,
-    aegisLoadout: [...loadouts.aegisLoadout] as AegisLoadout,
+    aegisTechniqueLoadout: sanitizeAegisTechniqueLoadout(loadouts.aegisTechniqueLoadout),
     hexShotLoadout: [...loadouts.hexShotLoadout] as HexShotLoadout,
     envoyLoadout: [...loadouts.envoyLoadout] as EnvoyLoadout,
   };

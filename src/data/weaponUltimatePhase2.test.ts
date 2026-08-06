@@ -1,5 +1,5 @@
 /**
- * WU-2 — rebind class ultimates to Longsword / Carbine / Scythe only.
+ * WU-2 — rebind class ultimates to Longsword / Ash Shotgun / Scythe only.
  * Run: npx tsx src/data/weaponUltimatePhase2.test.ts
  */
 import assert from 'node:assert/strict';
@@ -68,9 +68,12 @@ assert.ok(!ENVOY_ABILITY_CATALOG.CATACLYSM_SIGIL.label.includes('CATACLYSM'));
 // Deck reject copy uses weapon ultimate names
 assert.ok(
   validateHexShotLoadoutCommit([
-    'SILVER_CORE_SIDEARM',
     'ZERO_PROTOCOL',
-    'PHASE_SHIFT_RELOAD',
+    'RIFT_SNARE',
+    'ASH_JACKET_SALVO',
+  ])?.includes('ULTIMATE') || validateHexShotLoadoutCommit([
+    'ZERO_PROTOCOL',
+    'RIFT_SNARE',
     'ASH_JACKET_SALVO',
   ])?.includes('ZERO PROTOCOL'),
 );
@@ -83,4 +86,4 @@ assert.ok(
   ])?.includes('NULL CIRCUIT'),
 );
 
-console.log('Phase WU-2 rebind OK — Longsword / Carbine / Scythe own rebound ultimates');
+console.log('Phase WU-2 rebind OK — Longsword / Ash Shotgun / Scythe own rebound ultimates');

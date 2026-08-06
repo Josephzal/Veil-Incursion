@@ -26,7 +26,10 @@ export function createHexAmmoCastTracker(): HexAmmoCastTracker {
 
 export interface HexAmmoEffectInput {
   ammoType: HexAmmoType;
-  /** ARMOR_PIERCE-tagged or otherwise flagged heavy shot. */
+  /**
+   * Heavy / armor-breaking shot for ammo strip & Stasis AP tables.
+   * Authority: `isHexAmmoHeavyShot` (ARMOR_PIERCE flex OR fixed-basic ARMOR_BREAK).
+   */
   isHeavyShot: boolean;
   /** 0-based hit index for multi-hit abilities. */
   hitIndex: number;

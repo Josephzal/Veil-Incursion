@@ -74,7 +74,6 @@ import HollowLungAttacking from '../../assets/enemy images/hollow_lung_attack.pn
 import GraveRobber from '../../assets/enemy images/grave_robber.png';
 import GraveRobberAttacking from '../../assets/enemy images/grave_robber_attack.png';
 import EnemyFallback from '../../assets/enemy images/enemyl2.png';
-import EnemyStalker from '../../assets/enemy images/stalkerv1.png';
 import type { RunNodeType } from '../types/game';
 import type { EnemyCombatProfile } from '../types/run';
 import type { EnemyRosterId } from '../data/enemyRoster';
@@ -200,13 +199,11 @@ export function resolveRosterAttackPortrait(rosterId?: string | null): ImageSour
 
 export function resolveCombatEnemyPortrait(options: {
   isBoss?: boolean;
-  isVeilStalker?: boolean;
   rosterId?: string | null;
   nodeType?: RunNodeType | null;
   isElite?: boolean;
   enemyClass?: EnemyCombatProfile['class'];
 }): ImageSourcePropType {
-  if (options.isVeilStalker) return EnemyStalker;
   if (options.rosterId) return resolveRosterPortrait(options.rosterId);
   if (options.isBoss) return EnemyFallback;
   return EnemyFallback;
@@ -215,11 +212,10 @@ export function resolveCombatEnemyPortrait(options: {
 export function resolveUnitCombatPortrait(
   unit: Pick<
     EnemyCombatProfile,
-    'isBoss' | 'isVeilStalker' | 'class' | 'rosterId'
+    'isBoss' | 'class' | 'rosterId'
   >,
   nodeType?: RunNodeType | null,
 ): ImageSourcePropType {
-  if (unit.isVeilStalker) return EnemyStalker;
   if (unit.rosterId) return resolveRosterPortrait(unit.rosterId);
   if (unit.isBoss) return EnemyFallback;
   return EnemyFallback;
@@ -228,11 +224,11 @@ export function resolveUnitCombatPortrait(
 export function resolveUnitCombatAttackPortrait(
   unit: Pick<
     EnemyCombatProfile,
-    'isBoss' | 'isVeilStalker' | 'class' | 'rosterId'
+    'isBoss' | 'class' | 'rosterId'
   >,
   idlePortrait: ImageSourcePropType,
 ): ImageSourcePropType {
-  if (unit.isVeilStalker || unit.isBoss) return idlePortrait;
+  if (unit.isBoss) return idlePortrait;
   if (unit.rosterId) {
     return resolveRosterAttackPortrait(unit.rosterId) ?? idlePortrait;
   }
@@ -241,11 +237,9 @@ export function resolveUnitCombatAttackPortrait(
 
 export function resolvePortraitKeySuffix(options: {
   isBoss: boolean;
-  isVeilStalker?: boolean;
   rosterId?: string | null;
   nodeType?: RunNodeType | null;
 }): string {
-  if (options.isVeilStalker) return 'stalker';
   if (options.rosterId) return options.rosterId;
   if (options.isBoss) return 'boss';
   if (options.nodeType === 'ELITE_COMBAT') return 'elite';

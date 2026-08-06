@@ -21,7 +21,10 @@ import { validateWeaponRegistry } from './weaponValidationEngine';
 import { ENVOY_ABILITY_CATALOG } from './envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from './hexShotAbilities';
 import { AEGIS_ABILITY_CATALOG } from './aegisAbilities';
-import { validateHexShotLoadoutCommit } from '../utils/classLoadoutUtils';
+import {
+  normalizeHexShotLoadoutForCommit,
+  validateHexShotLoadoutCommit,
+} from '../utils/classLoadoutUtils';
 import {
   AEGIS_ANCHOR,
   normalizeAegisLoadout,
@@ -61,20 +64,26 @@ function run(): void {
   assert.equal('NOT_A_REAL_ABILITY' in HEX_SHOT_ABILITY_CATALOG, false);
   assert.equal('NOT_A_REAL_ABILITY' in AEGIS_ABILITY_CATALOG, false);
   const badHex = validateHexShotLoadoutCommit([
-    'SILVER_CORE_SIDEARM',
     'ASH_JACKET_SALVO',
     'ASH_JACKET_SALVO',
     'RIFT_SNARE',
   ]);
   assert.ok(badHex && badHex.includes('DUPLICATE'));
   const retired = validateHexShotLoadoutCommit([
-    'SILVER_CORE_SIDEARM',
     'WRAITH_PIERCER_ROUND',
     'RIFT_SNARE',
     'SINGULARITY_SLUG',
   ] as never);
-  // Deprecated may pass commit string-wise but 3H validation forbids recommending them
-  void retired;
+  assert.ok(retired && retired.includes('DEPRECATED'));
+  const sanitizedLegacy = normalizeHexShotLoadoutForCommit([
+    'SILVER_CORE_SIDEARM',
+    'WRAITH_PIERCER_ROUND',
+    'RIFT_SNARE',
+    'SINGULARITY_SLUG',
+  ]);
+  // Legacy 4-tuple: drop slot0; migrate deprecated Wraith → Singularity; fill third from defaults.
+  assert.equal(sanitizedLegacy[0], 'SINGULARITY_SLUG');
+  assert.equal(validateHexShotLoadoutCommit(sanitizedLegacy), null);
 
   const coverage = buildAbilityCoverageReport();
   const allCatalog = [
@@ -99,15 +108,16 @@ function run(): void {
   });
   assert.ok(coverage.some((c) => c.abilityId === 'STRIKE' && c.structuralKind === 'FIXED_WEAPON_BASIC'));
   assert.ok(formatAbilityCoverageDebug().length > 0);
-  assert.ok(describeLiveLoadoutRules().includes('STRIKE'));
+  assert.ok(describeLiveLoadoutRules().includes('3 snapshotted techniques'));
   assert.ok(describeLiveLoadoutRules().includes('fixed'));
 
-  // Aegis fixed basic sanitization
-  const migrated = normalizeAegisLoadout(['RUIN', 'DEVASTATE', 'SHADOW_STEP', 'ASHEN_MANTLE']);
-  assert.equal(migrated[0], AEGIS_ANCHOR);
+  // Aegis Phase B — technique migrate (no STRIKE pad); weapon actions rejected in commit
+  const migrated = normalizeAegisLoadout(['STRIKE', 'RUIN', 'DEVASTATE', 'SHADOW_STEP']);
+  assert.equal(migrated.length, 3);
+  assert.ok(!migrated.includes(AEGIS_ANCHOR as never));
   assert.ok(migrated.includes('RUIN'));
-  assert.ok(validateLoadoutCommit(['RUIN', 'DEVASTATE', 'SHADOW_STEP', 'ASHEN_MANTLE'] as never));
-  assert.equal(validateLoadoutCommit(migrated), null);
+  assert.equal(validateLoadoutCommit(['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE']), null);
+  assert.ok(validateLoadoutCommit(['WARDENS_STRIKE', 'RUIN', 'GRAVE_BIND']));
 
   // Sibling identity-forward not identical (all classes)
   (['AEGIS', 'HEX_SHOT', 'ENVOY'] as const).forEach((classId) => {
@@ -120,9 +130,9 @@ function run(): void {
     assert.equal(new Set(keys).size, keys.length, `${classId} identical identity-forward`);
   });
 
-  // Pulse ID remains permanent; live display is Carbine (Ash rename retired)
+  // Pulse ID remains permanent; H.1a live display is Ash Shotgun
   assert.ok(queryWeaponLoadoutRecommendations('hex-pulse-rifle'));
-  assert.equal(getWeaponIdentityProfile('hex-pulse-rifle').liveDisplayName, 'Carbine');
+  assert.equal(getWeaponIdentityProfile('hex-pulse-rifle').liveDisplayName, 'Ash Shotgun');
   assert.equal(getWeaponIdentityProfile('hex-pulse-rifle').plannedDisplayName, null);
 
   const weaponReg = validateWeaponRegistry();

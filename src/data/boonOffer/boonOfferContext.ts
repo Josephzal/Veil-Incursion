@@ -14,12 +14,40 @@ import { AEGIS_ANCHOR } from '../../utils/aegisLoadoutUtils';
 import { HEX_SHOT_ANCHOR, ENVOY_ANCHOR } from '../classAbilityUnlockEngine';
 import { isFrozenInteractionHook } from './weaponInteractionHookContract';
 import { getClassGraftDefinition } from '../classGraftEngine';
+import { resolveAegisAbilityGraftId } from '../aegisGraftTarget';
+import { aegisWeaponActionTags, isAegisWeaponActionCatalogId } from '../aegisWeaponActionCatalog';
 import type { BoonOfferContext, TagLayerSnapshot } from './boonOfferTypes';
 
+function aegisFamilyStrikeId(weaponFamilyId: WeaponFamilyId): string {
+  if (weaponFamilyId === 'aegis-rift-edge') return 'PAIRED_BLADES_STRIKE';
+  if (weaponFamilyId === 'aegis-claymore-blade') return 'UNMAKER_STRIKE';
+  return 'WARDENS_STRIKE';
+}
+
 function abilityTags(classId: ClassType, abilityId: string): readonly string[] {
-  if (classId === 'AEGIS') return getAegisAbilityTags(abilityId as never);
+  if (classId === 'AEGIS') {
+    if (isAegisWeaponActionCatalogId(abilityId)) {
+      return [...aegisWeaponActionTags(abilityId)];
+    }
+    return getAegisAbilityTags(abilityId as never);
+  }
   if (classId === 'HEX_SHOT') return getHexShotAbilityTags(abilityId as never);
   return getEnvoyAbilityTags(abilityId as never);
+}
+
+function lookupEquippedGraftId(
+  classId: ClassType,
+  abilityId: string,
+  abilityGrafts?: Readonly<Record<string, string>>,
+): string | undefined {
+  if (!abilityGrafts) return undefined;
+  if (classId === 'AEGIS') {
+    return resolveAegisAbilityGraftId(
+      abilityGrafts as Partial<Record<string, import('../../types/veilGraft').VeilGraftId>>,
+      abilityId,
+    ) ?? abilityGrafts[abilityId];
+  }
+  return abilityGrafts[abilityId];
 }
 
 type GraftTagMods = Pick<
@@ -71,8 +99,13 @@ export function buildLoadoutTagLayers(args: {
 }): TagLayerSnapshot {
   const profile = getWeaponIdentityProfile(args.weaponFamilyId);
   const anchor =
-    args.classId === 'AEGIS' ? AEGIS_ANCHOR : args.classId === 'HEX_SHOT' ? HEX_SHOT_ANCHOR : ENVOY_ANCHOR;
-  const basicGraftId = args.abilityGrafts?.[anchor];
+    args.classId === 'AEGIS'
+      ? aegisFamilyStrikeId(args.weaponFamilyId)
+      : args.classId === 'HEX_SHOT'
+        ? HEX_SHOT_ANCHOR
+        : ENVOY_ANCHOR;
+  void AEGIS_ANCHOR;
+  const basicGraftId = lookupEquippedGraftId(args.classId, anchor, args.abilityGrafts);
   const basicGraftMods =
     args.graft
     ?? (basicGraftId ? resolveGraftTagMods(args.classId, basicGraftId) : null);
@@ -89,7 +122,7 @@ export function buildLoadoutTagLayers(args: {
   const graftRemoved = new Set<string>(basic.graftRemovedTags);
 
   args.equippedAbilityIds.forEach((id) => {
-    const graftId = args.abilityGrafts?.[id];
+    const graftId = lookupEquippedGraftId(args.classId, id, args.abilityGrafts);
     // Anchor uses weapon-basic graft mods when provided via `graft` or abilityGrafts.
     const modsForAbility: GraftTagMods | null =
       id === anchor && args.graft
@@ -119,7 +152,7 @@ export function buildLoadoutTagLayers(args: {
   // Ensure removed tags do not leak from base registry unless another action still has them.
   graftRemoved.forEach((t) => {
     const stillPresent = args.equippedAbilityIds.some((id) => {
-      const graftId = args.abilityGrafts?.[id];
+      const graftId = lookupEquippedGraftId(args.classId, id, args.abilityGrafts);
       return transformAbilityTags(args.classId, id, graftId).final.includes(t);
     }) || basic.finalTransformedTags.includes(t);
     if (!stillPresent) finalUnion.delete(t);
@@ -210,7 +243,10 @@ export function resolveReachableInteractionHooks(args: {
     && Object.values(args.abilityGrafts).includes('WIDOW_CHOKE_GRAFT')
   ) {
     // Widow-Choke on a spread ability removes AoE — SPREAD_CLUSTER may still exist on basic.
-    const basicGraft = args.abilityGrafts['SILVER_CORE_SIDEARM'];
+    const basicGraft = args.abilityGrafts['CENTER_MASS']
+      ?? args.abilityGrafts['QUICKDRAW']
+      ?? args.abilityGrafts['DOOR_KNOCKER']
+      ?? args.abilityGrafts['SILVER_CORE_SIDEARM'];
     if (basicGraft === 'WIDOW_CHOKE_GRAFT') {
       hooks = hooks.filter((h) => h !== 'SPREAD_CLUSTER');
     }
@@ -222,8 +258,11 @@ export function ensureFixedBasicInLoadout(
   classId: ClassType,
   equippedAbilityIds: readonly string[],
 ): readonly string[] {
-  const anchor =
-    classId === 'AEGIS' ? AEGIS_ANCHOR : classId === 'HEX_SHOT' ? HEX_SHOT_ANCHOR : ENVOY_ANCHOR;
+  // Phase C: Aegis techniques are exactly three — no phantom STRIKE pad.
+  if (classId === 'AEGIS') {
+    return equippedAbilityIds.slice(0, 3);
+  }
+  const anchor = classId === 'HEX_SHOT' ? HEX_SHOT_ANCHOR : ENVOY_ANCHOR;
   if (equippedAbilityIds.includes(anchor)) return equippedAbilityIds;
   return [anchor, ...equippedAbilityIds.filter((id) => id !== anchor)].slice(0, 4);
 }

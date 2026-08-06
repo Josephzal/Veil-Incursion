@@ -7,10 +7,17 @@ export const PHANTOM_FEED_AMMO = 1;
 /** Every reload initiation costs this many AP (including at 0/6). */
 export { HEX_RELOAD_AP_COST } from '../types/hexShotState';
 
+/** H.3b — these tactical casts must not mutate magazine (no Phantom Feed). */
+const PHANTOM_FEED_EXCLUDED: readonly HexShotAbilityId[] = [
+  'CINDERLINE_SATURATION',
+  'BLACKSITE_TRIAGE',
+];
+
 export function shouldApplyPhantomFeed(
   abilityId: HexShotAbilityId,
   effectiveTags?: readonly string[],
 ): boolean {
+  if (PHANTOM_FEED_EXCLUDED.includes(abilityId)) return false;
   const tags = effectiveTags ?? getHexShotAbilityTags(abilityId);
   return tags.includes('TACTICAL') && !tags.includes('RELOAD');
 }

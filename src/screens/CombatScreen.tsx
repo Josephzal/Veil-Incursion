@@ -169,6 +169,13 @@ export default function CombatScreen(): React.JSX.Element {
       ...baseWeaponStats,
       strikeDamage: Math.floor(baseWeaponStats.strikeDamage * mult),
       exhaustedStrikeDamage: Math.floor(baseWeaponStats.exhaustedStrikeDamage * mult),
+      ...(baseWeaponStats.aegisTechniqueStrikePower != null
+        ? {
+          aegisTechniqueStrikePower: Math.floor(
+            baseWeaponStats.aegisTechniqueStrikePower * mult,
+          ),
+        }
+        : {}),
     };
   }, [baseWeaponStats, strikeBonusPct]);
   const playerCritChanceBonus = account.factionPerks.critChanceBonus;
@@ -350,7 +357,7 @@ export default function CombatScreen(): React.JSX.Element {
   const combatAugmentIcons = useMemo(
     () => buildCombatAugmentIcons({
       operativeClass,
-      aegisLoadout: activeIncursion.aegisLoadout,
+      aegisLoadout: activeIncursion.aegisTechniqueLoadout,
       hexShotLoadout: activeIncursion.hexShotLoadout,
       envoyLoadout: activeIncursion.envoyLoadout,
       abilityGrafts: activeIncursion.abilityGrafts,
@@ -363,7 +370,7 @@ export default function CombatScreen(): React.JSX.Element {
     }),
     [
       operativeClass,
-      activeIncursion.aegisLoadout,
+      activeIncursion.aegisTechniqueLoadout,
       activeIncursion.hexShotLoadout,
       activeIncursion.envoyLoadout,
       activeIncursion.abilityGrafts,
@@ -393,7 +400,6 @@ export default function CombatScreen(): React.JSX.Element {
   }).phaseBudget;
   const portraitSource = resolveCombatEnemyPortrait({
     isBoss: isBossEncounter,
-    isVeilStalker: runState.pendingEnemy?.isVeilStalker === true,
     rosterId: runState.pendingEnemy?.rosterId,
     nodeType,
   });
@@ -401,7 +407,6 @@ export default function CombatScreen(): React.JSX.Element {
     `${runState.pendingEnemy?.designation ?? 'hostile'}`
     + `-${resolvePortraitKeySuffix({
       isBoss: isBossEncounter,
-      isVeilStalker: runState.pendingEnemy?.isVeilStalker === true,
       rosterId: runState.pendingEnemy?.rosterId,
       nodeType,
     })}`
@@ -425,7 +430,6 @@ export default function CombatScreen(): React.JSX.Element {
       .map((unit) => {
         const portraitMeta = {
           isBoss: unit.isBoss,
-          isVeilStalker: unit.isVeilStalker,
           class: unit.enemyClass ?? 'GREMLIN',
           rosterId: unit.rosterId,
         } as const;
@@ -1123,7 +1127,7 @@ export default function CombatScreen(): React.JSX.Element {
                       environmentalModifiers={env}
                       bossProfile={activeIncursion.bossProfile}
                       onBossPhaseShift={shiftBossPhase}
-                      aegisLoadout={activeIncursion.aegisLoadout}
+                      aegisLoadout={activeIncursion.aegisTechniqueLoadout}
                       hexShotLoadout={activeIncursion.hexShotLoadout}
                       envoyLoadout={activeIncursion.envoyLoadout}
                       leyLineMutations={activeIncursion.leyLineMutations}

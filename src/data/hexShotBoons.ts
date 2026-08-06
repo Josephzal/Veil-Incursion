@@ -69,7 +69,7 @@ export const HEX_SHOT_BOON_CATALOG: Record<HexShotBoonId, ClassBoonDefinition> =
   ZERO_POINT_EXTRACTION: hex('ZERO_POINT_EXTRACTION', 'TIER_4', 'Zero-Point Extraction', 'Ultimate kills fully restore Magazine and Stamina.', 'ULTIMATE kill // full mag + stamina', 'onKill', { tagAll: ['ULTIMATE'] }),
   HOT_SWAP: hex('HOT_SWAP', 'TIER_4', 'Hot-Swap', 'Emptying Magazine: next TACTICAL deals 20 Occult to random enemy.', 'Empty mag // next TACTICAL 20 occult', 'passive'),
   CURSED_SHRAPNEL: hex('CURSED_SHRAPNEL', 'TIER_4', 'Cursed Shrapnel', 'Ballistic AoE applies Void-Bleed to all hit.', 'BALLISTIC + AOE // Void-Bleed all hit', 'onDamageDeal', { tagAll: ['BALLISTIC', 'AOE'] }),
-  OVERWATCH_MASTERY: hex('OVERWATCH_MASTERY', 'TIER_4', 'Overwatch Mastery', 'Panopticon interrupt costs 0 Ammo and deals double damage.', 'Panopticon interrupt // 0 ammo, 2× damage', 'onAbilityResolve'),
+  OVERWATCH_MASTERY: hex('OVERWATCH_MASTERY', 'TIER_4', 'Overwatch Mastery', 'Panopticon Watch interrupt deals double damage (16 Kinetic).', 'Panopticon interrupt // 2× damage', 'onAbilityResolve'),
   GUNSMITHS_CURSE: hex('GUNSMITHS_CURSE', 'TIER_4', "The Gunsmith's Curse", 'All damage +30%, but Perfect Reload window is 50% smaller.', 'Passive // +30% dmg, tighter reload', 'passive'),
   SILVER_DISCIPLINE: hex('SILVER_DISCIPLINE', 'TIER_2', 'Silver Discipline', 'First Silver-Core shot after a Perfect reload strips +1 Kinetic Armor and deals +15 Fracture.', 'Perfect reload → Silver-Core // +15 Fracture, +1 armor strip', 'passive'),
   WRAITHGLASS_ETCHING: hex('WRAITHGLASS_ETCHING', 'TIER_2', 'Wraithglass Etching', 'Wraithglass shots vs Void-Marked targets deal +8 Occult.', 'WRAITHGLASS vs VOID_MARKED // +8 occult', 'passive'),

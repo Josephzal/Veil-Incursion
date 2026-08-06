@@ -122,7 +122,7 @@ const PRESSURES: Record<WeaponFamilyId, readonly [WeaponStrengthOrPressure, Weap
     strength('Soft vs swarms', 'drawback.secondary', 'Tempo is spent once — chip fights starve it'),
   ],
   'aegis-claymore-blade': [
-    strength('Stamina-hungry swings', 'drawback.primary', 'Drain and multi-attacker pressure punish it'),
+    strength('Commitment-heavy swings', 'drawback.primary', 'Setup and interrupt pressure punish mistimed breaks'),
     strength('Poor chip Reserve', 'drawback.mechanicalEnforcement', 'Ordinary hits stay Reserve-poor'),
   ],
   'hex-silver-core-sidearm': [
@@ -167,10 +167,10 @@ const FIRST_USE: Record<WeaponFamilyId, WeaponFirstUseBrief> = {
     buildToward: 'Evade, Parry, Execution, Occult.',
   }),
   'aegis-claymore-blade': brief({
-    coreLoop: 'Commit stamina into heavy Fracture, then cash Reserve on the break.',
-    doThis: 'Pick break windows and spend stamina when Fracture is about to land.',
+    coreLoop: 'Commit into heavy Fracture, then cash Reserve on the break.',
+    doThis: 'Pick break windows when Fracture is about to land.',
     avoidThis: 'Do not trade chip hits forever — chip Reserve stays poor.',
-    watchThis: 'Stamina remaining and Fracture-break opportunities.',
+    watchThis: 'Fracture-break opportunities and Reserve spikes.',
     buildToward: 'Fracture, Break, Reserve, Control.',
   }),
   'hex-silver-core-sidearm': brief({
@@ -220,7 +220,7 @@ const FIRST_USE: Record<WeaponFamilyId, WeaponFirstUseBrief> = {
 const SELECTION: Record<WeaponFamilyId, string> = {
   'aegis-runed-longsword': 'Steady Fracture and Parry/Reserve — the complete Aegis baseline.',
   'aegis-rift-edge': 'Earn tempo from Evade/Parry, then finish with an Occult rider.',
-  'aegis-claymore-blade': 'Spend stamina for heavy Fracture and cash out on the break.',
+  'aegis-claymore-blade': 'Heavy Fracture commitment — cash out Reserve on the break.',
   'hex-silver-core-sidearm': 'Precision shots, Perfect Reload, and Protocol Charge tempo.',
   'hex-void-cannon': 'Scarce ammo, hard Kinetic Armor breach, priority deletes.',
   'hex-pulse-rifle': 'Short-range spread into clusters — reload is the burst window.',

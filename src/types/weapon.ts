@@ -43,6 +43,12 @@ export type WeaponTag =
 
 export type WeaponOncePerCombatPassiveId =
   | 'FIRST_MELEE_RESERVE_BONUS'
+  /**
+   * Unmaker Tier III — +Abyssal Reserve when an authored WA causes a Fracture break.
+   * Once per committed action (not once-per-combat). Graft-added hits excluded.
+   */
+  | 'FRACTURE_BREAK_RESERVE'
+  /** @deprecated E.1b — alias of FRACTURE_BREAK_RESERVE; no Stamina grant. */
   | 'FIRST_FRACTURE_STAMINA_REFUND'
   | 'MELEE_CRIT_RESERVE_BONUS'
   | 'FIRST_RELOAD_STAMINA'
@@ -58,7 +64,26 @@ export interface WeaponResourceCost {
 }
 
 export interface WeaponStatModifiers {
+  /**
+   * Legacy / migration scaling for non-Aegis STRIKE basics and dormant Aegis basic engine.
+   * Not applied to the canonical Aegis 4+3 weapon-action surface (Phase E.1b).
+   * Not the live authority for Aegis VEIL_PIERCER / REAVE (use aegisTechniquePowerPct).
+   */
   strikeDamagePct?: number;
+  /**
+   * Aegis technique strike-power % for VEIL_PIERCER / REAVE only (Phase E.1c.1).
+   * Does not scale canonical weapon-action kinetic damage.
+   * When absent, `resolveAegisTechniqueStrikePower` falls back to strikeDamagePct for migration.
+   */
+  aegisTechniquePowerPct?: number;
+  /**
+   * Aegis ultimate strike-power % for REND_THE_VEIL / GRAVEFALL only (Phase E.1d.1).
+   * Does not scale canonical weapon-action kinetic damage or techniques.
+   * When absent, `resolveAegisUltimateStrikePower` falls back to strikeDamagePct for migration.
+   * ABYSSAL_VERDICT uses a fixed True matrix and does not read this field.
+   */
+  aegisUltimatePowerPct?: number;
+  /** Legacy stamina cost scaling — Aegis has no Stamina on the combat surface. */
   strikeStaminaCostPct?: number;
   fractureFromMeleePct?: number;
   reserveGainFlat?: number;

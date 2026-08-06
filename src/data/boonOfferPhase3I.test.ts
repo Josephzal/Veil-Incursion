@@ -86,7 +86,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
     ...getLiveBoonAuditEntry('ADRENALINE_SPIKE')!,
     id: 'FAKE_ABILITY_GATED',
     hardRequiredTags: [] as const,
-    requiredAbilityIds: ['ABYSSAL_FAULT'] as const,
+    requiredAbilityIds: ['RUIN'] as const,
     requiredHooks: [] as const,
     live: true,
     runtimeImplemented: true,
@@ -94,20 +94,20 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   const without = buildBoonOfferContext({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-runed-longsword',
-    equippedAbilityIds: ['STRIKE', 'DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
+    equippedAbilityIds: ['DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'abil-1',
   });
   assert.equal(evaluateHardEligibility('FAKE_ABILITY_GATED', without, entry as never).eligible, false);
 
-  const withFault = buildBoonOfferContext({
+  const withRuin = buildBoonOfferContext({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-runed-longsword',
-    equippedAbilityIds: ['STRIKE', 'ABYSSAL_FAULT', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
+    equippedAbilityIds: ['RUIN', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'abil-2',
   });
-  assert.equal(evaluateHardEligibility('FAKE_ABILITY_GATED', withFault, entry as never).eligible, true);
+  assert.equal(evaluateHardEligibility('FAKE_ABILITY_GATED', withRuin, entry as never).eligible, true);
 }
 
 // --- Graft tag layers change eligibility ---
@@ -115,14 +115,14 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   const base = buildLoadoutTagLayers({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-claymore-blade',
-    equippedAbilityIds: ['STRIKE', 'DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
+    equippedAbilityIds: ['DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
   });
   assert.ok(base.finalTransformedTags.includes('FRACTURE') || base.runtimeBasicTags.includes('FRACTURE'));
 
   const removed = buildLoadoutTagLayers({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-claymore-blade',
-    equippedAbilityIds: ['STRIKE', 'DEMONS_LUNG', 'ASHEN_MANTLE', 'BLOOD_TITHE'],
+    equippedAbilityIds: ['DEMONS_LUNG', 'ASHEN_MANTLE', 'REAVE'],
     basicActionRuntimeTags: ['MELEE', 'KINETIC', 'FRACTURE', 'HEAVY'],
     graft: { removeTags: ['FRACTURE'] },
   });
@@ -139,20 +139,20 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   assert.ok(added.finalTransformedTags.includes('VOID_AMMO'));
 }
 
-// --- ABYSSAL_FAULT tags participate when equipped ---
+// --- RUIN AoE tags participate when equipped ---
 {
-  const tags = getAbilityTags('ABYSSAL_FAULT');
+  const tags = getAbilityTags('RUIN');
   assert.ok(tags.length > 0);
-  const withFault = buildLoadoutTagLayers({
+  const withRuin = buildLoadoutTagLayers({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-runed-longsword',
-    equippedAbilityIds: ['STRIKE', 'ABYSSAL_FAULT', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
+    equippedAbilityIds: ['RUIN', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
   });
-  tags.forEach((t) => assert.ok(withFault.finalTransformedTags.includes(t), t));
+  tags.forEach((t) => assert.ok(withRuin.finalTransformedTags.includes(t), t));
 
-  const faultBoon = {
+  const aoeBoon = {
     ...getLiveBoonAuditEntry('ADRENALINE_SPIKE')!,
-    id: 'FAKE_FAULT_TAG',
+    id: 'FAKE_AOE_TAG',
     hardRequiredTags: ['AOE'] as const,
     preferredTags: ['AOE'] as const,
     requiredAbilityIds: [] as const,
@@ -163,19 +163,19 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   const ctxMissing = buildBoonOfferContext({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-runed-longsword',
-    equippedAbilityIds: ['STRIKE', 'DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
+    equippedAbilityIds: ['DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'fault-1',
   });
   const ctxPresent = buildBoonOfferContext({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-runed-longsword',
-    equippedAbilityIds: ['STRIKE', 'ABYSSAL_FAULT', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
+    equippedAbilityIds: ['RUIN', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'fault-2',
   });
-  assert.equal(evaluateHardEligibility('FAKE_FAULT_TAG', ctxMissing, faultBoon as never).eligible, false);
-  assert.equal(evaluateHardEligibility('FAKE_FAULT_TAG', ctxPresent, faultBoon as never).eligible, true);
+  assert.equal(evaluateHardEligibility('FAKE_AOE_TAG', ctxMissing, aoeBoon as never).eligible, false);
+  assert.equal(evaluateHardEligibility('FAKE_AOE_TAG', ctxPresent, aoeBoon as never).eligible, true);
 }
 
 // --- Conflicts reduce weight but do not ban ---
@@ -269,10 +269,11 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   assert.equal(voidBoon.eligible, true);
 }
 
-// --- Aegis always retains weapon basic ---
+// --- Aegis weapon basic remains reachable (derived; not a technique slot) ---
 {
   const sanitized = sanitizeAegisCombatLoadout(['DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE', 'GRAVE_BIND']);
-  assert.equal(sanitized[0], AEGIS_ANCHOR);
+  assert.equal(sanitized.length, 3);
+  assert.ok(!sanitized.includes(AEGIS_ANCHOR as never));
   const ctx = buildBoonOfferContext({
     classId: 'AEGIS',
     weaponFamilyId: 'aegis-rift-edge',
@@ -280,7 +281,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
     ownedBoonIds: [],
     seed: 'aegis-basic',
   });
-  assert.ok(ctx.equippedAbilityIds.includes('STRIKE'));
+  // Anchor STRIKE is still the boon-context basic identity; not persisted in technique loadout.
   assert.ok(ctx.reachableHooks.includes('WEAPON_BASIC'));
 }
 

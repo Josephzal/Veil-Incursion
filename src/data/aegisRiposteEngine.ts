@@ -119,11 +119,31 @@ export function clearAegisRiposte(state: AegisRiposteState): AegisRiposteState {
 }
 
 /** True when this ability carries the authoritative STRIKE tag (or is the STRIKE id). */
-export function abilityCarriesStrikeTag(classId: ClassType, abilityId: string): boolean {
+export function abilityCarriesStrikeTag(
+  classId: ClassType,
+  abilityId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
+): boolean {
   if (abilityId === 'STRIKE') return true;
   if (classId === 'AEGIS') {
-    const tags = getAbilityTags(abilityId as import('../types/aegisCombat').AegisAbilityId);
-    if (tags.includes(AEGIS_RIPOSTE_STRIKE_TAG)) return true;
+    if (abilityId === 'DOOMFALL') {
+      // Charge is not a STRIKE; Release is.
+      return opts?.doomfallReleaseAvailable === true;
+    }
+    try {
+      const cost = resolveClassAbilityCost(classId, abilityId);
+      if (cost.tags.includes(AEGIS_RIPOSTE_STRIKE_TAG) || cost.tags.includes('STRIKE')) {
+        return true;
+      }
+    } catch {
+      // Fall through to legacy catalog lookup.
+    }
+    try {
+      const tags = getAbilityTags(abilityId as import('../types/aegisCombat').AegisAbilityId);
+      if (tags.includes(AEGIS_RIPOSTE_STRIKE_TAG)) return true;
+    } catch {
+      return false;
+    }
   }
   const cost = resolveClassAbilityCost(classId, abilityId);
   return cost.tags.includes(AEGIS_RIPOSTE_STRIKE_TAG) || cost.tags.includes('STRIKE');
@@ -159,9 +179,14 @@ export function canCashOutAegisRiposte(args: {
   if (!successfulHit) return false;
   if (alreadyCashedForAction) return false;
   if (args.nestedPresentation || args.indirectDamage || args.echoHit) return false;
-  if (!abilityId || !abilityCarriesStrikeTag(operativeClass, abilityId)) return false;
-  if (!primaryTargetId || !hitTargetId) return false;
-  if (primaryTargetId !== hitTargetId) return false;
+  if (!abilityId || !abilityCarriesStrikeTag(operativeClass, abilityId, {
+    // Riposte cash-out for Doomfall Release is gated by the caller passing STRIKE tags;
+    // Release stage is treated as STRIKE-eligible when abilityId is DOOMFALL and ready.
+    doomfallReleaseAvailable: abilityId === 'DOOMFALL' ? true : undefined,
+  })) return false;
+  if (!hitTargetId) return false;
+  // null primary = first successful authored hit (Divergence / Horizon multi-target).
+  if (primaryTargetId != null && primaryTargetId !== hitTargetId) return false;
   return true;
 }
 

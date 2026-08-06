@@ -15,6 +15,8 @@ import type { WeaponFamilyId, WeaponTierNumber } from '../types/weapon';
 import { getWeaponFamily } from './weaponRegistry';
 import { isEnemyFractured } from './combatFractureEngine';
 import { stripKineticArmor } from './combatDefenseLayerEngine';
+import { resolveAegisTechniqueStrikePower } from './aegisTechniquePowerEngine';
+import { resolveAegisUltimateStrikePower } from './aegisUltimatePowerEngine';
 
 export function resolveWeaponCombatStatsFromState(
   weapon: ResolvedWeaponState,
@@ -33,7 +35,7 @@ export function resolveWeaponCombatStatsFromState(
   const baseReserve = COMBAT_ACTION.ABYSSAL_RESERVE_CHARGE;
   const abyssalChargePerStrike = Math.round(baseReserve * reserveMult) + reserveFlat;
 
-  return resolveWeaponCombatStats(
+  const resolved = resolveWeaponCombatStats(
     {
       baseDamageOverride: strikeDamage,
       staminaCostModifier: strikeStaminaCost - baseStamina,
@@ -41,6 +43,14 @@ export function resolveWeaponCombatStatsFromState(
     },
     weapon.displayName,
   );
+  if (weapon.classId === 'AEGIS') {
+    return {
+      ...resolved,
+      aegisTechniqueStrikePower: resolveAegisTechniqueStrikePower(mods),
+      aegisUltimateStrikePower: resolveAegisUltimateStrikePower(mods),
+    };
+  }
+  return resolved;
 }
 
 export function resolveWeaponMagazineBonus(mods: WeaponStatModifiers): number {
@@ -52,11 +62,19 @@ export function applyWeaponBallisticDamageMultiplier(
   mods: WeaponStatModifiers,
   postReloadBonus: boolean,
   passiveBonusPct = 0,
+  /**
+   * H.2a — when true, skip family ballisticDamagePct (already applied in
+   * resolveHexBasicShot). Post-reload Tier-III bonus still applies.
+   */
+  options?: { skipFamilyBallisticPct?: boolean },
 ): number {
-  let mult = 1 + (mods.ballisticDamagePct ?? 0) / 100;
+  let mult = options?.skipFamilyBallisticPct
+    ? 1
+    : 1 + (mods.ballisticDamagePct ?? 0) / 100;
   if (postReloadBonus) {
     mult *= 1 + passiveBonusPct / 100;
   }
+  if (mult === 1) return Math.max(0, damage);
   return Math.max(0, Math.floor(damage * mult));
 }
 
@@ -115,7 +133,8 @@ export interface WeaponHookResult extends CombatHookResult {
 function passiveLabel(passive: WeaponOncePerCombatPassiveId): string {
   switch (passive) {
     case 'FIRST_MELEE_RESERVE_BONUS': return 'WEAPON';
-    case 'FIRST_FRACTURE_STAMINA_REFUND': return 'CLAYMORE';
+    case 'FRACTURE_BREAK_RESERVE': return 'UNMAKER';
+    case 'FIRST_FRACTURE_STAMINA_REFUND': return 'UNMAKER';
     case 'MELEE_CRIT_RESERVE_BONUS': return 'RIFT EDGE';
     case 'FIRST_RELOAD_STAMINA': return 'SIDEARM';
     case 'POST_RELOAD_BALLISTIC_DAMAGE': return 'PULSE RIFLE';
@@ -151,19 +170,11 @@ export function runWeaponOnMeleeHitHooks(
 }
 
 export function runWeaponOnFractureHooks(ctx: WeaponHookContext): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  let staminaDelta = 0;
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-
-  if (passive === 'FIRST_FRACTURE_STAMINA_REFUND' && !ctx.runtime.firstFractureUsed) {
-    runtimePatch.firstFractureUsed = true;
-    staminaDelta = bonus;
-    logLines.push(`[${passiveLabel(passive)}] >> First Fracture — +${bonus} Stamina restored.`);
-  }
-
-  return { logLines, runtimePatch, staminaDelta };
+  // Phase E.1b — Unmaker T3 no longer grants Stamina here.
+  // FRACTURE_BREAK_RESERVE is awarded at the Fracture-break event in the hub
+  // (authored WA only, once per action) via unmakerTier3FractureBreakEngine.
+  void ctx;
+  return { logLines: [], runtimePatch: {} };
 }
 
 export function runWeaponOnReloadHooks(ctx: WeaponHookContext): WeaponHookResult {
@@ -279,9 +290,16 @@ export function buildResolvedWeaponForRun(
 export function formatWeaponStatLines(weapon: ResolvedWeaponState): string[] {
   const lines: string[] = [];
   const mods = weapon.statModifiers;
-  if (mods.strikeDamagePct) lines.push(`${mods.strikeDamagePct > 0 ? '+' : ''}${mods.strikeDamagePct}% Strike Damage`);
+  const aegisWaSurface = weapon.classId === 'AEGIS';
+  // Aegis canonical combat is 4+3 weapon actions — strikeDamagePct / stamina cost
+  // do not scale that surface (legacy fields may remain for migration/basics).
+  if (mods.strikeDamagePct && !aegisWaSurface) {
+    lines.push(`${mods.strikeDamagePct > 0 ? '+' : ''}${mods.strikeDamagePct}% Strike Damage`);
+  }
   if (mods.fractureFromMeleePct) lines.push(`+${mods.fractureFromMeleePct}% Fracture from melee`);
-  if (mods.strikeStaminaCostPct) lines.push(`${mods.strikeStaminaCostPct > 0 ? '+' : ''}${mods.strikeStaminaCostPct}% Stamina Cost`);
+  if (mods.strikeStaminaCostPct && !aegisWaSurface) {
+    lines.push(`${mods.strikeStaminaCostPct > 0 ? '+' : ''}${mods.strikeStaminaCostPct}% Stamina Cost`);
+  }
   if (mods.magazineSizeBonus) lines.push(`${mods.magazineSizeBonus > 0 ? '+' : ''}${mods.magazineSizeBonus} Magazine`);
   if (mods.ballisticDamagePct) lines.push(`${mods.ballisticDamagePct > 0 ? '+' : ''}${mods.ballisticDamagePct}% Ballistic Damage`);
   if (mods.occultDamagePct) lines.push(`${mods.occultDamagePct > 0 ? '+' : ''}${mods.occultDamagePct}% Occult Damage`);

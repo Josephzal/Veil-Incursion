@@ -131,20 +131,72 @@ export function canAffordGraftResources(
   return { ok: true };
 }
 
+export type ScaleGraftDamageOptions = {
+  /**
+   * Phase E.1a — Aegis weapon-action hits already own `damageMultiplier` and
+   * `occultFlatBonus` via `applyGraftTransformToWeaponPlan`. Skip those here.
+   * Phase E.1e.1 — Apex boss ×2 is owned by WA delivery when pre-scaled; do not
+   * re-apply here. Neutron reserve-add still resolves via `neutronOnce`.
+   */
+  damageAlreadyScaled?: boolean;
+  /**
+   * Phase E.1e.1 — Neutron floor(reserve×0.8) at most once per `playerActionId`.
+   * Mutates the ledger when the addition is applied to an eligible packet.
+   */
+  neutronOnce?: {
+    playerActionId: string;
+    ledger: { consumedForPlayerActionId: string | null };
+  };
+};
+
+function applyNeutronReserveAddOnce(
+  damage: number,
+  baseDamage: number,
+  plan: GraftCastPlan,
+  reserveSpent: number,
+  options?: ScaleGraftDamageOptions,
+): number {
+  if (!(reserveSpent > 0 && plan.consumeAllReserve && baseDamage > 0)) {
+    return damage;
+  }
+  const once = options?.neutronOnce;
+  if (
+    once
+    && once.ledger.consumedForPlayerActionId === once.playerActionId
+  ) {
+    return damage;
+  }
+  const next = damage + Math.floor(reserveSpent * 0.8);
+  if (once) {
+    once.ledger.consumedForPlayerActionId = once.playerActionId;
+  }
+  return next;
+}
+
 export function scaleGraftDamage(
   baseDamage: number,
   plan: GraftCastPlan,
   reserveSpent = 0,
   isBoss = false,
+  options?: ScaleGraftDamageOptions,
 ): number {
+  if (options?.damageAlreadyScaled) {
+    // Apex boss mult is applied at WA delivery before hurtEnemy — never again here.
+    const withNeutron = applyNeutronReserveAddOnce(
+      baseDamage,
+      baseDamage,
+      plan,
+      reserveSpent,
+      options,
+    );
+    return Math.max(0, withNeutron);
+  }
   let multiplier = plan.damageMultiplier;
   if (isBoss && plan.bossDamageMultiplier > 1) {
     multiplier *= plan.bossDamageMultiplier;
   }
   let damage = Math.floor(baseDamage * multiplier);
-  if (reserveSpent > 0 && plan.consumeAllReserve) {
-    damage += Math.floor(reserveSpent * 0.8);
-  }
+  damage = applyNeutronReserveAddOnce(damage, baseDamage, plan, reserveSpent, options);
   damage += plan.occultFlatBonus;
   return Math.max(0, damage);
 }

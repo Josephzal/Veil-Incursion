@@ -116,12 +116,15 @@ import { CLASS_RANK_MAX } from './classRankEngine';
   });
 }
 
-// Phase 3H loadouts remain legal (slots present)
+// Phase 3H loadouts remain legal (class-specific combat structures)
 {
   ALL_WEAPON_FAMILY_IDS.forEach((id) => {
     const p = getWeaponLoadoutRecommendationProfile(id);
     assert.equal(p.sampleLoadouts.length, 2);
-    p.sampleLoadouts.forEach((s) => assert.equal(s.slots.length, 4));
+    // Aegis / Hex W.2: 3 persisted flex/technique slots (weapon actions family-derived).
+    // Envoy: 4-slot deck (fixed basic + 3 flex).
+    const expectedSlots = getWeaponFamily(id).classId === 'ENVOY' ? 4 : 3;
+    p.sampleLoadouts.forEach((s) => assert.equal(s.slots.length, expectedSlots, `${id} ${s.kind}`));
   });
 }
 

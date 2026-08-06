@@ -14,6 +14,12 @@ import {
 } from './combatSquadEngine';
 import type { ResolvedWeaponCombatStats } from './inventory';
 import { playCombatPresentationCue } from '../utils/combatPresentationAudio';
+import {
+  ASH_JACKET_SALVO_PACKETS,
+  canCastBlacksiteTriage,
+  resolveCinderlineSlotForUnit,
+  seedCinderlineHazard,
+} from './hexShotPhaseH3bEngine';
 
 export interface HexShotAbilityHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -26,6 +32,13 @@ export interface HexShotAbilityHurtOptions {
   indirectDamage?: boolean;
   /** Floor for Kinetic Armor strip layers (Nullbreach innate pressure). */
   innateArmorPressureLayers?: number;
+  /**
+   * H.2a — family ballisticDamagePct already applied in resolveHexBasicShot.
+   * Hub must not re-apply the family ballistic layer.
+   */
+  weaponFamilyBallisticAlreadyScaled?: boolean;
+  /** Stable action id shared across all packets of one fixed-basic commitment. */
+  playerActionId?: string;
 }
 
 export interface HexShotExecutionContext {
@@ -62,6 +75,9 @@ export interface HexShotExecutionContext {
   resolvedWeapon?: ResolvedWeaponState | null;
   /** Called when magazine hits 0 after a basic (shotgun / breach loop). */
   onMagazineEmptied?: () => void;
+  /** Operative HP for Blacksite Triage validation (H.3b). */
+  operativeCurrentHp?: number;
+  operativeMaxHp?: number;
 }
 
 export type HexShotExecutionResult =
@@ -150,6 +166,8 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         // Spread hits share one cast-level ammo payload in the hub (tracker caps).
         // Nullbreach innate KA pressure is applied once in hurtEnemy via
         // resolveWeaponArmorPressureLayers (floor = innateArmorPressureLayers).
+        // H.2a — one playerActionId for the whole fixed-basic commitment.
+        const playerActionId = `pa-hex-basic-${Date.now()}`;
         for (const hit of plan.hits) {
           ctx.hurtEnemy(hit.damage, hit.isPrimary ? '[WEAPON BASIC]' : '[SPREAD]', {
             channel: 'KINETIC',
@@ -157,6 +175,9 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
             abilityId: ctx.abilityId,
             targetId: hit.targetId,
             innateArmorPressureLayers: plan.innateArmorPressureLayers,
+            // Family ballisticDamagePct already applied in resolveHexBasicShot.
+            weaponFamilyBallisticAlreadyScaled: true,
+            playerActionId,
           }, hit.targetId);
         }
         if (ctx.currentAmmo - (ammoCost || plan.ammoCost) <= 0) {
@@ -179,15 +200,29 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         ctx.log('[REJECTED] >> Salvo requires a target.');
         return { ok: false, refundAp: def.apCost, refundAmmo: def.ammoCost };
       }
-      const dmg = ballisticDamage(ctx, ctx.abilityId);
-      ctx.hurtEnemy(dmg, '[ASH-JACKET SALVO]', {
-        channel: 'KINETIC',
-        fractureGain: 30,
-        abilityId: ctx.abilityId,
-        targetId: unit.unitId,
-      }, unit.unitId);
-      ctx.patchUnit(unit.unitId, addCombatTag(unit, 'CONCUSSED'));
-      ctx.log('[ASH-JACKET SALVO] >> Three-round burst — stagger applied.');
+      // H.3b — three authored packets (7+7+8); ammo spent once above via ammoCost=3.
+      const playerActionId = `pa-hex-salvo-${Date.now()}`;
+      let resolvedHits = 0;
+      ASH_JACKET_SALVO_PACKETS.forEach((packetDmg, index) => {
+        const landed = ctx.hurtEnemy(
+          packetDmg,
+          `[ASH-JACKET SALVO — ${index + 1}]`,
+          {
+            channel: 'KINETIC',
+            fractureGain: index === 0 ? 30 : 0,
+            abilityId: ctx.abilityId,
+            targetId: unit.unitId,
+            playerActionId,
+          },
+          unit.unitId,
+        );
+        if (landed) resolvedHits += 1;
+      });
+      if (resolvedHits > 0) {
+        const working = getUnitById(ctx.squad, unit.unitId) ?? unit;
+        ctx.patchUnit(unit.unitId, addCombatTag(working, 'CONCUSSED'));
+        ctx.log('[ASH-JACKET SALVO] >> Three-round burst (7+7+8) — stagger applied.');
+      }
       return { ok: true };
     }
 
@@ -368,7 +403,39 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
 
     case 'PANOPTICON_PROTOCOL': {
       ctx.classState.panopticonActive = true;
-      ctx.log('[PANOPTICON PROTOCOL] >> Overwatch online — next hostile action will be interrupted.');
+      ctx.log('[PANOPTICON WATCH] >> Overwatch online — next hostile action will be interrupted.');
+      return { ok: true };
+    }
+
+    case 'CINDERLINE_SATURATION': {
+      const unit = targetUnit(ctx);
+      if (!unit?.unitId) {
+        ctx.log('[REJECTED] >> Cinderline Saturation requires a positional target.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      const slot = resolveCinderlineSlotForUnit(unit);
+      if (!slot) {
+        ctx.log('[REJECTED] >> Target has no stable grid position for Cinderline.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      seedCinderlineHazard(ctx.classState, slot);
+      ctx.log(`[CINDERLINE SATURATION] >> Hazard seeded on ${slot} — 5 Occult / enemy turn · 2 rounds.`);
+      return { ok: true };
+    }
+
+    case 'BLACKSITE_TRIAGE': {
+      const currentHp = ctx.operativeCurrentHp ?? 0;
+      const maxHp = ctx.operativeMaxHp ?? 0;
+      const gate = canCastBlacksiteTriage(ctx.classState, currentHp, maxHp);
+      if (!gate.ok) {
+        ctx.log(gate.reason === 'USED'
+          ? '[REJECTED] >> Blacksite Triage already expended this encounter.'
+          : '[REJECTED] >> Blacksite Triage — operative at full HP.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      ctx.classState.blacksiteTriageUsed = true;
+      ctx.healOperative(gate.heal);
+      ctx.log(`[BLACKSITE TRIAGE] >> Field recovery — +${gate.heal} HP.`);
       return { ok: true };
     }
 
@@ -408,6 +475,7 @@ export function isHexShotAbilityEnabled(
   stamina: number,
   classState: ClassCombatEncounterState,
   ammoCostOverride?: number,
+  operativeHp?: { current: number; max: number },
 ): boolean {
   const def = getHexShotAbilityDefinition(abilityId);
   const costs = resolveHexShotResourceCosts(def, { ammoCost: ammoCostOverride });
@@ -422,6 +490,10 @@ export function isHexShotAbilityEnabled(
     return false;
   }
   if (abilityId === 'PANOPTICON_PROTOCOL' && classState.panopticonActive) return false;
+  if (abilityId === 'BLACKSITE_TRIAGE' && operativeHp) {
+    return canCastBlacksiteTriage(classState, operativeHp.current, operativeHp.max).ok;
+  }
+  if (abilityId === 'BLACKSITE_TRIAGE' && classState.blacksiteTriageUsed) return false;
   return true;
 }
 

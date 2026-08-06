@@ -25,6 +25,8 @@ const HEX_TARGET_MODE: Partial<Record<HexShotAbilityId, AbilityTargetMode>> = {
   RIFT_SNARE: 'SINGLE',
   PHOSPHORUS_HEX: 'SINGLE',
   ASTRAL_TARGET_LOCK: 'SINGLE',
+  CINDERLINE_SATURATION: 'SINGLE',
+  BLACKSITE_TRIAGE: 'NONE',
   BLEEDING_PAYLOAD: 'SINGLE',
   WRAITH_PIERCER_ROUND: 'SINGLE',
   BLOOD_TRACER_ROUND: 'SINGLE',
@@ -34,6 +36,21 @@ const HEX_TARGET_MODE: Partial<Record<HexShotAbilityId, AbilityTargetMode>> = {
   NULL_SPACE_CLOAK: 'NONE',
   GHOST_GRID_CAMO: 'NONE',
   PHASE_SHIFT_RELOAD: 'NONE',
+};
+
+const HEX_WEAPON_ACTION_TARGET_MODE: Partial<Record<string, AbilityTargetMode>> = {
+  QUICKDRAW: 'SINGLE',
+  SLIPSHOT: 'SINGLE',
+  SIX_BELLS: 'SINGLE',
+  LAST_WORD: 'SINGLE',
+  CENTER_MASS: 'SINGLE',
+  CONTROLLED_BURST: 'SINGLE',
+  SUPPRESSIVE_BARRAGE: 'SINGLE',
+  CONTACT_FRONT: 'ONE_OR_TWO',
+  DOOR_KNOCKER: 'SINGLE',
+  FATAL_FUNNEL: 'COLUMN',
+  THRESHOLD: 'NONE',
+  DEADBOLT: 'SINGLE',
 };
 
 const ENVOY_TARGET_MODE: Partial<Record<EnvoyAbilityId, AbilityTargetMode>> = {
@@ -60,18 +77,35 @@ function hexOccultBackline(id: HexShotAbilityId): boolean {
 export function classAbilityTargetMode(
   classId: ClassType,
   abilityId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
 ): AbilityTargetMode {
   if (classId === 'HEX_SHOT') {
+    if (HEX_WEAPON_ACTION_TARGET_MODE[abilityId]) {
+      return HEX_WEAPON_ACTION_TARGET_MODE[abilityId]!;
+    }
     return HEX_TARGET_MODE[migrateHexShotAbilityId(abilityId)] ?? 'SINGLE';
   }
   if (classId === 'ENVOY') {
     return ENVOY_TARGET_MODE[migrateEnvoyAbilityId(abilityId)] ?? 'SINGLE';
   }
-  return aegisTargetMode(abilityId as AegisAbilityId);
+  return aegisTargetMode(abilityId as AegisAbilityId, opts);
 }
 
-export function classAbilityRequiresTarget(classId: ClassType, abilityId: string): boolean {
-  return classAbilityTargetMode(classId, abilityId) === 'SINGLE';
+export function classAbilityRequiresTarget(
+  classId: ClassType,
+  abilityId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
+): boolean {
+  const mode = classAbilityTargetMode(classId, abilityId, opts);
+  return mode === 'SINGLE'
+    || mode === 'DUAL'
+    || mode === 'ROW'
+    || mode === 'ONE_OR_TWO'
+    || mode === 'COLUMN';
+}
+
+export function classAbilityRequiresTargetLegacy(classId: ClassType, abilityId: string): boolean {
+  return classAbilityRequiresTarget(classId, abilityId);
 }
 
 export function canTargetWithClassAbility(
@@ -79,18 +113,24 @@ export function canTargetWithClassAbility(
   squad: EnemyCombatProfile[],
   abilityId: string,
   unitId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
 ): boolean {
   if (classId === 'AEGIS') {
-    return aegisCanTarget(squad, abilityId as AegisAbilityId, unitId);
+    return aegisCanTarget(squad, abilityId as AegisAbilityId, unitId, opts);
   }
   const unit = squad.find((u) => u.unitId === unitId);
   if (!unit || !isUnitAlive(unit)) return false;
   const mode = classAbilityTargetMode(classId, abilityId);
   if (mode === 'NONE' || mode === 'ALL') return false;
+  if (classId === 'HEX_SHOT' && abilityId === 'LAST_WORD') {
+    if (!unit.maxHp || unit.currentHp / unit.maxHp > 0.3) return false;
+  }
   if (classId === 'HEX_SHOT' && hexOccultBackline(abilityId as HexShotAbilityId)) {
     return unit.gridSlot?.startsWith('BL') === true || true;
   }
   if (unit.isUntargetable) return false;
+  // Fatal Funnel column pick may anchor on either cell in the lane.
+  if (classId === 'HEX_SHOT' && abilityId === 'FATAL_FUNNEL') return true;
   if (unit.gridSlot?.startsWith('BL')) {
     const guardSlot = unit.gridSlot === 'BL_0' ? 'FL_0' : 'FL_1';
     const guard = squad.find((u) => u.gridSlot === guardSlot && isUnitAlive(u));
@@ -109,6 +149,7 @@ export function isUnitBlockedForClassAbility(
     return aegisIsBlocked(squad, abilityId as AegisAbilityId, unitId);
   }
   if (classId === 'HEX_SHOT' && abilityId === 'WRAITH_PIERCER_ROUND') return false;
+  if (classId === 'HEX_SHOT' && abilityId === 'FATAL_FUNNEL') return false;
   const unit = squad.find((u) => u.unitId === unitId);
   if (!unit || !isUnitAlive(unit)) return false;
   if (!unit.gridSlot?.startsWith('BL')) return false;
@@ -131,9 +172,10 @@ export function validTargetsForClassAbility(
   classId: ClassType,
   squad: EnemyCombatProfile[],
   abilityId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
 ): EnemyCombatProfile[] {
   if (classId === 'AEGIS') {
-    return aegisValidTargets(squad, abilityId as AegisAbilityId);
+    return aegisValidTargets(squad, abilityId as AegisAbilityId, opts);
   }
   const mode = classAbilityTargetMode(classId, abilityId);
   if (mode === 'ALL') return squad.filter(isUnitAlive);
@@ -141,15 +183,10 @@ export function validTargetsForClassAbility(
   return squad.filter((u) => u.unitId && canTargetWithClassAbility(classId, squad, abilityId, u.unitId));
 }
 
-export function classAbilityRequiresTargetLegacy(classId: ClassType, abilityId: string): boolean {
-  if (classId === 'AEGIS') return aegisRequiresTarget(abilityId as AegisAbilityId);
-  return classAbilityRequiresTarget(classId, abilityId);
-}
-
 function bypassesWardenIntercept(classId: ClassType, abilityId: string): boolean {
   if (classId === 'AEGIS') {
     const aegisId = abilityId as AegisAbilityId;
-    return aegisId === 'GRAVE_BIND' || aegisId === 'VEIL_PIERCER' || aegisId === 'BLOOD_TITHE';
+    return aegisId === 'GRAVE_BIND' || aegisId === 'VEIL_PIERCER';
   }
   if (classId === 'HEX_SHOT') {
     return migrateHexShotAbilityId(abilityId) === 'WRAITH_PIERCER_ROUND';

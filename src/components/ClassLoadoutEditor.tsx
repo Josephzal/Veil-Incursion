@@ -70,8 +70,8 @@ interface ClassLoadoutEditorProps<T extends string> {
   anchorLabel: string;
   assignableIds: readonly T[];
   catalog: Record<string, ClassAbilityCatalogEntry>;
-  selectedSlot: 1 | 2 | 3;
-  onSelectSlot: (slot: 1 | 2 | 3) => void;
+  selectedSlot: 0 | 1 | 2 | 3;
+  onSelectSlot: (slot: 0 | 1 | 2 | 3) => void;
   onAssignAbility: (abilityId: T) => void;
   onCommit: () => void;
   theme: ClassLoadoutEditorTheme;
@@ -86,6 +86,18 @@ interface ClassLoadoutEditorProps<T extends string> {
   anchorCostLine?: string;
   /** When true, hides the manual commit button (loadout auto-saves). */
   hideCommit?: boolean;
+  /**
+   * W.2 Hex — three editable flex slots, no fixed anchor card.
+   * Draft length 3; selectedSlot is 0|1|2.
+   */
+  flexOnly?: boolean;
+  /** Read-only equipped-family weapon actions (W.2 Revolver kit). */
+  readOnlyWeaponActions?: readonly {
+    id: string;
+    label: string;
+    costLine: string;
+    description: string;
+  }[];
 }
 
 export default function ClassLoadoutEditor<T extends string>({
@@ -108,6 +120,8 @@ export default function ClassLoadoutEditor<T extends string>({
   statusMessage = null,
   anchorCostLine,
   hideCommit = false,
+  flexOnly = false,
+  readOnlyWeaponActions,
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
   const { isDesktop } = useHubLayout();
@@ -128,13 +142,63 @@ export default function ClassLoadoutEditor<T extends string>({
       {title ? <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text> : null}
       {hint ? <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text> : null}
 
-      <LoadoutSectionBlock label="Active Slots">
+      {readOnlyWeaponActions && readOnlyWeaponActions.length > 0 ? (
+        <LoadoutSectionBlock label="Weapon Actions // Equipped Family">
+          <DossierCardShell
+            padding={10}
+            style={styles.sectionShell}
+            contentStyle={styles.sectionContent}
+          >
+            <Grid columns={2}>
+              {readOnlyWeaponActions.map((wa) => (
+                <GridCell key={wa.id}>
+                  <View
+                    style={[
+                      hubTerminalUi.interactiveButton,
+                      hubTerminalUi.interactiveButtonSm,
+                      styles.card,
+                      cardStyle,
+                      styles.anchorSlot,
+                      loadoutSlotSurface(false, theme.accentColor, theme.borderColor),
+                    ]}
+                  >
+                    <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
+                      WA // FIXED
+                    </Text>
+                    <Text
+                      style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+                      numberOfLines={2}
+                    >
+                      {wa.label}
+                    </Text>
+                    <Text
+                      style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+                      numberOfLines={1}
+                    >
+                      {wa.costLine ? `COST: ${wa.costLine}` : 'FIXED WEAPON ACTION'}
+                    </Text>
+                    <Text
+                      style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+                      numberOfLines={2}
+                    >
+                      {wa.description}
+                    </Text>
+                  </View>
+                </GridCell>
+              ))}
+            </Grid>
+          </DossierCardShell>
+        </LoadoutSectionBlock>
+      ) : null}
+
+      <LoadoutSectionBlock label={flexOnly ? 'Flex Abilities' : 'Active Slots'}>
         <DossierCardShell
           padding={10}
           style={styles.sectionShell}
           contentStyle={styles.sectionContent}
         >
         <Grid columns={2}>
+          {!flexOnly ? (
           <GridCell>
             <View
               style={[
@@ -169,8 +233,9 @@ export default function ClassLoadoutEditor<T extends string>({
             ) : null}
           </View>
         </GridCell>
+          ) : null}
 
-        {([1, 2, 3] as const).map((slotIndex) => {
+        {(flexOnly ? ([0, 1, 2] as const) : ([1, 2, 3] as const)).map((slotIndex) => {
           const abilityId = draft[slotIndex];
           const def = catalog[abilityId];
           const isSelected = selectedSlot === slotIndex;
@@ -188,7 +253,7 @@ export default function ClassLoadoutEditor<T extends string>({
                 ]}
               >
                 <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
-                  {`S${slotIndex + 1}`}
+                  {flexOnly ? `FLEX ${slotIndex + 1}` : `S${slotIndex + 1}`}
                 </Text>
                 <Text
                   style={[

@@ -1,5 +1,4 @@
 import type { AegisAbilityId } from '../types/aegisCombat';
-import { RUNIC_BRAND_CAP } from '../types/aegisCombat';
 import type { BoonEncounterState } from '../types/boonHooks';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import { COMBAT_CHANCE } from '../types/combatChance';
@@ -143,14 +142,17 @@ export function slipstreamMobilityActive(
   return mods.slipstreamReserveCost > 0 && boonMatchesAction(owned, 'SLIPSTREAM', abilityId);
 }
 
+/** Phase C: Deep Lungs adds +10% max Reserve on RESTORE resolve — never grants Brands. */
+export const DEEP_LUNGS_BONUS_RESERVE_PCT = 10;
+
 export function applyDeepLungsOnRestore(
   owned: readonly LeyLineMutationId[],
   abilityId: AegisAbilityId,
-  setRunicBrands: (count: number) => void,
+  chargeReserve: (pct: number) => void,
   log: (msg: string) => void,
 ): void {
   if (!hasMutation(owned, 'DEEP_LUNGS')) return;
   if (!getAbilityTags(abilityId).includes('RESTORE')) return;
-  setRunicBrands(RUNIC_BRAND_CAP);
-  log('[DEEP LUNGS] >> Runic Brand tracker surged to 3.');
+  chargeReserve(DEEP_LUNGS_BONUS_RESERVE_PCT);
+  log(`[DEEP LUNGS] >> +${DEEP_LUNGS_BONUS_RESERVE_PCT}% Abyssal Reserve.`);
 }

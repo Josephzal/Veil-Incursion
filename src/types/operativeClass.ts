@@ -1,5 +1,5 @@
 import type { ClassType } from './game';
-import type { AegisAbilityId, AegisLoadout } from './aegisCombat';
+import type { AegisAbilityId, AegisTechniqueLoadout } from './aegisCombat';
 
 /** Hex Shot deck ability ids. */
 export type HexShotAbilityId =
@@ -15,17 +15,26 @@ export type HexShotAbilityId =
   | 'NULL_SPACE_CLOAK'
   | 'GHOST_GRID_CAMO'
   | 'ASTRAL_TARGET_LOCK'
+  | 'CINDERLINE_SATURATION'
+  | 'BLACKSITE_TRIAGE'
   | 'BLEEDING_PAYLOAD'
   | 'WRAITH_PIERCER_ROUND'
   | 'BLOOD_TRACER_ROUND'
   | 'STASIS_LOCK_SLUG';
 
-export type HexShotLoadout = readonly [
-  HexShotAbilityId,
+/**
+ * W.2 — persisted Hex flex selections (exactly three).
+ * Weapon actions are derived from the equipped family and never stored here.
+ * Legacy 4-tuples `[SILVER_CORE_SIDEARM, f0, f1, f2]` are migrated by sanitizeHexFlexLoadout.
+ */
+export type HexFlexLoadout = readonly [
   HexShotAbilityId,
   HexShotAbilityId,
   HexShotAbilityId,
 ];
+
+/** @deprecated Alias — HexShotLoadout is now the three-flex shape. */
+export type HexShotLoadout = HexFlexLoadout;
 
 /** Envoy deck ability ids. */
 export type EnvoyAbilityId =
@@ -53,12 +62,14 @@ export type EnvoyLoadout = readonly [
 
 export const ALL_OPERATIVE_CLASSES: readonly ClassType[] = ['AEGIS', 'HEX_SHOT', 'ENVOY'];
 
-export const DEFAULT_HEX_SHOT_LOADOUT: HexShotLoadout = [
-  'SILVER_CORE_SIDEARM',
+export const DEFAULT_HEX_FLEX_LOADOUT: HexFlexLoadout = [
   'ASH_JACKET_SALVO',
   'RIFT_SNARE',
   'SINGULARITY_SLUG',
 ];
+
+/** @deprecated Prefer DEFAULT_HEX_FLEX_LOADOUT */
+export const DEFAULT_HEX_SHOT_LOADOUT: HexShotLoadout = DEFAULT_HEX_FLEX_LOADOUT;
 
 export const DEFAULT_ENVOY_LOADOUT: EnvoyLoadout = [
   'VEIL_SPLINTER',
@@ -72,6 +83,6 @@ export const DEFAULT_HEX_SHOT_UNLOCKED: readonly HexShotAbilityId[] = [...DEFAUL
 export const DEFAULT_ENVOY_UNLOCKED: readonly EnvoyAbilityId[] = [...DEFAULT_ENVOY_LOADOUT];
 
 export type ClassLoadoutSnapshot =
-  | { classId: 'AEGIS'; loadout: AegisLoadout; unlocked: readonly AegisAbilityId[] }
+  | { classId: 'AEGIS'; loadout: AegisTechniqueLoadout; unlocked: readonly AegisAbilityId[] }
   | { classId: 'HEX_SHOT'; loadout: HexShotLoadout; unlocked: readonly HexShotAbilityId[] }
   | { classId: 'ENVOY'; loadout: EnvoyLoadout; unlocked: readonly EnvoyAbilityId[] };

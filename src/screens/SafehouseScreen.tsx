@@ -36,7 +36,7 @@ import {
 } from '../data/classAbilityUnlockEngine';
 import { ENVOY_ABILITY_CATALOG } from '../data/envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from '../data/hexShotAbilities';
-import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
+import { sanitizeAegisTechniqueLoadout } from '../utils/aegisLoadoutUtils';
 import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
@@ -54,7 +54,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     vaultIncursionVeilResidueToAccount,
     restoreHealthFromBench,
     getSafehouseIntel,
-    setAegisLoadout,
+    setAegisTechniqueLoadout,
     setHexShotLoadout,
     setEnvoyLoadout,
     relocateCargoItem,
@@ -62,7 +62,6 @@ export default function SafehouseScreen(): React.JSX.Element {
   const {
     account,
     depositVeilResidueBalance,
-    setAegisLoadout: setAccountAegisLoadout,
     setHexShotLoadout: setAccountHexShotLoadout,
     setEnvoyLoadout: setAccountEnvoyLoadout,
     unlockAegisAbility,
@@ -77,7 +76,9 @@ export default function SafehouseScreen(): React.JSX.Element {
   const horizontalPad = 24 * fontScale;
 
   const [statusLine, setStatusLine] = useState('>> CABAL CHECKPOINT ONLINE — AWAITING OPERATIVE INPUT.');
-  const [loadoutDraft, setLoadoutDraft] = useState<AegisAbilityId[]>([...activeIncursion.aegisLoadout]);
+  const [loadoutDraft, setLoadoutDraft] = useState<AegisAbilityId[]>([
+    ...sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout),
+  ]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...activeIncursion.hexShotLoadout]);
   const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...activeIncursion.envoyLoadout]);
   const [selectedSlot, setSelectedSlot] = useState(1);
@@ -98,12 +99,16 @@ export default function SafehouseScreen(): React.JSX.Element {
   }, [appendRunLog, depositVeilResidueBalance, vaultIncursionVeilResidueToAccount]);
 
   useEffect(() => {
-    setLoadoutDraft([...activeIncursion.aegisLoadout]);
+    setLoadoutDraft([...sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout)]);
     setHexDraft([...activeIncursion.hexShotLoadout]);
     setEnvoyDraft([...activeIncursion.envoyLoadout]);
-    setLoadoutStatus(null);
+    setLoadoutStatus(
+      operativeClass === 'AEGIS'
+        ? '>> AEGIS TECHNIQUES LOCKED AT DESCENT — SAFEHOUSE CANNOT REWRITE SNAPSHOT.'
+        : null,
+    );
   }, [
-    activeIncursion.aegisLoadout,
+    activeIncursion.aegisTechniqueLoadout,
     activeIncursion.hexShotLoadout,
     activeIncursion.envoyLoadout,
     operativeClass,
@@ -117,22 +122,14 @@ export default function SafehouseScreen(): React.JSX.Element {
   const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
   const resonancePct = Math.round(activeIncursion.resonance.percent);
 
-  const commitAegisLoadout = useCallback((draft: readonly AegisAbilityId[]) => {
-    const rejection = validateLoadoutCommit(draft, account.unlockedAegisAbilities);
-    if (rejection) {
-      setLoadoutStatus(rejection);
-      setStatusLine(rejection);
-      return false;
-    }
-    const committed: AegisLoadout = [draft[0], draft[1], draft[2], draft[3]];
-    setAegisLoadout(committed);
-    setAccountAegisLoadout(committed);
-    appendRunLog('>> AEGIS LOADOUT LOCKED — four active abilities staged for next descent.');
-    const success = '>> LOADOUT COMMITTED — COMBAT DECK WILL DEPLOY ON NEXT INCURSION.';
-    setLoadoutStatus(success);
-    setStatusLine(success);
-    return true;
-  }, [account.unlockedAegisAbilities, appendRunLog, setAccountAegisLoadout, setAegisLoadout]);
+  const commitAegisLoadout = useCallback((_draft: readonly AegisAbilityId[]) => {
+    // Phase A contract: technique snapshot is immutable during an active incursion.
+    setAegisTechniqueLoadout(_draft as never);
+    const locked = '>> AEGIS TECHNIQUES LOCKED — DESCENT SNAPSHOT IMMUTABLE.';
+    setLoadoutStatus(locked);
+    setStatusLine(locked);
+    return false;
+  }, [setAegisTechniqueLoadout]);
 
   const commitHexLoadout = useCallback((draft: readonly HexShotAbilityId[]) => {
     const rejection = validateHexShotLoadoutCommit(draft, account.unlockedHexShotAbilities);
@@ -141,7 +138,7 @@ export default function SafehouseScreen(): React.JSX.Element {
       setStatusLine(rejection);
       return false;
     }
-    const committed: HexShotLoadout = [draft[0], draft[1], draft[2], draft[3]];
+    const committed: HexShotLoadout = [draft[0], draft[1], draft[2]];
     setHexShotLoadout(committed);
     setAccountHexShotLoadout(committed);
     appendRunLog('>> HEX-SHOT LOADOUT LOCKED — ballistic deck staged for next descent.');
@@ -173,13 +170,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     if (slotIndex === 0) return;
 
     if (operativeClass === 'AEGIS') {
-      const id = abilityId as AegisAbilityId;
-      if (id === 'EVISCERATE' || id === 'STRIKE') return;
-      if (!isAbilityUnlocked(account.unlockedAegisAbilities, id)) return;
-      const next = [...loadoutDraft];
-      next[slotIndex] = id;
-      setLoadoutDraft(next);
-      commitAegisLoadout(next);
+      commitAegisLoadout(loadoutDraft);
       return;
     }
     if (operativeClass === 'HEX_SHOT') {

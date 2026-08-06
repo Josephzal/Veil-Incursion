@@ -93,8 +93,8 @@ Nine weapon ultimates are WIRED end-to-end: foundation → rebind → host → s
 |--------|----------|-------------|----------------|
 | Paired Blades | REND THE VEIL | Dual hold traces + rupture | 2 kinetic + Occult; Tempo cashout only if armed |
 | Unmaker | GRAVEFALL | Raise / strain / slam | Heavy hit; cash existing Fracture; CLEAN armor/Fracture; PERFECT narrow shockwave |
-| Revolver | SIXTH SEAL | Align / seat / close | One reload (NORMAL/ACTIVE/PERFECT) → precision shots → empty mag → Protocol spend |
-| Black Door | LAST KNOCK | Pump / rings / slam | Needs ≥1 round (`RELOAD REQUIRED`); commit all ammo; never log "The Black Door" |
+| Silver-Core Sidearm | SIXTH SEAL | Align / seat / close | Protocol spend → ultimate-owned refill (no ordinary reload rewards) → precision shots → empty mag |
+| Nullbreach | LAST KNOCK | Pump / rings / slam | Needs ≥1 round (`RELOAD REQUIRED`); commit all ammo; never log "The Black Door" |
 | Vambrace | FUNERAL KNOT | Wind / tighten / tear | All living; baseline Occult + lantern Rot detonation; Rot gate purge on commit |
 | Heart's Due | CRIMSON REFRACTION | Align / offer / commit | HP offer on commit only; brink ≤25% Flux; full-pay ×1.15 |
 
@@ -165,7 +165,7 @@ Nine weapon ultimates are WIRED end-to-end: foundation → rebind → host → s
 | Weapon | Ultimate | Legacy ability ID | Fire gate |
 |--------|----------|-------------------|-----------|
 | Longsword | THREEFOLD BRAND | `EVISCERATE` | `canFireLegacyClassUltimate('EVISCERATE', family)` |
-| Carbine | ZERO PROTOCOL | `ZERO_PROTOCOL` | `canFireLegacyClassUltimate('ZERO_PROTOCOL', family)` |
+| Ash Shotgun | ZERO PROTOCOL | `ZERO_PROTOCOL` | `canFireLegacyClassUltimate('ZERO_PROTOCOL', family)` |
 | Scythe | NULL CIRCUIT | `CATACLYSM_SIGIL` | `canFireLegacyClassUltimate('CATACLYSM_SIGIL', family)` |
 
 ### Sibling behavior
@@ -196,9 +196,9 @@ Nine weapon ultimates are WIRED end-to-end: foundation → rebind → host → s
 | `aegis-runed-longsword` | Longsword |
 | `aegis-rift-edge` | Paired Blades |
 | `aegis-claymore-blade` | Unmaker |
-| `hex-silver-core-sidearm` | Revolver |
-| `hex-pulse-rifle` | Carbine |
-| `hex-void-cannon` | Black Door |
+| `hex-silver-core-sidearm` | Silver-Core Sidearm (legacy alias: Revolver) |
+| `hex-pulse-rifle` | Ash Shotgun (legacy alias: Carbine) |
+| `hex-void-cannon` | Nullbreach (legacy alias: Black Door) |
 | `envoy-echo-lantern` | Vambrace |
 | `envoy-null-conduit` | Scythe |
 | `envoy-sanguine-prism` | Heart's Due |

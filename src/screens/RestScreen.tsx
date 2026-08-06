@@ -5,7 +5,10 @@ import SanctuaryBg from '../../assets/images/location images/sanctuary.png';
 import ClassGraftUI, { type GraftInjectSelection } from '../components/ClassGraftUI';
 import TerminalOverlay from '../components/TerminalOverlay';
 import { canAffordAnySanctuaryGraft, getMinimumClassGraftCost } from '../data/classGraftEngine';
+import { buildAegisGraftSurface } from '../data/aegisGraftTarget';
+import { getGraftSocketAccessForClassRank } from '../data/graftSynergy/graftCapacityEngine';
 import { useRun } from '../context/RunContext';
+import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -19,6 +22,7 @@ import HubPrimaryCta from '../components/hub/HubPrimaryCta';
 import { RUN_FIELD, type RunFieldTone } from '../theme/runFieldTokens';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { readPressableHover } from '../utils/terminalHoverStyle';
+import { sanitizeAegisTechniqueLoadout } from '../utils/aegisLoadoutUtils';
 
 type SanctuaryChoice = 'ATTUNE' | 'GRAFT' | null;
 
@@ -196,10 +200,12 @@ export default function RestScreen(): React.JSX.Element {
     activeIncursion,
     applySanctuaryAttune,
     openSanctuaryGraftTerminal,
+    clearSanctuaryGraftSession,
     applyClassGraftToAbility,
     getVeilResidueBalance,
     getSelectedVectorNode,
   } = useRun();
+  const { account } = usePlayerAccount();
   const { completeCurrentNode } = useNodeProgression();
   const {
     isDesktop,
@@ -232,14 +238,31 @@ export default function RestScreen(): React.JSX.Element {
   const loadout = useMemo(() => {
     if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotLoadout;
     if (activeClass === 'ENVOY') return activeIncursion.envoyLoadout;
-    return activeIncursion.aegisLoadout;
-  }, [activeClass, activeIncursion.aegisLoadout, activeIncursion.envoyLoadout, activeIncursion.hexShotLoadout]);
+    return sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout);
+  }, [activeClass, activeIncursion.aegisTechniqueLoadout, activeIncursion.envoyLoadout, activeIncursion.hexShotLoadout]);
+
+  const classRank = account.progressionProfile.classes[activeClass]?.rank ?? 1;
+  const graftAccess = useMemo(() => getGraftSocketAccessForClassRank(classRank), [classRank]);
+
+  const aegisSurfaceRows = useMemo(() => {
+    if (activeClass !== 'AEGIS') return undefined;
+    return buildAegisGraftSurface({
+      weaponFamilyId: activeIncursion.activeWeaponFamilyId,
+      techniques: sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout),
+    });
+  }, [activeClass, activeIncursion.activeWeaponFamilyId, activeIncursion.aegisTechniqueLoadout]);
 
   const abilityGrafts = useMemo(() => {
     if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotAbilityGrafts;
     if (activeClass === 'ENVOY') return activeIncursion.envoyAbilityGrafts;
     return activeIncursion.abilityGrafts;
   }, [activeClass, activeIncursion.abilityGrafts, activeIncursion.envoyAbilityGrafts, activeIncursion.hexShotAbilityGrafts]);
+
+  const graftCapacityUsed = useMemo(
+    () => Object.values(abilityGrafts as Record<string, string | undefined>).filter(Boolean).length,
+    [abilityGrafts],
+  );
+  const graftCapacityAvailable = Math.max(0, graftAccess.capacity - graftCapacityUsed);
 
   const contentPadding = isDesktop ? scaleSpacing(graftTerminalOpen ? 12 : 16) : scaleSpacing(10);
   const contentMaxWidth = isDesktop
@@ -326,6 +349,7 @@ export default function RestScreen(): React.JSX.Element {
     setGraftTerminalOpen(false);
     setGraftComplete(false);
     setGraftSelection({ graftId: null, abilityId: null, canInject: false });
+    clearSanctuaryGraftSession();
   };
 
   const handleAttuneContinue = () => {
@@ -336,6 +360,7 @@ export default function RestScreen(): React.JSX.Element {
   const handleLeaveSanctuary = () => {
     if (confirmed || attuneOverlay) return;
     setConfirmed(true);
+    clearSanctuaryGraftSession();
     if (selectedChoice === 'GRAFT' && graftComplete) {
       setTimeout(() => completeCurrentNode('Class graft mutation secured.'), 400);
       return;
@@ -435,6 +460,10 @@ export default function RestScreen(): React.JSX.Element {
             canInject={graftSelection.canInject}
             injectDisabled={confirmed}
             cancelDisabled={confirmed}
+            classRank={classRank}
+            aegisSurfaceRows={aegisSurfaceRows}
+            capacityUsed={graftCapacityUsed}
+            capacityAvailable={graftCapacityAvailable}
           />
         </View>
       ) : null}

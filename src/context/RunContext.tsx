@@ -13,13 +13,13 @@ import {
   validateSanctuaryGraftApplication,
 } from '../data/graftSynergy/permanentGraftLoadoutEngine';
 import { getGraftSocketAccessForClassRank } from '../data/graftSynergy/graftCapacityEngine';
+import { sanitizeAegisAbilityGrafts } from '../data/graftSynergy/graftSanitizationEngine';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { resolveStartingRunCanisterResidue } from '../data/veilResidueRunEngine';
 import {
   createEasyTestEnemy,
   createHardTestEnemy,
   spawnGridHoundProfile,
-  spawnVeilStalkerProfile,
 } from '../data/enemies';
 import {
   applyEliteModifierToEnvironment,
@@ -212,7 +212,6 @@ import {
   getGreedZoneActive,
 } from '../data/sectorGraphEngine';
 import {
-  clearVeilStalkerHunt,
   consumeExtractionDecoy,
   isTerminalBlindActive,
 } from '../data/resonanceEscalationEngine';
@@ -309,7 +308,6 @@ import type { HarvestYieldTier } from '../types/cargoGrid';
 import {
   MAX_SECTOR_NODES,
   RESONANCE_TIER_DATA_BLEED,
-  VEIL_STALKER_AMBUSH_CHANCE,
 } from '../types/sector';
 import { rollSanctuarySchedule } from '../data/sanctuaryScheduleEngine';
 import { createRunSegment, applyEncounterToSegment } from '../data/encounterGenerator';
@@ -482,7 +480,12 @@ import {
 import type { PostCombatBoonOffer } from '../types/classBoon';
 import type { EnvoyBoonId, HexShotBoonId } from '../types/classBoon';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
-import type { AegisLoadout } from '../types/aegisCombat';
+import type { AegisTechniqueLoadout } from '../types/aegisCombat';
+import {
+  hydrateAegisTechniqueLoadout,
+  sanitizeAegisTechniqueLoadout,
+} from '../utils/aegisLoadoutUtils';
+import { DEFAULT_AEGIS_TECHNIQUE_LOADOUT } from '../types/aegisCombat';
 import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import type { CargoItemId } from '../types/cargoGrid';
 import type {
@@ -570,7 +573,7 @@ export interface RunStartConfig {
   factionPerks?: FactionModifiers;
   unlockedBiomes?: BiomeType[];
   sectorTier?: number;
-  aegisLoadout?: AegisLoadout;
+  aegisTechniqueLoadout?: AegisTechniqueLoadout;
   hexShotLoadout?: HexShotLoadout;
   envoyLoadout?: EnvoyLoadout;
   activeClass?: ClassType;
@@ -595,7 +598,7 @@ export interface RunStartConfig {
 
 export interface BadgeTestCombatConfig {
   activeClass: ClassType;
-  aegisLoadout: AegisLoadout;
+  aegisTechniqueLoadout: AegisTechniqueLoadout;
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
   alignedFaction?: FactionType | null;
@@ -653,6 +656,8 @@ interface RunContextType {
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
   applySanctuaryAttune: () => void;
   openSanctuaryGraftTerminal: () => void;
+  /** Clears staged Sanctuary graft offers for this visit (terminal cancel / node exit). */
+  clearSanctuaryGraftSession: () => void;
   applyClassGraftToAbility: (abilityId: string, graftId: string) => { success: boolean; message: string };
   getVeilResidueBalance: () => number;
   clearEncounterUltimateDisabled: () => void;
@@ -803,7 +808,11 @@ interface RunContextType {
   /** Applies consumable heal to run state (non-combat screens). */
   applyIncursionConsumableHeal: (amount: number) => void;
   awardRunCredits: (amount: number, reason: string) => void;
-  setAegisLoadout: (loadout: AegisLoadout) => void;
+  /**
+   * @deprecated Phase A — Aegis technique snapshot is immutable mid-run.
+   * No-ops; kept so Safehouse call sites compile until UI is removed.
+   */
+  setAegisTechniqueLoadout: (loadout: AegisTechniqueLoadout) => void;
   setHexShotLoadout: (loadout: HexShotLoadout) => void;
   setEnvoyLoadout: (loadout: EnvoyLoadout) => void;
   purchaseBlackMarketCargo: (itemId: CargoItemId) => { success: boolean; logLine: string } | null;
@@ -1192,9 +1201,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       pendingLeyBoonSwap: null,
       pendingClassBoonSwap: null,
       blackMarketStock: [],
-      aegisLoadout: config?.aegisLoadout
-        ? [...config.aegisLoadout] as AegisLoadout
-        : createDefaultActiveIncursionState().aegisLoadout,
+      aegisTechniqueLoadout: hydrateAegisTechniqueLoadout({
+        aegisTechniqueLoadout: config?.aegisTechniqueLoadout
+          ?? createDefaultActiveIncursionState().aegisTechniqueLoadout,
+      }),
       hexShotLoadout: config?.hexShotLoadout
         ? sanitizeHexShotCombatLoadout(config.hexShotLoadout)
         : createDefaultActiveIncursionState().hexShotLoadout,
@@ -1710,7 +1720,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ? inc.hexShotLoadout
         : classId === 'ENVOY'
           ? inc.envoyLoadout
-          : inc.aegisLoadout;
+          : sanitizeAegisTechniqueLoadout(inc.aegisTechniqueLoadout);
     const ownedCount =
       classId === 'HEX_SHOT'
         ? inc.hexShotBoons.length
@@ -1835,8 +1845,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     // If rank filtering empties the pool, fall back to rolled Standard pool (preserve economy UX).
     const staged = (offers.length > 0 ? offers : (rolled as string[])).slice(0, 3);
     setActiveIncursion((prev) => {
+      let abilityGrafts = prev.abilityGrafts;
+      if (classId === 'AEGIS') {
+        abilityGrafts = sanitizeAegisAbilityGrafts(prev.abilityGrafts, classRank, {
+          weaponFamilyId: prev.activeWeaponFamilyId,
+          techniques: prev.aegisTechniqueLoadout,
+        }).map;
+      }
       const next = {
         ...prev,
+        abilityGrafts,
         sanctuaryGraftOffers: staged as ActiveIncursionState['sanctuaryGraftOffers'],
       };
       activeIncursionRef.current = next;
@@ -1848,6 +1866,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(`>> — OFFER: ${graft.name.toUpperCase()} (${graft.cost} RESIDUE)`);
     });
   }, [account.progressionProfile.classes, appendRunLog]);
+
+  const clearSanctuaryGraftSession = useCallback(() => {
+    setActiveIncursion((prev) => {
+      if (prev.sanctuaryGraftOffers == null) return prev;
+      const next = { ...prev, sanctuaryGraftOffers: null };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const applyClassGraftToAbility = useCallback((
     abilityId: string,
@@ -1873,6 +1900,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       sanctuarySessionActive: inc.sanctuaryGraftOffers != null,
       residueBalance: inc.sessionVeilResidueCollected,
       sanctuaryOffers: inc.sanctuaryGraftOffers,
+      aegisSurface: classId === 'AEGIS'
+        ? {
+          weaponFamilyId: inc.activeWeaponFamilyId,
+          techniques: inc.aegisTechniqueLoadout,
+        }
+        : undefined,
     });
 
     if (!validation.ok) {
@@ -2324,7 +2357,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
       activeClass: config.activeClass,
-      aegisLoadout: [...config.aegisLoadout] as AegisLoadout,
+      aegisTechniqueLoadout: hydrateAegisTechniqueLoadout({
+        aegisTechniqueLoadout: config.aegisTechniqueLoadout ?? DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
+      }),
       hexShotLoadout: sanitizeHexShotCombatLoadout(config.hexShotLoadout),
       envoyLoadout: sanitizeEnvoyCombatLoadout(config.envoyLoadout),
       alignedFaction: config.alignedFaction ?? null,
@@ -4278,47 +4313,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [appendRunLog, beginCombatRunLogSession]);
 
-  const prepareVeilStalkerEncounter = useCallback(() => {
-    beginCombatRunLogSession();
-    const inc = activeIncursionRef.current;
-    const encounterNode = resolveActiveVectorNode(inc);
-    const prev = runStateRef.current;
-    const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const pendingEnemies = squadFromSingleEnemy(spawnVeilStalkerProfile(inc.nodesCleared));
-    const pendingEnemy = pendingEnemies[0] ?? null;
-    const envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
-
-    setActiveIncursion((prevState) => ({
-      ...prevState,
-      environmentalModifiers: envModifiers,
-    }));
-    activeIncursionRef.current = {
-      ...activeIncursionRef.current,
-      environmentalModifiers: envModifiers,
-    };
-
-    setRunState((prevState) => {
-      const next = {
-        ...prevState,
-        currentSector: sector,
-        pendingEnemy,
-        pendingEnemies,
-        pendingEncounter: buildEncounter(
-          inc.currentEncounterIndex,
-          sector,
-          'COMBAT',
-          'VEIL STALKER AMBUSH',
-        ),
-        pendingAmbush: true,
-      };
-      runStateRef.current = next;
-      return next;
-    });
-
-    appendRunLog('>> HUNTER AMBUSH — null shade signature locked.');
-    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
-  }, [appendRunLog, beginCombatRunLogSession]);
-
   const prepareHarvestAmbushEncounter = useCallback(() => {
     beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
@@ -6263,20 +6257,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearPendingAmbush = useCallback(() => {
-    const wasStalker = runStateRef.current.pendingEnemy?.isVeilStalker === true;
     setRunState((prev) => ({ ...prev, pendingAmbush: false }));
-    if (wasStalker) {
-      setActiveIncursion((prev) => {
-        const next = {
-          ...prev,
-          resonanceEscalations: clearVeilStalkerHunt(prev.resonanceEscalations),
-        };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      appendRunLog('>> VEIL STALKER ERADICATED — hunter flag cleared.');
-    }
-  }, [appendRunLog]);
+  }, []);
 
   const receiveRunItem = useCallback((
     itemId: RunItemId,
@@ -6836,13 +6818,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> +${amount} RUN CREDITS — ${reason}`);
   }, [appendRunLog]);
 
-  const setAegisLoadout = useCallback((loadout: AegisLoadout) => {
-    setActiveIncursion((prev) => {
-      const next = { ...prev, aegisLoadout: [...loadout] as AegisLoadout };
-      activeIncursionRef.current = next;
-      return next;
-    });
-  }, []);
+  /** Mid-run technique edits are forbidden — descent snapshot is authoritative. */
+  const setAegisTechniqueLoadout = useCallback((_loadout: AegisTechniqueLoadout) => {
+    appendRunLog('>> AEGIS TECHNIQUES LOCKED — DESCENT SNAPSHOT IMMUTABLE.');
+  }, [appendRunLog]);
 
   const setHexShotLoadout = useCallback((loadout: HexShotLoadout) => {
     const sanitized = sanitizeHexShotCombatLoadout(loadout);
@@ -7300,6 +7279,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applySkillCheckTier,
       applySanctuaryAttune,
       openSanctuaryGraftTerminal,
+      clearSanctuaryGraftSession,
       applyClassGraftToAbility,
       getVeilResidueBalance,
       clearEncounterUltimateDisabled,
@@ -7357,7 +7337,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       commitRunItemFieldChoice,
       applyIncursionConsumableHeal,
       awardRunCredits,
-      setAegisLoadout,
+      setAegisTechniqueLoadout,
       setHexShotLoadout,
       setEnvoyLoadout,
       purchaseBlackMarketCargo,
@@ -7491,6 +7471,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applySkillCheckTier,
       applySanctuaryAttune,
       openSanctuaryGraftTerminal,
+      clearSanctuaryGraftSession,
       applyClassGraftToAbility,
       getVeilResidueBalance,
       clearEncounterUltimateDisabled,
@@ -7548,7 +7529,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       commitRunItemFieldChoice,
       applyIncursionConsumableHeal,
       awardRunCredits,
-      setAegisLoadout,
+      setAegisTechniqueLoadout,
       setHexShotLoadout,
       setEnvoyLoadout,
       purchaseBlackMarketCargo,

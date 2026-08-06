@@ -142,6 +142,10 @@ export function resolveWeaponAnchorCardPresentation(
     const primaryHit = plan.hits.find((h) => h.isPrimary) ?? plan.hits[0];
     primaryOutcome = primaryHit ? `${primaryHit.damage} BALLISTIC` : 'BALLISTIC';
     secondaryCost = `${plan.ammoCost} AMMO`;
+    // H.2a — Nullbreach stamina is part of the authoritative plan; surface it in preview.
+    if (plan.staminaCost > 0) {
+      secondaryCost = `${plan.ammoCost} AMMO // ${plan.staminaCost} STAM`;
+    }
     if (familyId === 'hex-pulse-rifle') {
       const spread = Math.max(0, plan.hits.length - 1);
       conditionalState = spread > 0 ? `${spread} SPREAD TARGETS` : 'PRIMARY ONLY';

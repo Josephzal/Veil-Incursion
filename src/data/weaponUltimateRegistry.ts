@@ -1,7 +1,7 @@
 /**
  * Weapon ultimates — resolve from equipped weapon family.
  * Class ultimate IDs are compatibility aliases only.
- * WU-2 wired Longsword / Carbine / Scythe; WU-4 wires the remaining six.
+ * WU-2 wired Longsword / Ash Shotgun / Scythe; WU-4 wires the remaining six.
  */
 import type { ClassType } from '../types/game';
 import type { WeaponFamilyId } from '../types/weapon';
@@ -42,11 +42,11 @@ export const WEAPON_ULTIMATE_BY_FAMILY: Record<WeaponFamilyId, WeaponUltimateRec
     id: 'THREEFOLD_BRAND',
     displayName: 'ABYSSAL VERDICT',
     weaponFamilyId: 'aegis-runed-longsword',
-    weaponDisplayName: 'Longsword',
+    weaponDisplayName: 'Runed Longsword',
     classId: 'AEGIS',
     legacyClassUltimateIds: ['EVISCERATE'],
     status: 'WIRED',
-    interactionSummary: 'Aegis Longsword ultimate cinematic (ABYSSAL VERDICT) — stable id THREEFOLD_BRAND / EVISCERATE.',
+    interactionSummary: 'Aegis Runed Longsword ultimate cinematic (ABYSSAL VERDICT) — stable id THREEFOLD_BRAND / EVISCERATE.',
   },
   'aegis-rift-edge': {
     id: 'REND_THE_VEIL',
@@ -72,31 +72,31 @@ export const WEAPON_ULTIMATE_BY_FAMILY: Record<WeaponFamilyId, WeaponUltimateRec
     id: 'SIXTH_SEAL',
     displayName: 'SIXTH SEAL',
     weaponFamilyId: 'hex-silver-core-sidearm',
-    weaponDisplayName: 'Revolver',
+    weaponDisplayName: 'Silver-Core Sidearm',
     classId: 'HEX_SHOT',
     legacyClassUltimateIds: [],
     status: 'WIRED',
-    interactionSummary: 'Revolver — cylinder ritual counts as one reload, then precision sequence.',
+    interactionSummary: 'Silver-Core Sidearm — cylinder ritual performs an ultimate-owned refill, then precision sequence. Does not grant ordinary Perfect Reload rewards.',
   },
   'hex-pulse-rifle': {
     id: 'ZERO_PROTOCOL',
     displayName: 'ZERO PROTOCOL',
     weaponFamilyId: 'hex-pulse-rifle',
-    weaponDisplayName: 'Carbine',
+    weaponDisplayName: 'Ash Shotgun',
     classId: 'HEX_SHOT',
     legacyClassUltimateIds: ['ZERO_PROTOCOL'],
     status: 'WIRED',
-    interactionSummary: 'Existing Hex Zero Protocol interaction rebound onto Carbine only.',
+    interactionSummary: 'Ash Shotgun exclusive — Zero Protocol interaction. Protocol ≥3; not full-magazine gated.',
   },
   'hex-void-cannon': {
     id: 'LAST_KNOCK',
     displayName: 'LAST KNOCK',
     weaponFamilyId: 'hex-void-cannon',
-    weaponDisplayName: 'Black Door',
+    weaponDisplayName: 'Nullbreach',
     classId: 'HEX_SHOT',
     legacyClassUltimateIds: [],
     status: 'WIRED',
-    interactionSummary: 'Black Door — pump / hold / slam; commit loaded rounds. Never titled "The Black Door".',
+    interactionSummary: 'Nullbreach — pump / hold / slam; commit loaded rounds. Never titled "The Black Door".',
   },
   'envoy-echo-lantern': {
     id: 'FUNERAL_KNOT',

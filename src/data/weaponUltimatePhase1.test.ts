@@ -32,12 +32,12 @@ import { getWeaponIdentityProfile } from './weaponIdentityProfiles';
 console.log('Phase WU-1 — weapon ultimate foundation suite');
 
 const EXPECTED_NAMES: Record<string, string> = {
-  'aegis-runed-longsword': 'Longsword',
+  'aegis-runed-longsword': 'Runed Longsword',
   'aegis-rift-edge': 'Paired Blades',
   'aegis-claymore-blade': 'Unmaker',
-  'hex-silver-core-sidearm': 'Revolver',
-  'hex-pulse-rifle': 'Carbine',
-  'hex-void-cannon': 'Black Door',
+  'hex-silver-core-sidearm': 'Silver-Core Sidearm',
+  'hex-pulse-rifle': 'Ash Shotgun',
+  'hex-void-cannon': 'Nullbreach',
   'envoy-echo-lantern': 'Vambrace',
   'envoy-null-conduit': 'Scythe',
   'envoy-sanguine-prism': "Heart's Due",
@@ -103,7 +103,7 @@ assert.equal(
 assert.equal(
   resolveUltimateFromLegacyClassId('ZERO_PROTOCOL', 'hex-silver-core-sidearm'),
   null,
-  'Revolver must not inherit Carbine Zero Protocol',
+  'Silver-Core Sidearm must not inherit Ash Shotgun Zero Protocol',
 );
 assert.equal(
   resolveUltimateFromLegacyClassId('EVISCERATE', 'aegis-runed-longsword')?.id,

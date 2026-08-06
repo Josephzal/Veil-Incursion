@@ -79,8 +79,16 @@ export const HEX_AMMO_PROFILES: readonly HexAmmoProfile[] = [
   {
     id: 'TACTICAL',
     displayName: 'Tactical Utility',
-    description: 'Reload, traps, and defensive tools.',
-    abilityIds: ['PHASE_SHIFT_RELOAD', 'RIFT_SNARE', 'NULL_SPACE_CLOAK', 'GHOST_GRID_CAMO'],
+    description: 'Reload, traps, setup, and defensive tools.',
+    abilityIds: [
+      'PHASE_SHIFT_RELOAD',
+      'RIFT_SNARE',
+      'NULL_SPACE_CLOAK',
+      'GHOST_GRID_CAMO',
+      'ASTRAL_TARGET_LOCK',
+      'CINDERLINE_SATURATION',
+      'BLACKSITE_TRIAGE',
+    ],
     counterTags: ['BLOCK', 'DECOY'],
     bonusAgainst: {},
     tooltipHint: 'Tempo / survival tool.',
@@ -103,5 +111,14 @@ export function getHexAmmoProfileForAbility(abilityId: HexShotAbilityId): HexAmm
 }
 
 export function formatHexAmmoCounterHint(abilityId: HexShotAbilityId): string | null {
+  if (abilityId === 'ASTRAL_TARGET_LOCK') {
+    return 'Setup — primes next BALLISTIC crit; does not fire or consume ammo.';
+  }
+  if (abilityId === 'CINDERLINE_SATURATION') {
+    return 'Positional hazard — no ammunition.';
+  }
+  if (abilityId === 'BLACKSITE_TRIAGE') {
+    return 'Self recovery — no ammunition.';
+  }
   return getHexAmmoProfileForAbility(abilityId)?.tooltipHint ?? null;
 }

@@ -1,12 +1,14 @@
 /**
  * ABYSSAL VERDICT ready / targeting presentation helpers.
- * Pure — no React. Presentation state only; combat math stays in the hub commit path.
+ * Pure — no React. Presentation state only; combat math stays in commit helpers / hub.
  */
 
-import { COMBAT_ACTION } from '../types/run';
 import { ABYSSAL_VERDICT_DISPLAY_NAME } from './abyssalVerdictPresentation';
-import { resolveWeaponUltimateGrade } from './weaponUltimateGradeEngine';
-import { buildSimplifiedUltimateRawResult } from './weaponUltimateInputAdapter';
+import {
+  resolveAbyssalVerdictCommitFromGradeInput,
+  scaleAbyssalVerdictDamage,
+} from './abyssalVerdictCommitEngine';
+import type { WeaponUltimateGrade } from '../types/weaponUltimateInteraction';
 
 export type AbyssalVerdictPresentationState = 'unavailable' | 'ready' | 'targeting';
 
@@ -21,34 +23,25 @@ export type AbyssalVerdictDamagePreview = {
   gradeLabel: string;
 };
 
-/** Scale slice damage the same way the hub does for EVISCERATE commits. */
-export function scaleAbyssalVerdictDamage(
-  base: number,
-  sliceDamagePenalty: number,
-): number {
-  if (sliceDamagePenalty > 0) {
-    return Math.floor(base * (1 - sliceDamagePenalty));
-  }
-  return base;
-}
+export { scaleAbyssalVerdictDamage };
 
 /**
- * Canonical commit damage for Abyssal Verdict when targeting replaces the slice minigame.
- * SIMPLIFIED → STANDARD (1/3). FULL deliberate confirm → PERFECT (3/3).
+ * Canonical commit damage for Abyssal Verdict.
+ * Grade comes from the authoritative grade/input engine (or staged grade) —
+ * FULL targeting confirmation does not itself award PERFECT.
  */
 export function resolveAbyssalVerdictCommitDamage(input: {
-  simplifiedInputs: boolean;
+  simplifiedInputs?: boolean;
+  hitCount?: number;
+  grade?: WeaponUltimateGrade;
   sliceDamagePenalty?: number;
 }): { damage: number; gradeLabel: string; hits: number } {
-  const penalty = input.sliceDamagePenalty ?? 0;
-  const base = scaleAbyssalVerdictDamage(COMBAT_ACTION.EVISCERATE_DAMAGE, penalty);
-  if (input.simplifiedInputs) {
-    const resolved = resolveWeaponUltimateGrade(buildSimplifiedUltimateRawResult('THREEFOLD_BRAND'));
-    const hits = resolved.effectiveHits ?? 1;
-    const damage = hits >= 3 ? base : Math.floor(base * (hits / 3));
-    return { damage, gradeLabel: resolved.grade, hits };
-  }
-  return { damage: base, gradeLabel: 'PERFECT', hits: 3 };
+  const resolved = resolveAbyssalVerdictCommitFromGradeInput(input);
+  return {
+    damage: resolved.damage,
+    gradeLabel: resolved.grade,
+    hits: resolved.hits,
+  };
 }
 
 /**
@@ -58,11 +51,15 @@ export function resolveAbyssalVerdictCommitDamage(input: {
 export function previewAbyssalVerdictDamage(input: {
   currentHp: number;
   kineticArmor?: number;
-  simplifiedInputs: boolean;
+  simplifiedInputs?: boolean;
+  hitCount?: number;
+  grade?: WeaponUltimateGrade;
   sliceDamagePenalty?: number;
 }): AbyssalVerdictDamagePreview {
   const { damage, gradeLabel } = resolveAbyssalVerdictCommitDamage({
     simplifiedInputs: input.simplifiedInputs,
+    hitCount: input.hitCount,
+    grade: input.grade,
     sliceDamagePenalty: input.sliceDamagePenalty,
   });
   const remainingHp = Math.max(0, input.currentHp - damage);
@@ -147,4 +144,7 @@ export type AbyssalVerdictHudSnapshot = {
   canInteract: boolean;
   collapsingUnitId: string | null;
   reducedMotion: boolean;
+  /** Staged grade after slice / simplified resolve; null before grade input. */
+  stagedGrade: string | null;
+  stagedDamage: number | null;
 };

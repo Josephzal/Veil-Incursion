@@ -94,7 +94,6 @@ export interface EnemyCombatProfile {
   nodeIndex: number;
   scale: number;
   isBoss?: boolean;
-  isVeilStalker?: boolean;
   isGridHound?: boolean;
   isApex?: boolean;
   bossPhase?: number;

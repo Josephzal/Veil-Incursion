@@ -5,6 +5,20 @@ import { getAbilityDefinition, getAbilityTags } from './aegisAbilities';
 import { getEnvoyAbilityDefinition, getEnvoyAbilityTags } from './envoyAbilities';
 import { getHexShotAbilityDefinition, getHexShotAbilityTags } from './hexShotAbilities';
 import { resolveHexShotResourceCosts } from './hexShotResourceEngine';
+import {
+  aegisWeaponActionApCost,
+  aegisWeaponActionTags,
+  formatAegisWeaponActionLabel,
+  getAegisWeaponActionDefinition,
+  isAegisWeaponActionCatalogId,
+} from './aegisWeaponActionCatalog';
+import { getAegisTechniqueDefinition, isAegisTechniqueId } from './aegisTechniqueCatalog';
+import {
+  getHexWeaponActionDefinition,
+  hexWeaponActionTags,
+} from './hexWeaponActionCatalog';
+import type { HexWeaponActionId } from '../types/hexWeaponAction';
+import { isDefinedHexWeaponActionId } from './hexWeaponActionCatalog';
 
 export interface ClassAbilityCostSummary {
   apCost: number;
@@ -28,8 +42,30 @@ export interface ClassAbilityCostSummary {
 export function resolveClassAbilityCost(
   classId: ClassType,
   abilityId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
 ): ClassAbilityCostSummary {
   if (classId === 'HEX_SHOT') {
+    const waDef = getHexWeaponActionDefinition(abilityId as HexWeaponActionId);
+    if (waDef) {
+      return {
+        apCost: waDef.apCost,
+        ammoCost: waDef.ammoCost,
+        fluxRegen: 0,
+        fluxCost: 0,
+        staminaCost: waDef.staminaCost,
+        staminaCostPct: 0,
+        reserveCost: 0,
+        reserveCostPct: 0,
+        minReservePct: 0,
+        requiresFullMag: false,
+        label: waDef.label,
+        description: waDef.description,
+        tags: waDef.tags,
+        isUltimate: false,
+        consumesFlux: false,
+        restoresFlux: false,
+      };
+    }
     const def = getHexShotAbilityDefinition(abilityId as HexShotAbilityId);
     const tags = getHexShotAbilityTags(abilityId as HexShotAbilityId);
     const resolved = resolveHexShotResourceCosts(def);
@@ -74,6 +110,52 @@ export function resolveClassAbilityCost(
       restoresFlux: def.fluxRegen > 0,
     };
   }
+  if (isAegisWeaponActionCatalogId(abilityId)) {
+    const def = getAegisWeaponActionDefinition(abilityId);
+    const tags = aegisWeaponActionTags(abilityId, opts);
+    return {
+      apCost: aegisWeaponActionApCost(abilityId, opts),
+      ammoCost: 0,
+      fluxRegen: 0,
+      fluxCost: 0,
+      // Aegis weapon actions — AP only. Never spend Stamina.
+      staminaCost: 0,
+      staminaCostPct: 0,
+      reserveCost: 0,
+      reserveCostPct: 0,
+      minReservePct: 0,
+      requiresFullMag: false,
+      label: formatAegisWeaponActionLabel(abilityId, opts),
+      description: def.description,
+      tags: [...tags],
+      isUltimate: false,
+      consumesFlux: false,
+      restoresFlux: false,
+    };
+  }
+  if (isAegisTechniqueId(abilityId)) {
+    const tech = getAegisTechniqueDefinition(abilityId);
+    const def = getAbilityDefinition(abilityId as AegisAbilityId);
+    const tags = getAbilityTags(abilityId as AegisAbilityId);
+    return {
+      apCost: def.apCost,
+      ammoCost: 0,
+      fluxRegen: 0,
+      fluxCost: 0,
+      staminaCost: 0,
+      staminaCostPct: 0,
+      reserveCost: 0,
+      reserveCostPct: 0,
+      minReservePct: 0,
+      requiresFullMag: false,
+      label: tech.label,
+      description: tech.description,
+      tags,
+      isUltimate: tags.includes('ULTIMATE'),
+      consumesFlux: false,
+      restoresFlux: false,
+    };
+  }
   const def = getAbilityDefinition(abilityId as AegisAbilityId);
   const tags = getAbilityTags(abilityId as AegisAbilityId);
   return {
@@ -107,23 +189,33 @@ export function formatClassAbilityCostLine(classId: ClassType, abilityId: string
     else if (cost.fluxRegen > 0) parts.push(`+${cost.fluxRegen}% FLUX`);
   }
   if (classId === 'AEGIS') {
+    if (isAegisWeaponActionCatalogId(abilityId)) {
+      // Weapon actions: AP only — no stamina / reserve spend lines.
+      return parts.join(' // ');
+    }
+    if (isAegisTechniqueId(abilityId)) {
+      const def = getAbilityDefinition(abilityId as AegisAbilityId);
+      if (def.requiredBrands && def.requiredBrands > 0) {
+        if (def.brandsConsumed === 'ALL') {
+          parts.push(`≥${def.requiredBrands} BRAND · −ALL`);
+        } else if (typeof def.brandsConsumed === 'number') {
+          parts.push(`−${def.brandsConsumed} BRAND`);
+        } else {
+          parts.push(`≥${def.requiredBrands} BRAND`);
+        }
+      } else if (def.brandsConsumed != null) {
+        if (def.brandsConsumed === 'ALL') parts.push('−ALL BRANDS');
+        else parts.push(`−${def.brandsConsumed} BRAND`);
+      }
+      if (def.hpCostPct && def.hpCostPct > 0) {
+        parts.push(`−${def.hpCostPct}% HP`);
+      }
+      return parts.join(' // ');
+    }
     const def = getAbilityDefinition(abilityId as AegisAbilityId);
     if (cost.reserveCost > 0) parts.push(`−${cost.reserveCost}% AR`);
     else if (cost.reserveCostPct > 0) parts.push(`−${cost.reserveCostPct}% AR`);
     if (cost.minReservePct > 0) parts.push(`≥${cost.minReservePct}% AR`);
-    if (def.brandsImprinted && def.brandsImprinted > 0) {
-      parts.push(`+${def.brandsImprinted} BRAND`);
-    }
-    if (def.requiredBrands && def.requiredBrands > 0) {
-      parts.push(`≥${def.requiredBrands} BRAND`);
-    }
-    if (def.brandsConsumed != null) {
-      if (def.brandsConsumed === 'ALL') {
-        parts.push('−ALL BRANDS');
-      } else {
-        parts.push(`−${def.brandsConsumed} BRAND`);
-      }
-    }
   } else {
     if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
     else if (cost.staminaCostPct > 0) parts.push(`${cost.staminaCostPct}% STAM`);

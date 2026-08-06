@@ -29,7 +29,7 @@ const ARM = 0.22;
 /** Occult scanner lock — SVG L-corners. Hover glow tuned in `data/reticleHoverGlow.ts`. */
 export default function TargetingBrackets({
   active = true,
-  color = OTT.cyanSelect,
+  color = OTT.terminalGreen,
   focused = false,
   contentScale = 1,
 }: TargetingBracketsProps): React.JSX.Element | null {

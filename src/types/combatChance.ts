@@ -1,4 +1,3 @@
-import type { AegisAbilityId } from './aegisCombat';
 import type { DamageChannel } from './aegisCombat';
 import type { EnemyCombatProfile } from './run';
 
@@ -36,7 +35,8 @@ export function createDefaultCombatChanceState(): CombatChanceEncounterState {
 }
 
 export interface PlayerCritContext {
-  abilityId?: AegisAbilityId;
+  /** Ability / weapon-action id for crit bonuses (Aegis techniques, weapon actions, etc.). */
+  abilityId?: string;
   target: EnemyCombatProfile;
   factionCritBonus: number;
   hasShatterPoint: boolean;
@@ -59,6 +59,12 @@ export interface EnemyEvadeContext {
   bypassPostureEvade?: boolean;
   /** Skip all enemy evade (stat + posture) — guaranteed contact. */
   bypassAllEvade?: boolean;
+  /**
+   * Action-scoped attacker accuracy bonus in percentage points
+   * (e.g. Rupture +15). Applied against combined evade before clamp.
+   * Does not mutate the defender’s evade stat.
+   */
+  accuracyBonusPct?: number;
 }
 
 export interface CombatHitResolution {

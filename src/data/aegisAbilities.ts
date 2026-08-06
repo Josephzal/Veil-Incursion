@@ -13,21 +13,21 @@ export interface AegisAbilityDefinition {
   description: string;
   tags: readonly AbilityTag[];
   unlockCost: AbilityUnlockCost;
-  /** Flat Abyssal Reserve % gained on successful resolution. */
+  /** Flat Abyssal Reserve % gained on successful resolution (effect, not activation cost). */
   reserveGain?: number;
-  /** Runic Brands imprinted on successful resolution. */
+  /** @deprecated Techniques must not imprint Brands (Phase C). */
   brandsImprinted?: number;
-  /** Brands spent when the ability resolves. */
+  /** Brands spent at commitment. */
   brandsConsumed?: BrandConsumeMode;
   /** Minimum brands required before cast. */
   requiredBrands?: number;
-  /** Minimum Abyssal Reserve % required before cast. */
+  /** @deprecated Technique activation Reserve costs removed in Phase C. */
   minReservePct?: number;
-  /** Flat Abyssal Reserve % tithed on cast. */
+  /** @deprecated Technique activation Reserve costs removed in Phase C. */
   reserveCost?: number;
-  /** Percent of current Reserve tithed on cast. */
+  /** @deprecated Technique activation Reserve costs removed in Phase C. */
   reserveCostPct?: number;
-  /** Fixed kinetic damage (Strike). */
+  /** Fixed kinetic damage (legacy Strike). */
   baseKineticDamage?: number;
   /** Bonus crit chance % (Veil-Piercer). */
   critBonusPct?: number;
@@ -41,8 +41,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     staminaCost: 0,
     baseKineticDamage: 10,
     reserveGain: 15,
-    brandsImprinted: 1,
-    description: 'Kinetic melee Strike. +15% Abyssal Reserve. +1 Runic Brand. Concussed if fracture >50%. Counters: Guard, Heavy Attack (armor break). Perfect Parry readies Riposte — next successful Strike deals +16 Kinetic before end of next player turn.',
+    description: 'Legacy kinetic melee identity. Brands are generated only by weapon-mastery conditions — not by this action.',
     tags: ['STRIKE', 'KINETIC', 'MELEE', 'FRACTURE', 'ARMOR_BREAK', 'DEBUFF', 'GUARD_BREAK'],
     unlockCost: {},
   },
@@ -51,8 +50,9 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ RUIN ]',
     apCost: 2,
     staminaCost: 0,
+    requiredBrands: 1,
     brandsConsumed: 'ALL',
-    description: 'Consume all Brands — full 2×2 grid AoE (front + back). +30 fracture per Brand. 3 Brands + Concussed = fracture stun. Counters: Guard.',
+    description: 'Spend all Brands (min 1) — full 2×2 grid AoE. Fracture 20 + 30 per Brand, then 12 Kinetic. 3 Brands + Concussed = instant Fractured.',
     tags: ['KINETIC', 'AOE', 'FRACTURE', 'CONTROL', 'GUARD_BREAK'],
     unlockCost: { 'ley-slag': 15 },
   },
@@ -70,7 +70,6 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ GRAVE BIND ]',
     apCost: 1,
     staminaCost: 0,
-    reserveCost: 10,
     description: 'Pull backline target to melee. Exposed — defense halved. Counters: Guard (pulls protected backline).',
     tags: ['OCCULT', 'RANGED', 'CONTROL', 'DEBUFF', 'GUARD_BREAK', 'INTERRUPT'],
     unlockCost: { 'ley-slag': 12, 'echo-glass-shard': 3 },
@@ -78,9 +77,8 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
   SHADOW_STEP: {
     id: 'SHADOW_STEP',
     label: '[ SHADOW STEP ]',
-    apCost: 0,
+    apCost: 1,
     staminaCost: 0,
-    reserveCostPct: 30,
     description: 'Teleport shoulder-check. Massive fracture. End turn to seize initiative.',
     tags: ['OCCULT', 'MOBILITY', 'MELEE', 'FRACTURE', 'BUFF'],
     unlockCost: { 'ley-slag': 20, 'echo-glass-shard': 5 },
@@ -90,10 +88,12 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ VEIL-PIERCER ]',
     apCost: 1,
     staminaCost: 0,
+    requiredBrands: 1,
+    brandsConsumed: 1,
     reserveGain: 20,
-    brandsImprinted: 1,
-    critBonusPct: 15,
-    description: 'Occult strike — armor pierce, +15% crit. +20% Reserve. +1 Runic Brand.',
+    /** Display mirror of COMBAT_CHANCE.VEIL_PIERCER_CRIT_BONUS (0.10 → 10). */
+    critBonusPct: 10,
+    description: 'Spend 1 Brand — Occult pierce (ignore Armor/Ward), +15 Fracture, +10% crit. On hit: +20% Reserve.',
     tags: ['OCCULT', 'MELEE', 'ARMOR_PIERCE'],
     unlockCost: { 'encrypted-grid-drive': 1 },
   },
@@ -102,8 +102,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ ASHEN MANTLE ]',
     apCost: 2,
     staminaCost: 0,
-    brandsConsumed: 'ALL',
-    description: 'Consume all Brands — 50% damage reduction for 1 turn (+1 turn per Brand). Attackers gain Doomed.',
+    description: '50% damage reduction through the next enemy phase. Eligible attackers become Doomed. Expires at the start of your next turn.',
     tags: ['OCCULT', 'DEFENSIVE', 'DEBUFF'],
     unlockCost: { 'ley-slag': 8, 'sanguine-ampoule': 1 },
   },
@@ -112,30 +111,20 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ NAIL TO GRID ]',
     apCost: 1,
     staminaCost: 0,
-    reserveCost: 8,
     description: 'Pin target shadow — enemy loses 1 AP. Doomed spreads to adjacents.',
     tags: ['OCCULT', 'RANGED', 'DEBUFF', 'CONTROL'],
     unlockCost: { 'ley-slag': 10, 'echo-glass-shard': 4 },
-  },
-  BLOOD_TITHE: {
-    id: 'BLOOD_TITHE',
-    label: '[ BLOOD-TITHE ]',
-    apCost: 2,
-    staminaCost: 0,
-    minReservePct: 30,
-    brandsConsumed: 'ALL',
-    description: 'Requires 30% Reserve — tithe Reserve to heal 3% HP per 10 AR. Occult damage ×1.5 per Brand spent.',
-    tags: ['OCCULT', 'MELEE', 'RESTORE'],
-    unlockCost: { 'sanguine-ampoule': 3, 'ley-slag': 10 },
   },
   DEMONS_LUNG: {
     id: 'DEMONS_LUNG',
     label: "[ DEMON'S LUNG ]",
     apCost: 0,
     staminaCost: 0,
+    requiredBrands: 1,
+    brandsConsumed: 1,
     cooldownTurns: 3,
     reserveGain: 30,
-    description: "+30% Reserve, Overcharged, +1 AP next turn. Cooldown −1 on critical hit.",
+    description: 'Spend 1 Brand — +30% Reserve, Overcharged, +1 AP next turn. 3-turn cooldown.',
     tags: ['RESTORE', 'BUFF'],
     unlockCost: { 'ley-slag': 10 },
   },
@@ -144,8 +133,10 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ CRIMSON PACT ]',
     apCost: 1,
     staminaCost: 0,
+    requiredBrands: 1,
+    brandsConsumed: 1,
     hpCostPct: 12,
-    description: 'Sacrifice HP — next two attacks are guaranteed Critical Hits.',
+    description: 'Spend 1 Brand and 12% HP — gain two guaranteed-critical charges (one per authored attack).',
     tags: ['OCCULT', 'SACRIFICE', 'BUFF'],
     unlockCost: { 'sanguine-ampoule': 4, 'ley-slag': 12 },
   },
@@ -166,37 +157,36 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     staminaCost: 0,
     requiredBrands: 3,
     brandsConsumed: 3,
-    description: 'Requires 3 Brands — detonates 100% of target fracture as True damage.',
+    description: 'Spend 3 Brands — target must be Fractured. 4 Kinetic, then True damage equal to the target’s Fracture threshold (minimum 8), then clear Fractured.',
     tags: ['KINETIC', 'MELEE', 'TRUE_DAMAGE', 'CONTROL', 'FRACTURE', 'EXECUTE'],
     unlockCost: { 'ley-slag': 18 },
   },
-  ABYSSAL_FAULT: {
-    id: 'ABYSSAL_FAULT',
-    label: '[ ABYSSAL FAULT ]',
-    apCost: 2,
-    staminaCost: 0,
-    reserveCost: 22,
-    description: 'Corrupts the entire grid with Veil-tar for 3 turns — hostiles lose evade and are rooted on entry.',
-    tags: ['OCCULT', 'AOE', 'DEBUFF', 'CONTROL'],
-    unlockCost: { 'ley-slag': 15, 'echo-glass-shard': 4 },
-  },
-  BLOOD_BOUND_CARAPACE: {
-    id: 'BLOOD_BOUND_CARAPACE',
-    label: '[ BLOOD-BOUND CARAPACE ]',
+  RUNEBOUND_CARAPACE: {
+    id: 'RUNEBOUND_CARAPACE',
+    label: '[ RUNEBOUND CARAPACE ]',
     apCost: 1,
     staminaCost: 0,
-    hpCostPct: 10,
-    description: 'Sacrifice HP — next enemy phase: full damage taken, melee attackers reflect True damage and Fracture.',
-    tags: ['KINETIC', 'DEFENSIVE', 'SACRIFICE', 'BUFF'],
-    unlockCost: { 'sanguine-ampoule': 3, 'ley-slag': 12 },
+    description: 'Arm a carapace until your next turn. After the first blockable melee hit that damages you, reflect 12 True and 24 Fracture once, then consume.',
+    tags: ['KINETIC', 'DEFENSIVE', 'BUFF'],
+    unlockCost: {},
+  },
+  FINAL_MERCY: {
+    id: 'FINAL_MERCY',
+    label: '[ FINAL MERCY ]',
+    apCost: 1,
+    staminaCost: 0,
+    requiredBrands: 2,
+    brandsConsumed: 2,
+    description: 'Spend 2 Brands — execute a foe at ≤25% HP for True damage equal to remaining HP (bosses: 36 True). Kill heals 10% max HP. No accuracy check.',
+    tags: ['KINETIC', 'MELEE', 'EXECUTE', 'TRUE_DAMAGE'],
+    unlockCost: {},
   },
   REAVE: {
     id: 'REAVE',
     label: '[ REAVE ]',
-    apCost: 1,
+    apCost: 2,
     staminaCost: 0,
-    reserveCostPct: 15,
-    description: 'Line burst through a column — heavy kinetic, shatters 1 armor layer; unarmored targets bleed 2 turns.',
+    description: 'Column burst — heavy kinetic, shatters 1 armor layer; unarmored targets bleed 2 turns. +12 Fracture per hit.',
     tags: ['KINETIC', 'RANGED', 'AOE', 'ARMOR_PIERCE', 'DEBUFF'],
     unlockCost: { 'ley-slag': 14, 'encrypted-grid-drive': 1 },
   },
@@ -212,4 +202,15 @@ export function getAbilityTags(id: AegisAbilityId): readonly AbilityTag[] {
 
 export function abilityHasTag(id: AegisAbilityId, tag: AbilityTag): boolean {
   return AEGIS_ABILITY_CATALOG[id].tags.includes(tag);
+}
+
+/** Retired technique IDs — migration inputs only; never playable. */
+export const RETIRED_AEGIS_TECHNIQUE_IDS = [
+  'BLOOD_TITHE',
+  'ABYSSAL_FAULT',
+  'BLOOD_BOUND_CARAPACE',
+] as const;
+
+export function isRetiredAegisTechniqueId(id: string): boolean {
+  return (RETIRED_AEGIS_TECHNIQUE_IDS as readonly string[]).includes(id);
 }

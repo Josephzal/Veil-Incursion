@@ -180,7 +180,7 @@ export function useDescentNavigator() {
       );
       persistRunExtraction({
         cargo: extractionResources.mergedCargo,
-        aegisLoadout: inc.aegisLoadout,
+        aegisTechniqueLoadout: inc.aegisTechniqueLoadout,
         hexShotLoadout: inc.hexShotLoadout,
         envoyLoadout: inc.envoyLoadout,
         sessionVeilResidueCollected: inc.sessionVeilResidueCollected,

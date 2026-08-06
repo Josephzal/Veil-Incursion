@@ -1,13 +1,17 @@
 /**
  * Phase 3J — sanitize equipped graft maps (ownership preserved; invalid assignments dropped).
+ * Phase D — Aegis maps use encoded WA:/TECH: keys + surface sanitize (never redirect).
  */
 import type { ClassType } from '../../types/game';
 import type { AbilityGraftMap } from '../../types/veilGraft';
 import type { EnvoyAbilityGraftMap, HexShotAbilityGraftMap } from '../../types/classGraft';
+import type { AegisTechniqueLoadout } from '../../types/aegisCombat';
+import type { WeaponFamilyId } from '../../types/weapon';
 import { evaluateGraftCompatibility, isLiveGraftId } from './graftCompatibilityEngine';
 import { getGraftSocketAccessForClassRank } from './graftCapacityEngine';
 import { canGraftClassAbility } from '../classGraftEngine';
 import { migrateHexShotAbilityId } from '../hexShotMigration';
+import { sanitizeAegisAbilityGraftMap } from '../aegisGraftTarget';
 
 export type GraftSanitizeReport = {
   kept: Record<string, string>;
@@ -88,9 +92,52 @@ function sanitizeMap(
 export function sanitizeAegisAbilityGrafts(
   map: AbilityGraftMap,
   classRank: number,
+  surface?: {
+    weaponFamilyId?: WeaponFamilyId | null;
+    techniques?: AegisTechniqueLoadout | readonly string[] | null;
+  },
 ): { map: AbilityGraftMap; report: GraftSanitizeReport } {
-  const report = sanitizeMap('AEGIS', map as Record<string, string>, classRank);
-  return { map: report.kept as AbilityGraftMap, report };
+  // First: drop legacy / other-family / Parry / Ultimate / unknown keys (never redirect).
+  const surfaceClean = sanitizeAegisAbilityGraftMap(map as Record<string, string>, {
+    weaponFamilyId: surface?.weaponFamilyId,
+    techniques: surface?.techniques,
+  });
+  const report = sanitizeMap('AEGIS', surfaceClean, classRank);
+  // Drop mechanic-incompatible pairs that capacity sanitize would still keep.
+  const kept: Record<string, string> = {};
+  const removed = [...report.removed];
+  Object.entries(report.kept).forEach(([abilityId, graftId]) => {
+    const check = evaluateGraftCompatibility({
+      classId: 'AEGIS',
+      abilityId,
+      graftId,
+      classRank,
+      equippedMap: kept,
+      graftAvailable: true,
+    });
+    if (!check.ok) {
+      removed.push({
+        abilityId,
+        graftId,
+        reason: check.rejections.join(',') || 'INCOMPATIBLE',
+      });
+      return;
+    }
+    kept[abilityId] = graftId;
+  });
+  return {
+    map: kept as AbilityGraftMap,
+    report: {
+      ...report,
+      kept,
+      removed,
+      capacityUsed: Object.keys(kept).length,
+      capacityAvailable: Math.max(
+        0,
+        getGraftSocketAccessForClassRank(classRank).capacity - Object.keys(kept).length,
+      ),
+    },
+  };
 }
 
 export function sanitizeHexShotAbilityGrafts(

@@ -18,6 +18,7 @@ export interface HexShotAbilityDefinition {
 }
 
 import { migrateHexShotAbilityId } from './hexShotMigration';
+import { getHexWeaponActionDefinition } from './hexWeaponActionCatalog';
 
 export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDefinition> = {
   SILVER_CORE_SIDEARM: {
@@ -36,7 +37,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     id: 'ZERO_PROTOCOL',
     classId: 'HEX_SHOT',
     label: '[ ZERO PROTOCOL ]',
-    description: 'Carbine ultimate — true-damage execution using calibrated ammo. Requires 3 Protocol Charges from Perfect reloads.',
+    description: 'Ash Shotgun ultimate — true-damage execution using calibrated ammo. Requires 3 Protocol Charges from Perfect reloads.',
     apCost: 0,
     ammoCost: 0,
     staminaCost: 0,
@@ -60,7 +61,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     id: 'ASH_JACKET_SALVO',
     classId: 'HEX_SHOT',
     label: '[ ASH-JACKET SALVO ]',
-    description: '3-round burst — inherits current ammo type on each hit. Bonus vs Fractured. Counters: Guard / Heavy.',
+    description: '3-round burst (7 + 7 + 8 Kinetic) — inherits current ammo type on each hit. Applies CONCUSSED once. Counters: Guard / Heavy.',
     apCost: 2,
     ammoCost: 3,
     staminaCost: 0,
@@ -83,8 +84,8 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
   PANOPTICON_PROTOCOL: {
     id: 'PANOPTICON_PROTOCOL',
     classId: 'HEX_SHOT',
-    label: '[ PANOPTICON PROTOCOL ]',
-    description: 'Overwatch — auto-interrupt and Concuss the next acting hostile; triggered shot uses current ammo type. Counters: Lock-On, Channel, Heavy Attack.',
+    label: '[ PANOPTICON WATCH ]',
+    description: 'Overwatch — auto-interrupt and Concuss the next acting hostile with a fixed Kinetic interrupt shot. Does not consume magazine ammunition. Counters: Lock-On, Channel, Heavy Attack.',
     apCost: 1,
     ammoCost: 0,
     staminaCost: 30,
@@ -156,13 +157,37 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     id: 'ASTRAL_TARGET_LOCK',
     classId: 'HEX_SHOT',
     label: '[ ASTRAL TARGET-LOCK ]',
-    description: 'Target becomes EXPOSED — next BALLISTIC attack is a guaranteed crit. Wraithglass ammo also applies Void-Mark.',
+    description: 'Setup — target becomes EXPOSED. Next BALLISTIC attack is a guaranteed crit. Does not fire or consume ammunition.',
     apCost: 1,
     ammoCost: 0,
     staminaCost: 25,
     baseDamage: 0,
     tags: ['TACTICAL', 'DEBUFF'],
     unlockCost: { 'ley-slag': 12 },
+  },
+  CINDERLINE_SATURATION: {
+    id: 'CINDERLINE_SATURATION',
+    classId: 'HEX_SHOT',
+    label: '[ CINDERLINE SATURATION ]',
+    description: 'Seeds a two-round positional burn hazard on the target\'s grid slot — 5 Occult at affected enemy turn start. No ammunition. Same-slot recast refreshes; does not stack.',
+    apCost: 1,
+    ammoCost: 0,
+    staminaCost: 30,
+    baseDamage: 0,
+    tags: ['TACTICAL', 'AOE', 'OCCULT', 'TRAP'],
+    unlockCost: { 'ley-slag': 14 },
+  },
+  BLACKSITE_TRIAGE: {
+    id: 'BLACKSITE_TRIAGE',
+    classId: 'HEX_SHOT',
+    label: '[ BLACKSITE TRIAGE ]',
+    description: 'Once per encounter — restore 20% maximum HP (capped at missing HP). Costs 1 AP and 35 Stamina. Cannot cast at full HP. No ammunition.',
+    apCost: 1,
+    ammoCost: 0,
+    staminaCost: 35,
+    baseDamage: 0,
+    tags: ['TACTICAL', 'RESTORE'],
+    unlockCost: { 'ley-slag': 14 },
   },
   BLEEDING_PAYLOAD: {
     id: 'BLEEDING_PAYLOAD',
@@ -218,6 +243,9 @@ export function getHexShotAbilityDefinition(id: HexShotAbilityId): HexShotAbilit
   return HEX_SHOT_ABILITY_CATALOG[migrateHexShotAbilityId(id)];
 }
 
-export function getHexShotAbilityTags(id: HexShotAbilityId): readonly HexShotAbilityTag[] {
-  return HEX_SHOT_ABILITY_CATALOG[migrateHexShotAbilityId(id)].tags;
+export function getHexShotAbilityTags(id: HexShotAbilityId | string): readonly HexShotAbilityTag[] {
+  // W.2 — weapon-action IDs are not in HEX_SHOT_ABILITY_CATALOG.
+  const wa = getHexWeaponActionDefinition(id as import('../types/hexWeaponAction').HexWeaponActionId);
+  if (wa) return wa.tags;
+  return HEX_SHOT_ABILITY_CATALOG[migrateHexShotAbilityId(id as HexShotAbilityId)].tags;
 }

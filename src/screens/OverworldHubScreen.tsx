@@ -71,7 +71,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
     const runPayload = {
       factionPerks: account.factionPerks,
       unlockedBiomes: account.unlockedBiomes,
-      aegisLoadout: account.aegisLoadout,
+      aegisTechniqueLoadout: account.aegisTechniqueLoadout,
       hexShotLoadout: account.hexShotLoadout,
       envoyLoadout: account.envoyLoadout,
       activeClass: account.activeClass,

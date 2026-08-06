@@ -4,7 +4,7 @@ import ClassLoadoutEditor from '../ClassLoadoutEditor';
 import { SELECT_ACCENT } from '../../constants/dossierSurface';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { isAbilityUnlocked } from '../../data/aegisAbilityUnlockEngine';
+import { getAssignableAbilities } from '../../data/aegisAbilityUnlockEngine';
 import {
   ENVOY_ANCHOR,
   ENVOY_INTRINSIC,
@@ -20,9 +20,21 @@ import {
 import { ENVOY_ABILITY_CATALOG } from '../../data/envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from '../../data/hexShotAbilities';
 import { formatClassAbilityCostLine } from '../../data/classAbilityResolver';
-import type { AegisAbilityId, AegisLoadout } from '../../types/aegisCombat';
+import { getAegisTechniqueDefinition, isAegisTechniqueId } from '../../data/aegisTechniqueCatalog';
+import {
+  deriveHexWeaponActions,
+  isHexWeaponKitComplete,
+} from '../../data/hexWeaponActionRegistry';
+import {
+  formatHexWeaponActionLabel,
+  getHexWeaponActionDefinition,
+} from '../../data/hexWeaponActionCatalog';
+import { getEquippedWeaponForClass } from '../../data/weaponProgressionEngine';
+import type { AegisTechniqueId, AegisTechniqueLoadout } from '../../types/aegisCombat';
 import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../../types/operativeClass';
-import { validateLoadoutCommit } from '../../utils/aegisLoadoutUtils';
+import {
+  validateAegisTechniqueLoadoutCommit,
+} from '../../utils/aegisLoadoutUtils';
 import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
@@ -32,25 +44,24 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   const { theme } = useTerminal();
   const {
     account,
-    setAegisLoadout,
+    setAegisTechniqueLoadout,
     setHexShotLoadout,
     setEnvoyLoadout,
-    unlockAegisAbility,
     unlockHexShotAbility,
     unlockEnvoyAbility,
     appendHubLog,
   } = usePlayerAccount();
 
-  const [aegisDraft, setAegisDraft] = useState<AegisAbilityId[]>([...account.aegisLoadout]);
+  const [aegisDraft, setAegisDraft] = useState<AegisTechniqueId[]>([...account.aegisTechniqueLoadout]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...account.hexShotLoadout]);
   const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...account.envoyLoadout]);
-  const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2 | 3>(1);
+  const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2>(0);
   const [selectedFlexSlot, setSelectedFlexSlot] = useState<1 | 2 | 3>(1);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    setAegisDraft([...account.aegisLoadout]);
-  }, [account.aegisLoadout]);
+    setAegisDraft([...account.aegisTechniqueLoadout]);
+  }, [account.aegisTechniqueLoadout]);
 
   useEffect(() => {
     setHexDraft([...account.hexShotLoadout]);
@@ -60,20 +71,24 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     setEnvoyDraft([...account.envoyLoadout]);
   }, [account.envoyLoadout]);
 
-  // Auto-save: persist a valid draft immediately so the player never manages a save state.
   useEffect(() => {
     if (account.activeClass !== 'AEGIS') return;
-    if (validateLoadoutCommit(aegisDraft, account.unlockedAegisAbilities)) return;
-    const committed: AegisLoadout = [aegisDraft[0], aegisDraft[1], aegisDraft[2], aegisDraft[3]];
-    if (committed.some((id, index) => id !== account.aegisLoadout[index])) {
-      setAegisLoadout(committed);
+    if (validateAegisTechniqueLoadoutCommit(aegisDraft)) return;
+    const committed: AegisTechniqueLoadout = [aegisDraft[0]!, aegisDraft[1]!, aegisDraft[2]!];
+    if (committed.some((id, index) => id !== account.aegisTechniqueLoadout[index])) {
+      setAegisTechniqueLoadout(committed);
     }
-  }, [aegisDraft, account.activeClass, account.aegisLoadout, account.unlockedAegisAbilities, setAegisLoadout]);
+  }, [
+    aegisDraft,
+    account.activeClass,
+    account.aegisTechniqueLoadout,
+    setAegisTechniqueLoadout,
+  ]);
 
   useEffect(() => {
     if (account.activeClass !== 'HEX_SHOT') return;
     if (validateHexShotLoadoutCommit(hexDraft, account.unlockedHexShotAbilities)) return;
-    const committed: HexShotLoadout = [hexDraft[0], hexDraft[1], hexDraft[2], hexDraft[3]];
+    const committed: HexShotLoadout = [hexDraft[0]!, hexDraft[1]!, hexDraft[2]!];
     if (committed.some((id, index) => id !== account.hexShotLoadout[index])) {
       setHexShotLoadout(committed);
     }
@@ -104,6 +119,32 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     [],
   );
 
+  const hexReadOnlyWeaponActions = useMemo(() => {
+    if (account.activeClass !== 'HEX_SHOT') return undefined;
+    const familyId = getEquippedWeaponForClass({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, 'HEX_SHOT');
+    if (!isHexWeaponKitComplete(familyId)) return undefined;
+    const actions = deriveHexWeaponActions(familyId);
+    if (!actions) return undefined;
+    return actions.map((id) => {
+      const def = getHexWeaponActionDefinition(id);
+      return {
+        id,
+        label: def?.label ?? formatHexWeaponActionLabel(id),
+        costLine: formatClassAbilityCostLine('HEX_SHOT', id) ?? '',
+        description: def?.description ?? 'Fixed weapon action.',
+      };
+    });
+  }, [
+    account.activeClass,
+    account.equippedWeaponByClass,
+    account.weaponTiers,
+    account.weaponUnlocks,
+  ]);
+
   const envoyCatalog = useMemo(
     () => Object.fromEntries(
       getAssignableEnvoyAbilities().map((id) => [
@@ -127,24 +168,23 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     textColor: theme.textColor,
   };
 
-  const assignAegisAbility = useCallback((abilityId: AegisAbilityId) => {
-    if (abilityId === 'EVISCERATE' || abilityId === 'WRAITH_PARRY' || abilityId === 'STRIKE') return;
-    if (selectedSlot === 0) {
-      setLoadoutStatus('>> SLOT 1 IS FIXED WEAPON BASIC — STRIKE.');
-      return;
-    }
-    if (!isAbilityUnlocked(account.unlockedAegisAbilities, abilityId)) {
-      setLoadoutStatus(`>> ${abilityId.replace(/_/g, ' ')} NOT UNLOCKED — DECRYPT PROTOCOL FIRST.`);
+  const assignAegisTechnique = useCallback((abilityId: string) => {
+    if (!isAegisTechniqueId(abilityId)) {
+      setLoadoutStatus('>> ONLY SHARED TECHNIQUES MAY FILL THESE SLOTS.');
       return;
     }
     setAegisDraft((prev) => {
-      const next = [...prev];
-      next[0] = 'STRIKE';
+      const next = [...prev] as AegisTechniqueId[];
+      // Swap if already equipped elsewhere.
+      const existing = next.indexOf(abilityId);
+      if (existing >= 0 && existing !== selectedSlot) {
+        next[existing] = next[selectedSlot]!;
+      }
       next[selectedSlot] = abilityId;
       return next;
     });
     setLoadoutStatus(null);
-  }, [account.unlockedAegisAbilities, selectedSlot]);
+  }, [selectedSlot]);
 
   const assignHexAbility = useCallback((abilityId: HexShotAbilityId) => {
     if (HEX_SHOT_INTRINSIC.includes(abilityId) || abilityId === HEX_SHOT_ANCHOR) return;
@@ -154,11 +194,15 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     }
     setHexDraft((prev) => {
       const next: HexShotAbilityId[] = [...prev];
-      next[selectedFlexSlot] = abilityId;
+      const existing = next.indexOf(abilityId);
+      if (existing >= 0 && existing !== selectedSlot) {
+        next[existing] = next[selectedSlot]!;
+      }
+      next[selectedSlot] = abilityId;
       return next;
     });
     setLoadoutStatus(null);
-  }, [account.unlockedHexShotAbilities, selectedFlexSlot]);
+  }, [account.unlockedHexShotAbilities, selectedSlot]);
 
   const assignEnvoyAbility = useCallback((abilityId: EnvoyAbilityId) => {
     if (ENVOY_INTRINSIC.includes(abilityId) || abilityId === ENVOY_ANCHOR) return;
@@ -175,16 +219,16 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   }, [account.unlockedEnvoyAbilities, selectedFlexSlot]);
 
   const commitAegisLoadout = useCallback(() => {
-    const rejection = validateLoadoutCommit(aegisDraft, account.unlockedAegisAbilities);
+    const rejection = validateAegisTechniqueLoadoutCommit(aegisDraft);
     if (rejection) {
       setLoadoutStatus(rejection);
       return;
     }
-    const committed: AegisLoadout = [aegisDraft[0], aegisDraft[1], aegisDraft[2], aegisDraft[3]];
-    setAegisLoadout(committed);
-    appendHubLog('>> AEGIS LOADOUT LOCKED — combat deck staged for next incursion.');
+    const committed: AegisTechniqueLoadout = [aegisDraft[0]!, aegisDraft[1]!, aegisDraft[2]!];
+    setAegisTechniqueLoadout(committed);
+    appendHubLog('>> AEGIS TECHNIQUES LOCKED — three techniques staged for next descent.');
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
-  }, [aegisDraft, account.unlockedAegisAbilities, appendHubLog, setAegisLoadout]);
+  }, [aegisDraft, appendHubLog, setAegisTechniqueLoadout]);
 
   const commitHexLoadout = useCallback(() => {
     const rejection = validateHexShotLoadoutCommit(hexDraft, account.unlockedHexShotAbilities);
@@ -192,7 +236,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
       setLoadoutStatus(rejection);
       return;
     }
-    const committed: HexShotLoadout = [hexDraft[0], hexDraft[1], hexDraft[2], hexDraft[3]];
+    const committed: HexShotLoadout = [hexDraft[0], hexDraft[1], hexDraft[2]];
     setHexShotLoadout(committed);
     appendHubLog('>> HEX-SHOT LOADOUT LOCKED — ballistic deck staged for next incursion.');
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
@@ -210,28 +254,31 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
   }, [account.unlockedEnvoyAbilities, appendHubLog, envoyDraft, setEnvoyLoadout]);
 
+  const techniquePoolIds = useMemo(() => getAssignableAbilities(), []);
+
   return (
     <>
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
             draft={aegisDraft}
             selectedSlot={selectedSlot}
-            onSelectSlot={setSelectedSlot}
-            onAssignAbility={assignAegisAbility}
-            onUnlockAbility={(abilityId) => {
-              const result = unlockAegisAbility(abilityId);
-              appendHubLog(result.logLine);
-              setLoadoutStatus(result.logLine);
-            }}
+            onSelectSlot={(slot) => setSelectedSlot(slot as 0 | 1 | 2)}
+            onAssignAbility={assignAegisTechnique}
             onCommit={commitAegisLoadout}
-            unlockedAbilities={account.unlockedAegisAbilities}
-            resourceStash={account.resourceStash}
             theme={editorTheme}
-            title=""
-            hint=""
-            commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
+            unlockedAbilities={[...techniquePoolIds]}
+            resourceStash={account.resourceStash}
+            title="AEGIS TECHNIQUES // 3 OF 12"
+            hint="Select three techniques. At least one Brand technique required. Weapon actions and Ultimate derive from equipped weapon."
+            commitLabel="[ COMMIT TECHNIQUES ]"
             statusMessage={loadoutStatus}
             hideCommit
+            techniqueMode
+            techniquePool={techniquePoolIds.map((id) => ({
+              id,
+              label: getAegisTechniqueDefinition(id).label,
+              description: getAegisTechniqueDefinition(id).description,
+            }))}
           />
         ) : null}
 
@@ -240,27 +287,27 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             draft={hexDraft}
             anchorId={HEX_SHOT_ANCHOR}
             anchorLabel={HEX_SHOT_ABILITY_CATALOG[HEX_SHOT_ANCHOR].label}
-            anchorCostLine={formatClassAbilityCostLine('HEX_SHOT', HEX_SHOT_ANCHOR)}
             assignableIds={getAssignableHexShotAbilities()}
             catalog={hexCatalog}
-            selectedSlot={selectedFlexSlot}
-            onSelectSlot={setSelectedFlexSlot}
+            selectedSlot={selectedSlot}
+            onSelectSlot={(slot) => setSelectedSlot(slot as 0 | 1 | 2)}
             onAssignAbility={assignHexAbility}
-            onUnlockAbility={(abilityId) => {
-              const result = unlockHexShotAbility(abilityId);
-              appendHubLog(result.logLine);
-              setLoadoutStatus(result.logLine);
-            }}
             onCommit={commitHexLoadout}
+            theme={editorTheme}
             unlockedAbilities={account.unlockedHexShotAbilities}
             isUnlocked={(id) => isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, id)}
             resourceStash={account.resourceStash}
-            theme={editorTheme}
-            title=""
-            hint=""
-            commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
+            onUnlockAbility={(id) => {
+              const result = unlockHexShotAbility(id);
+              appendHubLog(result.logLine);
+              setLoadoutStatus(result.logLine);
+            }}
             statusMessage={loadoutStatus}
             hideCommit
+            flexOnly
+            readOnlyWeaponActions={hexReadOnlyWeaponActions}
+            title="HEX FLEX // 3 OF 11"
+            hint="Select three flex abilities. Weapon actions derive from the equipped family (Revolver kit live in W.2)."
           />
         ) : null}
 
@@ -272,22 +319,20 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             assignableIds={getAssignableEnvoyAbilities()}
             catalog={envoyCatalog}
             selectedSlot={selectedFlexSlot}
-            onSelectSlot={setSelectedFlexSlot}
-            onAssignAbility={assignEnvoyAbility}
-            onUnlockAbility={(abilityId) => {
-              const result = unlockEnvoyAbility(abilityId);
-              appendHubLog(result.logLine);
-              setLoadoutStatus(result.logLine);
+            onSelectSlot={(slot) => {
+              if (slot === 1 || slot === 2 || slot === 3) setSelectedFlexSlot(slot);
             }}
+            onAssignAbility={assignEnvoyAbility}
             onCommit={commitEnvoyLoadout}
+            theme={editorTheme}
             unlockedAbilities={account.unlockedEnvoyAbilities}
             isUnlocked={(id) => isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, id)}
             resourceStash={account.resourceStash}
-            theme={editorTheme}
-            title=""
-            hint=""
-            anchorCostLine={formatClassAbilityCostLine('ENVOY', ENVOY_ANCHOR)}
-            commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
+            onUnlockAbility={(id) => {
+              const result = unlockEnvoyAbility(id);
+              appendHubLog(result.logLine);
+              setLoadoutStatus(result.logLine);
+            }}
             statusMessage={loadoutStatus}
             hideCommit
           />

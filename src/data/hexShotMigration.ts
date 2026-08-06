@@ -36,9 +36,17 @@ export function migrateHexShotAbilityList(ids: readonly string[]): HexShotAbilit
 /** Resolve graft bindings after ability id renames (e.g. saved incursion maps). */
 export function resolveHexShotAbilityGraftId(
   grafts: Partial<Record<string, HexShotGraftId>>,
-  abilityId: HexShotAbilityId,
+  abilityId: HexShotAbilityId | string,
 ): HexShotGraftId | undefined {
-  const resolved = migrateHexShotAbilityId(abilityId);
+  const raw = String(abilityId);
+  // W.2–W.4 — live fixed-basics map to historical SILVER_CORE_SIDEARM graft signatures.
+  if (raw === 'QUICKDRAW' || raw === 'CENTER_MASS' || raw === 'DOOR_KNOCKER') {
+    if (grafts[raw as 'QUICKDRAW' | 'CENTER_MASS' | 'DOOR_KNOCKER']) {
+      return grafts[raw as 'QUICKDRAW' | 'CENTER_MASS' | 'DOOR_KNOCKER'];
+    }
+    if (grafts.SILVER_CORE_SIDEARM) return grafts.SILVER_CORE_SIDEARM;
+  }
+  const resolved = migrateHexShotAbilityId(raw as HexShotAbilityId);
   if (grafts[resolved]) return grafts[resolved];
   if (resolved === 'BLEEDING_PAYLOAD' && grafts.BRIMSTONE_PAYLOAD) {
     return grafts.BRIMSTONE_PAYLOAD;

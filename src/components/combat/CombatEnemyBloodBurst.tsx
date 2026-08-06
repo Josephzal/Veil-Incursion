@@ -791,7 +791,7 @@ interface CombatEnemyBloodBurstProps {
   variant?: EnemyBloodBurstVariant;
   /** Pulses per hit flash — Cinder Sweep fires 3 in quick succession. */
   burstRepeats?: number;
-  /** Blood mist size multiplier — Black Door / Unmaker use 1.5. */
+  /** Blood mist size multiplier — Nullbreach / Unmaker use 1.5. */
   mistScale?: number;
 }
 

@@ -62,7 +62,7 @@ interface CombatEnemyUnitProps {
   meleeDashDelta?: { x: number; y: number };
   /** Class-specific blood shard burst on damage flash. */
   bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
-  /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
+  /** Blood mist size multiplier (Nullbreach / Unmaker = 1.5). */
   bloodMistScale?: number;
   /** Hovered via the grid SlotHitOverlay (covers the unit while targeting). */
   reticleHovered?: boolean;
@@ -262,15 +262,19 @@ export default function CombatEnemyUnit({
             {/* Brackets outside VFX stack so hover glow is not clipped by effect layers. */}
             <View style={styles.bracketHost} pointerEvents="none">
               <TargetingBrackets
-                active={showAbilityReticle || unit.isSlumped === true}
-                focused={reticleHovered || abilityHovered}
+                active={
+                  showAbilityReticle
+                  || unit.isSlumped === true
+                  || unit.firingSolutionActive === true
+                }
+                focused={reticleHovered || abilityHovered || unit.firingSolutionActive === true}
                 contentScale={isAlpha ? 0.86 : 0.75}
                 color={
-                  unit.isSlumped
-                    ? OTT.terminalGreenMuted
-                    : unit.isAoeAffected
-                      ? OTT.warningAmber
-                      : OTT.cyanSelect
+                  unit.firingSolutionActive === true && !(reticleHovered || abilityHovered)
+                    ? '#c9a227'
+                    : (reticleHovered || abilityHovered)
+                      ? OTT.fluxViolet
+                      : OTT.terminalGreen
                 }
               />
               <AbyssalVerdictTargetBrackets
@@ -280,6 +284,11 @@ export default function CombatEnemyUnit({
                 collapsing={unit.abyssalVerdictCollapsing === true}
                 reducedMotion={getCombatPresentationSettings().reducedMotion === true}
               />
+              {unit.carbineSuppressedActive === true ? (
+                <Text style={styles.carbineSuppressedCallout} numberOfLines={2}>
+                  SUPPRESSED −30%{'\n'}next direct
+                </Text>
+              ) : null}
             </View>
 
             {/* Stationary: contact anchor, callouts, hitbox — only portrait recoils. */}
@@ -429,6 +438,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.6,
     color: '#67e8f9',
+  },
+  carbineSuppressedCallout: {
+    position: 'absolute',
+    bottom: -2,
+    left: 0,
+    right: 0,
+    zIndex: 21,
+    textAlign: 'center',
+    fontFamily: MONO,
+    fontSize: 6,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    lineHeight: 8,
+    color: '#b8a070',
   },
   localDecalTucked: {
     zIndex: 1,

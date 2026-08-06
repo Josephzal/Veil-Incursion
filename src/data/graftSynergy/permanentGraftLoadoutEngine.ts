@@ -2,11 +2,15 @@
  * Phase 3J — run-scoped Sanctuary graft helpers.
  * Class rank permanently unlocks capacity/sockets/tiers; applications are deployment-only.
  * Safehouse is not a graft equipment surface.
+ * Phase D — Aegis assignments store encoded WA:/TECH: keys.
  */
 import type { ClassType } from '../../types/game';
+import type { AegisTechniqueLoadout } from '../../types/aegisCombat';
+import type { WeaponFamilyId } from '../../types/weapon';
 import { getClassGraftDefinition } from '../classGraftEngine';
 import { getGraftSocketAccessForClassRank, inferGraftCostTier } from './graftCapacityEngine';
 import { evaluateGraftCompatibility, isLiveGraftId } from './graftCompatibilityEngine';
+import { normalizeAegisGraftAssignmentKey } from '../aegisGraftTarget';
 
 export type RunScopedGraftMap = Readonly<Record<string, string>>;
 
@@ -49,6 +53,11 @@ export function validateSanctuaryGraftApplication(args: {
   residueBalance: number;
   /** Offered graft IDs for this Sanctuary visit (null = no session). */
   sanctuaryOffers: readonly string[] | null;
+  /** Aegis snapshotted surface — required to encode/validate targets. */
+  aegisSurface?: {
+    weaponFamilyId?: WeaponFamilyId | null;
+    techniques?: AegisTechniqueLoadout | readonly string[] | null;
+  };
 }): {
   ok: boolean;
   message: string;
@@ -84,9 +93,26 @@ export function validateSanctuaryGraftApplication(args: {
     };
   }
 
+  let assignmentKey = args.abilityId;
+  if (args.classId === 'AEGIS') {
+    const encoded = normalizeAegisGraftAssignmentKey(args.abilityId, {
+      weaponFamilyId: args.aegisSurface?.weaponFamilyId,
+      techniques: args.aegisSurface?.techniques,
+    });
+    if (!encoded) {
+      return {
+        ok: false,
+        message: 'Target is outside the snapshotted Aegis graft surface.',
+        proposedMap: { ...args.currentMap },
+        cost: 0,
+        rejections: ['UNKNOWN_ABILITY'],
+      };
+    }
+    assignmentKey = encoded;
+  }
+
   const def = getClassGraftDefinition(args.classId, args.graftId);
   const cost = def.cost;
-  const proposedMap = { ...args.currentMap, [args.abilityId]: args.graftId };
 
   const access = getGraftSocketAccessForClassRank(args.classRank);
   const tier = inferGraftCostTier(cost);
@@ -102,7 +128,7 @@ export function validateSanctuaryGraftApplication(args: {
 
   const compat = evaluateGraftCompatibility({
     classId: args.classId,
-    abilityId: args.abilityId,
+    abilityId: assignmentKey,
     graftId: args.graftId,
     classRank: args.classRank,
     equippedMap: args.currentMap,
@@ -128,11 +154,22 @@ export function validateSanctuaryGraftApplication(args: {
     };
   }
 
-  void proposedMap;
+  // Replace any prior assignment on the same logical target (bare or encoded).
+  const proposedMap = { ...args.currentMap };
+  if (args.classId === 'AEGIS') {
+    const bare = assignmentKey.includes(':')
+      ? assignmentKey.slice(assignmentKey.indexOf(':') + 1)
+      : assignmentKey;
+    delete proposedMap[bare];
+    delete proposedMap[`WA:${bare}`];
+    delete proposedMap[`TECH:${bare}`];
+  }
+  proposedMap[assignmentKey] = args.graftId;
+
   return {
     ok: true,
     message: `${def.name} ready.`,
-    proposedMap: { ...args.currentMap, [args.abilityId]: args.graftId },
+    proposedMap,
     cost,
     rejections: [],
   };

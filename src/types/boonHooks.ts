@@ -2,6 +2,7 @@ import type { AegisAbilityId, AbilityTag } from './aegisCombat';
 import type { DamageChannel } from './aegisCombat';
 import type { EnemyCombatProfile } from './run';
 import type { LeyLineMutationId } from './leyLineMutation';
+import type { HitAbsorbProtectionSource } from '../data/hitAbsorbProtectionEngine';
 
 /** Lifecycle hooks the boon engine listens on. */
 export type BoonHook =
@@ -55,7 +56,16 @@ export interface BoonEncounterState {
   secondWindUsed: boolean;
   unstoppableFractureUsed: boolean;
   masochistBuff: boolean;
-  juggernautShield: boolean;
+  /**
+   * Remaining incoming-hit absorbs (Martyr graft = 2; Juggernaut Plating boon = 1).
+   * Legacy boolean `juggernautShield` was one-hit; Phase D uses a counter.
+   */
+  juggernautShieldHits: number;
+  /**
+   * Provenance for the active hit-absorb counter.
+   * Null when inactive, or when hydrated from incomplete legacy state with hits > 0.
+   */
+  hitAbsorbProtectionSource: HitAbsorbProtectionSource | null;
   spallWeaveActive: boolean;
   spallShatterPending: number;
   bloodTitheCooldown: number;
@@ -87,7 +97,8 @@ export function createDefaultBoonEncounterState(): BoonEncounterState {
     secondWindUsed: false,
     unstoppableFractureUsed: false,
     masochistBuff: false,
-    juggernautShield: false,
+    juggernautShieldHits: 0,
+    hitAbsorbProtectionSource: null,
     spallWeaveActive: false,
     spallShatterPending: 0,
     bloodTitheCooldown: 0,

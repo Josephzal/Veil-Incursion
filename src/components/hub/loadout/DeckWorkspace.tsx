@@ -3,8 +3,7 @@ import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import TerminalText from '../../TerminalText';
 import { usePlayerAccount } from '../../../context/PlayerAccountContext';
-import { AEGIS_ABILITY_CATALOG, getAbilityDefinition } from '../../../data/aegisAbilities';
-import { getAssignableAbilities, isAbilityUnlocked } from '../../../data/aegisAbilityUnlockEngine';
+import { getAssignableAbilities } from '../../../data/aegisAbilityUnlockEngine';
 import {
   ENVOY_ANCHOR,
   ENVOY_INTRINSIC,
@@ -20,14 +19,23 @@ import {
 import { ENVOY_ABILITY_CATALOG } from '../../../data/envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from '../../../data/hexShotAbilities';
 import { formatClassAbilityCostLine } from '../../../data/classAbilityResolver';
-import type { AegisAbilityId, AegisLoadout } from '../../../types/aegisCombat';
+import type { AegisTechniqueId, AegisTechniqueLoadout } from '../../../types/aegisCombat';
 import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../../../types/operativeClass';
-import { validateLoadoutCommit } from '../../../utils/aegisLoadoutUtils';
+import { validateAegisTechniqueLoadoutCommit } from '../../../utils/aegisLoadoutUtils';
+import { getAegisTechniqueDefinition, isAegisTechniqueId } from '../../../data/aegisTechniqueCatalog';
 import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
 } from '../../../utils/classLoadoutUtils';
 import { getEquippedWeaponForClass } from '../../../data/weaponProgressionEngine';
+import {
+  deriveHexWeaponActions,
+  isHexWeaponKitComplete,
+} from '../../../data/hexWeaponActionRegistry';
+import {
+  formatHexWeaponActionLabel,
+  getHexWeaponActionDefinition,
+} from '../../../data/hexWeaponActionCatalog';
 import { resolveAbilityGuidanceForWeapon } from '../../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import type { OperativeAbilityId } from '../../../types/weaponLoadoutRecommendation';
 import type { WeaponAbilityGuidanceLabel } from '../../../types/weaponPlayerFacing';
@@ -45,6 +53,8 @@ import {
 export type DeckSelection =
   | { kind: 'SLOT'; index: 0 | 1 | 2 | 3 }
   | { kind: 'POOL'; abilityId: string };
+
+const AEGIS_TECHNIQUE_SLOT_INDICES = [0, 1, 2] as const;
 
 export interface DeckDossierAction {
   label: string;
@@ -92,36 +102,35 @@ export default function DeckWorkspace({
 }: DeckWorkspaceProps): React.JSX.Element {
   const {
     account,
-    setAegisLoadout,
+    setAegisTechniqueLoadout,
     setHexShotLoadout,
     setEnvoyLoadout,
-    unlockAegisAbility,
     unlockHexShotAbility,
     unlockEnvoyAbility,
     appendHubLog,
   } = usePlayerAccount();
 
-  const [aegisDraft, setAegisDraft] = useState<AegisAbilityId[]>([...account.aegisLoadout]);
+  const [aegisDraft, setAegisDraft] = useState<AegisTechniqueId[]>([...account.aegisTechniqueLoadout]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...account.hexShotLoadout]);
   const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...account.envoyLoadout]);
 
-  useEffect(() => { setAegisDraft([...account.aegisLoadout]); }, [account.aegisLoadout]);
+  useEffect(() => { setAegisDraft([...account.aegisTechniqueLoadout]); }, [account.aegisTechniqueLoadout]);
   useEffect(() => { setHexDraft([...account.hexShotLoadout]); }, [account.hexShotLoadout]);
   useEffect(() => { setEnvoyDraft([...account.envoyLoadout]); }, [account.envoyLoadout]);
 
   useEffect(() => {
     if (account.activeClass !== 'AEGIS') return;
-    if (validateLoadoutCommit(aegisDraft, account.unlockedAegisAbilities)) return;
-    const committed: AegisLoadout = [aegisDraft[0], aegisDraft[1], aegisDraft[2], aegisDraft[3]];
-    if (committed.some((id, index) => id !== account.aegisLoadout[index])) {
-      setAegisLoadout(committed);
+    if (validateAegisTechniqueLoadoutCommit(aegisDraft)) return;
+    const committed: AegisTechniqueLoadout = [aegisDraft[0]!, aegisDraft[1]!, aegisDraft[2]!];
+    if (committed.some((id, index) => id !== account.aegisTechniqueLoadout[index])) {
+      setAegisTechniqueLoadout(committed);
     }
-  }, [aegisDraft, account.activeClass, account.aegisLoadout, account.unlockedAegisAbilities, setAegisLoadout]);
+  }, [aegisDraft, account.activeClass, account.aegisTechniqueLoadout, setAegisTechniqueLoadout]);
 
   useEffect(() => {
     if (account.activeClass !== 'HEX_SHOT') return;
     if (validateHexShotLoadoutCommit(hexDraft, account.unlockedHexShotAbilities)) return;
-    const committed: HexShotLoadout = [hexDraft[0], hexDraft[1], hexDraft[2], hexDraft[3]];
+    const committed: HexShotLoadout = [hexDraft[0]!, hexDraft[1]!, hexDraft[2]!];
     if (committed.some((id, index) => id !== account.hexShotLoadout[index])) {
       setHexShotLoadout(committed);
     }
@@ -151,6 +160,21 @@ export default function DeckWorkspace({
     [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks],
   );
 
+  const hexReadOnlyWeaponActions = useMemo(() => {
+    if (account.activeClass !== 'HEX_SHOT' || !equippedWeaponId) return null;
+    if (!isHexWeaponKitComplete(equippedWeaponId)) return null;
+    const actions = deriveHexWeaponActions(equippedWeaponId);
+    if (!actions) return null;
+    return actions.map((id) => {
+      const def = getHexWeaponActionDefinition(id);
+      return {
+        id,
+        label: def?.label ?? formatHexWeaponActionLabel(id),
+        costLine: formatClassAbilityCostLine('HEX_SHOT', id) ?? '',
+      };
+    });
+  }, [account.activeClass, equippedWeaponId]);
+
   const pool: PoolEntry[] = useMemo(() => {
     const withGuidance = (id: string, base: Omit<PoolEntry, 'guidanceLabel' | 'guidanceReason'>): PoolEntry => {
       const guidance = equippedWeaponId
@@ -164,15 +188,15 @@ export default function DeckWorkspace({
     };
     if (account.activeClass === 'AEGIS') {
       return getAssignableAbilities().map((id) => {
-        const def = AEGIS_ABILITY_CATALOG[id];
+        const def = getAegisTechniqueDefinition(id);
         const inDeckSlot = aegisDraft.findIndex((entry) => entry === id);
         return withGuidance(id, {
           id,
           label: def.label,
           description: def.description,
           costLine: formatClassAbilityCostLine('AEGIS', id) ?? '',
-          tagsLine: getAbilityDefinition(id).tags.join(' · '),
-          unlocked: isAbilityUnlocked(account.unlockedAegisAbilities, id),
+          tagsLine: def.category === 'BRAND' ? 'BRAND TECHNIQUE' : 'AP UTILITY',
+          unlocked: true,
           inDeckSlot: inDeckSlot >= 0 ? inDeckSlot : null,
         });
       });
@@ -216,23 +240,32 @@ export default function DeckWorkspace({
     hexDraft,
   ]);
 
-  const selectedFlexSlot = selection?.kind === 'SLOT' && selection.index > 0
+  /** Envoy still uses slots 1–3 with fixed anchor at 0. */
+  const selectedEnvoyFlexSlot = selection?.kind === 'SLOT' && selection.index > 0
     ? selection.index as 1 | 2 | 3
     : 1;
 
+  const selectedAegisSlot = selection?.kind === 'SLOT'
+    && AEGIS_TECHNIQUE_SLOT_INDICES.includes(selection.index as 0 | 1 | 2)
+    ? selection.index as 0 | 1 | 2
+    : 0;
+
+  /** W.2 Hex — three editable flex slots at indices 0–2. */
+  const selectedHexFlexSlot = selection?.kind === 'SLOT'
+    && AEGIS_TECHNIQUE_SLOT_INDICES.includes(selection.index as 0 | 1 | 2)
+    ? selection.index as 0 | 1 | 2
+    : 0;
+
   const assignToSelectedSlot = useCallback((abilityId: string) => {
     if (account.activeClass === 'AEGIS') {
-      const id = abilityId as AegisAbilityId;
-      if (id === 'EVISCERATE' || id === 'WRAITH_PARRY' || id === 'STRIKE') return;
-      if (!isAbilityUnlocked(account.unlockedAegisAbilities, id)) {
-        const result = unlockAegisAbility(id);
-        appendHubLog(result.logLine);
-        return;
-      }
+      if (!isAegisTechniqueId(abilityId)) return;
       setAegisDraft((prev) => {
-        const next = [...prev];
-        next[0] = 'STRIKE';
-        next[selectedFlexSlot] = id;
+        const next = [...prev] as AegisTechniqueId[];
+        const existing = next.indexOf(abilityId);
+        if (existing >= 0 && existing !== selectedAegisSlot) {
+          next[existing] = next[selectedAegisSlot]!;
+        }
+        next[selectedAegisSlot] = abilityId;
         return next;
       });
       return;
@@ -247,7 +280,11 @@ export default function DeckWorkspace({
       }
       setHexDraft((prev) => {
         const next: HexShotAbilityId[] = [...prev];
-        next[selectedFlexSlot] = id;
+        const existing = next.indexOf(id);
+        if (existing >= 0 && existing !== selectedHexFlexSlot) {
+          next[existing] = next[selectedHexFlexSlot]!;
+        }
+        next[selectedHexFlexSlot] = id;
         return next;
       });
       return;
@@ -261,18 +298,17 @@ export default function DeckWorkspace({
     }
     setEnvoyDraft((prev) => {
       const next: EnvoyAbilityId[] = [...prev];
-      next[selectedFlexSlot] = id;
+      next[selectedEnvoyFlexSlot] = id;
       return next;
     });
   }, [
     account.activeClass,
-    account.unlockedAegisAbilities,
     account.unlockedEnvoyAbilities,
     account.unlockedHexShotAbilities,
     appendHubLog,
-    selectedFlexSlot,
-    selection,
-    unlockAegisAbility,
+    selectedAegisSlot,
+    selectedHexFlexSlot,
+    selectedEnvoyFlexSlot,
     unlockEnvoyAbility,
     unlockHexShotAbility,
   ]);
@@ -309,11 +345,13 @@ export default function DeckWorkspace({
     }
 
     const poolEntry = pool.find((entry) => entry.id === abilityId);
-    const isAnchor = account.activeClass === 'AEGIS'
-      ? slotIndex === 0
-      : account.activeClass === 'HEX_SHOT'
-        ? abilityId === HEX_SHOT_ANCHOR || slotIndex === 0
-        : abilityId === ENVOY_ANCHOR || slotIndex === 0;
+    const isAegis = account.activeClass === 'AEGIS';
+    const isAnchor = isAegis || account.activeClass === 'HEX_SHOT'
+      ? false
+      : abilityId === ENVOY_ANCHOR || slotIndex === 0;
+    const assignSlotLabel = isAegis || account.activeClass === 'HEX_SHOT'
+      ? (account.activeClass === 'AEGIS' ? selectedAegisSlot : selectedHexFlexSlot) + 1
+      : selectedEnvoyFlexSlot + 1;
 
     const actions: DeckDossierAction[] = [];
     if (isAnchor && slotIndex === 0) {
@@ -342,16 +380,16 @@ export default function DeckWorkspace({
           disabled: true,
           tone: 'muted',
         });
-        if (selectedFlexSlot !== poolEntry.inDeckSlot && selectedFlexSlot > 0) {
+        if (assignSlotLabel !== poolEntry.inDeckSlot + 1) {
           actions.push({
-            label: `[ MOVE TO SLOT ${selectedFlexSlot + 1} ]`,
+            label: `[ MOVE TO SLOT ${assignSlotLabel} ]`,
             onPress: () => assignToSelectedSlot(abilityId!),
             tone: 'primary',
           });
         }
       } else {
         actions.push({
-          label: `[ ASSIGN TO SLOT ${selectedFlexSlot + 1} ]`,
+          label: `[ ASSIGN TO SLOT ${assignSlotLabel} ]`,
           onPress: () => assignToSelectedSlot(abilityId!),
           tone: 'primary',
         });
@@ -382,31 +420,60 @@ export default function DeckWorkspace({
     onInspectChange,
     onSelect,
     pool,
-    selectedFlexSlot,
+    selectedAegisSlot,
+    selectedHexFlexSlot,
+    selectedEnvoyFlexSlot,
     selection,
   ]);
 
-  const activeSlots = [0, 1, 2, 3].map((index) => {
+  const slotIndices = account.activeClass === 'AEGIS' || account.activeClass === 'HEX_SHOT'
+    ? [0, 1, 2]
+    : [0, 1, 2, 3];
+  const activeSlots = slotIndices.map((index) => {
     const abilityId = draft[index];
     const entry = pool.find((item) => item.id === abilityId)
       ?? {
-        id: abilityId,
-        label: abilityId,
+        id: abilityId ?? 'EMPTY',
+        label: abilityId ?? 'EMPTY',
         description: '',
-        costLine: formatClassAbilityCostLine(account.activeClass, abilityId as never) ?? '',
+        costLine: abilityId
+          ? (formatClassAbilityCostLine(account.activeClass, abilityId as never) ?? '')
+          : '',
         tagsLine: '',
         unlocked: true,
         inDeckSlot: index,
         guidanceLabel: null,
         guidanceReason: null,
       };
-    const isAnchor = index === 0;
+    const isAnchor = account.activeClass === 'ENVOY' && index === 0;
     const selected = selection?.kind === 'SLOT' && selection.index === index;
     return { index: index as 0 | 1 | 2 | 3, entry, isAnchor, selected, abilityId };
   });
 
   return (
     <View style={styles.root}>
+      {hexReadOnlyWeaponActions ? (
+        <View style={[styles.activeDeck, compact && styles.activeDeckCompact, { marginBottom: 8 }]}>
+          {hexReadOnlyWeaponActions.map((wa) => (
+            <View key={wa.id} style={[styles.deckSlot, { opacity: 0.88 }]}>
+              <View style={styles.slotTopline}>
+                <TerminalText size={7} letterSpacing={0.9} style={styles.slotMeta}>
+                  WA
+                </TerminalText>
+                <TerminalText size={7} letterSpacing={0.9} style={{ color: MUTED, fontWeight: '700' }}>
+                  FIXED
+                </TerminalText>
+              </View>
+              <TerminalText size={9.5} letterSpacing={0.3} style={styles.slotTitle} numberOfLines={1}>
+                {wa.label.replace(/[\[\]]/g, '').trim().toUpperCase()}
+              </TerminalText>
+              <TerminalText size={7.5} style={styles.slotCost} numberOfLines={1}>
+                {wa.costLine || '—'}
+              </TerminalText>
+            </View>
+          ))}
+        </View>
+      ) : null}
       <View style={[styles.activeDeck, compact && styles.activeDeckCompact]}>
         {activeSlots.map((slot) => (
           <HapticPressable
@@ -427,7 +494,13 @@ export default function DeckWorkspace({
                 {`SLOT ${slot.index + 1}`}
               </TerminalText>
               <TerminalText size={7} letterSpacing={0.9} style={{ color: slot.isAnchor ? TERMINAL : MUTED, fontWeight: '700' }}>
-                {slot.isAnchor ? 'ANCHOR · FIXED' : 'ACTIVE'}
+                {slot.isAnchor
+                  ? 'ANCHOR · FIXED'
+                  : account.activeClass === 'AEGIS'
+                    ? 'TECHNIQUE'
+                    : account.activeClass === 'HEX_SHOT'
+                      ? 'FLEX'
+                      : 'ACTIVE'}
               </TerminalText>
             </View>
             <TerminalText size={9.5} letterSpacing={0.3} style={styles.slotTitle} numberOfLines={1}>

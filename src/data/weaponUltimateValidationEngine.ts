@@ -175,7 +175,7 @@ export function validateWeaponUltimates(): WeaponValidationIssue[] {
     pushIssues(issues, ['Paired Blades must not fire legacy EVISCERATE']);
   }
   if (canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-void-cannon')) {
-    pushIssues(issues, ['Black Door must not fire legacy ZERO_PROTOCOL']);
+    pushIssues(issues, ['Nullbreach must not fire legacy ZERO_PROTOCOL']);
   }
   if (canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-echo-lantern')) {
     pushIssues(issues, ['Vambrace must not fire legacy CATACLYSM_SIGIL']);
@@ -184,7 +184,7 @@ export function validateWeaponUltimates(): WeaponValidationIssue[] {
     pushIssues(issues, ['Longsword must own ABYSSAL VERDICT (THREEFOLD_BRAND / EVISCERATE) hook']);
   }
   if (!canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-pulse-rifle')) {
-    pushIssues(issues, ['Carbine must own ZERO PROTOCOL']);
+    pushIssues(issues, ['Ash Shotgun must own ZERO PROTOCOL']);
   }
   if (!canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-null-conduit')) {
     pushIssues(issues, ['Scythe must own NULL CIRCUIT']);

@@ -397,8 +397,8 @@ assert.equal(isWeaponFamilyId('ash-shotgun'), false);
     maxStamina: 100,
     claymoreStaminaCommitted: true,
   });
-  assert.ok(claymore.some((c) => /STAMINA COMMITTED/i.test(c.label)));
-  assert.ok(claymore.some((c) => /BREAK CASHOUT/i.test(c.label)));
+  assert.ok(claymore.some((c) => /BREAK CASHOUT READY/i.test(c.label)));
+  assert.ok(!claymore.some((c) => /STAMINA/i.test(c.label)));
 
   const sidearm = resolveWeaponCombatCallouts({
     weaponFamilyId: 'hex-silver-core-sidearm',

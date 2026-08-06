@@ -15,7 +15,8 @@ import type {
   WeaponSampleLoadout,
 } from '../types/weaponLoadoutRecommendation';
 import { ALL_WEAPON_FAMILY_IDS, getWeaponFamily } from './weaponRegistry';
-import { AEGIS_ABILITY_CATALOG } from './aegisAbilities';
+import { AEGIS_ABILITY_CATALOG, isRetiredAegisTechniqueId } from './aegisAbilities';
+import { ALL_AEGIS_TECHNIQUES } from '../types/aegisCombat';
 import { ENVOY_ABILITY_CATALOG } from './envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from './hexShotAbilities';
 import { getAssignableAbilities } from './aegisAbilityUnlockEngine';
@@ -51,6 +52,23 @@ function classOfAbility(abilityId: string): ClassType | null {
   if (abilityId in AEGIS_ABILITY_CATALOG) return 'AEGIS';
   if (abilityId in HEX_SHOT_ABILITY_CATALOG) return 'HEX_SHOT';
   if (abilityId in ENVOY_ABILITY_CATALOG) return 'ENVOY';
+  // W.2 — derived Hex weapon actions are class-local but not catalog flex IDs.
+  if (
+    abilityId === 'QUICKDRAW'
+    || abilityId === 'SLIPSHOT'
+    || abilityId === 'SIX_BELLS'
+    || abilityId === 'LAST_WORD'
+    || abilityId === 'CENTER_MASS'
+    || abilityId === 'CONTROLLED_BURST'
+    || abilityId === 'SUPPRESSIVE_BARRAGE'
+    || abilityId === 'CONTACT_FRONT'
+    || abilityId === 'DOOR_KNOCKER'
+    || abilityId === 'FATAL_FUNNEL'
+    || abilityId === 'THRESHOLD'
+    || abilityId === 'DEADBOLT'
+  ) {
+    return 'HEX_SHOT';
+  }
   return null;
 }
 
@@ -60,11 +78,12 @@ function validateSlots(
   label: string,
 ): LoadoutRecommendationValidationIssue[] {
   const issues: LoadoutRecommendationValidationIssue[] = [];
-  if (slots.length !== 4) {
+  const expectedSlots = profile.classId === 'AEGIS' || profile.classId === 'HEX_SHOT' ? 3 : 4;
+  if (slots.length !== expectedSlots) {
     issues.push({
       severity: 'error',
       weaponId: profile.weaponFamilyId,
-      message: `${label} must have exactly 4 slots.`,
+      message: `${label} must have exactly ${expectedSlots} slots.`,
     });
     return issues;
   }
@@ -232,18 +251,28 @@ export function validateWeaponLoadoutRecommendations(): LoadoutRecommendationVal
           ...validateSlots(profile, sample.earlyAlternativeSlots, `${sample.kind} earlyAlternative`),
         );
       }
-      if (profile.classId === 'AEGIS' && sample.slots[0] !== AEGIS_ANCHOR) {
-        issues.push({
-          severity: 'error',
-          weaponId: profile.weaponFamilyId,
-          message: `${sample.kind} slot0 must be ${AEGIS_ANCHOR}.`,
-        });
+      if (profile.classId === 'AEGIS') {
+        // Phase C: samples are exactly three techniques — no STRIKE pad.
+        if (sample.slots.length !== 3) {
+          issues.push({
+            severity: 'error',
+            weaponId: profile.weaponFamilyId,
+            message: `${sample.kind} must list exactly 3 techniques.`,
+          });
+        }
+        if (sample.slots.includes(AEGIS_ANCHOR as never)) {
+          issues.push({
+            severity: 'error',
+            weaponId: profile.weaponFamilyId,
+            message: `${sample.kind} must not pad STRIKE into the technique loadout.`,
+          });
+        }
       }
-      if (profile.classId === 'HEX_SHOT' && sample.slots[0] !== HEX_SHOT_ANCHOR) {
+      if (profile.classId === 'HEX_SHOT' && sample.slots.includes(HEX_SHOT_ANCHOR as never)) {
         issues.push({
           severity: 'error',
           weaponId: profile.weaponFamilyId,
-          message: `${sample.kind} slot0 must be ${HEX_SHOT_ANCHOR}.`,
+          message: `${sample.kind} must not include fixed-basic ${HEX_SHOT_ANCHOR} in the flex loadout.`,
         });
       }
       if (profile.classId === 'ENVOY' && sample.slots[0] !== ENVOY_ANCHOR) {
@@ -354,10 +383,12 @@ export function formatWeaponLoadoutRecommendationDebug(weaponFamilyId: WeaponFam
 
 function structuralKindFor(classId: ClassType, abilityId: string): import('../types/weaponLoadoutRecommendation').AbilityStructuralKind {
   if (classId === 'AEGIS') {
+    if (isRetiredAegisTechniqueId(abilityId)) return 'DEPRECATED_RETIRED';
     if (abilityId === AEGIS_ANCHOR) return 'FIXED_WEAPON_BASIC';
     if (abilityId === 'EVISCERATE') return 'ULTIMATE';
     if (abilityId === 'WRAITH_PARRY') return 'INTRINSIC';
-    return 'LIVE_SELECTABLE_FLEX';
+    if ((ALL_AEGIS_TECHNIQUES as readonly string[]).includes(abilityId)) return 'LIVE_SELECTABLE_FLEX';
+    return 'DEPRECATED_RETIRED';
   }
   if (classId === 'HEX_SHOT') {
     if (HEX_SHOT_DEPRECATED_ABILITIES.includes(abilityId as HexShotAbilityId)) return 'DEPRECATED_RETIRED';
@@ -420,9 +451,7 @@ export function buildAbilityCoverageReport(): AbilityCoverageEntry[] {
       if (kind === 'LIVE_SELECTABLE_FLEX' && (!meta || meta.categories.size === 0)) {
         cats.add('INTENTIONALLY_UNMAPPED_SELECTABLE');
         unmappedExplanation = 'TOO_NICHE';
-        notes = abilityId === 'ABYSSAL_FAULT'
-          ? 'Intentionally unmapped selectable — niche grid-root control; tags still participate in Phase 3I eligibility when equipped.'
-          : 'Intentionally unmapped selectable — niche for base weapon mapping.';
+        notes = 'Intentionally unmapped selectable — niche for base weapon mapping.';
       } else if (kind === 'FIXED_WEAPON_BASIC') {
         notes = 'Fixed weapon basic (slot 0) — not a flex-selectable recommendation orphan.';
       } else if (kind === 'ULTIMATE') {
@@ -468,15 +497,15 @@ export function formatAbilityCoverageDebug(): string {
 /** Live loadout rules snapshot for reports. */
 export function describeLiveLoadoutRules(): string {
   return [
-    'Slots: exactly 4 per class.',
-    `Aegis: slot0 fixed ${AEGIS_ANCHOR} (weapon basic for all Aegis weapons); WRAITH_PARRY + EVISCERATE are combat intrinsics/ultimate (not deck slots); flex slots 1–3; duplicates illegal.`,
-    `Hex: slot0 fixed ${HEX_SHOT_ANCHOR} (weapon basic for all Hex weapons); ZERO_PROTOCOL + PHASE_SHIFT_RELOAD intrinsic; deprecated ammo-identity abilities hidden; duplicates illegal in flex.`,
+    'Aegis: exactly 3 snapshotted techniques (+ 4 derived weapon actions in combat; Wraith Parry + weapon Ultimate outside the card strip).',
+    'Hex / Envoy: exactly 4 loadout slots with fixed weapon basic in slot 0.',
+    `Hex: three persisted flexes; weapon actions derived from family; ZERO_PROTOCOL + PHASE_SHIFT_RELOAD intrinsic; deprecated ammo-identity abilities hidden; duplicates illegal in flex.`,
     `Envoy: slot0 fixed ${ENVOY_ANCHOR}; CATACLYSM_SIGIL + RIFT_WARD intrinsic; duplicates illegal in flex.`,
     'Unlocks: hub stash costs; starters seed default loadouts; invalid/retired IDs sanitized/migrated on load.',
     'Loadouts are hub/safehouse staged — not mid-combat editable; persisted on account/run extraction.',
     'Class restriction: abilities are per-class catalogs only.',
     'Weapon unlocks are stash-cost only (no class-rank gate).',
-    'Every loadout permanently retains access to its equipped weapon Phase 3D unique basic via the fixed slot-0 basic.',
+    'Aegis weapon basics are derived from activeWeaponFamilyId — not persisted in the technique loadout.',
   ].join('\n');
 }
 

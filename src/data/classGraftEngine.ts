@@ -18,6 +18,7 @@ import { canGraftAbility, rollVeilGraftOffers } from './veilGraftEngine';
 import { GRAFT_DATABASE, getVeilGraftDefinition } from './veilGraftDatabase';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { VeilGraftId } from '../types/veilGraft';
+import { resolveAegisAbilityGraftId } from './aegisGraftTarget';
 
 const HEX_ANCHORS: readonly HexShotAbilityId[] = ['SILVER_CORE_SIDEARM'];
 const ENVOY_ANCHORS: readonly EnvoyAbilityId[] = ['VEIL_SPLINTER'];
@@ -78,7 +79,14 @@ export function canGraftClassAbility(
   const allowUltimate = access?.allowUltimate === true;
   if (classId === 'HEX_SHOT') {
     if (abilityId === 'PHASE_SHIFT_RELOAD') return true;
-    if (abilityId === 'SILVER_CORE_SIDEARM') return allowBasic;
+    if (
+      abilityId === 'SILVER_CORE_SIDEARM'
+      || abilityId === 'QUICKDRAW'
+      || abilityId === 'CENTER_MASS'
+      || abilityId === 'DOOR_KNOCKER'
+    ) {
+      return allowBasic;
+    }
     if (abilityId === 'ZERO_PROTOCOL') return allowUltimate;
     // WU-5: weapon ultimate IDs graft as ultimates (legacy ZERO_PROTOCOL path).
     if (abilityId === 'SIXTH_SEAL' || abilityId === 'LAST_KNOCK') return allowUltimate;
@@ -92,15 +100,44 @@ export function canGraftClassAbility(
     }
     return true;
   }
-  if (abilityId === 'EVISCERATE' || abilityId === 'WRAITH_PARRY') return allowUltimate;
+  // Phase D — Aegis graftable surface is 4 family weapon actions + 3 techniques.
+  // Parry / Ultimates / legacy STRIKE / EVISCERATE / THREEFOLD_BRAND are never graftable.
+  const bare = abilityId.startsWith('WA:') || abilityId.startsWith('TECH:')
+    ? abilityId.slice(abilityId.indexOf(':') + 1)
+    : abilityId;
   if (
-    abilityId === 'THREEFOLD_BRAND'
-    || abilityId === 'REND_THE_VEIL'
-    || abilityId === 'GRAVEFALL'
+    bare === 'EVISCERATE'
+    || bare === 'WRAITH_PARRY'
+    || bare === 'ABYSSAL_VERDICT'
+    || bare === 'REND_THE_VEIL'
+    || bare === 'GRAVEFALL'
+    || bare === 'THREEFOLD_BRAND'
+    || bare === 'STRIKE'
   ) {
-    return allowUltimate;
+    return false;
   }
-  return canGraftAbility(abilityId as AegisAbilityId) || (abilityId === 'STRIKE' && allowBasic);
+  if (
+    bare === 'WARDENS_STRIKE'
+    || bare === 'PAIRED_BLADES_STRIKE'
+    || bare === 'UNMAKER_STRIKE'
+  ) {
+    return allowBasic;
+  }
+  // Weapon actions (non-strike) and techniques — graftable when not Ultimate-tagged.
+  if (
+    bare === 'RUPTURE'
+    || bare === 'DREADBIND'
+    || bare === 'NO_RESPITE'
+    || bare === 'DIVERGENCE'
+    || bare === 'ECLIPSE'
+    || bare === 'SEVERANCE'
+    || bare === 'DREAD_HORIZON'
+    || bare === 'UNBOWED'
+    || bare === 'DOOMFALL'
+  ) {
+    return true;
+  }
+  return canGraftAbility(bare as AegisAbilityId);
 }
 
 function applyTagMods(
@@ -279,7 +316,7 @@ export function getAbilityClassGraftId(
   abilityId: string,
   hexShotAbilityGrafts: HexShotAbilityGraftMap,
   envoyAbilityGrafts: EnvoyAbilityGraftMap,
-  aegisAbilityGrafts: Partial<Record<AegisAbilityId, VeilGraftId>>,
+  aegisAbilityGrafts: Partial<Record<string, VeilGraftId>>,
 ): OperativeClassGraftId | VeilGraftId | undefined {
   if (classId === 'HEX_SHOT') {
     return resolveHexShotAbilityGraftId(hexShotAbilityGrafts, abilityId as HexShotAbilityId);
@@ -287,5 +324,5 @@ export function getAbilityClassGraftId(
   if (classId === 'ENVOY') {
     return envoyAbilityGrafts[abilityId as EnvoyAbilityId];
   }
-  return aegisAbilityGrafts[abilityId as AegisAbilityId];
+  return resolveAegisAbilityGraftId(aegisAbilityGrafts, abilityId);
 }

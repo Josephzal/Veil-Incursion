@@ -1,5 +1,6 @@
 /**
  * Phase 3J — hard graft compatibility (equip gates) vs advisory anti-synergy (separate).
+ * Phase D — Aegis mechanic-aware eligibility via aegisGraftCompatibility.
  */
 import type { ClassType } from '../../types/game';
 import {
@@ -12,6 +13,12 @@ import { canGraftClassAbility, getClassGraftDefinition } from '../classGraftEngi
 import { ALL_HEX_SHOT_GRAFT_IDS } from '../hexShotGrafts';
 import { ALL_ENVOY_GRAFT_IDS } from '../envoyGrafts';
 import { ALL_VEIL_GRAFT_IDS } from '../veilGraftDatabase';
+import {
+  evaluateAegisGraftCompatibility,
+  resolveAegisGraftTargetFromAbilityId,
+} from '../aegisGraftCompatibility';
+import { parseAegisGraftTargetKey } from '../aegisGraftTarget';
+import type { VeilGraftId } from '../../types/veilGraft';
 
 export type GraftCompatibilityRejection =
   | 'UNKNOWN_GRAFT'
@@ -26,7 +33,8 @@ export type GraftCompatibilityRejection =
   | 'APEX_LOCKED'
   | 'SAFETY_INVARIANT'
   | 'NOT_OWNED_OR_UNAVAILABLE'
-  | 'EXECUTOR_UNSUPPORTED';
+  | 'EXECUTOR_UNSUPPORTED'
+  | 'MECHANIC_INCOMPATIBLE';
 
 export type GraftCompatibilityResult = {
   ok: boolean;
@@ -113,6 +121,29 @@ export function evaluateGraftCompatibility(args: {
     && HEX_BASIC_AMMO_BYPASS_GRAFTS.has(args.graftId)
   ) {
     rejections.push('SAFETY_INVARIANT');
+  }
+
+  if (args.classId === 'AEGIS') {
+    const target = parseAegisGraftTargetKey(args.abilityId)
+      ?? resolveAegisGraftTargetFromAbilityId(args.abilityId);
+    if (!target) {
+      rejections.push('UNKNOWN_ABILITY');
+    } else {
+      const mechanic = evaluateAegisGraftCompatibility({
+        target,
+        graftId: args.graftId as VeilGraftId,
+        allowFixedBasic: access.allowFixedBasic,
+      });
+      if (!mechanic.ok) {
+        if (mechanic.reason === 'FIXED_BASIC_LOCKED') {
+          if (!rejections.includes('FIXED_BASIC_LOCKED')) rejections.push('FIXED_BASIC_LOCKED');
+        } else if (mechanic.reason === 'ULTIMATE_OR_PARRY') {
+          rejections.push('SOCKET_INCOMPATIBLE');
+        } else {
+          rejections.push('MECHANIC_INCOMPATIBLE');
+        }
+      }
+    }
   }
 
   // Sponsor-restricted: live catalogs have no sponsor field — none.

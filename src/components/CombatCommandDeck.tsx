@@ -55,6 +55,17 @@ interface CombatCommandDeckProps {
   getAbilityEffectTags?: (ability: string) => string;
   /** Target mode drives confirm-on-card for NONE abilities. */
   getAbilityTargetMode?: (ability: string) => AbilityTargetMode;
+  /**
+   * Phase B Aegis — when set, loadout is [weaponActions…, techniques…] and
+   * renders as two labeled groups instead of a flat four-card strip.
+   */
+  weaponActionCount?: number;
+  techniqueCount?: number;
+  /** Optional second-group label (default TECHNIQUES). Hex uses FLEX ABILITIES. */
+  techniqueGroupLabel?: string;
+  /** Dual-target pick progress (Divergence) — enables CONFIRM when both set. */
+  dualTargetsReady?: boolean;
+  dualTargetLabel?: string | null;
   initiativeQueued?: boolean;
   initiativeProcSeq?: number;
   onInitiativeProcComplete?: () => void;
@@ -106,6 +117,11 @@ export default function CombatCommandDeck({
   getAbilityCategory,
   getAbilityEffectTags,
   getAbilityTargetMode,
+  weaponActionCount = 0,
+  techniqueCount = 0,
+  techniqueGroupLabel = 'TECHNIQUES',
+  dualTargetsReady = false,
+  dualTargetLabel = null,
   initiativeQueued = false,
   initiativeProcSeq = 0,
   onInitiativeProcComplete,
@@ -350,7 +366,7 @@ export default function CombatCommandDeck({
     const isSelected = selectedAbility === ability;
     const strikeEligible = Boolean(riposteReady && isStrikeAbility?.(ability));
     const tileBorderColor = isSelected
-      ? (dashboardLayout ? OTT.cyanSelect : OTT.terminalGreen)
+      ? OTT.terminalGreen
       : strikeEligible
         ? (enabled ? OTT.warningAmber : 'rgba(224, 180, 90, 0.35)')
       : enabled && accent
@@ -367,18 +383,43 @@ export default function CombatCommandDeck({
       const targetMode = getAbilityTargetMode?.(ability) ?? 'SINGLE';
       const needsConfirm = isSelected
         && enabled
-        && (targetMode === 'NONE' || targetMode === 'ALL');
-      const confirmLabel = targetMode === 'ALL' ? 'CONFIRM AOE' : 'CONFIRM';
+        && (
+          targetMode === 'NONE'
+          || targetMode === 'ALL'
+          || (targetMode === 'DUAL' && dualTargetsReady)
+          || (targetMode === 'ONE_OR_TWO' && dualTargetsReady)
+          || (targetMode === 'COLUMN' && dualTargetsReady)
+          || (targetMode === 'ROW' && dualTargetsReady)
+        );
+      const confirmLabel = targetMode === 'ALL'
+        ? 'CONFIRM AOE'
+        : targetMode === 'DUAL'
+          ? 'CONFIRM ×2'
+          : targetMode === 'ONE_OR_TWO'
+            ? (dualTargetsReady ? 'CONFIRM CONTACT' : 'CONFIRM')
+            : targetMode === 'COLUMN'
+              ? (dualTargetsReady ? 'CONFIRM LANE' : 'SELECT LANE')
+              : 'CONFIRM';
+      const dualHint = isSelected && (targetMode === 'DUAL' || targetMode === 'ONE_OR_TWO' || targetMode === 'COLUMN')
+        ? (dualTargetLabel ?? (
+          targetMode === 'ONE_OR_TWO'
+            ? '4+0 / 2+2'
+            : targetMode === 'COLUMN'
+              ? 'COLUMN LANE'
+              : 'TARGET ×2'
+        ))
+        : null;
       const spectrallyLit = hoveredAbility === ability;
+      // Selected = mint; hover (unselected) = occult purple.
       const hoverAccent = isSelected
-        ? OTT.cyanSelect
+        ? OTT.terminalGreen
         : spectrallyLit
-          ? OTT.terminalGreen
+          ? OTT.fluxViolet
           : tileBorderColor;
       const hoverFill = isSelected
-        ? 'rgba(98, 220, 229, 0.12)'
+        ? 'rgba(69, 247, 160, 0.12)'
         : spectrallyLit
-          ? 'rgba(69, 247, 160, 0.14)'
+          ? 'rgba(176, 124, 255, 0.14)'
           : strikeEligible
             ? (enabled ? 'rgba(224, 180, 90, 0.1)' : 'rgba(8, 12, 14, 0.42)')
           : 'rgba(8, 12, 14, 0.42)';
@@ -427,11 +468,11 @@ export default function CombatCommandDeck({
               <View style={styles.apDiamondHost}>
                 <View style={[
                   styles.apDiamond,
-                  { borderColor: isSelected ? OTT.cyanSelect : OTT.borderSubtle },
+                  { borderColor: isSelected ? OTT.terminalGreen : OTT.borderSubtle },
                 ]}>
                   <Text style={[
                     styles.apDiamondText,
-                    { color: isSelected ? OTT.cyanSelect : OTT.textPrimary },
+                    { color: isSelected ? OTT.terminalGreen : OTT.textPrimary },
                   ]}>
                     {apCost}
                   </Text>
@@ -449,11 +490,19 @@ export default function CombatCommandDeck({
             <Text style={styles.conceptCardCategory} numberOfLines={1}>
               {category}
             </Text>
+            {dualHint ? (
+              <Text
+                style={[styles.conceptCardTags, { color: OTT.cyanSelect }]}
+                numberOfLines={1}
+              >
+                {dualHint}
+              </Text>
+            ) : null}
             {effectTags ? (
               <Text
                 style={[
                   styles.conceptCardTags,
-                  { color: isSelected ? OTT.cyanSelect : OTT.textMuted },
+                  { color: isSelected ? OTT.terminalGreen : OTT.textMuted },
                 ]}
                 numberOfLines={3}
               >
@@ -483,8 +532,8 @@ export default function CombatCommandDeck({
           {
             borderColor: tileBorderColor,
             borderWidth: isSelected ? 1.5 : StyleSheet.hairlineWidth,
-            backgroundColor: isSelected ? 'rgba(98, 220, 229, 0.1)' : OTT.deepPanel,
-            shadowColor: isSelected ? OTT.cyanSelect : 'transparent',
+            backgroundColor: isSelected ? 'rgba(69, 247, 160, 0.1)' : OTT.deepPanel,
+            shadowColor: isSelected ? OTT.terminalGreen : 'transparent',
             shadowOpacity: isSelected ? 0.35 : 0,
             shadowRadius: isSelected ? 6 : 0,
             ...(tileHeight != null ? { height: tileHeight } : null),
@@ -496,7 +545,7 @@ export default function CombatCommandDeck({
           disabled={!canSelectActions}
           style={[styles.deckTile, { opacity: enabled ? 1 : 0.38 }]}
         >
-          <Text style={[styles.tileSlotIndex, { color: isSelected ? OTT.cyanSelect : OTT.textMuted }]}>
+          <Text style={[styles.tileSlotIndex, { color: isSelected ? OTT.terminalGreen : OTT.textMuted }]}>
             {`${String(Math.max(1, loadout.indexOf(ability) + 1)).padStart(2, '0')} //`}
           </Text>
           <Text
@@ -530,10 +579,10 @@ export default function CombatCommandDeck({
   } : null;
 
   const endTurnBorder = dashboardLayout
-    ? (canEndTurn ? OTT.cyanSelect : OTT.borderMuted)
+    ? (canEndTurn ? OTT.terminalGreen : OTT.borderMuted)
     : (canEndTurn ? END_TURN_BORDER : END_TURN_BORDER_MUTED);
   const endTurnText = dashboardLayout
-    ? (canEndTurn ? OTT.cyanSelect : OTT.textMuted)
+    ? (canEndTurn ? OTT.terminalGreen : OTT.textMuted)
     : (canEndTurn ? END_TURN_ENABLED : mutedColor);
 
   const renderEndTurnButton = () => (
@@ -542,7 +591,7 @@ export default function CombatCommandDeck({
         style={[
           dashboardLayout ? styles.endTurnBtnDashboard : styles.endTurnBtn,
           {
-            borderColor: dashboardLayout ? OTT.cyanSelect : queuedBorderColor,
+            borderColor: dashboardLayout ? OTT.terminalGreen : queuedBorderColor,
             opacity: canEndTurn ? 1 : 0.4,
             ...(dashboardLayout ? null : desktopBtnStyle),
           },
@@ -557,7 +606,7 @@ export default function CombatCommandDeck({
             styles.endTurnLabel,
             dashboardLayout && styles.endTurnLabelDashboard,
             dashboardLayout ? null : desktopActionLabelStyle,
-            { color: INITIATIVE_GLOW_PALE },
+            { color: OTT.terminalGreen },
           ]}>
             END TURN
           </Text>
@@ -572,7 +621,7 @@ export default function CombatCommandDeck({
           {
             borderColor: endTurnBorder,
             backgroundColor: dashboardLayout
-              ? 'rgba(98, 220, 229, 0.06)'
+              ? 'rgba(69, 247, 160, 0.06)'
               : (canEndTurn ? '#1a1212' : DOSSIER_ROW_BG),
             opacity: canEndTurn ? 1 : 0.4,
             ...(dashboardLayout ? null : desktopBtnStyle),
@@ -712,7 +761,7 @@ export default function CombatCommandDeck({
     const primed = voidWardPrimed;
     const enabled = voidWardEnabled && !primed;
     const accent = primed || enabled
-      ? OTT.cyanSelect
+      ? OTT.terminalGreen
       : OTT.borderSubtle;
     const statusLabel = primed ? 'WARD PRIMED' : enabled ? 'READY' : 'LOCKED';
     if (dashboardLayout) {
@@ -724,6 +773,9 @@ export default function CombatCommandDeck({
             styles.catalystTile,
             {
               borderColor: accent,
+              backgroundColor: primed || enabled
+                ? 'rgba(69, 247, 160, 0.05)'
+                : 'rgba(8, 12, 14, 0.42)',
               opacity: primed || enabled ? 1 : 0.42,
             },
           ]}
@@ -745,11 +797,9 @@ export default function CombatCommandDeck({
         style={[
           styles.combatReloadBtn,
           {
-            borderColor: primed
-              ? '#7dd3fc'
-              : enabled
-                ? '#38bdf8'
-                : borderColor,
+            borderColor: primed || enabled
+              ? OTT.terminalGreen
+              : borderColor,
             opacity: primed || enabled ? 1 : 0.4,
             ...desktopBtnStyle,
           },
@@ -760,11 +810,9 @@ export default function CombatCommandDeck({
             styles.combatReloadLabel,
             desktopActionLabelStyle,
             {
-              color: primed
-                ? '#bae6fd'
-                : enabled
-                  ? '#38bdf8'
-                  : mutedColor,
+              color: primed || enabled
+                ? OTT.terminalGreen
+                : mutedColor,
             },
           ]}
           numberOfLines={1}
@@ -1052,13 +1100,14 @@ export default function CombatCommandDeck({
     if (voidWardAvailable) {
       const primed = voidWardPrimed;
       const enabled = voidWardEnabled && !primed;
-      const classAccent = OTT.cyanSelect;
+      const classAccent = OTT.terminalGreen;
       const accent = primed || enabled
         ? classAccent
         : OTT.borderSubtle;
       const title = 'PARRY';
       const statusLabel = primed ? 'WARD PRIMED' : enabled ? 'READY' : 'LOCKED';
       const hovered = hoveredAbility === '__CLASS_PARRY__';
+      const cardAccent = hovered ? OTT.fluxViolet : accent;
       return (
         <HapticPressable
           key="class-action-parry"
@@ -1069,13 +1118,15 @@ export default function CombatCommandDeck({
           style={[
             styles.conceptCard,
             {
-              borderColor: hovered ? classAccent : accent,
+              borderColor: cardAccent,
               backgroundColor: hovered
-                ? 'rgba(98, 220, 229, 0.14)'
-                : 'rgba(8, 12, 14, 0.42)',
-              shadowColor: hovered ? classAccent : 'transparent',
-              shadowOpacity: hovered ? 0.5 : 0,
-              shadowRadius: hovered ? 10 : 0,
+                ? 'rgba(176, 124, 255, 0.14)'
+                : primed || enabled
+                  ? 'rgba(69, 247, 160, 0.08)'
+                  : 'rgba(8, 12, 14, 0.42)',
+              shadowColor: hovered || primed || enabled ? cardAccent : 'transparent',
+              shadowOpacity: hovered || primed || enabled ? 0.45 : 0,
+              shadowRadius: hovered || primed || enabled ? 10 : 0,
               opacity: primed || enabled ? 1 : 0.42,
             },
           ]}
@@ -1116,11 +1167,63 @@ export default function CombatCommandDeck({
   };
 
   const renderAbilityGrid = () => {
+    const groupedAegis = weaponActionCount > 0 && techniqueCount > 0;
+    const weaponCards = groupedAegis
+      ? loadout.slice(0, weaponActionCount)
+      : loadout.slice(0, 4);
+    const techniqueCards = groupedAegis
+      ? loadout.slice(weaponActionCount, weaponActionCount + techniqueCount)
+      : [];
+
     if (dashboardLayout) {
+      if (groupedAegis) {
+        return (
+          <View style={styles.conceptGroupedHost}>
+            <View style={styles.conceptGroupBlock}>
+              <Text style={styles.conceptGroupLabel}>WEAPON ACTIONS</Text>
+              <View style={styles.conceptCardRow}>
+                {weaponCards.map((ability) => renderTile(ability))}
+              </View>
+            </View>
+            <View style={styles.conceptGroupBlock}>
+              <Text style={styles.conceptGroupLabel}>{techniqueGroupLabel}</Text>
+              <View style={styles.conceptCardRow}>
+                {techniqueCards.map((ability) => renderTile(ability))}
+                {renderClassActionDeckCard()}
+              </View>
+            </View>
+          </View>
+        );
+      }
       return (
         <View style={styles.conceptCardRow}>
-          {loadout.slice(0, 4).map((ability) => renderTile(ability))}
+          {weaponCards.map((ability) => renderTile(ability))}
           {renderClassActionDeckCard()}
+        </View>
+      );
+    }
+    if (groupedAegis) {
+      return (
+        <View style={styles.deckBody}>
+          <Text style={styles.conceptGroupLabel}>WEAPON ACTIONS</Text>
+          <View style={styles.abilityGrid}>
+            <View style={styles.abilityRow}>
+              {renderTile(weaponCards[0])}
+              {renderTile(weaponCards[1])}
+            </View>
+            <View style={styles.abilityRow}>
+              {renderTile(weaponCards[2])}
+              {renderTile(weaponCards[3])}
+            </View>
+          </View>
+          <Text style={[styles.conceptGroupLabel, { marginTop: 8 }]}>{techniqueGroupLabel}</Text>
+          <View style={styles.abilityGrid}>
+            <View style={styles.abilityRow}>
+              {renderTile(techniqueCards[0])}
+              {renderTile(techniqueCards[1])}
+              {renderTile(techniqueCards[2])}
+            </View>
+          </View>
         </View>
       );
     }
@@ -1452,8 +1555,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: OTT.cyanSelect,
-    backgroundColor: 'rgba(98, 220, 229, 0.06)',
+    borderColor: OTT.terminalGreen,
+    backgroundColor: 'rgba(69, 247, 160, 0.06)',
     overflow: 'hidden',
   },
   conceptDeck: {
@@ -1490,24 +1593,43 @@ const styles = StyleSheet.create({
     gap: 4,
     flexShrink: 1,
   },
+  conceptGroupedHost: {
+    width: '100%',
+    gap: 8,
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  conceptGroupBlock: {
+    width: '100%',
+    gap: 4,
+  },
+  conceptGroupLabel: {
+    fontFamily: MONO,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: OTT.textMuted,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
   conceptCardRow: {
     flexGrow: 0,
     flexShrink: 1,
     minHeight: 0,
     width: '100%',
-    maxWidth: 920,
+    maxWidth: 980,
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
     alignSelf: 'center',
   },
   conceptCard: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 0,
-    maxWidth: 168,
-    minWidth: 110,
+    maxWidth: 148,
+    minWidth: 88,
     height: 198,
     borderWidth: 1.25,
     borderRadius: 2,
@@ -1856,7 +1978,7 @@ const styles = StyleSheet.create({
     fontSize: 5,
     fontWeight: '800',
     letterSpacing: 0.8,
-    color: OTT.cyanSelect,
+    color: OTT.terminalGreen,
   },
   stagedPanel: {
     width: '100%',

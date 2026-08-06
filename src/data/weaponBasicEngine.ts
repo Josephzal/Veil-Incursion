@@ -4,6 +4,7 @@ import { getWeaponIdentityProfile } from './weaponIdentityProfiles';
 import { adjacentAliveUnits, isUnitAlive } from './combatSquadEngine';
 import { isEnemyFractured } from './combatFractureEngine';
 import type { EnvoyCatalystType } from './envoyCatalystEngine';
+import { applyBlackDoorBacklineFalloffForUnit } from './hexBlackDoorPositionEngine';
 
 /** Brink Flux threshold for Sanguine Prism amp (live Void-Siphoned is at 0). */
 export const PRISM_BRINK_FLUX_THRESHOLD = 25;
@@ -215,6 +216,12 @@ export function resolveHexBasicShot(args: {
         logLines.push('[NULLBREACH] >> Breach round — Kinetic Armor layer pressure.');
       } else {
         logLines.push('[NULLBREACH] >> Breach round — no Kinetic Armor to peel (overcommit risk).');
+      }
+      // Black Door backline falloff — single shared owner (W.4).
+      const beforeFalloff = dmg;
+      dmg = applyBlackDoorBacklineFalloffForUnit(dmg, primary.gridSlot);
+      if (dmg < beforeFalloff) {
+        logLines.push('[NULLBREACH] >> Backline falloff ×0.75.');
       }
       return {
         familyId: weapon.familyId,

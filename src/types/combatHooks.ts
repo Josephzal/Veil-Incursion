@@ -14,7 +14,10 @@ export type PlayerDebuffId =
   | 'SEARING'
   | 'LASER_SIGHT'
   | 'HEXED'
-  | 'MAX_ANCHOR_DEBT';
+  | 'MAX_ANCHOR_DEBT'
+  /** Hard control — cancels Aegis Doomfall Charge (Phase B.1). */
+  | 'STUN'
+  | 'KNOCKDOWN';
 
 export interface StructuredPlayerDebuff {
   type: PlayerDebuffId;

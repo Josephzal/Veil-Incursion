@@ -3,7 +3,6 @@ import {
   RESONANCE_TIER_CRITICAL,
   RESONANCE_TIER_VECTOR_SEVERED,
   TERMINAL_BLIND_NODE_COUNT,
-  VEIL_STALKER_RESONANCE_THRESHOLD,
 } from '../types/sector';
 import type { ResonanceEscalationState } from '../types/resonanceEscalation';
 import { createDefaultResonanceEscalationState } from '../types/resonanceEscalation';
@@ -53,15 +52,6 @@ export function applyResonanceEscalationsOnSpike(
   }
 
   if (
-    prevPercent < VEIL_STALKER_RESONANCE_THRESHOLD
-    && nextPercent >= VEIL_STALKER_RESONANCE_THRESHOLD
-    && !next.veilStalkerHuntActive
-  ) {
-    next.veilStalkerHuntActive = true;
-    logLines.push('>> VEIL STALKER HUNT ACTIVE — sanctuary and market vectors compromised.');
-  }
-
-  if (
     prevPercent < RESONANCE_TIER_VECTOR_SEVERED
     && nextPercent >= RESONANCE_TIER_VECTOR_SEVERED
     && !next.vectorSeveredTriggered
@@ -94,12 +84,6 @@ export function tickTerminalBlindOnScannerSession(
 
 export function isTerminalBlindActive(escalations: ResonanceEscalationState): boolean {
   return escalations.terminalBlindNodesRemaining > 0;
-}
-
-export function clearVeilStalkerHunt(
-  escalations: ResonanceEscalationState,
-): ResonanceEscalationState {
-  return { ...escalations, veilStalkerHuntActive: false };
 }
 
 export function consumeExtractionDecoy(

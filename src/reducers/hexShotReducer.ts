@@ -11,13 +11,22 @@ import {
   type HexAmmoType,
   type ReloadQuality,
 } from '../types/hexAmmo';
-import { getHexShotAbilityTags } from '../data/hexShotAbilities';
+import { getHexShotAbilityTags, HEX_SHOT_ABILITY_CATALOG } from '../data/hexShotAbilities';
+import { getHexWeaponActionDefinition } from '../data/hexWeaponActionCatalog';
+import { migrateHexShotAbilityId } from '../data/hexShotMigration';
+import type { HexShotAbilityId } from '../types/operativeClass';
 
 export type HexShotReducerAction =
   | { type: 'HEX_SYNC_RESOURCES'; patch: Partial<Pick<HexShotCombatState, 'hp' | 'maxHp' | 'stamina' | 'maxStamina' | 'ap' | 'ammo' | 'maxAmmo'>> }
   | { type: 'HEX_TURN_START'; ap: number; encounter: ClassCombatEncounterState; squad: readonly EnemyCombatProfile[] }
   | { type: 'HEX_BEGIN_RELOAD'; manual: boolean; deadMansSwitch?: boolean }
   | { type: 'HEX_RESOLVE_RELOAD'; quality: ReloadQuality; ammoType: HexAmmoType; encounter: ClassCombatEncounterState; squad: readonly EnemyCombatProfile[]; deadMansSwitchBlocksOvercharge?: boolean }
+  /**
+   * Phase H.1a — Sixth Seal (and similar) ultimate-owned magazine refill.
+   * Refills ammo without Protocol / Overcharge / fail penalty / calibrated push.
+   * Must not be used for ordinary Active Reload resolution.
+   */
+  | { type: 'HEX_ULTIMATE_OWNED_MAGAZINE_REFILL' }
   | { type: 'HEX_CONSUME_BALLISTIC_OVERCHARGE' }
   | { type: 'HEX_AFTER_BALLISTIC_SPEND' }
   | { type: 'HEX_PHANTOM_FEED' }
@@ -109,7 +118,7 @@ export function hexShotReducer(
           action.squad,
         );
       }
-      // CLEAN (or Perfect blocked by Dead-Man's Switch): refill only, no Protocol.
+      // CLEAN (or Perfect blocked by Dead-Man's Switch): refill only, no Protocol / Overcharge.
       // FAILED: refill + a light −10% first-shot penalty (no Protocol, no stamina rip).
       return withUltimate(
         {
@@ -122,6 +131,17 @@ export function hexShotReducer(
         action.squad,
       );
     }
+
+    case 'HEX_ULTIMATE_OWNED_MAGAZINE_REFILL':
+      // Presentation refill only — no Protocol, Overcharge, fail penalty, or calibrated push.
+      return {
+        ...state,
+        ammo: state.maxAmmo,
+        isAutoLoadMinigameActive: false,
+        isManualReloadMinigameActive: false,
+        autoReloadPending: false,
+        pendingEjectDamage: 0,
+      };
 
     case 'HEX_CONSUME_BALLISTIC_OVERCHARGE':
       return {
@@ -170,9 +190,17 @@ export function canBeginHexShotReload(state: HexShotCombatState): boolean {
 }
 
 export function abilityUsesBallisticTags(abilityId: string): boolean {
-  return getHexShotAbilityTags(abilityId as import('../types/operativeClass').HexShotAbilityId).includes('BALLISTIC');
+  const wa = getHexWeaponActionDefinition(abilityId as import('../types/hexWeaponAction').HexWeaponActionId);
+  if (wa) return wa.tags.includes('BALLISTIC');
+  const resolved = migrateHexShotAbilityId(abilityId);
+  if (!(resolved in HEX_SHOT_ABILITY_CATALOG)) return false;
+  return getHexShotAbilityTags(resolved as HexShotAbilityId).includes('BALLISTIC');
 }
 
 export function abilityUsesTacticalTags(abilityId: string): boolean {
-  return getHexShotAbilityTags(abilityId as import('../types/operativeClass').HexShotAbilityId).includes('TACTICAL');
+  const wa = getHexWeaponActionDefinition(abilityId as import('../types/hexWeaponAction').HexWeaponActionId);
+  if (wa) return wa.tags.includes('TACTICAL');
+  const resolved = migrateHexShotAbilityId(abilityId);
+  if (!(resolved in HEX_SHOT_ABILITY_CATALOG)) return false;
+  return getHexShotAbilityTags(resolved as HexShotAbilityId).includes('TACTICAL');
 }

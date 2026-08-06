@@ -17,7 +17,7 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     accentColor: '#dc2626',
     setApCost: 0,
     addHpCost: 0.1,
-    description: 'Costs 0 AP. Drains 10% Max HP on cast.',
+    description: 'Costs 0 AP. Drains 10% Max HP on cast. Once per turn.',
   },
   ECHO_GRAFT: {
     id: 'ECHO_GRAFT',
@@ -26,7 +26,7 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     accentColor: '#a78bfa',
     duplicateCast: 0.5,
     removeTags: ['FRACTURE'],
-    description: 'Strikes twice at 50% power. Removes fracture tagging.',
+    description: 'Primary hit plus a 50% echo (150% combined). Removes fracture tagging.',
   },
   VOID_GLASS_GRAFT: {
     id: 'VOID_GLASS_GRAFT',

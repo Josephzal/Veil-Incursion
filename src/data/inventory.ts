@@ -85,6 +85,16 @@ export interface ResolvedWeaponCombatStats {
   exhaustedStrikeDamage: number;
   abyssalChargePerStrike: number;
   label: string;
+  /**
+   * Aegis-only: technique strike power for VEIL_PIERCER / REAVE.
+   * Undefined for Hex Shot / Envoy. Not used by canonical Aegis weapon actions.
+   */
+  aegisTechniqueStrikePower?: number;
+  /**
+   * Aegis-only: ultimate strike power for REND_THE_VEIL / GRAVEFALL.
+   * Undefined for Hex Shot / Envoy. Not used by canonical Aegis weapon actions or techniques.
+   */
+  aegisUltimateStrikePower?: number;
 }
 
 export function resolveWeaponCombatStats(

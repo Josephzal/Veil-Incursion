@@ -7,8 +7,6 @@ export interface ResonanceEscalationState {
   extractionDecoyPending: boolean;
   /** Graph node id tagged as the relocated extraction relay. */
   relayExtractionNodeId: string | null;
-  /** Veil Stalker is hunting the operative through sanctuary and market nodes. */
-  veilStalkerHuntActive: boolean;
 }
 
 export function createDefaultResonanceEscalationState(): ResonanceEscalationState {
@@ -17,6 +15,5 @@ export function createDefaultResonanceEscalationState(): ResonanceEscalationStat
     vectorSeveredTriggered: false,
     extractionDecoyPending: false,
     relayExtractionNodeId: null,
-    veilStalkerHuntActive: false,
   };
 }

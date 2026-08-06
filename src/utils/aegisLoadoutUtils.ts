@@ -1,101 +1,88 @@
+/**
+ * Aegis loadout helpers — technique loadout + Phase C combat surface.
+ */
 import {
-  ALL_AEGIS_ABILITIES,
-  DEFAULT_AEGIS_LOADOUT,
+  DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
   type AegisAbilityId,
-  type AegisLoadout,
+  type AegisTechniqueId,
+  type AegisTechniqueLoadout,
 } from '../types/aegisCombat';
+import {
+  hydrateAegisTechniqueLoadout,
+  migrateAegisTechniqueLoadout,
+  sanitizeAegisTechniqueLoadout,
+  validateAegisTechniqueLoadoutCommit,
+} from '../data/aegisMigration';
+import { buildAegisCombatSurface } from '../data/aegisCombatCompatibility';
+import { isAegisTechniqueId, listAegisTechniques } from '../data/aegisTechniqueCatalog';
 
-/** Fixed weapon-basic slot — same principle as Hex SILVER_CORE_SIDEARM / Envoy VEIL_SPLINTER. */
+/**
+ * @deprecated Phase A phantom STRIKE slot — no longer part of the combat HUD.
+ */
 export const AEGIS_ANCHOR: AegisAbilityId = 'STRIKE';
 
-type AssignableAegisAbilityId = Exclude<AegisAbilityId, 'EVISCERATE' | 'WRAITH_PARRY'>;
-/** Flex pool — excludes fixed basic, ultimate, and Void Ward intrinsic. */
-type FlexAegisAbilityId = Exclude<AssignableAegisAbilityId, 'STRIKE'>;
+export {
+  hydrateAegisTechniqueLoadout,
+  migrateAegisTechniqueLoadout,
+  sanitizeAegisTechniqueLoadout,
+  validateAegisTechniqueLoadoutCommit,
+  buildAegisCombatSurface,
+};
 
-const FLEX_POOL = new Set<FlexAegisAbilityId>(
-  ALL_AEGIS_ABILITIES.filter((id): id is FlexAegisAbilityId => (
-    id !== 'EVISCERATE' && id !== 'WRAITH_PARRY' && id !== AEGIS_ANCHOR
-  )),
-);
-
-function isFlexAbility(id: unknown): id is FlexAegisAbilityId {
-  return typeof id === 'string' && FLEX_POOL.has(id as FlexAegisAbilityId);
+export function normalizeAegisTechniqueLoadout(input: unknown): AegisTechniqueLoadout {
+  return sanitizeAegisTechniqueLoadout(input);
 }
 
 /**
- * Sanitize Aegis combat loadout: slot 0 is always STRIKE (weapon basic).
- * Valid flex abilities from the prior loadout are preserved in order without duplicates.
+ * @deprecated Prefer normalizeAegisTechniqueLoadout.
+ * Returns the sanitized three-technique loadout (no STRIKE pad).
  */
-export function sanitizeAegisCombatLoadout(loadout: readonly AegisAbilityId[]): AegisLoadout {
-  const used = new Set<AegisAbilityId>([AEGIS_ANCHOR]);
-  const flex: AegisAbilityId[] = [];
-  for (const raw of loadout) {
-    if (raw === AEGIS_ANCHOR || raw === 'EVISCERATE' || raw === 'WRAITH_PARRY') continue;
-    if (!isFlexAbility(raw) || used.has(raw)) continue;
-    used.add(raw);
-    flex.push(raw);
-    if (flex.length >= 3) break;
-  }
-  const defaults = DEFAULT_AEGIS_LOADOUT.slice(1) as AegisAbilityId[];
-  for (const d of defaults) {
-    if (flex.length >= 3) break;
-    if (used.has(d) || !isFlexAbility(d)) continue;
-    used.add(d);
-    flex.push(d);
-  }
-  for (const d of FLEX_POOL) {
-    if (flex.length >= 3) break;
-    if (used.has(d)) continue;
-    used.add(d);
-    flex.push(d);
-  }
-  return [AEGIS_ANCHOR, flex[0]!, flex[1]!, flex[2]!] as AegisLoadout;
+export function normalizeAegisLoadout(input: unknown): AegisTechniqueLoadout {
+  return migrateAegisTechniqueLoadout(input);
 }
 
-export function normalizeAegisLoadout(input: unknown): AegisLoadout {
-  if (!Array.isArray(input) || input.length === 0) {
-    return [...DEFAULT_AEGIS_LOADOUT];
-  }
-  const migrated = input.map((id) => {
-    if (id === 'WRAITH_PARRY') return null;
-    if (typeof id === 'string' && (id === AEGIS_ANCHOR || isFlexAbility(id))) return id as AegisAbilityId;
-    return null;
-  }).filter((id): id is AegisAbilityId => id != null);
-  return sanitizeAegisCombatLoadout(migrated);
+/**
+ * @deprecated Prefer sanitizeAegisTechniqueLoadout.
+ */
+export function sanitizeAegisCombatLoadout(
+  loadout: readonly AegisAbilityId[],
+): AegisTechniqueLoadout {
+  return migrateAegisTechniqueLoadout(loadout);
 }
 
-export function hasDuplicateLoadoutSlots(loadout: readonly AegisAbilityId[]): boolean {
+export function hasDuplicateTechniqueSlots(loadout: readonly string[]): boolean {
   return new Set(loadout).size < loadout.length;
 }
 
-export function validateLoadoutCommit(
-  loadout: readonly AegisAbilityId[],
-  unlocked?: readonly AegisAbilityId[],
-): string | null {
-  if (loadout.length !== 4) return '>> LOADOUT REJECTED — FOUR SLOTS REQUIRED.';
-  if (loadout[0] !== AEGIS_ANCHOR) {
-    return '>> LOADOUT REJECTED — SLOT 1 MUST REMAIN STRIKE (WEAPON BASIC).';
-  }
-  if (loadout.some((id) => id === 'EVISCERATE' || id === 'WRAITH_PARRY')) {
-    return '>> LOADOUT REJECTED — ABILITY RESERVED FOR COMBAT CONTROLS.';
-  }
-  if (hasDuplicateLoadoutSlots(loadout)) {
-    return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';
-  }
-  const flex = loadout.slice(1);
-  if (flex.some((id) => !isFlexAbility(id))) {
-    return '>> LOADOUT REJECTED — UNKNOWN OR NON-FLEX ABILITY IN SLOT.';
-  }
-  if (unlocked) {
-    const locked = flex.find((id) => !unlocked.includes(id) && id !== AEGIS_ANCHOR);
-    if (locked) {
-      return `>> LOADOUT REJECTED — ${locked.replace(/_/g, ' ')} NOT UNLOCKED.`;
-    }
-  }
-  return null;
+/** @deprecated Prefer validateAegisTechniqueLoadoutCommit. */
+export function hasDuplicateLoadoutSlots(loadout: readonly AegisAbilityId[]): boolean {
+  return hasDuplicateTechniqueSlots(loadout);
 }
 
-/** Flex abilities assignable to slots 1–3 (excludes fixed STRIKE). */
-export function getAegisFlexAbilities(): FlexAegisAbilityId[] {
-  return [...FLEX_POOL];
+/**
+ * Validate a three-technique commit. Ignores unlock economy (all techniques free).
+ * @deprecated unlocked arg ignored — retained for call-site compatibility.
+ */
+export function validateLoadoutCommit(
+  loadout: readonly string[],
+  _unlocked?: readonly string[],
+): string | null {
+  if (loadout.length === 4) {
+    const techniques = migrateAegisTechniqueLoadout(loadout);
+    return validateAegisTechniqueLoadoutCommit(techniques);
+  }
+  return validateAegisTechniqueLoadoutCommit(loadout);
+}
+
+/** All twelve techniques — assignable without unlock economy. */
+export function getAegisFlexAbilities(): AegisTechniqueId[] {
+  return [...listAegisTechniques()];
+}
+
+export function getDefaultAegisTechniqueLoadout(): AegisTechniqueLoadout {
+  return [...DEFAULT_AEGIS_TECHNIQUE_LOADOUT];
+}
+
+export function assertIsTechniqueOnlyLoadout(loadout: readonly string[]): boolean {
+  return loadout.length === 3 && loadout.every((id) => isAegisTechniqueId(id));
 }

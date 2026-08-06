@@ -126,7 +126,7 @@ interface CombatEnemyGridProps {
   arenaGridVariant?: ArenaGridVariant;
   /** Class damage blood-shard burst on enemy center. */
   bloodBurstVariant?: 'aegis' | 'hex' | 'envoy' | null;
-  /** Blood mist size multiplier (Black Door / Unmaker = 1.5). */
+  /** Blood mist size multiplier (Nullbreach / Unmaker = 1.5). */
   bloodMistScale?: number;
 }
 

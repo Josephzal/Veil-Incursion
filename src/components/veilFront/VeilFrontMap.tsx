@@ -74,7 +74,6 @@ export default function VeilFrontMap({
   const reactId = useId().replace(/:/g, '');
   const [hostSize, setHostSize] = useState({ width: 640, height: 400 });
   const [hoveredSectorId, setHoveredSectorId] = useState<SectorId | null>(null);
-  const [focusedSectorId, setFocusedSectorId] = useState<SectorId | null>(null);
   const mapHref = useMemo(() => resolveSvgHref(VeilFrontMapBase), []);
 
   const unlockedSet = useMemo(() => {
@@ -125,15 +124,30 @@ export default function VeilFrontMap({
     onSectorPress(id);
   }, [onSectorPress]);
 
-  const handleMapPress = useCallback(
-    (localX: number, localY: number) => {
+  const hitSectorAtLocalPoint = useCallback(
+    (localX: number, localY: number): SectorId | null => {
       const viewBoxPoint = screenPointToViewBoxExpanded(localX, localY, 1, 0, 0, drawMetrics);
       const hit = hitTestSectorAtPoint(viewBoxPoint, macroLikeSectors);
-      if (!hit) return;
-      const sectorId = hit.id as unknown as SectorId;
+      return hit ? (hit.id as unknown as SectorId) : null;
+    },
+    [drawMetrics, macroLikeSectors],
+  );
+
+  const handleMapPress = useCallback(
+    (localX: number, localY: number) => {
+      const sectorId = hitSectorAtLocalPoint(localX, localY);
+      if (!sectorId) return;
       handleSectorSelect(sectorId);
     },
-    [drawMetrics, handleSectorSelect, macroLikeSectors],
+    [handleSectorSelect, hitSectorAtLocalPoint],
+  );
+
+  const handleWebHoverMove = useCallback(
+    (event: { nativeEvent: { locationX: number; locationY: number } }) => {
+      const { locationX, locationY } = event.nativeEvent;
+      setHoveredSectorId(hitSectorAtLocalPoint(locationX, locationY));
+    },
+    [hitSectorAtLocalPoint],
   );
 
   const tapGesture = Gesture.Tap()
@@ -146,9 +160,6 @@ export default function VeilFrontMap({
   const activeDef = getVeilFrontMapSector(activeSectorId);
   const hoverDef = hoveredSectorId
     ? VEIL_FRONT_MAP_SECTORS.find((s) => s.id === hoveredSectorId) ?? null
-    : null;
-  const focusDef = focusedSectorId
-    ? VEIL_FRONT_MAP_SECTORS.find((s) => s.id === focusedSectorId) ?? null
     : null;
 
   const clipIdFor = (sector: VeilFrontMapSectorDef) => `${reactId}-${sector.clipIdBase}`;
@@ -199,7 +210,17 @@ export default function VeilFrontMap({
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.host} onLayout={handleHostLayout}>
         <GestureDetector gesture={tapGesture}>
-          <View style={styles.svgWrap}>
+          <View
+            style={styles.svgWrap}
+            {...(Platform.OS === 'web'
+              ? {
+                  // Web: hover via host View — do not put mouse/DOM props on <Path>
+                  // (react-native-svg prepare() forwards them onto DOM path and crashes).
+                  onMouseMove: handleWebHoverMove,
+                  onMouseLeave: () => setHoveredSectorId(null),
+                }
+              : {})}
+          >
             <Svg
               width="100%"
               height="100%"
@@ -377,20 +398,6 @@ export default function VeilFrontMap({
                 />
               ) : null}
 
-              {/* Focus ring */}
-              {!SHOW_SECTOR_DEBUG && focusDef ? (
-                <Path
-                  d={focusDef.path}
-                  fill="none"
-                  stroke={focusDef.accent}
-                  strokeWidth={1.25}
-                  strokeOpacity={0.9}
-                  strokeDasharray="4 3"
-                  strokeLinejoin="round"
-                  pointerEvents="none"
-                />
-              ) : null}
-
               {/* Selected glow — layered outer bloom + crisp edge */}
               {!SHOW_SECTOR_DEBUG && activeDef ? (
                 <G pointerEvents="none">
@@ -442,39 +449,29 @@ export default function VeilFrontMap({
                 </G>
               ) : null}
 
-              {/* Invisible hitboxes — locked sectors remain selectable for inspection */}
-              {!SHOW_SECTOR_DEBUG ? (
+              {/*
+                Native hitboxes only. Web selection uses GestureDetector + hitTestSectorAtPoint;
+                web hover uses the host View mouse handlers above. Spreading DOM/a11y props onto
+                react-native-svg Path on web forwards invalid values onto <path> and crashes.
+              */}
+              {!SHOW_SECTOR_DEBUG && Platform.OS !== 'web' ? (
                 <G id="sector-hitboxes">
                   {VEIL_FRONT_MAP_SECTORS.map((sector) => {
                     const unlocked = isUnlocked(sector.id);
-                    const hitProps = {
-                      d: sector.path,
-                      fill: 'rgba(0,0,0,0.001)',
-                      stroke: 'none',
-                      onPress: () => handleSectorSelect(sector.id),
-                      accessibilityRole: 'button' as const,
-                      accessibilityLabel: unlocked
-                        ? `Select ${sector.name}`
-                        : `Inspect locked sector ${sector.name}`,
-                      accessibilityState: { selected: activeSectorId === sector.id },
-                      ...(Platform.OS === 'web'
-                        ? {
-                            cursor: 'pointer',
-                            tabIndex: 0,
-                            onMouseEnter: () => setHoveredSectorId(sector.id),
-                            onMouseLeave: () => setHoveredSectorId((id) => (id === sector.id ? null : id)),
-                            onFocus: () => setFocusedSectorId(sector.id),
-                            onBlur: () => setFocusedSectorId((id) => (id === sector.id ? null : id)),
-                            onKeyDown: (event: { key: string; preventDefault: () => void }) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                handleSectorSelect(sector.id);
-                              }
-                            },
-                          }
-                        : {}),
-                    };
-                    return <Path key={`hit-${sector.id}`} {...(hitProps as object)} />;
+                    return (
+                      <Path
+                        key={`hit-${sector.id}`}
+                        d={sector.path}
+                        fill="rgba(0,0,0,0.001)"
+                        stroke="none"
+                        onPress={() => handleSectorSelect(sector.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={unlocked
+                          ? `Select ${sector.name}`
+                          : `Inspect locked sector ${sector.name}`}
+                        accessibilityState={{ selected: activeSectorId === sector.id }}
+                      />
+                    );
                   })}
                 </G>
               ) : null}

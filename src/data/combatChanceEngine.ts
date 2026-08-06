@@ -19,7 +19,9 @@ export function resolveEnemyStatEvadeChance(ctx: EnemyEvadeContext): number {
   const postureEvade = ctx.defender.evadeActive && !ctx.bypassPostureEvade
     ? COMBAT_CHANCE.EVADE_POSTURE_MISS_BONUS
     : 0;
-  return clampChance(statEvade + postureEvade);
+  const accuracyBonus = Math.max(0, (ctx.accuracyBonusPct ?? 0) / 100);
+  // Accuracy subtracts from the combined evade pool, then clamps — action-scoped only.
+  return clampChance(statEvade + postureEvade - accuracyBonus);
 }
 
 export function resolvePlayerEvadeChance(ctx: PlayerEvadeContext): number {

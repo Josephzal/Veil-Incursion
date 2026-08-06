@@ -37,7 +37,7 @@ export const WEAPON_ANCHOR_ATTACK_BY_FAMILY: Record<WeaponFamilyId, WeaponAnchor
     id: 'WARDENS_STRIKE',
     displayName: "WARDEN'S STRIKE",
     weaponFamilyId: 'aegis-runed-longsword',
-    weaponDisplayName: 'Longsword',
+    weaponDisplayName: 'Runed Longsword',
     classId: 'AEGIS',
     classCompatId: 'STRIKE',
     targetPattern: 'SINGLE',
@@ -67,7 +67,7 @@ export const WEAPON_ANCHOR_ATTACK_BY_FAMILY: Record<WeaponFamilyId, WeaponAnchor
     id: 'SILVER_VERDICT',
     displayName: 'SILVER VERDICT',
     weaponFamilyId: 'hex-silver-core-sidearm',
-    weaponDisplayName: 'Revolver',
+    weaponDisplayName: 'Silver-Core Sidearm',
     classId: 'HEX_SHOT',
     classCompatId: 'SILVER_CORE_SIDEARM',
     targetPattern: 'SINGLE',
@@ -77,7 +77,7 @@ export const WEAPON_ANCHOR_ATTACK_BY_FAMILY: Record<WeaponFamilyId, WeaponAnchor
     id: 'BREACH_ROUND',
     displayName: 'BREACH ROUND',
     weaponFamilyId: 'hex-void-cannon',
-    weaponDisplayName: 'Black Door',
+    weaponDisplayName: 'Nullbreach',
     classId: 'HEX_SHOT',
     classCompatId: 'SILVER_CORE_SIDEARM',
     targetPattern: 'SINGLE',
@@ -87,7 +87,7 @@ export const WEAPON_ANCHOR_ATTACK_BY_FAMILY: Record<WeaponFamilyId, WeaponAnchor
     id: 'CINDER_SWEEP',
     displayName: 'CINDER SWEEP',
     weaponFamilyId: 'hex-pulse-rifle',
-    weaponDisplayName: 'Carbine',
+    weaponDisplayName: 'Ash Shotgun',
     classId: 'HEX_SHOT',
     classCompatId: 'SILVER_CORE_SIDEARM',
     targetPattern: 'SPREAD',
@@ -187,6 +187,7 @@ export function toRuntimeClassBasicId(
 ): 'STRIKE' | 'SILVER_CORE_SIDEARM' | 'VEIL_SPLINTER' | string {
   const canonical = canonicalizeWeaponAnchorAttackId(abilityId, equippedFamilyId);
   if (canonical) return ANCHOR_BY_ID[canonical].classCompatId;
+  if (abilityId === 'QUICKDRAW' || abilityId === 'CENTER_MASS') return 'SILVER_CORE_SIDEARM';
   if (
     abilityId === 'STRIKE'
     || abilityId === 'SILVER_CORE_SIDEARM'
@@ -204,6 +205,8 @@ export function isWeaponBasicAbilityId(
   return canonicalizeWeaponAnchorAttackId(abilityId, equippedFamilyId) != null
     || abilityId === 'STRIKE'
     || abilityId === 'SILVER_CORE_SIDEARM'
+    || abilityId === 'QUICKDRAW'
+    || abilityId === 'CENTER_MASS'
     || abilityId === 'VEIL_SPLINTER';
 }
 
@@ -227,19 +230,26 @@ export function resolveWeaponAnchorForAbility(
   return null;
 }
 
-/** Retired player-facing strings — must never appear on active surfaces. */
+/**
+ * Retired player-facing strings — must never appear on active surfaces.
+ * Phase H.1a: Revolver / Black Door / Carbine are legacy Hex presentation aliases.
+ * Canonical Hex live names: Silver-Core Sidearm / Nullbreach / Ash Shotgun.
+ */
 export const RETIRED_WEAPON_DISPLAY_NAMES = [
   'Rift Edge',
   'Veil Edge',
   'Nullbreach Carbine',
   'Nullbreach Shotgun',
-  'Runed Longsword',
+  /** Bare "Longsword" retired — canonical live name is Runed Longsword. */
   'Claymore Blade',
-  'Silver-Core Sidearm',
   'Pulse Rifle',
   'Null Conduit',
   'Echo Lantern',
   'Sanguine Prism',
+  /** Hex H.1a — WU-1 presentation names retired in favor of H.1a canon. */
+  'Revolver',
+  'Black Door',
+  'Carbine',
 ] as const;
 
 export const RETIRED_ANCHOR_DISPLAY_NAMES = [

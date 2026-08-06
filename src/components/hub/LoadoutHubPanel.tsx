@@ -268,10 +268,10 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     : 'None equipped';
 
   const abilityLoadout = useMemo(() => {
-    if (account.activeClass === 'AEGIS') return account.aegisLoadout;
+    if (account.activeClass === 'AEGIS') return account.aegisTechniqueLoadout;
     if (account.activeClass === 'HEX_SHOT') return account.hexShotLoadout;
     return account.envoyLoadout;
-  }, [account.activeClass, account.aegisLoadout, account.hexShotLoadout, account.envoyLoadout]);
+  }, [account.activeClass, account.aegisTechniqueLoadout, account.hexShotLoadout, account.envoyLoadout]);
 
   const fieldFilled = [...account.runItemLoadout.combatSlots, ...account.runItemLoadout.fieldSlots]
     .filter((id) => id != null).length;

@@ -4,7 +4,6 @@ import {
   DEFAULT_ENVOY_LOADOUT,
   DEFAULT_HEX_SHOT_LOADOUT,
   type EnvoyLoadout,
-  type HexShotLoadout,
 } from '../types/operativeClass';
 import {
   ENVOY_PROC_ULTIMATES,
@@ -14,7 +13,7 @@ import {
 } from './combatMasteryEngine';
 import { ENVOY_ABILITY_CATALOG } from './envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from './hexShotAbilities';
-import { migrateHexShotAbilityId, migrateDeprecatedHexShotLoadoutId } from './hexShotMigration';
+import { migrateHexShotAbilityId } from './hexShotMigration';
 import { migrateEnvoyAbilityId } from './envoyMigration';
 import {
   canAffordAbilityUnlock,
@@ -76,27 +75,11 @@ export function getAssignableEnvoyAbilities(): EnvoyAbilityId[] {
   );
 }
 
-export function sanitizeHexShotCombatLoadout(loadout: readonly HexShotAbilityId[]): HexShotLoadout {
-  const migrated = loadout.map((id) => migrateHexShotAbilityId(id));
-  if (migrated.length !== 4 || migrated[0] !== HEX_SHOT_ANCHOR) {
-    return [...DEFAULT_HEX_SHOT_LOADOUT];
-  }
-  const used = new Set<string>([migrated[0]]);
-  const flex = migrated.slice(1).map((raw) => {
-    // v1: swap deprecated ammo-identity abilities for their shot-pattern replacements.
-    const id = migrateDeprecatedHexShotLoadoutId(raw);
-    if (!isHexShotProcUltimate(id) && !used.has(id)) {
-      used.add(id);
-      return id;
-    }
-    const replacement = DEFAULT_HEX_SHOT_LOADOUT.slice(1).find((d) => !used.has(d))
-      ?? getAssignableHexShotAbilities().find((d) => !used.has(d))
-      ?? 'RIFT_SNARE';
-    used.add(replacement);
-    return replacement;
-  });
-  return [migrated[0], flex[0], flex[1], flex[2]] as HexShotLoadout;
-}
+export {
+  sanitizeHexFlexLoadout,
+  sanitizeHexShotCombatLoadout,
+  validateHexFlexLoadoutCommit,
+} from './hexFlexLoadoutEngine';
 
 export function sanitizeEnvoyCombatLoadout(loadout: readonly EnvoyAbilityId[]): EnvoyLoadout {
   const migrated = loadout.map((id) => migrateEnvoyAbilityId(id));

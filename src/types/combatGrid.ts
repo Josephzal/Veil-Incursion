@@ -66,3 +66,7 @@ export function slotLabel(slot: CombatGridSlotId): string {
       return slot;
   }
 }
+
+export function isCombatGridSlotId(value: string | null | undefined): value is CombatGridSlotId {
+  return value === 'FL_0' || value === 'FL_1' || value === 'BL_0' || value === 'BL_1';
+}

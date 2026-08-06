@@ -408,7 +408,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     });
     return {
       activeClass: account.activeClass,
-      aegisLoadout: account.aegisLoadout,
+      aegisTechniqueLoadout: account.aegisTechniqueLoadout,
       hexShotLoadout: account.hexShotLoadout,
       envoyLoadout: account.envoyLoadout,
       alignedFaction: account.alignedFaction,
@@ -417,7 +417,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     };
   }, [
     account.activeClass,
-    account.aegisLoadout,
+    account.aegisTechniqueLoadout,
     account.alignedFaction,
     account.envoyLoadout,
     account.equippedWeaponByClass,

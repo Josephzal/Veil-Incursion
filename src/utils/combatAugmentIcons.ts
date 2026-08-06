@@ -68,7 +68,8 @@ function pushUnique(
 
 export function buildCombatAugmentIcons(input: {
   operativeClass: ClassType;
-  aegisLoadout: AegisLoadout;
+  /** Technique loadout and/or combat HUD cards — grafts keyed by ability id. */
+  aegisLoadout: readonly string[] | AegisLoadout;
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
   abilityGrafts: AbilityGraftMap;

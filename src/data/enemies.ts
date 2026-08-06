@@ -171,14 +171,6 @@ export function spawnDefendRiftHordeProfile(nodeIndex: number): EnemyCombatProfi
   };
 }
 
-/** Resonance hunter ambush — null shade from the established roster. */
-export function spawnVeilStalkerProfile(nodeIndex: number): EnemyCombatProfile {
-  return {
-    ...spawnRosterUnit(ENEMY_ROSTER['null-shade'], nodeIndex, { forcedElite: true }),
-    isVeilStalker: true,
-  };
-}
-
 /** Grid-Hound apex ambush — mandatory fight when caught on overworld at 75%+ resonance. */
 export function spawnGridHoundProfile(nodeIndex: number): EnemyCombatProfile {
   const depth = nodeIndex + 1;

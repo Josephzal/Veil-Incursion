@@ -164,6 +164,13 @@ export interface ClassBoonEncounterState {
   lastActionWasAoe: boolean;
   phantomTracerUnits: Record<string, number>;
   voidMarkedUnits: Record<string, boolean>;
+  /**
+   * H.2a — remaining Void-Mark turns from Wraithglass ammo (`voidMarkTurns`).
+   * Boolean `voidMarkedUnits` stays in sync while turns > 0 for boon readers.
+   */
+  voidMarkTurnsRemaining: Record<string, number>;
+  /** H.2a — remaining Stasis-Lock turns from ammo (`stasisTurns`). */
+  stasisLockTurnsRemaining: Record<string, number>;
   voidBleedTurns: Record<string, number>;
   suppressiveFireUnits: Record<string, boolean>;
   chemicalWarfareTurns: Record<string, number>;
@@ -198,6 +205,8 @@ export function createDefaultClassBoonEncounterState(): ClassBoonEncounterState 
     lastActionWasAoe: false,
     phantomTracerUnits: {},
     voidMarkedUnits: {},
+    voidMarkTurnsRemaining: {},
+    stasisLockTurnsRemaining: {},
     voidBleedTurns: {},
     suppressiveFireUnits: {},
     chemicalWarfareTurns: {},

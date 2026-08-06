@@ -21,7 +21,7 @@ export function isGhostCamoBlockingAttacks(classState: ClassCombatEncounterState
 
 export function resolveAstralLockCrit(
   targetId: string | undefined,
-  abilityId: HexShotAbilityId | undefined,
+  abilityId: HexShotAbilityId | string | undefined,
   hasBallisticTag: boolean,
   classState: ClassCombatEncounterState,
 ): { forceCrit: boolean; consumeLock: boolean } {

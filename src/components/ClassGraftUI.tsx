@@ -7,6 +7,9 @@ import {
   getClassGraftDefinition,
 } from '../data/classGraftEngine';
 import { resolveClassAbilityCost } from '../data/classAbilityResolver';
+import { evaluateGraftCompatibility } from '../data/graftSynergy/graftCompatibilityEngine';
+import { getGraftSocketAccessForClassRank } from '../data/graftSynergy/graftCapacityEngine';
+import { formatAegisWeaponActionLabel } from '../data/aegisWeaponActionCatalog';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { RUN_FIELD } from '../theme/runFieldTokens';
 import type { ClassType } from '../types/game';
@@ -17,14 +20,16 @@ import type {
 } from '../types/classGraft';
 import type { AbilityGraftMap, VeilGraftId } from '../types/veilGraft';
 import type { EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
-import type { AegisLoadout } from '../types/aegisCombat';
+import type { AegisTechniqueLoadout } from '../types/aegisCombat';
+import type { AegisGraftSurfaceRow } from '../data/aegisGraftTarget';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 
 const WEB_NO_OUTLINE = Platform.OS === 'web'
   ? ({ outlineStyle: 'none', outlineWidth: 0 } as object)
   : null;
 
-type ClassLoadout = AegisLoadout | HexShotLoadout | EnvoyLoadout;
+/** Aegis: 4+3 surface rows; Hex/Envoy: combat decks. */
+type ClassLoadout = AegisTechniqueLoadout | HexShotLoadout | EnvoyLoadout | readonly string[];
 type ClassGraftMap = AbilityGraftMap | HexShotAbilityGraftMap | EnvoyAbilityGraftMap;
 
 export interface GraftInjectSelection {
@@ -52,6 +57,12 @@ interface ClassGraftUIProps {
   canInject?: boolean;
   injectDisabled?: boolean;
   cancelDisabled?: boolean;
+  /** Authoritative class-rank socket flags (must match apply validation). */
+  classRank?: number;
+  /** Phase D — Aegis 4 weapon actions + 3 techniques. */
+  aegisSurfaceRows?: readonly AegisGraftSurfaceRow[];
+  capacityUsed?: number;
+  capacityAvailable?: number;
 }
 
 export default function ClassGraftUI({
@@ -71,6 +82,10 @@ export default function ClassGraftUI({
   canInject = false,
   injectDisabled = false,
   cancelDisabled = false,
+  classRank = 1,
+  aegisSurfaceRows,
+  capacityUsed,
+  capacityAvailable,
 }: ClassGraftUIProps): React.JSX.Element {
   const { fontScale, scaleFont, scaleSpacing } = useResponsiveLayout();
   const [selectedGraftId, setSelectedGraftId] = useState<string | null>(null);
@@ -79,6 +94,8 @@ export default function ClassGraftUI({
   const selectedGraft = selectedGraftId
     ? getClassGraftDefinition(activeClass, selectedGraftId)
     : null;
+
+  const access = useMemo(() => getGraftSocketAccessForClassRank(classRank), [classRank]);
 
   const panelPadding = scaleSpacing(compact ? 16 : 24);
   const cardPadding = scaleSpacing(compact ? 10 : 16);
@@ -94,21 +111,80 @@ export default function ClassGraftUI({
 
   const abilityRows = useMemo(
     () => {
+      if (activeClass === 'AEGIS' && aegisSurfaceRows?.length) {
+        return aegisSurfaceRows.map((row) => {
+          const graftId = (abilityGrafts as Record<string, VeilGraftId | undefined>)[row.key];
+          const socketOk = canGraftClassAbility(activeClass, row.key, {
+            allowFixedBasic: access.allowFixedBasic,
+            allowUltimate: access.allowUltimate,
+          });
+          let lockReason: string | null = null;
+          if (row.isFixedBasic && !access.allowFixedBasic) {
+            lockReason = 'RANK 7 LOCK';
+          } else if (!socketOk) {
+            lockReason = 'LOCKED';
+          } else if (selectedGraftId) {
+            const compat = evaluateGraftCompatibility({
+              classId: 'AEGIS',
+              abilityId: row.key,
+              graftId: selectedGraftId,
+              classRank,
+              equippedMap: abilityGrafts as Record<string, string>,
+              graftAvailable: true,
+            });
+            if (!compat.ok) {
+              lockReason = compat.rejections[0] ?? 'INCOMPATIBLE';
+            }
+          }
+          const label = row.group === 'WEAPON_ACTION'
+            ? formatAegisWeaponActionLabel(row.actionId as never)
+            : resolveClassAbilityCost(activeClass, row.actionId).label;
+          return {
+            abilityId: row.key,
+            label,
+            group: row.group,
+            graftId,
+            graftable: socketOk && lockReason == null,
+            lockReason,
+            isFixedBasic: row.isFixedBasic,
+          };
+        });
+      }
+
       const abilityIds: string[] = activeClass === 'HEX_SHOT'
         ? [...loadout, 'PHASE_SHIFT_RELOAD' as HexShotAbilityId]
         : [...loadout];
       return abilityIds.map((abilityId) => {
         const cost = resolveClassAbilityCost(activeClass, abilityId);
+        const socketOk = canGraftClassAbility(activeClass, abilityId, {
+          allowFixedBasic: access.allowFixedBasic,
+          allowUltimate: access.allowUltimate,
+        });
         return {
           abilityId,
           label: cost.label,
+          group: 'TECHNIQUE' as const,
           graftId: (abilityGrafts as Record<string, OperativeClassGraftId | VeilGraftId | undefined>)[abilityId],
-          graftable: canGraftClassAbility(activeClass, abilityId),
+          graftable: socketOk,
+          lockReason: socketOk ? null : 'ANCHOR LOCK',
+          isFixedBasic: false,
         };
       });
     },
-    [abilityGrafts, activeClass, loadout],
+    [
+      abilityGrafts,
+      activeClass,
+      aegisSurfaceRows,
+      access.allowFixedBasic,
+      access.allowUltimate,
+      classRank,
+      loadout,
+      selectedGraftId,
+    ],
   );
+
+  const weaponRows = abilityRows.filter((r) => r.group === 'WEAPON_ACTION');
+  const techniqueRows = abilityRows.filter((r) => r.group !== 'WEAPON_ACTION');
 
   const classLabel = activeClass === 'HEX_SHOT'
     ? 'HEX-SHOT GRAFT'
@@ -117,19 +193,37 @@ export default function ClassGraftUI({
       : 'VEIL-GRAFT';
 
   useEffect(() => {
-    const canInject = selectedGraftId != null
+    let injectOk = selectedGraftId != null
       && selectedAbilityId != null
       && selectedGraft != null
       && residueBalance >= selectedGraft.cost
-      && canGraftClassAbility(activeClass, selectedAbilityId);
+      && canGraftClassAbility(activeClass, selectedAbilityId, {
+        allowFixedBasic: access.allowFixedBasic,
+        allowUltimate: access.allowUltimate,
+      });
+    if (injectOk && activeClass === 'AEGIS' && selectedGraftId && selectedAbilityId) {
+      const compat = evaluateGraftCompatibility({
+        classId: 'AEGIS',
+        abilityId: selectedAbilityId,
+        graftId: selectedGraftId,
+        classRank,
+        equippedMap: abilityGrafts as Record<string, string>,
+        graftAvailable: true,
+      });
+      injectOk = compat.ok;
+    }
 
     onSelectionChange?.({
       graftId: selectedGraftId,
       abilityId: selectedAbilityId,
-      canInject,
+      canInject: injectOk,
     });
   }, [
+    abilityGrafts,
+    access.allowFixedBasic,
+    access.allowUltimate,
     activeClass,
+    classRank,
     onSelectionChange,
     residueBalance,
     selectedAbilityId,
@@ -164,6 +258,98 @@ export default function ClassGraftUI({
       secondaryDisabled={cancelDisabled}
     />
   ) : null);
+
+  const renderSlot = ({
+    abilityId,
+    label,
+    graftId,
+    graftable,
+    lockReason,
+  }: (typeof abilityRows)[number]) => {
+    const existing = graftId ? getClassGraftDefinition(activeClass, graftId) : null;
+    const slotSelected = selectedAbilityId === abilityId;
+    const canSelect = graftable
+      && selectedGraftId != null
+      && selectedGraft != null
+      && residueBalance >= selectedGraft.cost;
+    const dimmed = selectedAbilityId != null
+      && selectedAbilityId !== abilityId
+      && graftable
+      && canSelect;
+
+    const slotAccent = slotSelected
+      ? RUN_FIELD.mintBorder
+      : existing?.accentColor ?? RUN_FIELD.line;
+
+    return (
+      <HapticPressable
+        key={abilityId}
+        disabled={!canSelect}
+        onPress={() => handleSelectAbility(abilityId, graftable)}
+        style={(state) => [
+          styles.abilitySlot,
+          dashedBorder,
+          {
+            width: '48%',
+            minHeight: slotMinHeight,
+            borderColor: slotAccent,
+            borderWidth: slotSelected ? 2 : 1,
+            paddingVertical: compact ? 6 : 10,
+            paddingHorizontal: compact ? 6 : 8,
+            backgroundColor: slotSelected
+              ? RUN_FIELD.mintSoft
+              : existing
+                ? `${existing.accentColor}14`
+                : RUN_FIELD.panelWash,
+            opacity: !graftable
+              ? 0.45
+              : dimmed
+                ? 0.4
+                : canSelect
+                  ? state.pressed
+                    ? 0.82
+                    : 1
+                  : 0.7,
+          },
+          terminalHoverStyle(readPressableHover(state), state.pressed),
+          WEB_NO_OUTLINE,
+        ]}
+      >
+        <Text
+          style={[
+            styles.abilityLabel,
+            {
+              color: slotSelected
+                ? RUN_FIELD.mint
+                : existing?.accentColor ?? (graftable ? RUN_FIELD.text : RUN_FIELD.textDim),
+              fontSize: abilityLabelSize,
+              lineHeight: abilityLabelSize * 1.3,
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {label}
+        </Text>
+        {!graftable ? (
+          <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
+            {lockReason ?? 'LOCKED'}
+          </Text>
+        ) : existing ? (
+          <Text style={[styles.slotTag, { color: existing.accentColor, fontSize: tagSize }]}>
+            {existing.name.toUpperCase()}
+          </Text>
+        ) : slotSelected ? (
+          <Text style={[styles.slotTag, { color: RUN_FIELD.mint, fontSize: tagSize }]}>
+            PATCH READY
+          </Text>
+        ) : (
+          <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
+            UNGRAFTED
+          </Text>
+        )}
+      </HapticPressable>
+    );
+  };
 
   return (
     <View
@@ -214,7 +400,12 @@ export default function ClassGraftUI({
           },
         ]}
       >
-        Select a graft cartridge, patch an ability slot, then inject. Anchor and Ultimate abilities are locked.
+        {activeClass === 'AEGIS'
+          ? 'Select a graft, patch a snapshotted weapon action or technique, then inject. Family Strike locks at rank 7; Parry/Ultimates are ungraftable.'
+          : 'Select a graft cartridge, patch an ability slot, then inject. Anchor and Ultimate abilities are locked.'}
+        {capacityUsed != null && capacityAvailable != null
+          ? ` Capacity ${capacityUsed}/${capacityUsed + capacityAvailable}.`
+          : ''}
       </Text>
 
       <View style={[styles.offerCol, { gap: cardGap, marginTop: scaleSpacing(compact ? 10 : 20) }]}>
@@ -297,100 +488,45 @@ export default function ClassGraftUI({
           },
         ]}
       >
-        <View
-          style={[
-            styles.loadoutGrid,
-            {
-              gap: cardGap,
-            },
-          ]}
-        >
-          {abilityRows.map(({ abilityId, label, graftId, graftable }) => {
-            const existing = graftId ? getClassGraftDefinition(activeClass, graftId) : null;
-            const slotSelected = selectedAbilityId === abilityId;
-            const canSelect = graftable
-              && selectedGraftId != null
-              && selectedGraft != null
-              && residueBalance >= selectedGraft.cost;
-            const dimmed = selectedAbilityId != null
-              && selectedAbilityId !== abilityId
-              && graftable
-              && canSelect;
-
-            const slotAccent = slotSelected
-              ? RUN_FIELD.mintBorder
-              : existing?.accentColor ?? RUN_FIELD.line;
-
-            return (
-              <HapticPressable
-                key={abilityId}
-                disabled={!canSelect}
-                onPress={() => handleSelectAbility(abilityId, graftable)}
-                style={(state) => [
-                  styles.abilitySlot,
-                  dashedBorder,
-                  {
-                    width: '48%',
-                    minHeight: slotMinHeight,
-                    borderColor: slotAccent,
-                    borderWidth: slotSelected ? 2 : 1,
-                    paddingVertical: compact ? 6 : 10,
-                    paddingHorizontal: compact ? 6 : 8,
-                    backgroundColor: slotSelected
-                      ? RUN_FIELD.mintSoft
-                      : existing
-                        ? `${existing.accentColor}14`
-                        : RUN_FIELD.panelWash,
-                    opacity: !graftable
-                      ? 0.45
-                      : dimmed
-                        ? 0.4
-                        : canSelect
-                          ? state.pressed
-                            ? 0.82
-                            : 1
-                          : 0.7,
-                  },
-                  terminalHoverStyle(readPressableHover(state), state.pressed),
-                  WEB_NO_OUTLINE,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.abilityLabel,
-                    {
-                      color: slotSelected
-                        ? RUN_FIELD.mint
-                        : existing?.accentColor ?? (graftable ? RUN_FIELD.text : RUN_FIELD.textDim),
-                      fontSize: abilityLabelSize,
-                      lineHeight: abilityLabelSize * 1.3,
-                    },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {label}
-                </Text>
-                {!graftable ? (
-                  <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
-                    ANCHOR LOCK
-                  </Text>
-                ) : existing ? (
-                  <Text style={[styles.slotTag, { color: existing.accentColor, fontSize: tagSize }]}>
-                    {existing.name.toUpperCase()}
-                  </Text>
-                ) : slotSelected ? (
-                  <Text style={[styles.slotTag, { color: RUN_FIELD.mint, fontSize: tagSize }]}>
-                    PATCH READY
-                  </Text>
-                ) : (
-                  <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
-                    UNGRAFTED
-                  </Text>
-                )}
-              </HapticPressable>
-            );
-          })}
-        </View>
+        {weaponRows.length > 0 ? (
+          <>
+            <Text
+              style={[
+                styles.sectionLabel,
+                {
+                  color: RUN_FIELD.textSecondary,
+                  fontSize: tagSize,
+                  marginBottom: scaleSpacing(6),
+                },
+              ]}
+            >
+              WEAPON ACTIONS
+            </Text>
+            <View style={[styles.loadoutGrid, { gap: cardGap }]}>
+              {weaponRows.map(renderSlot)}
+            </View>
+            <Text
+              style={[
+                styles.sectionLabel,
+                {
+                  color: RUN_FIELD.textSecondary,
+                  fontSize: tagSize,
+                  marginTop: scaleSpacing(12),
+                  marginBottom: scaleSpacing(6),
+                },
+              ]}
+            >
+              TECHNIQUES
+            </Text>
+            <View style={[styles.loadoutGrid, { gap: cardGap }]}>
+              {techniqueRows.map(renderSlot)}
+            </View>
+          </>
+        ) : (
+          <View style={[styles.loadoutGrid, { gap: cardGap }]}>
+            {abilityRows.map(renderSlot)}
+          </View>
+        )}
       </View>
 
       {resolvedFooter ? (
@@ -477,6 +613,11 @@ const styles = StyleSheet.create({
   abilitySection: {
     borderTopWidth: 1,
     width: '100%',
+  },
+  sectionLabel: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   loadoutGrid: {
     flexDirection: 'row',

@@ -60,21 +60,28 @@ function main(): void {
   assert.ok(ABYSSAL_VERDICT_READY_NOTIFY_MS >= 700 && ABYSSAL_VERDICT_READY_NOTIFY_MS <= 900);
   assert.ok(ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS >= 60 && ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS <= 90);
 
-  const full = resolveAbyssalVerdictCommitDamage({ simplifiedInputs: false });
-  assert.equal(full.hits, 3);
-  assert.equal(full.damage, COMBAT_ACTION.EVISCERATE_DAMAGE);
-  assert.equal(full.gradeLabel, 'PERFECT');
+  // E.1d.1 — grade from authoritative input; FULL targeting does not force PERFECT.
+  const perfect = resolveAbyssalVerdictCommitDamage({ hitCount: 3 });
+  assert.equal(perfect.hits, 3);
+  assert.equal(perfect.damage, COMBAT_ACTION.EVISCERATE_DAMAGE);
+  assert.equal(perfect.gradeLabel, 'PERFECT');
+
+  const clean = resolveAbyssalVerdictCommitDamage({ hitCount: 2 });
+  assert.equal(clean.hits, 2);
+  assert.equal(clean.damage, 23);
+  assert.equal(clean.gradeLabel, 'CLEAN');
 
   const simplified = resolveAbyssalVerdictCommitDamage({ simplifiedInputs: true });
   assert.equal(simplified.hits, 1);
-  assert.ok(simplified.damage < full.damage);
+  assert.ok(simplified.damage < perfect.damage);
   assert.equal(simplified.gradeLabel, 'STANDARD');
+  assert.equal(simplified.damage, 11);
 
   // Preview uses the same commit damage path (canonical), not a second formula.
   const preview = previewAbyssalVerdictDamage({
     currentHp: 20,
     kineticArmor: 5,
-    simplifiedInputs: false,
+    grade: 'PERFECT',
   });
   assert.equal(preview.damage, COMBAT_ACTION.EVISCERATE_DAMAGE);
   assert.equal(preview.lethal, true);
@@ -83,10 +90,11 @@ function main(): void {
 
   const previewSurvive = previewAbyssalVerdictDamage({
     currentHp: 100,
-    simplifiedInputs: false,
+    grade: 'CLEAN',
   });
   assert.equal(previewSurvive.lethal, false);
-  assert.equal(previewSurvive.remainingHp, 100 - COMBAT_ACTION.EVISCERATE_DAMAGE);
+  assert.equal(previewSurvive.remainingHp, 100 - 23);
+  assert.equal(previewSurvive.gradeLabel, 'CLEAN');
 
   assert.equal(ABYSSAL_VERDICT_UI_COPY.displayName, 'ABYSSAL VERDICT');
   assert.ok(ABYSSAL_VERDICT_UI_COPY.targetingInstruction.includes('SELECT TARGET'));

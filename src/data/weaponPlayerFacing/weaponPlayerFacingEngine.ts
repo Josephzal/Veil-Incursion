@@ -244,21 +244,12 @@ export function resolveWeaponCombatCallouts(
       });
     }
     if (id === 'aegis-claymore-blade') {
-      const stm = input.stamina ?? 0;
-      const max = input.maxStamina ?? 1;
-      const low = stm / max <= 0.35;
+      // Aegis has no combat Stamina — surface Fracture-break cashout state instead.
       out.push({
-        id: 'claymore-stamina',
-        label: low ? 'STAMINA COMMITTED' : 'STAMINA READY',
-        tone: low ? 'warn' : 'info',
+        id: 'claymore-break',
+        label: input.claymoreStaminaCommitted ? 'BREAK CASHOUT READY' : 'BREAK CASHOUT SPENT',
+        tone: input.claymoreStaminaCommitted ? 'ready' : 'info',
       });
-      if (input.claymoreStaminaCommitted) {
-        out.push({
-          id: 'claymore-cashout',
-          label: 'BREAK CASHOUT WINDOW',
-          tone: 'ready',
-        });
-      }
     }
     if (input.weaponUltimateReady) {
       const label = input.weaponUltimateDisplayName

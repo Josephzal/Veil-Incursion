@@ -149,7 +149,7 @@ export const WEAPON_INTERACTION_HOOK_CONTRACT: Record<
   PROTOCOL_CHARGE: {
     id: 'PROTOCOL_CHARGE',
     runtimeProducer: 'HEX_RESOLVE_RELOAD PERFECT → protocolCharges; evaluateZeroProtocolReady',
-    eligibleConsumers: 'Protocol Charge / weapon ultimate routes (Carbine Zero Protocol + Hex siblings)',
+    eligibleConsumers: 'Protocol Charge / weapon ultimate routes (Ash Shotgun Zero Protocol + Hex siblings)',
     triggerTiming: 'On Perfect Reload only',
     cardinality: 'PER_ACTION',
     sources: ['CLASS_MECHANIC'],

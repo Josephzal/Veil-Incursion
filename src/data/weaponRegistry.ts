@@ -50,7 +50,7 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
   'aegis-runed-longsword': {
     id: 'aegis-runed-longsword',
     classId: 'AEGIS',
-    name: 'Longsword',
+    name: 'Runed Longsword',
     shortName: 'Longsword',
     description: 'Runed longsword — balanced damage, fracture, and Reserve generation.',
     flavorText: 'Agency-standard rune etching. For operatives learning the Aegis rhythm.',
@@ -64,15 +64,16 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     requiresAnomalousCore: true,
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
-      tier(1, 'Longsword I', {}, 'Baseline melee damage, fracture, and Reserve generation.', [
+      tier(1, 'Longsword I', { aegisTechniquePowerPct: 0 }, 'Baseline Fracture and Reserve generation.', [
         { resourceId: 'nullcrete-shard', quantity: 4 },
         { resourceId: 'echo-glass-shard', quantity: 3 },
       ]),
-      tier(2, 'Longsword II', { strikeDamagePct: 10, fractureFromMeleePct: 10 }, '+10% melee damage and fracture.', [
+      // strikeDamagePct: dormant WA/basic migration. aegisTechniquePowerPct: VP/Reave (E.1c.1).
+      tier(2, 'Longsword II', { strikeDamagePct: 10, aegisTechniquePowerPct: 10, fractureFromMeleePct: 10 }, '+10% Fracture from melee.', [
         { resourceId: 'nullcrete-shard', quantity: 6 },
         { resourceId: 'legion-blood-iron', quantity: 1 },
       ]),
-      tier(3, 'Longsword III', { strikeDamagePct: 18, fractureFromMeleePct: 15 }, 'First melee hit each combat generates +5 Abyssal Reserve.', EMPTY_COST, 'FIRST_MELEE_RESERVE_BONUS', 5),
+      tier(3, 'Longsword III', { strikeDamagePct: 18, aegisTechniquePowerPct: 18, fractureFromMeleePct: 15 }, 'First melee hit each combat generates +5 Abyssal Reserve.', EMPTY_COST, 'FIRST_MELEE_RESERVE_BONUS', 5),
     ],
   },
   'aegis-claymore-blade': {
@@ -80,7 +81,7 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     classId: 'AEGIS',
     name: 'Unmaker',
     shortName: 'Unmaker',
-    description: 'Massive claymore — higher damage and fracture at elevated stamina cost.',
+    description: 'Massive claymore — heavy Fracture pressure and break cashouts.',
     flavorText: 'Legion-forged mass transfer lattice for breaking armored Veil entities.',
     role: 'Heavy Fracture-break cashout',
     tags: ['MELEE', 'KINETIC', 'HEAVY', 'FRACTURE'],
@@ -96,15 +97,25 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     requiresAnomalousCore: true,
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
-      tier(1, 'Unmaker I', { strikeDamagePct: 15, fractureFromMeleePct: 20, strikeStaminaCostPct: 10 }, '+15% damage, +20% fracture, +10% stamina cost.', [
+      // strikeDamagePct: dormant WA/basic migration. aegisTechniquePowerPct: VP/Reave.
+      // aegisUltimatePowerPct: REND/GRAVEFALL (E.1d.1) — mirrors prior strikeDamagePct matrices.
+      tier(1, 'Unmaker I', { strikeDamagePct: 15, aegisTechniquePowerPct: 15, aegisUltimatePowerPct: 15, fractureFromMeleePct: 20, strikeStaminaCostPct: 10 }, '+20% Fracture from melee.', [
         { resourceId: 'combustion-cylinder', quantity: 2 },
         { resourceId: 'legion-blood-iron', quantity: 1 },
       ]),
-      tier(2, 'Unmaker II', { strikeDamagePct: 22, fractureFromMeleePct: 28, strikeStaminaCostPct: 10 }, 'Improved damage and fracture.', [
+      tier(2, 'Unmaker II', { strikeDamagePct: 22, aegisTechniquePowerPct: 22, aegisUltimatePowerPct: 22, fractureFromMeleePct: 28, strikeStaminaCostPct: 10 }, '+28% Fracture from melee.', [
         { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'legion-blood-iron', quantity: 2 },
       ]),
-      tier(3, 'Unmaker III', { strikeDamagePct: 25, fractureFromMeleePct: 32, strikeStaminaCostPct: 10 }, 'First Fracture each combat restores 15 Stamina.', EMPTY_COST, 'FIRST_FRACTURE_STAMINA_REFUND', 15),
+      tier(
+        3,
+        'Unmaker III',
+        { strikeDamagePct: 25, aegisTechniquePowerPct: 25, aegisUltimatePowerPct: 25, fractureFromMeleePct: 32, strikeStaminaCostPct: 10 },
+        'Fracture Break: Gain 1 Abyssal Reserve when an Unmaker action breaks Fracture. Once per action.',
+        EMPTY_COST,
+        'FRACTURE_BREAK_RESERVE',
+        1,
+      ),
     ],
   },
   'aegis-rift-edge': {
@@ -128,52 +139,54 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     requiresAnomalousCore: true,
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
-      tier(1, 'Paired Blades I', { strikeDamagePct: -5, reserveGainFlat: 3, critChancePct: 5 }, 'Melee generates extra Reserve; reduced kinetic damage; +5% crit.', [
+      // strikeDamagePct: dormant WA/basic. aegisTechniquePowerPct: VP/Reave (E.1c.1).
+      // aegisUltimatePowerPct: REND_THE_VEIL (E.1d.1) — mirrors prior strikeDamagePct matrices.
+      tier(1, 'Paired Blades I', { strikeDamagePct: -5, aegisTechniquePowerPct: -5, aegisUltimatePowerPct: -5, reserveGainFlat: 3, critChancePct: 5 }, 'Melee generates extra Reserve; +5% crit.', [
         { resourceId: 'echo-glass-shard', quantity: 6 },
         { resourceId: 'sanguine-ampoule', quantity: 1 },
       ]),
-      tier(2, 'Paired Blades II', { strikeDamagePct: -3, reserveGainFlat: 5, critChancePct: 8 }, 'Improved crit and Reserve bonuses.', [
+      tier(2, 'Paired Blades II', { strikeDamagePct: -3, aegisTechniquePowerPct: -3, aegisUltimatePowerPct: -3, reserveGainFlat: 5, critChancePct: 8 }, 'Improved crit and Reserve bonuses.', [
         { resourceId: 'echo-glass-shard', quantity: 10 },
         { resourceId: 'ossified-ley-knot', quantity: 1 },
       ]),
-      tier(3, 'Paired Blades III', { strikeDamagePct: -3, reserveGainFlat: 5, critChancePct: 10 }, 'Melee crits generate +5 additional Reserve.', EMPTY_COST, 'MELEE_CRIT_RESERVE_BONUS', 5),
+      tier(3, 'Paired Blades III', { strikeDamagePct: -3, aegisTechniquePowerPct: -3, aegisUltimatePowerPct: -3, reserveGainFlat: 5, critChancePct: 10 }, 'Melee crits generate +5 additional Reserve.', EMPTY_COST, 'MELEE_CRIT_RESERVE_BONUS', 5),
     ],
   },
   'hex-silver-core-sidearm': {
     id: 'hex-silver-core-sidearm',
     classId: 'HEX_SHOT',
-    name: 'Revolver',
-    shortName: 'Revolver',
-    description: 'Silver-core revolver — consistent ballistic damage and manageable ammo.',
-    flavorText: 'Terran Grid warded revolver. The Riftshot operative\'s default field piece.',
+    name: 'Silver-Core Sidearm',
+    shortName: 'Sidearm',
+    description: 'Silver-Core Sidearm — consistent ballistic damage and manageable ammo.',
+    flavorText: 'Terran Grid warded sidearm. The Riftshot operative\'s default field piece.',
     role: 'Starter / precision reload-tempo',
     tags: ['BALLISTIC', 'RANGED', 'KINETIC', 'BALANCED', 'AMMO'],
     startingUnlocked: true,
     unlockRequirement: EMPTY_COST,
-    uiSummary: 'Efficient revolver — reload tempo and precise finishes.',
+    uiSummary: 'Efficient sidearm — reload tempo and precise finishes.',
     masterworkUnlocked: false,
     masterworkRecipeId: null,
     requiresAnomalousCore: true,
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
-      tier(1, 'Revolver I', {}, 'Baseline revolver stats.', [
+      tier(1, 'Silver-Core Sidearm I', {}, 'Baseline sidearm stats.', [
         { resourceId: 'nullcrete-shard', quantity: 4 },
         { resourceId: 'echo-glass-shard', quantity: 3 },
       ]),
-      tier(2, 'Revolver II', { ballisticDamagePct: 10, strikeStaminaCostPct: -5 }, '+10% ballistic damage; smoother reload stamina.', [
+      tier(2, 'Silver-Core Sidearm II', { ballisticDamagePct: 10, strikeStaminaCostPct: -5 }, '+10% ballistic damage; smoother reload stamina.', [
         { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'encrypted-grid-drive', quantity: 1 },
       ]),
-      tier(3, 'Revolver III', { ballisticDamagePct: 15, strikeStaminaCostPct: -8 }, 'First reload each combat restores 10 Stamina.', EMPTY_COST, 'FIRST_RELOAD_STAMINA', 10),
+      tier(3, 'Silver-Core Sidearm III', { ballisticDamagePct: 20, strikeStaminaCostPct: -8 }, 'First reload each combat restores 10 Stamina.', EMPTY_COST, 'FIRST_RELOAD_STAMINA', 10),
     ],
   },
   'hex-pulse-rifle': {
     id: 'hex-pulse-rifle',
     classId: 'HEX_SHOT',
-    name: 'Carbine',
-    shortName: 'Carbine',
-    description: 'Veil-ammo carbine — multi-target pressure and reload tempo.',
-    flavorText: 'Recovered encrypted tech lattice. Chamber pattern favors clustered frontliners over precision.',
+    name: 'Ash Shotgun',
+    shortName: 'Ash Shotgun',
+    description: 'Ash Shotgun — multi-target pressure and reload tempo.',
+    flavorText: 'Recovered encrypted tech lattice. Spread pattern favors clustered frontliners over precision.',
     role: 'Close-range AoE / crowd clear',
     tags: ['BALLISTIC', 'RANGED', 'AMMO', 'RELOAD', 'SUSTAINED'],
     startingUnlocked: false,
@@ -189,23 +202,23 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     requiresAnomalousCore: true,
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
-      tier(1, 'Carbine I', { magazineSizeBonus: -1, ballisticDamagePct: -5 }, 'Tighter magazine; spread-pattern basic; slight per-pellet trade.', [
+      tier(1, 'Ash Shotgun I', { magazineSizeBonus: -1, ballisticDamagePct: -5 }, 'Tighter magazine; spread-pattern basic; slight per-pellet trade.', [
         { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'encrypted-grid-drive', quantity: 1 },
       ]),
-      tier(2, 'Carbine II', { magazineSizeBonus: -1, ballisticDamagePct: 0 }, 'Improved spread damage with same reload pressure.', [
+      tier(2, 'Ash Shotgun II', { magazineSizeBonus: -1, ballisticDamagePct: 0 }, 'Improved spread damage with same reload pressure.', [
         { resourceId: 'rail-capacitor', quantity: 3 },
         { resourceId: 'encrypted-grid-drive', quantity: 2 },
       ]),
-      tier(3, 'Carbine III', { magazineSizeBonus: 0, ballisticDamagePct: 5 }, 'After reloading, next Ballistic attack deals +10% damage.', EMPTY_COST, 'POST_RELOAD_BALLISTIC_DAMAGE', 10),
+      tier(3, 'Ash Shotgun III', { magazineSizeBonus: 0, ballisticDamagePct: 5 }, 'After reloading, next Ballistic attack deals +10% damage.', EMPTY_COST, 'POST_RELOAD_BALLISTIC_DAMAGE', 10),
     ],
   },
   'hex-void-cannon': {
     id: 'hex-void-cannon',
     classId: 'HEX_SHOT',
-    name: 'Black Door',
-    shortName: 'Black Door',
-    description: 'Nullbreach shotgun — high burst, low magazine, armor interaction.',
+    name: 'Nullbreach',
+    shortName: 'Nullbreach',
+    description: 'Nullbreach — high burst, low magazine, armor interaction.',
     flavorText: 'Dangerous single-shot lattice. Pierces armored hostiles at risky tempo.',
     role: 'Armor-breach single-target burst',
     tags: ['BALLISTIC', 'RANGED', 'VOID_AMMO', 'HEAVY', 'ARMOR_PIERCE'],
@@ -216,22 +229,22 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
       { resourceId: 'rail-capacitor', quantity: 1 },
       { resourceId: 'breach-thread', quantity: 1 },
     ],
-    uiSummary: 'Breach shotgun — small mag, armor pressure, weak crowds.',
+    uiSummary: 'Breach weapon — small mag, armor pressure, weak crowds.',
     masterworkUnlocked: false,
     masterworkRecipeId: null,
     requiresAnomalousCore: true,
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
-      tier(1, 'Black Door I', { magazineSizeBonus: -2, ballisticDamagePct: 20, armorPierceLayers: 1, strikeStaminaCostPct: 10 }, 'Lower magazine; higher damage; pierces 1 armor layer.', [
+      tier(1, 'Nullbreach I', { magazineSizeBonus: -2, ballisticDamagePct: 20, armorPierceLayers: 1, strikeStaminaCostPct: 10 }, 'Lower magazine; higher damage; pierces 1 armor layer.', [
         { resourceId: 'cinder-wire', quantity: 3 },
         { resourceId: 'combustion-cylinder', quantity: 1 },
       ]),
-      tier(2, 'Black Door II', { magazineSizeBonus: -2, ballisticDamagePct: 28, armorPierceLayers: 1, strikeStaminaCostPct: 8 }, 'Improved damage and armor interaction.', [
+      tier(2, 'Nullbreach II', { magazineSizeBonus: -2, ballisticDamagePct: 28, armorPierceLayers: 1, strikeStaminaCostPct: 8 }, 'Improved damage and armor interaction.', [
         { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'combustion-cylinder', quantity: 2 },
         { resourceId: 'encrypted-grid-drive', quantity: 1 },
       ]),
-      tier(3, 'Black Door III', { magazineSizeBonus: -2, ballisticDamagePct: 32, armorPierceLayers: 1, strikeStaminaCostPct: 8 }, 'First hit vs armored enemy removes 1 additional armor.', EMPTY_COST, 'FIRST_ARMORED_HIT_EXTRA_ARMOR_STRIP', 1),
+      tier(3, 'Nullbreach III', { magazineSizeBonus: -2, ballisticDamagePct: 32, armorPierceLayers: 1, strikeStaminaCostPct: 8 }, 'First hit vs armored enemy removes 1 additional armor.', EMPTY_COST, 'FIRST_ARMORED_HIT_EXTRA_ARMOR_STRIP', 1),
     ],
   },
   'envoy-null-conduit': {

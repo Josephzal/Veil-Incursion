@@ -204,11 +204,11 @@ function run(): void {
   assert.ok(lanternWard.logLines.some((l) => l.includes('ward') || l.includes('ECHO')), 'Lantern first debuff wards');
   assert.ok((extras.playerShield ?? 0) >= 1, 'Lantern ward mutates session extras');
 
-  // Debug inspect string includes affinity + live Carbine name
+  // Debug inspect string includes affinity + live Ash Shotgun name
   const debug = formatWeaponIdentityDebug('hex-pulse-rifle');
-  assert.ok(debug.includes('liveName=Carbine'));
+  assert.ok(debug.includes('liveName=Ash Shotgun'));
   assert.ok(debug.includes('affinity='));
-  assert.ok(!debug.includes('plannedName=Ash Shotgun'));
+  assert.ok(!debug.includes('liveName=Carbine'));
 
   ALL_WEAPON_FAMILY_IDS.forEach((id) => {
     const p = listWeaponIdentityProfiles().find((x) => x.id === id);

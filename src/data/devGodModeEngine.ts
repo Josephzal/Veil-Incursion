@@ -4,7 +4,7 @@
  */
 import type { ClassType, FactionType, PlayerAccount } from '../types/game';
 import type { BreachGradeId } from '../types/progression';
-import { ALL_AEGIS_ABILITIES, DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
+import { ALL_AEGIS_ABILITIES, DEFAULT_AEGIS_TECHNIQUE_LOADOUT } from '../types/aegisCombat';
 import {
   DEFAULT_ENVOY_LOADOUT,
   DEFAULT_ENVOY_UNLOCKED,
@@ -211,7 +211,7 @@ export function resetDevProgressionKeepItems(account: PlayerAccount): {
   godModeSnapshot = null;
 
   const weapons = createDefaultWeaponProgression();
-  const aegisLoadout = [...DEFAULT_AEGIS_LOADOUT] as PlayerAccount['aegisLoadout'];
+  const aegisTechniqueLoadout = [...DEFAULT_AEGIS_TECHNIQUE_LOADOUT] as PlayerAccount['aegisTechniqueLoadout'];
   let profile = createDefaultProgressionProfile();
   profile = appendProgressionEvent(profile, {
     kind: 'PROFILE_RESET',
@@ -233,8 +233,8 @@ export function resetDevProgressionKeepItems(account: PlayerAccount): {
       ...account.regionalPresence,
       weaponCoatingUnlocks: [],
     },
-    aegisLoadout,
-    unlockedAegisAbilities: [...normalizeUnlockedAegisAbilities(undefined, aegisLoadout)],
+    aegisTechniqueLoadout,
+    unlockedAegisAbilities: [...normalizeUnlockedAegisAbilities(undefined, aegisTechniqueLoadout)],
     hexShotLoadout: [...DEFAULT_HEX_SHOT_LOADOUT] as HexShotLoadout,
     unlockedHexShotAbilities: [...DEFAULT_HEX_SHOT_UNLOCKED],
     envoyLoadout: [...DEFAULT_ENVOY_LOADOUT] as EnvoyLoadout,

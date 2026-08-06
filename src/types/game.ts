@@ -6,7 +6,7 @@ import type { CargoItemId, CargoRunState, GlobalBankedCargo, HarvestReturnRoute 
 import { createDefaultBankedCargo } from './cargoGrid';
 import type { ResonanceEscalationState } from './resonanceEscalation';
 import type { PatrolState } from './overworldPatrol';
-import type { AegisLoadout, AegisAbilityId } from './aegisCombat';
+import type { AegisAbilityId, AegisTechniqueLoadout } from './aegisCombat';
 import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward';
 import type { ResourceQuantity } from './resourceItem';
 import {
@@ -23,7 +23,7 @@ import type { EnvoyBoonId, HexShotBoonId } from './classBoon';
 import type { EnvoyGraftId, HexShotGraftId } from './classGraft';
 import type { VeilGraftId } from './veilGraft';
 import type { BoundRequisitionRuntime } from './boundRequisition';
-import { DEFAULT_AEGIS_LOADOUT } from './aegisCombat';
+import { DEFAULT_AEGIS_TECHNIQUE_LOADOUT } from './aegisCombat';
 import {
   DEFAULT_ENVOY_LOADOUT,
   DEFAULT_HEX_SHOT_LOADOUT,
@@ -122,9 +122,15 @@ export interface PlayerAccount {
   inventory: PlayerInventoryState;
   /** Cabal vault — banked extraction cargo persists across runs. */
   bankedCargo: GlobalBankedCargo;
-  /** Pre-run combat deck — four active abilities carried into each incursion (Aegis). */
-  aegisLoadout: AegisLoadout;
-  /** Hub-unlocked Aegis abilities available for loadout staging. */
+  /**
+   * Pre-run Aegis technique selection — exactly three techniques.
+   * Weapon actions / Wraith Parry / Ultimate are derived, not stored here.
+   */
+  aegisTechniqueLoadout: AegisTechniqueLoadout;
+  /**
+   * @deprecated Technique unlock economy removed — all 12 techniques are available.
+   * Retained for save merge compatibility; ignored for assignment gates.
+   */
   unlockedAegisAbilities: AegisAbilityId[];
   /** Pre-run Hex Shot deck — four tactical ballistic slots. */
   hexShotLoadout: import('./operativeClass').HexShotLoadout;
@@ -145,7 +151,7 @@ export interface PlayerAccount {
   /** @deprecated Not an equipment surface — ignored on load. */
   ownedEnvoyGraftIds?: import('./classGraft').EnvoyGraftId[];
   /** @deprecated Safehouse is not a graft equipment surface. */
-  abilityGrafts?: Partial<Record<import('./aegisCombat').AegisAbilityId, import('./veilGraft').VeilGraftId>>;
+  abilityGrafts?: import('./veilGraft').AbilityGraftMap;
   /** @deprecated Safehouse is not a graft equipment surface. */
   hexShotAbilityGrafts?: Partial<Record<import('./operativeClass').HexShotAbilityId, import('./classGraft').HexShotGraftId>>;
   /** @deprecated Safehouse is not a graft equipment surface. */
@@ -461,8 +467,11 @@ export interface ActiveIncursionState {
   attunement: AttunementState;
   resonance: ResonanceState;
   patrolState: PatrolState;
-  /** Four active combat abilities locked at Safehouse (Aegis deck). */
-  aegisLoadout: AegisLoadout;
+  /**
+   * Aegis techniques snapshotted at descent — immutable for the active incursion.
+   * Weapon actions and Ultimate derive from activeWeaponFamilyId.
+   */
+  aegisTechniqueLoadout: AegisTechniqueLoadout;
   /** Hex Shot deck locked at run start. */
   hexShotLoadout: HexShotLoadout;
   /** Envoy deck locked at run start. */
@@ -539,8 +548,11 @@ export interface ActiveIncursionState {
   sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
   /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
   strikeDamageBonusPct: number;
-  /** Run-scoped Sanctuary graft applications for this deployment (cleared at deployment end). */
-  abilityGrafts: Partial<Record<import('./aegisCombat').AegisAbilityId, import('./veilGraft').VeilGraftId>>;
+  /**
+   * Run-scoped Sanctuary graft applications for this deployment (cleared at deployment end).
+   * Aegis keys are encoded `WA:` / `TECH:` targets (Phase D).
+   */
+  abilityGrafts: import('./veilGraft').AbilityGraftMap;
   hexShotAbilityGrafts: Partial<Record<import('./operativeClass').HexShotAbilityId, HexShotGraftId>>;
   envoyAbilityGrafts: Partial<Record<import('./operativeClass').EnvoyAbilityId, EnvoyGraftId>>;
   /** Active Sanctuary graft offers for the current Rest visit (null when terminal closed). */
@@ -671,7 +683,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },
     resonance: { percent: 0 },
     patrolState: createEmptyPatrolState(),
-    aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
+    aegisTechniqueLoadout: [...DEFAULT_AEGIS_TECHNIQUE_LOADOUT],
     hexShotLoadout: [...DEFAULT_HEX_SHOT_LOADOUT],
     envoyLoadout: [...DEFAULT_ENVOY_LOADOUT],
     activeClass: 'AEGIS',

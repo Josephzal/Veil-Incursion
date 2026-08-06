@@ -23,8 +23,9 @@ export function consumeRunicBrands(
   return { next: current - consumed, consumed };
 }
 
-export function ashenMantleDuration(consumedBrands: number): number {
-  return 1 + consumedBrands;
+/** @deprecated Phase C uses fixed ASHEN_MANTLE_DURATION_TURNS (=1). */
+export function ashenMantleDuration(_consumedBrands: number): number {
+  return 1;
 }
 
 export function ruinFracturePerBrand(consumedBrands: number, baseFracture = 20): number {

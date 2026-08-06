@@ -83,17 +83,15 @@ export interface WeaponSampleLoadoutAbilityJob {
 export interface WeaponSampleLoadout {
   kind: SampleLoadoutKind;
   label: string;
-  /** Exact live 4-slot loadout (fixed weapon basic in slot 0 + 3 flex). */
-  slots: readonly [OperativeAbilityId, OperativeAbilityId, OperativeAbilityId, OperativeAbilityId];
+  /**
+   * Aegis: exactly 3 techniques.
+   * Hex Shot / Envoy: 4-slot loadout (fixed basic + 3 flex).
+   */
+  slots: readonly OperativeAbilityId[];
   abilityJobs: readonly WeaponSampleLoadoutAbilityJob[];
   availability: SampleAvailabilityBand;
-  /** When LATE, a legal earlier substitute loadout. */
-  earlyAlternativeSlots?: readonly [
-    OperativeAbilityId,
-    OperativeAbilityId,
-    OperativeAbilityId,
-    OperativeAbilityId,
-  ];
+  /** When LATE, a legal earlier substitute loadout (same length as slots). */
+  earlyAlternativeSlots?: readonly OperativeAbilityId[];
   earlyAlternativeNote?: string;
   preservesDrawback: string;
   playerFacingSummary: string;

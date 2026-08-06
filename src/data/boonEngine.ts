@@ -128,7 +128,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
     id: 'DEEP_LUNGS',
     hook: 'onAbilityResolve',
     tagAll: ['RESTORE'],
-    trigger: 'RESTORE // surge Runic Brands to 3',
+    trigger: 'RESTORE // +10% Abyssal Reserve',
   },
   BLOOD_PRICE: {
     id: 'BLOOD_PRICE',
@@ -384,7 +384,8 @@ export function aggregateMutationModifiers(
     relentlessMomentumReserveGain: has('RELENTLESS_MOMENTUM') ? 25 : 0,
     gridGhostReserveRefundPct: has('GRID_GHOST') ? 20 : 0,
     slipstreamReserveCost: has('SLIPSTREAM') ? 20 : 0,
-    crimsonPactHpCostPct: has('BLOOD_PRICE') ? 5 : 15,
+    // Phase C base sacrifice is 12%; BLOOD_PRICE narrows to ~⅓ (defer broader rebalance to Phase E).
+    crimsonPactHpCostPct: has('BLOOD_PRICE') ? 4 : 12,
     startingAbyssalPercent: has('LEY_LINE_TAP') ? 50 : 0,
     healMultiplier: has('HYPER_METABOLISM') ? 1.5 : 1,
     maxHpMultiplier: has('HYPER_METABOLISM') ? 0.75 : 1,

@@ -3,8 +3,25 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import { BACKLINE_SLOTS } from '../types/combatGrid';
 import { aliveUnits, isUnitAlive, unitAtSlot } from './combatSquadEngine';
 import type { EnemyCombatProfile } from '../types/run';
+import {
+  aegisWeaponActionTargetMode,
+  isAegisWeaponActionCatalogId,
+} from './aegisWeaponActionCatalog';
+import {
+  canReachUnitWithMeleeRowSweep,
+  canTargetWithMeleeWeaponAction,
+} from './aegisWeaponActionRuntime';
 
-export type AbilityTargetMode = 'NONE' | 'SINGLE' | 'ALL';
+export type AbilityTargetMode =
+  | 'NONE'
+  | 'SINGLE'
+  | 'ALL'
+  | 'DUAL'
+  | 'ROW'
+  /** Hex Contact Front — confirm with 1 target (4+0) or 2 distinct (2+2). */
+  | 'ONE_OR_TWO'
+  /** Hex Fatal Funnel — select one column/lane (front+back pair). */
+  | 'COLUMN';
 
 const ABILITY_TARGET_MODE: Partial<Record<AegisAbilityId, AbilityTargetMode>> = {
   STRIKE: 'SINGLE',
@@ -12,7 +29,6 @@ const ABILITY_TARGET_MODE: Partial<Record<AegisAbilityId, AbilityTargetMode>> = 
   RUIN: 'ALL',
   GRAVE_BIND: 'SINGLE',
   NAIL_TO_GRID: 'SINGLE',
-  BLOOD_TITHE: 'SINGLE',
   CRIMSON_PACT: 'NONE',
   WRAITH_PARRY: 'NONE',
   ASHEN_MANTLE: 'NONE',
@@ -20,8 +36,8 @@ const ABILITY_TARGET_MODE: Partial<Record<AegisAbilityId, AbilityTargetMode>> = 
   DEMONS_LUNG: 'NONE',
   EVISCERATE: 'SINGLE',
   DEVASTATE: 'SINGLE',
-  ABYSSAL_FAULT: 'ALL',
-  BLOOD_BOUND_CARAPACE: 'NONE',
+  RUNEBOUND_CARAPACE: 'NONE',
+  FINAL_MERCY: 'SINGLE',
   REAVE: 'SINGLE',
 };
 
@@ -31,16 +47,30 @@ const COLUMN_GUARD: Partial<Record<CombatGridSlotId, CombatGridSlotId>> = {
   BL_1: 'FL_1',
 };
 
-export function abilityTargetMode(abilityId: AegisAbilityId): AbilityTargetMode {
-  return ABILITY_TARGET_MODE[abilityId] ?? 'SINGLE';
+export function abilityTargetMode(
+  abilityId: AegisAbilityId | string,
+  opts?: { doomfallReleaseAvailable?: boolean },
+): AbilityTargetMode {
+  if (isAegisWeaponActionCatalogId(abilityId)) {
+    return aegisWeaponActionTargetMode(abilityId, opts);
+  }
+  return ABILITY_TARGET_MODE[abilityId as AegisAbilityId] ?? 'SINGLE';
 }
 
-export function abilityRequiresTarget(abilityId: AegisAbilityId): boolean {
-  return abilityTargetMode(abilityId) === 'SINGLE';
+export function abilityRequiresTarget(
+  abilityId: AegisAbilityId | string,
+  opts?: { doomfallReleaseAvailable?: boolean },
+): boolean {
+  const mode = abilityTargetMode(abilityId, opts);
+  return mode === 'SINGLE'
+    || mode === 'DUAL'
+    || mode === 'ROW'
+    || mode === 'ONE_OR_TWO'
+    || mode === 'COLUMN';
 }
 
 function isOccultAbility(abilityId: AegisAbilityId): boolean {
-  return abilityId === 'VEIL_PIERCER' || abilityId === 'BLOOD_TITHE';
+  return abilityId === 'VEIL_PIERCER';
 }
 
 function isHookAbility(abilityId: AegisAbilityId): boolean {
@@ -71,20 +101,28 @@ export function isUnitColumnBlocked(
 
 export function canTargetWithAbility(
   squad: EnemyCombatProfile[],
-  abilityId: AegisAbilityId,
+  abilityId: AegisAbilityId | string,
   unitId: string,
+  opts?: { doomfallReleaseAvailable?: boolean },
 ): boolean {
   const unit = squad.find((u) => u.unitId === unitId);
   if (!unit || !isUnitAlive(unit)) return false;
 
-  const mode = abilityTargetMode(abilityId);
+  const mode = abilityTargetMode(abilityId, opts);
   if (mode === 'NONE' || mode === 'ALL') return false;
 
-  if (isHookAbility(abilityId)) {
+  if (isAegisWeaponActionCatalogId(abilityId)) {
+    if (mode === 'ROW') {
+      return canReachUnitWithMeleeRowSweep(squad, unit);
+    }
+    return canTargetWithMeleeWeaponAction(squad, unitId);
+  }
+
+  if (isHookAbility(abilityId as AegisAbilityId)) {
     return unit.gridSlot?.startsWith('BL') === true;
   }
 
-  if (isOccultAbility(abilityId)) return true;
+  if (isOccultAbility(abilityId as AegisAbilityId)) return true;
 
   if (unit.isUntargetable) return false;
 
@@ -118,12 +156,14 @@ export function isUnitHookValid(
 
 export function validTargetsForAbility(
   squad: EnemyCombatProfile[],
-  abilityId: AegisAbilityId,
+  abilityId: AegisAbilityId | string,
+  opts?: { doomfallReleaseAvailable?: boolean },
 ): EnemyCombatProfile[] {
-  const mode = abilityTargetMode(abilityId);
+  const mode = abilityTargetMode(abilityId, opts);
   if (mode === 'ALL') return aliveUnits(squad);
   if (mode === 'NONE') return [];
-  return aliveUnits(squad).filter((u) => canTargetWithAbility(squad, abilityId, u.unitId!));
+  return aliveUnits(squad).filter((u) =>
+    canTargetWithAbility(squad, abilityId, u.unitId!, opts));
 }
 
 export function resolveUnitAtGridSlot(

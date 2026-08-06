@@ -76,6 +76,9 @@ export interface CombatOperativeTelemetry {
   prismBrinkActive?: boolean;
   prismSacrificePreview?: number;
   prismCanPayFullSacrifice?: boolean;
+  /** Phase D.2 — Martyr / Juggernaut hit-absorb charges for status strip. */
+  hitAbsorbProtectionLabel?: string | null;
+  hitAbsorbProtectionHits?: number;
 }
 
 interface CombatOperativeHudProps {
@@ -185,6 +188,18 @@ export default function CombatOperativeHud({
       prismCanPayFullSacrifice: telemetry.prismCanPayFullSacrifice,
     })
     : [];
+  const protectionHits = telemetry.hitAbsorbProtectionHits ?? 0;
+  const protectionLabel = telemetry.hitAbsorbProtectionLabel ?? null;
+  const statusCallouts = [
+    ...(protectionHits > 0 && protectionLabel
+      ? [{
+        id: 'hit-absorb-protection',
+        label: `${protectionLabel} ×${protectionHits}`,
+        tone: 'ready' as const,
+      }]
+      : []),
+    ...weaponCallouts,
+  ];
 
   const compact = deckAligned || wide || dashboardCompact || consolePanel;
   const rowVariant = desktopArena
@@ -270,7 +285,19 @@ export default function CombatOperativeHud({
               readyUltimateLabel={ultimateLabel}
             />
           ) : null}
-          {!showAbyssalModule ? <WeaponCombatCalloutStrip callouts={weaponCallouts} /> : null}
+          {showAbyssalModule
+            ? (protectionHits > 0 && protectionLabel
+              ? (
+                <WeaponCombatCalloutStrip
+                  callouts={[{
+                    id: 'hit-absorb-protection',
+                    label: `${protectionLabel} ×${protectionHits}`,
+                    tone: 'ready',
+                  }]}
+                />
+              )
+              : null)
+            : <WeaponCombatCalloutStrip callouts={statusCallouts} />}
         </View>
         {showAbyssalModule ? (
           <AbyssalVerdictUltimateModule
@@ -377,7 +404,7 @@ export default function CombatOperativeHud({
         {...gaugeProps}
       />
       {renderClassResource()}
-      <WeaponCombatCalloutStrip callouts={weaponCallouts} />
+      <WeaponCombatCalloutStrip callouts={statusCallouts} />
       {operativeClass === 'HEX_SHOT' ? (
         <CombatTelemetryGaugeRow
           label={`STM // ${stamina}/${maxStamina}`}

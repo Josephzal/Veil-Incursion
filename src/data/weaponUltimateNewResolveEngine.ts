@@ -114,8 +114,8 @@ export function planSixthSeal(input: {
     precisionShots: shots,
     emptyMagazineAfter: true,
     notes: [
-      `Cylinder sealed — ${reloadQuality.toLowerCase()} reload ritual.`,
-      `Precision sequence ×${shots}; magazine empties into the reload loop.`,
+      `Cylinder sealed — ultimate-owned ${reloadQuality.toLowerCase()} refill ritual.`,
+      `Precision sequence ×${shots}; magazine empties after the seal (no ordinary reload rewards).`,
     ],
   };
 }

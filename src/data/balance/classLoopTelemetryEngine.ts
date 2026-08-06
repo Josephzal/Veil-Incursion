@@ -15,6 +15,7 @@ export interface ClassLoopTelemetry {
   // Hex Shot
   reloadsUsed: number;
   perfectReloads: number;
+  /** Retired H.1a — always 0; fields retained for telemetry shape compatibility. */
   chamberBonusGranted: number;
   chamberBonusConsumed: number;
   armorStacksRemoved: number;
@@ -74,7 +75,7 @@ export function formatClassLoopTelemetrySummary(
       .join(', ') || '—';
     lines.push(
       `  Reloads: ${t.reloadsUsed} (perfect ${t.perfectReloads})`,
-      `  Chamber bonus: ${t.chamberBonusGranted} granted / ${t.chamberBonusConsumed} used`,
+      `  Overcharge: Perfect Reload +20% only (legacy Chamber +15% retired)`,
       `  KA−${t.armorStacksRemoved} OW−${t.wardStacksRemoved} // Panopticon ${t.panopticonInterrupts}`,
       `  Profiles: ${profiles}`,
     );

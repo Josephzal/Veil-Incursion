@@ -38,12 +38,12 @@ assert.equal(new Set(ids).size, 9, 'unique anchor IDs');
 assert.equal(new Set(names).size, 9, 'unique anchor display names');
 
 const EXPECTED: Record<string, { name: string; attack: string; label: string }> = {
-  'aegis-runed-longsword': { name: 'Longsword', attack: 'WARDENS_STRIKE', label: "WARDEN'S STRIKE" },
+  'aegis-runed-longsword': { name: 'Runed Longsword', attack: 'WARDENS_STRIKE', label: "WARDEN'S STRIKE" },
   'aegis-rift-edge': { name: 'Paired Blades', attack: 'VEILSTEP_SLASH', label: 'VEILSTEP SLASH' },
   'aegis-claymore-blade': { name: 'Unmaker', attack: 'BREAKING_HEW', label: 'BREAKING HEW' },
-  'hex-silver-core-sidearm': { name: 'Revolver', attack: 'SILVER_VERDICT', label: 'SILVER VERDICT' },
-  'hex-void-cannon': { name: 'Black Door', attack: 'BREACH_ROUND', label: 'BREACH ROUND' },
-  'hex-pulse-rifle': { name: 'Carbine', attack: 'CINDER_SWEEP', label: 'CINDER SWEEP' },
+  'hex-silver-core-sidearm': { name: 'Silver-Core Sidearm', attack: 'SILVER_VERDICT', label: 'SILVER VERDICT' },
+  'hex-void-cannon': { name: 'Nullbreach', attack: 'BREACH_ROUND', label: 'BREACH ROUND' },
+  'hex-pulse-rifle': { name: 'Ash Shotgun', attack: 'CINDER_SWEEP', label: 'CINDER SWEEP' },
   'envoy-null-conduit': { name: 'Scythe', attack: 'NULL_ARC', label: 'NULL ARC' },
   'envoy-echo-lantern': { name: 'Vambrace', attack: 'GRAVEWEAVE', label: 'GRAVEWEAVE' },
   'envoy-sanguine-prism': { name: "Heart's Due", attack: 'BLOOD_REFRACTION', label: 'BLOOD REFRACTION' },
@@ -93,7 +93,7 @@ const aegisCards = (['aegis-runed-longsword', 'aegis-rift-edge', 'aegis-claymore
 assert.equal(new Set(aegisCards).size, 3);
 
 assert.equal(getWeaponFamily('aegis-rift-edge').name, 'Paired Blades');
-assert.equal(getWeaponFamily('hex-void-cannon').name, 'Black Door');
+assert.equal(getWeaponFamily('hex-void-cannon').name, 'Nullbreach');
 assert.equal(formatWeaponAnchorLabel('aegis-runed-longsword'), "[ WARDEN'S STRIKE ]");
 assert.equal(formatWeaponAnchorLabel('aegis-rift-edge'), '[ VEILSTEP SLASH ]');
 assert.equal(formatWeaponAnchorLabel('envoy-null-conduit'), '[ NULL ARC ]');

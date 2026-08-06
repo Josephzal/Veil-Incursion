@@ -288,7 +288,6 @@ export interface CombatGridUnitSnapshot {
   isApex?: boolean;
   isElite?: boolean;
   isAlpha?: boolean;
-  isVeilStalker?: boolean;
   enemyClass?: import('../types/run').EnemyClass;
   rosterId?: string;
   isDead: boolean;
@@ -331,6 +330,10 @@ export interface CombatGridUnitSnapshot {
   isFractured: boolean;
   /** True while fracture break is pending — tap this hostile to execute breach. */
   isFractureBreachTarget?: boolean;
+  /** W.3 — Carbine Firing Solution mark (accuracy-only). */
+  firingSolutionActive?: boolean;
+  /** W.3 — Carbine Suppressed (×0.70 next eligible direct). */
+  carbineSuppressedActive?: boolean;
   portraitGlow?: EnemyPortraitGlow;
   portraitAnim?: EnemyPortraitAnim;
   intentShimmer?: EnemyIntentShimmer | null;
@@ -346,7 +349,7 @@ export interface CombatGridUnitSnapshot {
   hitFlashSeq?: number;
   /** Blood-burst pulses to fire for the latest hit flash (Cinder Sweep = 3). */
   bloodBurstRepeats?: number;
-  /** Blood mist size multiplier for the latest hit (Black Door / Unmaker = 1.5). */
+  /** Blood mist size multiplier for the latest hit (Nullbreach / Unmaker = 1.5). */
   bloodMistScale?: number;
   /** Increments only on successful fracture breach — drives golden silhouette shatter VFX. */
   fractureShatterSeq?: number;
@@ -390,6 +393,8 @@ export type EnemyStatusUnitFields = Pick<
   | 'occultWards'
   | 'isSlumped'
   | 'slumpTurnsRemaining'
+  | 'firingSolutionActive'
+  | 'carbineSuppressedActive'
 >;
 
 /** Human-readable hostile status labels for the intel panel. */
@@ -415,6 +420,10 @@ export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
   if ((unit.fortifyTurnsRemaining ?? 0) > 0) labels.push('FORTIFIED');
   if ((unit.chargeTurns ?? 0) > 0 || unit.intent === 'CHARGE') labels.push('CHARGING');
   if (unit.intent === 'WORLD_ENDER') labels.push('WORLD-ENDER');
+  if (unit.firingSolutionActive) labels.push('FIRING SOLUTION');
+  if (unit.carbineSuppressedActive) {
+    labels.push('SUPPRESSED −30% next direct');
+  }
 
   for (const tag of STATUS_TAG_ORDER) {
     if (!tags.has(tag)) continue;
@@ -498,7 +507,6 @@ export function buildInitialSquadUiSnapshot(
       });
       return tier === 'ELITE' || tier === 'APEX';
     })(),
-    isVeilStalker: unit.isVeilStalker,
     enemyClass: unit.class,
     rosterId: unit.rosterId,
     isDead: !isUnitAlive(unit),

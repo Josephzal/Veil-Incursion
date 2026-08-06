@@ -114,6 +114,18 @@ export function recoverFromFracture(enemy: EnemyCombatProfile): EnemyCombatProfi
   };
 }
 
+/**
+ * While Fractured, gauge must remain 0 (cannot rebuild).
+ * Normalizes illegal FRACTURED + nonzero gauge fixtures / migrations.
+ */
+export function normalizeFracturedGaugeInvariant(
+  enemy: EnemyCombatProfile,
+): EnemyCombatProfile {
+  if (!isEnemyFractured(enemy)) return enemy;
+  if ((enemy.fractureGauge ?? 0) === 0) return enemy;
+  return { ...enemy, fractureGauge: 0 };
+}
+
 export function isEnemyFractured(enemy: EnemyCombatProfile): boolean {
   return enemy.fracturedThisRound === true || hasCombatTag(enemy, 'FRACTURED');
 }

@@ -24,8 +24,8 @@ import {
   InventoryItem,
   PlayerAccount,
 } from '../types/game';
-import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
-import { DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
+import type { AegisAbilityId, AegisTechniqueLoadout } from '../types/aegisCombat';
+import { DEFAULT_AEGIS_TECHNIQUE_LOADOUT } from '../types/aegisCombat';
 import {
   DEFAULT_ENVOY_LOADOUT,
   DEFAULT_ENVOY_UNLOCKED,
@@ -42,7 +42,7 @@ import {
 import { getHexShotAbilityDefinition } from '../data/hexShotAbilities';
 import { getEnvoyAbilityDefinition } from '../data/envoyAbilities';
 import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
-import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
+import { normalizeAegisTechniqueLoadout } from '../utils/aegisLoadoutUtils';
 import {
   normalizeEnvoyLoadoutForCommit,
   normalizeHexShotLoadoutForCommit,
@@ -291,8 +291,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     },
     inventory,
     bankedCargo: createDefaultBankedCargo(),
-    aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
-    unlockedAegisAbilities: [...normalizeUnlockedAegisAbilities(undefined, DEFAULT_AEGIS_LOADOUT)],
+    aegisTechniqueLoadout: [...DEFAULT_AEGIS_TECHNIQUE_LOADOUT],
+    unlockedAegisAbilities: [...normalizeUnlockedAegisAbilities(undefined, DEFAULT_AEGIS_TECHNIQUE_LOADOUT)],
     hexShotLoadout: [...DEFAULT_HEX_SHOT_LOADOUT] as HexShotLoadout,
     unlockedHexShotAbilities: [...DEFAULT_HEX_SHOT_UNLOCKED],
     envoyLoadout: [...DEFAULT_ENVOY_LOADOUT] as EnvoyLoadout,
@@ -463,7 +463,7 @@ interface PlayerAccountContextType {
   unlockRegionalWeaponCoating: (slotId: string) => void;
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
   depositBankedCargo: (delta: GlobalBankedCargo) => void;
-  setAegisLoadout: (loadout: AegisLoadout) => void;
+  setAegisTechniqueLoadout: (loadout: AegisTechniqueLoadout) => void;
   setHexShotLoadout: (loadout: HexShotLoadout) => void;
   setEnvoyLoadout: (loadout: EnvoyLoadout) => void;
   setActiveClass: (classId: ClassType) => void;
@@ -526,7 +526,7 @@ interface PlayerAccountContextType {
   commitDescentLoadout: () => { cargo: CargoRunState; runItems: RunItemsSlotState };
   persistRunExtraction: (payload: {
     cargo: CargoRunState;
-    aegisLoadout: AegisLoadout;
+    aegisTechniqueLoadout: AegisTechniqueLoadout;
     hexShotLoadout: HexShotLoadout;
     envoyLoadout: EnvoyLoadout;
     sessionVeilResidueCollected?: number;
@@ -935,11 +935,11 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
-  const setAegisLoadout = useCallback(
-    (loadout: AegisLoadout) => {
+  const setAegisTechniqueLoadout = useCallback(
+    (loadout: AegisTechniqueLoadout) => {
       updateAccount((prev) => ({
         ...prev,
-        aegisLoadout: [...loadout],
+        aegisTechniqueLoadout: normalizeAegisTechniqueLoadout(loadout),
       }));
     },
     [updateAccount],
@@ -1704,7 +1704,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
   const persistRunExtraction = useCallback(
     (payload: {
       cargo: CargoRunState;
-      aegisLoadout: AegisLoadout;
+      aegisTechniqueLoadout: AegisTechniqueLoadout;
       hexShotLoadout: HexShotLoadout;
       envoyLoadout: EnvoyLoadout;
       sessionVeilResidueCollected?: number;
@@ -1718,7 +1718,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       );
       updateAccount((prev) => {
         const deposited = depositAllCargoToHubAccount(cargoForStash, prev, {
-          aegisLoadout: payload.aegisLoadout,
+          aegisTechniqueLoadout: payload.aegisTechniqueLoadout,
           hexShotLoadout: payload.hexShotLoadout,
           envoyLoadout: payload.envoyLoadout,
         }, {
@@ -1728,7 +1728,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           ...prev,
           resourceStash: deposited.resourceStash,
           hubCraftedConsumables: deposited.hubCraftedConsumables,
-          aegisLoadout: normalizeAegisLoadout(deposited.aegisLoadout),
+          aegisTechniqueLoadout: normalizeAegisTechniqueLoadout(deposited.aegisTechniqueLoadout),
           hexShotLoadout: normalizeHexShotLoadoutForCommit(deposited.hexShotLoadout),
           envoyLoadout: normalizeEnvoyLoadoutForCommit(deposited.envoyLoadout),
           veilResidueBalance: prev.veilResidueBalance + totalDeposit,
@@ -2667,7 +2667,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       unlockRegionalWeaponCoating,
       setMetropolitanNode,
       depositBankedCargo,
-      setAegisLoadout,
+      setAegisTechniqueLoadout,
       setHexShotLoadout,
       setEnvoyLoadout,
       setActiveClass,
@@ -2784,7 +2784,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       unlockRegionalWeaponCoating,
       setMetropolitanNode,
       depositBankedCargo,
-      setAegisLoadout,
+      setAegisTechniqueLoadout,
       setHexShotLoadout,
       setEnvoyLoadout,
       setActiveClass,
