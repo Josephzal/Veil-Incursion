@@ -139,9 +139,9 @@ function passiveLabel(passive: WeaponOncePerCombatPassiveId): string {
     case 'FIRST_RELOAD_STAMINA': return 'SIDEARM';
     case 'POST_RELOAD_BALLISTIC_DAMAGE': return 'PULSE RIFLE';
     case 'FIRST_ARMORED_HIT_EXTRA_ARMOR_STRIP': return 'VOID CANNON';
-    case 'FIRST_OCCULT_RESOURCE_BONUS': return 'NULL CONDUIT';
-    case 'SACRIFICE_HP_RESOURCE_BONUS': return 'SANGUINE PRISM';
-    case 'FIRST_DEBUFF_WARD': return 'ECHO LANTERN';
+    case 'FIRST_OCCULT_RESOURCE_BONUS': return 'SCYTHE';
+    case 'SACRIFICE_HP_RESOURCE_BONUS': return "HEART'S DUE";
+    case 'FIRST_DEBUFF_WARD': return 'VAMBRACE';
     default: return 'WEAPON';
   }
 }

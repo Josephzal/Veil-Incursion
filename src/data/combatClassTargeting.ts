@@ -70,6 +70,22 @@ const ENVOY_TARGET_MODE: Partial<Record<EnvoyAbilityId, AbilityTargetMode>> = {
   RIFT_WARD: 'NONE',
 };
 
+/** E.3 structural recognition — does not alter shared DUAL/SINGLE/NONE legality. */
+const ENVOY_WEAPON_ACTION_TARGET_MODE: Partial<Record<string, AbilityTargetMode>> = {
+  GRAVEWEAVE: 'SINGLE',
+  GRAVE_TRANSFER: 'DUAL',
+  VEIL_BRAND: 'SINGLE',
+  ROT_KNELL: 'SINGLE',
+  NULL_ARC: 'SINGLE',
+  SILENT_EDGE: 'SINGLE',
+  VEIN_CUT: 'SINGLE',
+  SMOKE_ARC: 'SINGLE',
+  BLOOD_REFRACTION: 'SINGLE',
+  EXPOSE_VEIN: 'SINGLE',
+  CRIMSON_VENT: 'NONE',
+  HEART_CLAIM: 'SINGLE',
+};
+
 function hexOccultBackline(id: HexShotAbilityId): boolean {
   return id === 'WRAITH_PIERCER_ROUND';
 }
@@ -86,6 +102,9 @@ export function classAbilityTargetMode(
     return HEX_TARGET_MODE[migrateHexShotAbilityId(abilityId)] ?? 'SINGLE';
   }
   if (classId === 'ENVOY') {
+    if (ENVOY_WEAPON_ACTION_TARGET_MODE[abilityId]) {
+      return ENVOY_WEAPON_ACTION_TARGET_MODE[abilityId]!;
+    }
     return ENVOY_TARGET_MODE[migrateEnvoyAbilityId(abilityId)] ?? 'SINGLE';
   }
   return aegisTargetMode(abilityId as AegisAbilityId, opts);

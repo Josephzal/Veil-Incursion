@@ -25,8 +25,8 @@ const SLOT_BY_ID: Record<WeaponFamilyId, WeaponSlotPosition> = {
   'hex-silver-core-sidearm': 1,
   'hex-void-cannon': 2,
   'hex-pulse-rifle': 3,
-  'envoy-null-conduit': 1,
-  'envoy-echo-lantern': 2,
+  'envoy-echo-lantern': 1,
+  'envoy-null-conduit': 2,
   'envoy-sanguine-prism': 3,
 };
 

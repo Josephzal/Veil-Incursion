@@ -41,7 +41,14 @@ import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
 } from '../utils/classLoadoutUtils';
-import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
+import { sanitizeEnvoyFlexLoadout } from '../data/envoyFlexLoadoutEngine';
+import type {
+  EnvoyAbilityId,
+  EnvoyFlexAbilityId,
+  EnvoyLoadout,
+  HexShotAbilityId,
+  HexShotLoadout,
+} from '../types/operativeClass';
 
 export default function SafehouseScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -80,8 +87,10 @@ export default function SafehouseScreen(): React.JSX.Element {
     ...sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout),
   ]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...activeIncursion.hexShotLoadout]);
-  const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...activeIncursion.envoyLoadout]);
-  const [selectedSlot, setSelectedSlot] = useState(1);
+  const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([
+    ...sanitizeEnvoyFlexLoadout(activeIncursion.envoyLoadout),
+  ]);
+  const [selectedSlot, setSelectedSlot] = useState(0);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
 
   const operativeClass = activeIncursion.activeClass ?? account.activeClass;
@@ -101,7 +110,7 @@ export default function SafehouseScreen(): React.JSX.Element {
   useEffect(() => {
     setLoadoutDraft([...sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout)]);
     setHexDraft([...activeIncursion.hexShotLoadout]);
-    setEnvoyDraft([...activeIncursion.envoyLoadout]);
+    setEnvoyDraft([...sanitizeEnvoyFlexLoadout(activeIncursion.envoyLoadout)]);
     setLoadoutStatus(
       operativeClass === 'AEGIS'
         ? '>> AEGIS TECHNIQUES LOCKED AT DESCENT — SAFEHOUSE CANNOT REWRITE SNAPSHOT.'
@@ -155,10 +164,14 @@ export default function SafehouseScreen(): React.JSX.Element {
       setStatusLine(rejection);
       return false;
     }
-    const committed: EnvoyLoadout = [draft[0], draft[1], draft[2], draft[3]];
+    const committed: EnvoyLoadout = [
+      draft[0]! as EnvoyFlexAbilityId,
+      draft[1]! as EnvoyFlexAbilityId,
+      draft[2]! as EnvoyFlexAbilityId,
+    ];
     setEnvoyLoadout(committed);
     setAccountEnvoyLoadout(committed);
-    appendRunLog('>> ENVOY LOADOUT LOCKED — spell deck staged for next descent.');
+    appendRunLog('>> ENVOY LOADOUT LOCKED — three flex abilities staged for next descent.');
     const success = '>> LOADOUT COMMITTED — COMBAT DECK WILL DEPLOY ON NEXT INCURSION.';
     setLoadoutStatus(success);
     setStatusLine(success);
@@ -166,10 +179,8 @@ export default function SafehouseScreen(): React.JSX.Element {
   }, [account.unlockedEnvoyAbilities, appendRunLog, setAccountEnvoyLoadout, setEnvoyLoadout]);
 
   const handleAssignAbility = useCallback((abilityId: string, slotIndex: number) => {
-    // Slot 0 is the class anchor — never reassigned at the in-run safehouse bench.
-    if (slotIndex === 0) return;
-
     if (operativeClass === 'AEGIS') {
+      // Techniques locked at descent — never rewrite mid-incursion.
       commitAegisLoadout(loadoutDraft);
       return;
     }
@@ -177,6 +188,7 @@ export default function SafehouseScreen(): React.JSX.Element {
       const id = abilityId as HexShotAbilityId;
       if (HEX_SHOT_INTRINSIC.includes(id) || id === HEX_SHOT_ANCHOR) return;
       if (!isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, id)) return;
+      if (slotIndex < 0 || slotIndex > 2) return;
       const next: HexShotAbilityId[] = [...hexDraft];
       next[slotIndex] = id;
       setHexDraft(next);
@@ -186,6 +198,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     const id = abilityId as EnvoyAbilityId;
     if (ENVOY_INTRINSIC.includes(id) || id === ENVOY_ANCHOR) return;
     if (!isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, id)) return;
+    if (slotIndex < 0 || slotIndex > 2) return;
     const next: EnvoyAbilityId[] = [...envoyDraft];
     next[slotIndex] = id;
     setEnvoyDraft(next);
@@ -244,12 +257,10 @@ export default function SafehouseScreen(): React.JSX.Element {
     }
     return envoyDraft.map((abilityId, slotIndex) => ({
       slotIndex,
-      label: slotIndex === 0
-        ? ENVOY_ABILITY_CATALOG[ENVOY_ANCHOR].label
-        : (ENVOY_ABILITY_CATALOG[abilityId]?.label ?? abilityId),
+      label: ENVOY_ABILITY_CATALOG[abilityId]?.label ?? abilityId,
       abilityId,
-      editable: slotIndex > 0,
-      anchor: slotIndex === 0,
+      editable: true,
+      anchor: false,
     }));
   }, [envoyDraft, hexDraft, loadoutDraft, operativeClass]);
 

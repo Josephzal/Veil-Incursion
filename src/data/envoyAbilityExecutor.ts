@@ -19,14 +19,10 @@ import {
   unitAtSlot,
 } from './combatSquadEngine';
 import { resolveClassWardenInterceptTarget } from './combatClassTargeting';
-import { resolveEnvoySplinterBasic } from './weaponBasicEngine';
 import { resolveLanternFluxPurgePayoff } from './weaponLanternRotPayoff';
-import {
-  runWeaponOnDebuffAppliedHooks,
-  runWeaponOnOccultCastHooks,
-  runWeaponOnSacrificeHpHooks,
-} from './weaponCombatEngine';
 import type { CombatSessionExtras } from '../types/combatHooks';
+import { executeEnvoyActionOneFromCompat } from './envoyWeaponActionExecutor';
+import type { WeaponFamilyId } from '../types/weapon';
 
 export interface EnvoyAbilityHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -120,90 +116,45 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
 
   switch (ctx.abilityId) {
     case 'VEIL_SPLINTER': {
-      const raw = targetUnit(ctx);
-      if (!raw?.unitId) {
-        ctx.log('[REJECTED] >> Veil-Splinter requires a target.');
-        return { ok: false, refundAp: def.apCost };
+      // E.4 — consolidate Action 1 through canonical weapon-action executor.
+      const familyId = (ctx.resolvedWeapon?.familyId ?? 'envoy-echo-lantern') as WeaponFamilyId;
+      const wa = executeEnvoyActionOneFromCompat({
+        ingressId: 'VEIL_SPLINTER',
+        familyId,
+        squad: ctx.squad,
+        targetId: ctx.targetId,
+        veilFlux: ctx.veilFlux,
+        maxHp: ctx.maxSoulAnchor,
+        operativeHp: ctx.operativeHp ?? 1,
+        classState: ctx.classState,
+        log: ctx.log,
+        resolvedWeapon: ctx.resolvedWeapon ?? null,
+        weaponRuntime: ctx.weaponRuntime,
+        sessionExtras: ctx.sessionExtras,
+        // Stamina already committed by executeEnvoyAbility pre-switch validation.
+        spendStamina: () => true,
+        applyHpSacrifice: ctx.applyHpSacrifice,
+        applyVeilFluxBonus: ctx.applyVeilFluxBonus,
+        applyWeaponRuntimePatch: ctx.applyWeaponRuntimePatch,
+        hurtEnemy: (raw, tag, options, targetId) =>
+          ctx.hurtEnemy(raw, tag, {
+            channel: options?.channel,
+            targetId: options?.targetId,
+            abilityId: ctx.abilityId,
+            rollCrit: options?.rollCrit,
+            indirectDamage: options?.indirectDamage,
+          }, targetId),
+        patchUnit: ctx.patchUnit,
+        healOperative: ctx.healOperative,
+      });
+      if (!wa.ok) {
+        return { ok: false, refundAp: wa.refundAp || def.apCost };
       }
-      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
-      const weapon = ctx.resolvedWeapon;
-      let damage = def.baseDamage;
-      let rotStacks = 1;
-      let fluxDelta = netFlux;
-      if (weapon && ctx.weaponRuntime) {
-        // currentCatalyst is still the prior cast (hub primes after execute).
-        const plan = resolveEnvoySplinterBasic({
-          weapon,
-          catalogDamage: def.baseDamage,
-          catalogFluxCost: fluxCost,
-          veilFlux: ctx.veilFlux,
-          operativeHp: ctx.operativeHp ?? 1,
-          maxHp: ctx.maxSoulAnchor,
-          previousCatalyst: ctx.classState.currentCatalyst ?? null,
-        });
-        plan.logLines.forEach((line) => ctx.log(line));
-        damage = plan.occultDamage;
-        rotStacks = plan.rotStacks;
-        fluxDelta = (ctx.fluxRegenOverride ?? def.fluxRegen) - plan.fluxCost;
-        if (plan.fluxBonus > 0) {
-          fluxDelta += plan.fluxBonus;
-          ctx.log(
-            plan.cleanCatalystCycle
-              ? `[NULL CONDUIT] >> Clean cycle Flux +${plan.fluxBonus}.`
-              : `[NULL CONDUIT] >> Flux efficiency +${plan.fluxBonus}.`,
-          );
-        }
-        // Charge HP sacrifice exactly once per basic resolution.
-        if (plan.hpSacrifice > 0) {
-          ctx.applyHpSacrifice?.(plan.hpSacrifice);
-        }
-        const makeHookCtx = () => ({
-          weapon,
-          runtime: ctx.weaponRuntime!,
-          blueprintId: null,
-          player: {
-            hp: ctx.operativeHp ?? 1,
-            maxHp: ctx.maxSoulAnchor,
-            shield: ctx.sessionExtras?.playerShield ?? 0,
-            shieldTurnsRemaining: ctx.sessionExtras?.playerShieldTurnsRemaining ?? 0,
-            debuffs: [...(ctx.sessionExtras?.playerDebuffs ?? [])],
-          },
-          squad: ctx.squad,
-        });
-        if (plan.invokeOccultCastHook) {
-          const occultHooks = runWeaponOnOccultCastHooks(makeHookCtx());
-          occultHooks.logLines.forEach((line) => ctx.log(line));
-          if (occultHooks.runtimePatch) {
-            ctx.applyWeaponRuntimePatch?.(occultHooks.runtimePatch);
-            Object.assign(ctx.weaponRuntime!, occultHooks.runtimePatch);
-          }
-          if (occultHooks.veilFluxDelta) ctx.applyVeilFluxBonus?.(occultHooks.veilFluxDelta);
-        }
-        if (plan.invokeSacrificeHook) {
-          const sacHooks = runWeaponOnSacrificeHpHooks(makeHookCtx());
-          sacHooks.logLines.forEach((line) => ctx.log(line));
-          if (sacHooks.runtimePatch) {
-            ctx.applyWeaponRuntimePatch?.(sacHooks.runtimePatch);
-            Object.assign(ctx.weaponRuntime!, sacHooks.runtimePatch);
-          }
-          if (sacHooks.veilFluxDelta) ctx.applyVeilFluxBonus?.(sacHooks.veilFluxDelta);
-        }
-        if (plan.invokeDebuffHook && ctx.sessionExtras) {
-          const debuffHooks = runWeaponOnDebuffAppliedHooks(makeHookCtx(), ctx.sessionExtras);
-          debuffHooks.logLines.forEach((line) => ctx.log(line));
-          if (debuffHooks.runtimePatch) {
-            ctx.applyWeaponRuntimePatch?.(debuffHooks.runtimePatch);
-            Object.assign(ctx.weaponRuntime!, debuffHooks.runtimePatch);
-          }
-        }
+      // Preserve historical log tag for live projection period (E.5 cleans copy).
+      if (wa.plan.sourceUnitId) {
+        // Damage already dealt by WA executor with Action1 display tag.
       }
-      ctx.hurtEnemy(damage, '[VEIL-SPLINTER]', {
-        channel: 'OCCULT',
-        abilityId: ctx.abilityId,
-        targetId: unit.unitId,
-      }, unit.unitId);
-      infectVeilRot(ctx.classState, unit, rotStacks, ctx.log);
-      return { ok: true, fluxDelta };
+      return { ok: true, fluxDelta: wa.fluxDelta };
     }
 
     case 'ASTRAL_LANCE': {

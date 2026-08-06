@@ -287,8 +287,14 @@ export default function CombatCommandDeck({
 
   const labelFor = (ability: string) => getAbilityLabel(ability);
 
+  /** E.5V — two stacked rows (4 WA + 3 flex/tech) must both fit inside the clipped command deck. */
+  const groupedDashboard = dashboardLayout && weaponActionCount > 0 && techniqueCount > 0;
+  const groupedConceptCardHeight = desktopDeck ? 112 : 104;
+
   const tileHeight = dashboardLayout
-    ? (desktopDeck ? undefined : TILE_HEIGHT_DASHBOARD)
+    ? (desktopDeck
+      ? (groupedDashboard ? groupedConceptCardHeight : undefined)
+      : (groupedDashboard ? groupedConceptCardHeight : TILE_HEIGHT_DASHBOARD))
     : TILE_HEIGHT;
   const desktopBtnStyle = desktopDeck ? {
     borderWidth: 2,
@@ -441,6 +447,7 @@ export default function CombatCommandDeck({
           onHoverOut={() => setHoveredAbility((current) => (current === ability ? null : current))}
           style={[
             styles.conceptCard,
+            groupedDashboard ? styles.conceptCardGrouped : null,
             {
               borderColor: hoverAccent,
               backgroundColor: hoverFill,
@@ -448,10 +455,14 @@ export default function CombatCommandDeck({
               shadowOpacity: isSelected || spectrallyLit ? 0.5 : 0,
               shadowRadius: isSelected || spectrallyLit ? 10 : 0,
               opacity: enabled ? 1 : 0.4,
+              ...(tileHeight != null ? { height: tileHeight } : null),
             },
           ]}
         >
-          <View style={styles.conceptCardPress}>
+          <View style={[
+            styles.conceptCardPress,
+            groupedDashboard ? styles.conceptCardPressGrouped : null,
+          ]}>
             <View style={styles.conceptCardTop}>
               <View style={styles.conceptCardTopSpacer} />
               {strikeEligible ? (
@@ -480,14 +491,24 @@ export default function CombatCommandDeck({
               </View>
             </View>
             <Text
-              style={[styles.conceptCardName, { color: enabled ? OTT.textPrimary : OTT.textMuted }]}
+              style={[
+                styles.conceptCardName,
+                groupedDashboard ? styles.conceptCardNameGrouped : null,
+                { color: enabled ? OTT.textPrimary : OTT.textMuted },
+              ]}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
             >
               {abilityName}
             </Text>
-            <Text style={styles.conceptCardCategory} numberOfLines={1}>
+            <Text
+              style={[
+                styles.conceptCardCategory,
+                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
+              ]}
+              numberOfLines={1}
+            >
               {category}
             </Text>
             {dualHint ? (
@@ -502,9 +523,10 @@ export default function CombatCommandDeck({
               <Text
                 style={[
                   styles.conceptCardTags,
+                  groupedDashboard ? styles.conceptCardTagsGrouped : null,
                   { color: isSelected ? OTT.terminalGreen : OTT.textMuted },
                 ]}
-                numberOfLines={3}
+                numberOfLines={groupedDashboard ? 2 : 3}
               >
                 {effectTags}
               </Text>
@@ -1008,6 +1030,7 @@ export default function CombatCommandDeck({
           onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_RELOAD__' ? null : current))}
           style={[
             styles.conceptCard,
+            groupedDashboard ? styles.conceptCardGrouped : null,
             {
               borderColor: hovered ? classAccent : (ready ? accent : OTT.borderSubtle),
               backgroundColor: hovered
@@ -1017,24 +1040,46 @@ export default function CombatCommandDeck({
               shadowOpacity: hovered ? 0.5 : 0,
               shadowRadius: hovered ? 10 : 0,
               opacity: ready ? 1 : 0.42,
+              ...(tileHeight != null ? { height: tileHeight } : null),
             },
           ]}
         >
-          <View style={styles.conceptCardPress}>
+          <View style={[
+            styles.conceptCardPress,
+            groupedDashboard ? styles.conceptCardPressGrouped : null,
+          ]}>
             <View style={styles.conceptCardTop}>
               <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
               <Text style={[styles.conceptClassBadge, { color: accent }]}>CA</Text>
             </View>
             <Text
-              style={[styles.conceptCardName, { color: ready ? OTT.warningAmber : OTT.textMuted }]}
+              style={[
+                styles.conceptCardName,
+                groupedDashboard ? styles.conceptCardNameGrouped : null,
+                { color: ready ? OTT.warningAmber : OTT.textMuted },
+              ]}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
             >
               RELOAD
             </Text>
-            <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
-            <Text style={styles.conceptCardDesc} numberOfLines={3}>
+            <Text
+              style={[
+                styles.conceptCardCategory,
+                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
+              ]}
+              numberOfLines={1}
+            >
+              CLASS ACTION
+            </Text>
+            <Text
+              style={[
+                styles.conceptCardDesc,
+                groupedDashboard ? styles.conceptCardTagsGrouped : null,
+              ]}
+              numberOfLines={groupedDashboard ? 2 : 3}
+            >
               {ready ? 'Chamber tactical reload.' : 'Reload locked.'}
             </Text>
             <Text style={[styles.conceptArmed, { color: accent }]}>
@@ -1060,6 +1105,7 @@ export default function CombatCommandDeck({
           onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_CATALYST__' ? null : current))}
           style={[
             styles.conceptCard,
+            groupedDashboard ? styles.conceptCardGrouped : null,
             {
               borderColor: hovered ? classAccent : (ready ? accent : OTT.borderSubtle),
               backgroundColor: hovered
@@ -1069,24 +1115,46 @@ export default function CombatCommandDeck({
               shadowOpacity: hovered ? 0.5 : 0,
               shadowRadius: hovered ? 10 : 0,
               opacity: catalyticConsoleEnabled ? 1 : 0.42,
+              ...(tileHeight != null ? { height: tileHeight } : null),
             },
           ]}
         >
-          <View style={styles.conceptCardPress}>
+          <View style={[
+            styles.conceptCardPress,
+            groupedDashboard ? styles.conceptCardPressGrouped : null,
+          ]}>
             <View style={styles.conceptCardTop}>
               <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
               <Text style={[styles.conceptClassBadge, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}>CA</Text>
             </View>
             <Text
-              style={[styles.conceptCardName, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}
+              style={[
+                styles.conceptCardName,
+                groupedDashboard ? styles.conceptCardNameGrouped : null,
+                { color: ready ? OTT.terminalGreen : OTT.textMuted },
+              ]}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
             >
               CATALYST
             </Text>
-            <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
-            <Text style={styles.conceptCardDesc} numberOfLines={3}>
+            <Text
+              style={[
+                styles.conceptCardCategory,
+                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
+              ]}
+              numberOfLines={1}
+            >
+              CLASS ACTION
+            </Text>
+            <Text
+              style={[
+                styles.conceptCardDesc,
+                groupedDashboard ? styles.conceptCardTagsGrouped : null,
+              ]}
+              numberOfLines={groupedDashboard ? 2 : 3}
+            >
               {`Discharge Veil Rot payload. ${catalyticConsoleRotStacks} stacks.`}
             </Text>
             <Text style={[styles.conceptArmed, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}>
@@ -1117,6 +1185,7 @@ export default function CombatCommandDeck({
           onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_PARRY__' ? null : current))}
           style={[
             styles.conceptCard,
+            groupedDashboard ? styles.conceptCardGrouped : null,
             {
               borderColor: cardAccent,
               backgroundColor: hovered
@@ -1128,10 +1197,14 @@ export default function CombatCommandDeck({
               shadowOpacity: hovered || primed || enabled ? 0.45 : 0,
               shadowRadius: hovered || primed || enabled ? 10 : 0,
               opacity: primed || enabled ? 1 : 0.42,
+              ...(tileHeight != null ? { height: tileHeight } : null),
             },
           ]}
         >
-          <View style={styles.conceptCardPress}>
+          <View style={[
+            styles.conceptCardPress,
+            groupedDashboard ? styles.conceptCardPressGrouped : null,
+          ]}>
             <View style={styles.conceptCardTop}>
               <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
               <Text style={[styles.conceptClassBadge, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>CA</Text>
@@ -1139,6 +1212,7 @@ export default function CombatCommandDeck({
             <Text
               style={[
                 styles.conceptCardName,
+                groupedDashboard ? styles.conceptCardNameGrouped : null,
                 { color: accent === OTT.borderSubtle ? OTT.textMuted : accent },
               ]}
               numberOfLines={1}
@@ -1147,8 +1221,22 @@ export default function CombatCommandDeck({
             >
               {title}
             </Text>
-            <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
-            <Text style={styles.conceptCardDesc} numberOfLines={3}>
+            <Text
+              style={[
+                styles.conceptCardCategory,
+                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
+              ]}
+              numberOfLines={1}
+            >
+              CLASS ACTION
+            </Text>
+            <Text
+              style={[
+                styles.conceptCardDesc,
+                groupedDashboard ? styles.conceptCardTagsGrouped : null,
+              ]}
+              numberOfLines={groupedDashboard ? 2 : 3}
+            >
               {primed
                 ? 'Ward primed — kinetic intercept armed.'
                 : enabled
@@ -1595,14 +1683,15 @@ const styles = StyleSheet.create({
   },
   conceptGroupedHost: {
     width: '100%',
-    gap: 8,
+    gap: 4,
     flexGrow: 0,
-    flexShrink: 1,
+    flexShrink: 0,
     minHeight: 0,
   },
   conceptGroupBlock: {
     width: '100%',
-    gap: 4,
+    gap: 2,
+    flexShrink: 0,
   },
   conceptGroupLabel: {
     fontFamily: MONO,
@@ -1614,7 +1703,7 @@ const styles = StyleSheet.create({
   },
   conceptCardRow: {
     flexGrow: 0,
-    flexShrink: 1,
+    flexShrink: 0,
     minHeight: 0,
     width: '100%',
     maxWidth: 980,
@@ -1636,11 +1725,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 0 },
   },
+  conceptCardGrouped: {
+    maxWidth: 132,
+    minWidth: 76,
+  },
   conceptCardPress: {
     flex: 1,
     paddingHorizontal: 9,
     paddingVertical: 10,
     gap: 7,
+  },
+  conceptCardPressGrouped: {
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+    gap: 3,
+  },
+  conceptCardNameGrouped: {
+    fontSize: 11,
+    lineHeight: 13,
+  },
+  conceptCardCategoryGrouped: {
+    fontSize: 8,
+  },
+  conceptCardTagsGrouped: {
+    fontSize: 8,
+    lineHeight: 10,
   },
   conceptCardTop: {
     flexDirection: 'row',

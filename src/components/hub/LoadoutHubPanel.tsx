@@ -365,7 +365,9 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     } else if (category === 'RELIC') {
       primary = relicName;
     } else if (category === 'DECK') {
-      primary = `${abilityLoadout.filter(Boolean).length} / 4 ACTIVE`;
+      // Live flex footprint is three slots (Aegis/Hex/Envoy 4+3). Fixed WA are not deck slots.
+      const deckCap = Math.max(3, abilityLoadout.length);
+      primary = `${abilityLoadout.filter(Boolean).length} / ${deckCap} ACTIVE`;
     } else if (category === 'FIELD_KIT') {
       primary = `${fieldFilled} / 4 SLOTS FILLED`;
     } else {

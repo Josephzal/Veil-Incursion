@@ -195,22 +195,22 @@ const FIRST_USE: Record<WeaponFamilyId, WeaponFirstUseBrief> = {
     buildToward: 'Spread, Reload, Fracture, Ballistic.',
   }),
   'envoy-null-conduit': brief({
-    coreLoop: 'Prime NULL/BLOOD Catalyst, then Splinter for a Clean Cycle Flux payoff.',
-    doThis: 'Sequence Catalyst → Splinter deliberately; keep Flux cycling clean.',
-    avoidThis: 'Do not play Prism brink/sacrifice on this chassis — peak comes from sequencing.',
+    coreLoop: 'Your Scythe supplies four fixed actions. Prime NULL/BLOOD, then Null Arc for a Clean Cycle Flux payoff.',
+    doThis: 'Sequence Catalyst → Null Arc deliberately; keep Flux cycling clean across the four Scythe actions.',
+    avoidThis: 'Do not play Heart’s Due brink/sacrifice on this chassis — peak comes from sequencing.',
     watchThis: 'Current Catalyst, previous Catalyst, Flux.',
     buildToward: 'Clean Cycle, Catalyst, Flux.',
   }),
   'envoy-echo-lantern': brief({
-    coreLoop: 'Stack Rot, protect the setup, then dump Flux for detonation.',
-    doThis: 'Prefer durable groups that live long enough for Rot density.',
+    coreLoop: 'Your Vambrace supplies four fixed actions. Stack Rot, protect the setup, then dump Flux for detonation.',
+    doThis: 'Prefer durable groups that live long enough for Rot density. Your three flex picks stay when you change weapons.',
     avoidThis: 'Do not force detonation on the same resolution that just applied Rot.',
     watchThis: 'Total Rot stacks and whether a Flux dump is ready.',
     buildToward: 'Rot, Detonation, Curse, Flux.',
   }),
   'envoy-sanguine-prism': brief({
-    coreLoop: 'Enter Brink, pay the capped HP sacrifice fully, spike the cast, then vent.',
-    doThis: 'Only take the sacrifice when you can pay the full capped cost.',
+    coreLoop: 'Your Heart’s Due supplies four fixed actions. Enter Brink, pay the capped HP sacrifice fully, spike, then Crimson Vent.',
+    doThis: 'Only take the sacrifice when you can pay the full capped cost. Use Expose Vein before Heart Claim when the mark is armed.',
     avoidThis: 'Do not expect full payoff on a partial sacrifice.',
     watchThis: 'Flux vs Brink threshold, sacrifice preview, and whether full pay is possible.',
     buildToward: 'Brink, Sacrifice, Flux — with restore/vent support.',
@@ -224,9 +224,9 @@ const SELECTION: Record<WeaponFamilyId, string> = {
   'hex-silver-core-sidearm': 'Precision shots, Perfect Reload, and Protocol Charge tempo.',
   'hex-void-cannon': 'Scarce ammo, hard Kinetic Armor breach, priority deletes.',
   'hex-pulse-rifle': 'Short-range spread into clusters — reload is the burst window.',
-  'envoy-null-conduit': 'Clean Flux cycling with Catalyst → Splinter sequencing.',
-  'envoy-echo-lantern': 'Stack Rot, delay the dump, detonate when the board is ready — the complete Envoy starter.',
-  'envoy-sanguine-prism': 'Brink Flux and capped HP sacrifice for spike casts.',
+  'envoy-null-conduit': 'Clean Flux cycling with Catalyst → Null Arc sequencing across four Scythe actions.',
+  'envoy-echo-lantern': 'Stack Rot across four Vambrace actions, delay the dump, detonate when the board is ready — the complete Envoy starter.',
+  'envoy-sanguine-prism': 'Brink Flux, Expose Vein marks, and capped HP sacrifice across four Heart’s Due actions.',
 };
 
 function coreRecommendedIds(familyId: WeaponFamilyId): OperativeAbilityId[] {

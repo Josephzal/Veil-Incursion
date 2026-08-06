@@ -1,6 +1,7 @@
 import type { EnvoyAbilityId } from '../types/operativeClass';
 import type { EnvoyAbilityTag } from '../types/classCombatAbility';
 import type { AbilityUnlockCost } from '../types/aegisCombat';
+import { getEnvoyWeaponActionDefinition } from './envoyWeaponActionCatalog';
 
 export interface EnvoyAbilityDefinition {
   id: EnvoyAbilityId;
@@ -203,18 +204,67 @@ export const ENVOY_ABILITY_CATALOG: Record<EnvoyAbilityId, EnvoyAbilityDefinitio
   },
 };
 
-export function getEnvoyAbilityDefinition(id: EnvoyAbilityId): EnvoyAbilityDefinition {
-  return ENVOY_ABILITY_CATALOG[id];
+const ENVOY_ABILITY_TAG_SET = new Set<string>([
+  'SPELL', 'CURSE', 'ULTIMATE', 'TRUE_DAMAGE', 'RANGED', 'MELEE', 'OCCULT', 'AOE',
+  'DEFENSIVE', 'MOBILITY', 'BUFF', 'RESTORE', 'DEBUFF', 'CONTROL', 'FRACTURE',
+  'WARD_BREAK', 'ARMOR_PIERCE', 'INTERRUPT', 'SILENCE', 'BLOCK', 'GUARD_BREAK',
+  'BLIND', 'DECOY',
+]);
+
+function tagsFromWeaponAction(id: string): readonly EnvoyAbilityTag[] | null {
+  const wa = getEnvoyWeaponActionDefinition(id);
+  if (!wa) return null;
+  const tags: EnvoyAbilityTag[] = [];
+  for (const raw of wa.boonTags) {
+    if (ENVOY_ABILITY_TAG_SET.has(raw)) tags.push(raw as EnvoyAbilityTag);
+  }
+  if (wa.wardStrip > 0 && !tags.includes('WARD_BREAK')) tags.push('WARD_BREAK');
+  if (wa.damageChannel === 'OCCULT' && !tags.includes('OCCULT')) tags.push('OCCULT');
+  // Weapon actions are occult strikes — boon hooks that key on SPELL should see them.
+  if (wa.baseDamage > 0 && !tags.includes('SPELL')) tags.push('SPELL');
+  return tags;
 }
 
-export function getEnvoyAbilityTags(id: EnvoyAbilityId): readonly EnvoyAbilityTag[] {
-  return ENVOY_ABILITY_CATALOG[id].tags;
+function definitionFromWeaponAction(id: string): EnvoyAbilityDefinition | null {
+  const wa = getEnvoyWeaponActionDefinition(id);
+  if (!wa) return null;
+  return {
+    id: id as EnvoyAbilityId,
+    classId: 'ENVOY',
+    label: `[ ${wa.displayName.toUpperCase()} ]`,
+    description: wa.description,
+    apCost: wa.apCost,
+    fluxCost: wa.fluxCost,
+    fluxRegen: wa.fluxGain,
+    staminaCost: wa.staminaCost,
+    baseDamage: wa.baseDamage,
+    tags: tagsFromWeaponAction(id) ?? [],
+    unlockCost: {},
+  };
 }
 
-export function envoyAbilityConsumesFlux(id: EnvoyAbilityId): boolean {
-  return ENVOY_ABILITY_CATALOG[id].fluxCost > 0;
+/**
+ * Resolve Envoy flex catalog entries and live weapon-action IDs.
+ * E.5 WA ids are not flex catalog keys — must not throw on them (hurtEnemy / boon hooks).
+ */
+export function getEnvoyAbilityDefinition(id: EnvoyAbilityId | string): EnvoyAbilityDefinition {
+  const flex = ENVOY_ABILITY_CATALOG[id as EnvoyAbilityId];
+  if (flex) return flex;
+  const fromWa = definitionFromWeaponAction(String(id));
+  if (fromWa) return fromWa;
+  throw new Error(`Unknown Envoy ability: ${id}`);
 }
 
-export function envoyAbilityRestoresFlux(id: EnvoyAbilityId): boolean {
-  return ENVOY_ABILITY_CATALOG[id].fluxRegen > 0;
+export function getEnvoyAbilityTags(id: EnvoyAbilityId | string): readonly EnvoyAbilityTag[] {
+  const flex = ENVOY_ABILITY_CATALOG[id as EnvoyAbilityId];
+  if (flex) return flex.tags;
+  return tagsFromWeaponAction(String(id)) ?? [];
+}
+
+export function envoyAbilityConsumesFlux(id: EnvoyAbilityId | string): boolean {
+  return getEnvoyAbilityDefinition(id).fluxCost > 0;
+}
+
+export function envoyAbilityRestoresFlux(id: EnvoyAbilityId | string): boolean {
+  return getEnvoyAbilityDefinition(id).fluxRegen > 0;
 }

@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-08-05 (Aegis 4+3 combat surface + structural graft containment)
+Last updated: 2026-08-06 (Envoy E.5 4+3 weapon-kit cutover; Hex Shot W.5 and Aegis 4+3 unchanged)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -824,30 +824,32 @@ Nine families keep distinct loops and structural drawbacks (`weaponIdentityProfi
 | Class | Live combat strip | Player-selected | Outside the strip |
 |-------|-------------------|-----------------|-------------------|
 | **Aegis** | **4 fixed weapon actions** from equipped family + **3 selected techniques** | Techniques only (`aegisTechniqueLoadout`, exactly 3, ≥1 Brand technique) | Wraith Parry / Void Ward; weapon Ultimate |
-| **Hex Shot** | Still the prior **4-slot deck** (slot 0 = weapon-specific anchor; 3 flex abilities) | Full 4-slot loadout | Weapon Ultimate (orbital) |
-| **Envoy** | Still the prior **4-slot deck** (slot 0 = weapon-specific anchor; 3 flex abilities) | Full 4-slot loadout | Weapon Ultimate (orbital) |
+| **Hex Shot** | **4 family-derived weapon actions** + **3 persisted flex abilities** (`HexFlexLoadout`) | Flex only (exactly 3; label **FLEX ABILITIES**) | Phase-Shift Reload; equipped weapon Ultimate (orbital) |
+| **Envoy** | **4 family-derived weapon actions** + **3 persisted flex abilities** (`EnvoyFlexLoadout`) | Flex only (exactly 3; label **FLEX ABILITIES**) | Rift Ward; equipped weapon Ultimate (orbital) |
 
-Aegis weapon actions are **derived** from `activeWeaponFamilyId` (not persisted). Techniques are snapshotted at descent and frozen for the run. All 12 Aegis techniques are available from the start (no technique-unlock economy). Authority: `docs/aegis-refactor-contract.md`.
+Aegis, Hex, and Envoy weapon actions are **derived** from `activeWeaponFamilyId` (not persisted). Hex and Envoy flexes are the persisted combat-card selections for those classes. Aegis techniques are snapshotted at descent and frozen for the run. All 12 Aegis techniques are available from the start (no technique-unlock economy). Hex authority: `hexWeaponActionRegistry.ts` / `hexCombatCompatibility.ts` (W.1–W.5). Aegis authority: `docs/aegis-refactor-contract.md`. Envoy authority: `docs/envoy-weapon-kit-contract.md` (E.1–E.5).
 
 Recommendation profiles (`weaponLoadoutRecommendationProfiles*`) are advisory only — zero runtime effect. Retired Aegis IDs (`BLOOD_TITHE`, `ABYSSAL_FAULT`, legacy `STRIKE` / `EVISCERATE` as loadout picks) are migration/reject only.
 
-#### Weapon-specific anchor attacks (Phase 3L canon)
+#### Weapon-specific basics / anchors
 
-Each equipped weapon has its own stable anchor ID and player-facing name (`weaponAnchorAttackRegistry.ts`). Card labels, combat log, and HUD previews resolve from the **equipped weapon**, not merely the selected class. Mechanics/numbers still come from `weaponBasicEngine` (Phase 3G). Class tokens `STRIKE` / `SILVER_CORE_SIDEARM` / `VEIL_SPLINTER` remain save/executor compatibility inputs only — they must not appear as the resting card name for an equipped permanent weapon.
+**Aegis:** each equipped weapon has a stable Action-1 identity and player-facing name. **Envoy (E.5):** four weapon actions derive from the equipped family (`envoyWeaponActionRegistry.ts` / `envoyWeaponActionCatalog.ts` / `envoyWeaponActionExecutor.ts`); `VEIL_SPLINTER` / `BLACK_WICK` remain migration/execution aliases only and are never live cards.
 
-| Permanent weapon ID | Display name | Anchor ID | Player-facing name |
-|---------------------|--------------|-----------|--------------------|
-| `aegis-runed-longsword` | Longsword | `WARDENS_STRIKE` | `WARDEN'S STRIKE` |
-| `aegis-rift-edge` | Paired Blades | `VEILSTEP_SLASH` | `VEILSTEP SLASH` |
-| `aegis-claymore-blade` | Unmaker | `BREAKING_HEW` | `BREAKING HEW` |
-| `hex-silver-core-sidearm` | Silver-Core Sidearm | `SILVER_VERDICT` | `SILVER VERDICT` |
-| `hex-void-cannon` | Nullbreach | `BREACH_ROUND` | `BREACH ROUND` |
-| `hex-pulse-rifle` | Ash Shotgun | `CINDER_SWEEP` | `CINDER SWEEP` |
-| `envoy-echo-lantern` | Vambrace | `GRAVEWEAVE` | `GRAVEWEAVE` |
-| `envoy-null-conduit` | Scythe | `NULL_ARC` | `NULL ARC` |
-| `envoy-sanguine-prism` | Heart's Due | `BLOOD_REFRACTION` | `BLOOD REFRACTION` |
+**Hex Shot (W.5):** the combat strip no longer uses a single slot-0 anchor card. Each family derives **four** read-only weapon actions (`hexWeaponActionCatalog.ts` / `hexWeaponActionExecutor.ts`). Historical fixed-basic signatures canonicalize without a second playable card: Sidearm → `QUICKDRAW`, Ash/Carbine → `CENTER_MASS`, Nullbreach/Black Door → `DOOR_KNOCKER`. Design-kit aliases Revolver / Carbine / Black Door are not live display names (live: Silver-Core Sidearm / Ash Shotgun / Nullbreach).
 
-**Retired player-facing strings (never emit live):** Rift Edge, Veil Edge, Nullbreach Carbine, Nullbreach Shotgun, Claymore Blade, Pulse Rifle, Null Conduit, Echo Lantern, Sanguine Prism, Revolver, Black Door, Carbine, WARDEN'S CUT, RIFTSTEP CUT, CLEAN DISCHARGE, BLACK WICK. Legacy aliases `WARDENS_CUT` / `RIFTSTEP_CUT` / `CLEAN_DISCHARGE` / `BLACK_WICK` canonicalize to the rows above.
+| Permanent weapon ID | Display name | Combat basic surface | Notes |
+|---------------------|--------------|----------------------|-------|
+| `aegis-runed-longsword` | Longsword | `WARDENS_STRIKE` / Warden's Strike | Aegis WA strip |
+| `aegis-rift-edge` | Paired Blades | `VEILSTEP_SLASH` / Veilstep Slash | Aegis WA strip |
+| `aegis-claymore-blade` | Unmaker | `BREAKING_HEW` / Breaking Hew | Aegis WA strip |
+| `hex-silver-core-sidearm` | Silver-Core Sidearm | `QUICKDRAW` (+ Slipshot / Six Bells / Last Word) | Hex 4+3 |
+| `hex-pulse-rifle` | Ash Shotgun | `CENTER_MASS` (+ Controlled Burst / Suppressive Fire / Contact Front) | Hex 4+3 |
+| `hex-void-cannon` | Nullbreach | `DOOR_KNOCKER` (+ Fatal Funnel / Threshold / Deadbolt) | Hex 4+3 |
+| `envoy-echo-lantern` | Vambrace | `GRAVEWEAVE` (+ Grave Transfer / Veil Brand / Rot Knell) | Envoy 4+3 |
+| `envoy-null-conduit` | Scythe | `NULL_ARC` (+ Silent Edge / Vein Cut / Smoke Arc) | Envoy 4+3 |
+| `envoy-sanguine-prism` | Heart's Due | `BLOOD_REFRACTION` (+ Expose Vein / Crimson Vent / Heart Claim) | Envoy 4+3 |
+
+**Retired player-facing strings (never emit live):** Rift Edge, Veil Edge, Nullbreach Carbine, Nullbreach Shotgun, Claymore Blade, Pulse Rifle, Null Conduit, Echo Lantern, Sanguine Prism, WARDEN'S CUT, RIFTSTEP CUT, CLEAN DISCHARGE, BLACK WICK. Design-kit aliases Revolver / Black Door / Carbine are not live chassis titles. Legacy aliases `WARDENS_CUT` / `RIFTSTEP_CUT` / `CLEAN_DISCHARGE` / `BLACK_WICK` canonicalize to the rows above.
 
 #### Weapon-specific ultimates (WU plan)
 
@@ -890,7 +892,7 @@ Read-only classification under `src/data/weaponMatchup/` (**51** canonical non-b
 
 Canonical player-facing summaries live in `src/data/weaponPlayerFacing/` — one dossier model per permanent family (role, playstyle, basic, meter, strengths/pressures, build tags, first-use brief, Sanctuary paths). Wired into Loadout chassis cards/dossier, ability guidance labels (`REINFORCES LOOP` / `COVERS PRESSURE` / `ALTERNATE PATH`), Veil Front sector chassis brief, deploy confirm / operative identity (live equipped chassis — not stale class `weaponLine`), and compact combat HUD callouts.
 
-**Combat HUD:** Aegis shows the **4+3** surface (four family weapon-action cards + three technique cards); Parry and Ultimate remain outside that strip. Hex / Envoy still present the four-slot deck with slot 0 as the equipped weapon’s unique anchor. Cards show AP, live damage/outcome, secondary cost (ammo / Flux / HP; Aegis has **no Stamina** on the canonical surface), target pattern, and one–two defining effects plus conditional state when live (`TEMPO ARMED`, `PRIMARY ONLY`, `CLEAN CYCLE`, `FULL PAY` / `PARTIAL PAY`, etc.). Aegis weapon-action previews resolve from the weapon-action plan path; Hex/Envoy anchors still use `weaponBasicEngine` / `weaponAnchorCardPresentation.ts`. Enemy intel and turn order use spaced player-facing designations (`formatHostileDisplayName`) — never underscore registry IDs. Combat log clears on encounter start and uses the equipped chassis + weapon-specific attack name (e.g. `WARDEN'S STRIKE`, `NULL ARC`).
+**Combat HUD:** Aegis, Hex Shot, and Envoy show **4+3** surfaces (four family weapon-action cards + three selected cards). Aegis labels the second group **TECHNIQUES**; Hex and Envoy label it **FLEX ABILITIES**. Parry (Aegis), Phase-Shift Reload (Hex), Rift Ward (Envoy), and the equipped weapon Ultimate remain outside that strip. Cards show AP, live damage/outcome, secondary cost (ammo / Flux / HP / stamina where authored; Aegis has **no Stamina** on the canonical surface), target pattern, and one–two defining effects plus conditional state when live (`TEMPO ARMED`, Firing Solution, Threshold armed, Deadbolt primed, Elusive, Brink, CLEAN_CYCLE, etc.). Aegis / Hex / Envoy weapon-action previews resolve from their weapon-action catalog/executor/preview paths. Enemy intel and turn order use spaced player-facing designations (`formatHostileDisplayName`) — never underscore registry IDs. Combat log clears on encounter start and uses the equipped chassis + weapon-specific attack name (e.g. `WARDEN'S STRIKE`, `NULL ARC`).
 
 First-use briefs acknowledge on `PlayerAccount.weaponBriefAcknowledged` (missing ⇒ not acknowledged; survives extraction/death/new-run). Recommendation and matchup rendering remain read-only with zero runtime weight. **Phase 3M (repair complete — ready for re-review):** weapon-specific combat feel / VFX / SFX / pose integration plus ultimate-interaction host-gate fix — see Weapon Combat Presentation (Phase 3M) below. Deferred: validation expansion (3N), full alias migration (3O), numerical tuning including Black Door favorable-share / Vambrace strained band / Rival Merc density (3P). Weapon-specific ultimates shipped WU-1→WU-6.
 
@@ -2080,7 +2082,7 @@ Also still in play:
 | Class | Loop | Signature payoff |
 |-------|------|------------------|
 | Aegis | Read intent → Parry/Guard → Fracture → Riposte | Perfect Parry arms Riposte; Strike +30% vs Fractured |
-| Hex Shot | Load answer → break/interrupt → reload tempo | Perfect Reload +20% Overcharge + Protocol; Chamber +15% retired (H.1a) |
+| Hex Shot | Load answer → break/interrupt → reload tempo | Perfect Reload +20% Overcharge + Protocol; Chamber retired (H.1a); W.5 4+3 kits closed |
 | Envoy | Prime catalyst → sequence → collapse wards | NULL→ECHO Silencing Echo; Catalytic/Cataclysm |
 
 Dev Test: `[ CLASS IDENTITY REPORT ]`, `[ CLASS COMBAT REPORT ]`.
@@ -2270,16 +2272,16 @@ Notable alpha mechanics:
 
 ### Combat surface model
 
-**Target / live Aegis model:** each combat loadout presents **4 weapon abilities** (family-derived) and **3 techniques** (player-selected), plus class Parry and a weapon Ultimate outside the card strip.
+**Target / live Aegis + Hex model:** each combat loadout presents **4 weapon abilities** (family-derived) and **3 player-selected cards** (Aegis techniques / Hex flexes), plus class-specific outside-strip actions and a weapon Ultimate.
 
 | Layer | Count | Source | Persisted? |
 |-------|------:|--------|------------|
 | Weapon actions | 4 | Equipped weapon family registry | No (derived each combat) |
-| Techniques | 3 | Shared class technique pool | Yes — snapshotted at descent |
-| Parry / ward | 1 | Fixed class mechanic | No (not in technique loadout) |
-| Ultimate | 1 | Equipped weapon family | No (not in technique loadout) |
+| Techniques / flexes | 3 | Aegis technique pool / Hex eleven-flex roster | Yes — Aegis snapshotted at descent; Hex `HexFlexLoadout` |
+| Parry / Reload | 1 | Fixed class mechanic | No (not in the 3-card selection) |
+| Ultimate | 1 | Equipped weapon family | No (not in the 3-card selection) |
 
-Hex Shot and Envoy still use the older **4-slot ability deck** (anchor + 3 flex) until a matching class refactor lands. Do not describe them as 4+3 in player-facing or Sanctuary graft copy yet.
+**Envoy (E.5):** live combat surface is **4 family weapon actions + 3 persisted flex abilities** (+ Rift Ward + weapon Ultimate outside strip). Weapon actions are not persisted; flexes are `EnvoyFlexLoadout`.
 
 ### Aegis
 
@@ -2302,11 +2304,22 @@ Full matrices, Brand rules, graft surface, and Phase E closures: `docs/aegis-ref
 
 ### Hex Shot
 
-Design identity: ballistic control, overcharge, mark/round effects, cloak and reload tempo.
+Design identity: ballistic control, overcharge, mark/round effects, cloak and reload tempo. **W.1–W.5 complete** — Hex uses a total **4+3** combat surface. **Chamber is retired.**
 
-**Live loadout:** still **4 ability slots** — slot 0 = family-routed fixed basic; slots 1–3 = player-selected flex. Weapon Ultimate is separate (orbital), not a deck slot. **H.4 closed** — eleven-flex roster healthy; no H.4b retune.
+**Live combat strip (4+3):**
 
-**Fixed basics (slot 0 — not flex):** family-routed anchors — Silver-Core Sidearm (`SILVER_CORE_SIDEARM` / `hex-silver-core-sidearm`) · Nullbreach (`hex-void-cannon`) · Ash Shotgun (`hex-pulse-rifle`). One magazine round per fixed-basic action; inherits loaded ammunition.
+- **4 weapon actions** — derived from equipped family (not persisted; never flex):
+  - Silver-Core Sidearm (design-kit **Revolver**): Quickdraw, Slipshot, Six Bells, Last Word
+  - Ash Shotgun (design-kit **Carbine**): Center Mass, Controlled Burst, Suppressive Fire (`SUPPRESSIVE_BARRAGE`), Contact Front
+  - Nullbreach (design-kit **Black Door**): Door Knocker, Fatal Funnel, Threshold, Deadbolt
+- **3 flex abilities** — player-selected from the locked eleven-flex roster (`HexFlexLoadout`). Sanctuary / DeckWorkspace label: **FLEX ABILITIES**.
+- **Outside strip:** Phase-Shift Reload; equipped weapon Ultimate (Sixth Seal / Zero Protocol / Last Knock).
+
+**Family-local encounter state (never serialized):**
+
+- Revolver — Elusive (Slipshot)
+- Carbine — Firing Solution (+15 accuracy only); Carbine Suppressed (×0.70 next eligible direct; distinct from boon `SUPPRESSIVE_FIRE`)
+- Black Door — Threshold (pre-attack reaction; shell reserved on arm); `deadboltReloadOpportunity` (arms only after Phase-Shift Reload restores ≥1 round on Nullbreach); shared backline ×0.75 owner
 
 **Selectable flex abilities (exactly eleven):**
 
@@ -2328,7 +2341,9 @@ Design identity: ballistic control, overcharge, mark/round effects, cloak and re
 
 **Weapon ultimates (orbital — not flex):** Sixth Seal (Silver-Core Sidearm) · Last Knock (Nullbreach) · Zero Protocol (Ash Shotgun / `hex-pulse-rifle`). Sixth Seal’s ultimate-owned magazine refill does not grant ordinary Active Reload rewards. Zero Protocol is Ash Shotgun–owned, not a shared class ultimate slot.
 
-**Deprecated IDs (migration-only — non-assignable):**
+**Historical compatibility:** legacy `SILVER_CORE_SIDEARM` / slot-zero anchors remain migration/graft/telemetry signatures only — never live cards after W.5. Canonical fixed basics: `QUICKDRAW` / `CENTER_MASS` / `DOOR_KNOCKER`.
+
+**Deprecated flex IDs (migration-only — non-assignable):**
 
 | Deprecated ID | Migrates to |
 | --- | --- |
@@ -2341,11 +2356,13 @@ Legacy alias `BRIMSTONE_PAYLOAD` → `BLEEDING_PAYLOAD` (then follows the migrat
 
 **Panopticon Watch runtime (H.4 Decision 1A):** triggered interrupt is a fixed Kinetic derivative packet (8; 16 with Overwatch Mastery), `indirectDamage`, non-`BALLISTIC` — does **not** inherit loaded ammunition or spend magazine rounds.
 
+**Key files:** `hexWeaponActionRegistry.ts`, `hexWeaponActionCatalog.ts`, `hexWeaponActionExecutor.ts`, `hexCombatCompatibility.ts`, `hexFlexLoadoutEngine.ts`, family-state engines (`hexElusiveEngine`, `hexFiringSolutionEngine`, `hexCarbineSuppressedEngine`, `hexThresholdEngine`, `hexDeadboltEngine`, `hexFatalFunnelEngine`, `hexBlackDoorPositionEngine`).
+
 ### Envoy
 
 Design identity: occult, Veil Rot, curses, warding, flesh/phase manipulation.
 
-**Live loadout:** still **4 ability slots** (slot 0 = weapon-specific anchor such as Graveweave / Null Arc / Blood Refraction; three flex abilities). Weapon Ultimate is separate (orbital). Ability catalog includes Astral Lance, Necrotic Bloom, Flux Purge, Dimensional Shear, Rift Ward, Phase Step, Aetheric Transfusion, Soul Tether, Entropy Hex, Flesh Warp, Paralytic Miasma, Mind Sunder, etc.
+**Live loadout (E.5):** **4 family-derived weapon actions** (not persisted) + **3 persisted flex abilities** (`EnvoyFlexLoadout`). Rift Ward and the equipped weapon Ultimate remain outside the seven-card strip. Flex pool remains eleven (165 unordered / 990 ordered); default triple `ASTRAL_LANCE` / `ENTROPY_HEX` / `NECROTIC_BLOOM`. Legacy four-slot saves migrate by dropping slot-zero compatibility/anchor IDs. Authority: `envoyWeaponActionRegistry.ts`, `envoyCombatCompatibility.ts`, `envoyFlexLoadoutEngine.ts`, `envoyWeaponActionExecutor.ts`, `envoyWeaponActionPreviewEngine.ts`, `envoyCatalystCastEngine.ts`.
 
 ## Ley-Line Mutations, Boons, And Grafts
 
@@ -2467,10 +2484,13 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 - **Hex Shot Phase H.2c (authorized numeric retunes — complete):** `HEX_MAGAZINE_CONFIG.wraithglassFlatOccult` `6 → 3`; Silver-Core Sidearm Tier-III `ballisticDamagePct` `15 → 20`. Verified T1 Wraithglass neutral aggregates Sidearm 13 / Nullbreach 22 / Ash iso 10; Sidearm SILVER ladder 10 → 11 → 12; T3 mag 72 / before-P3 216. H.2a structure unchanged. **H.2 closed.**
 - **Hex Shot Phase H.3b (eleven-flex roster — complete):** Assignable flex = 11 (`CINDERLINE_SATURATION`, `BLACKSITE_TRIAGE` added). Ash Jacket Salvo packets 7+7+8; Astral Target Lock TACTICAL profile; Panopticon display `[ PANOPTICON WATCH ]` (ID unchanged). Deprecated four remain non-assignable with sanitize migrations. **H.3 closed.**
 - **Hex Shot Phase H.4 (eleven-flex diversity — complete):** H.4a audit + product decisions 1A/2A — Panopticon triggered packet honors runtime (no ammo inheritance); multi-packet Wraithglass per-hit flat Occult retained. Roster healthy across 165 loadouts. **H.4 closed; no H.4b.**
+- **Hex Shot Phases W.1–W.5 (weapon-kit refactor — complete):** W.1 decisions → W.2 Revolver 4+3 scaffold → W.3 Carbine + Firing Solution / Suppressed → W.4 Black Door + COLUMN / Threshold / Deadbolt → W.5 cross-family audit, transitional fallback removal, presentation + GDD reconciliation. All three Hex families kit-complete; 165 flex triples preserved.
 - **Weapon identity / WU-1 (live foundation; Hex display superseded by H.1a):** Display names Longsword / Paired Blades / Unmaker / Vambrace / Scythe / Heart's Due plus Hex H.1a names; Envoy starter = Vambrace; Vambrace anchor `GRAVEWEAVE` (legacy `BLACK_WICK`); combat portraits resolve from equipped weapon; `weaponUltimateRegistry` registers nine ultimates. Permanent family IDs unchanged.
 - **Weapon identity / Phase 3M (repair complete — ready for re-review):** Ultimate circle → weapon interaction popup host-gate fix; restrained weapon VFX; per-pose calibration (Scythe/Heart/Aegis); ultimate presentation tagging. Original 3M manual review did not pass. Next: 3N → 3O → 3P.
-- **Weapon identity / Phase 3L naming (superseded by WU-1 for display):** Prior 3L names (Veil Edge, Nullbreach Shotgun, Echo Lantern, etc.) are retired live strings. Hex/Envoy still use nine unique weapon-specific slot-0 anchors; Aegis combat HUD is the **4+3** weapon-action + technique strip (see Aegis refactor).
-- **Aegis refactor Phases A–E.1e.1 (live):** Combat surface is **4 family weapon actions + 3 selected techniques** (+ Parry + weapon Ultimate outside strip). No Aegis Stamina; Brands ≠ Reserve; graftable surface is that 4+3; structural graft containment closed in E.1e.1. Authority: `docs/aegis-refactor-contract.md`. Hex/Envoy remain on the prior 4-slot deck until their class refactor.
+- **Weapon identity / Phase 3L naming (superseded by WU-1 for display):** Prior 3L names (Veil Edge, Nullbreach Shotgun, Echo Lantern, etc.) are retired live strings. Aegis / Hex / Envoy combat HUDs are **4+3** strips (see class weapon-kit contracts).
+- **Aegis refactor Phases A–E.1e.1 (live):** Combat surface is **4 family weapon actions + 3 selected techniques** (+ Parry + weapon Ultimate outside strip). No Aegis Stamina; Brands ≠ Reserve; graftable surface is that 4+3; structural graft containment closed in E.1e.1. Authority: `docs/aegis-refactor-contract.md`.
+- **Hex Shot weapon-kit Phases W.1–W.5 (live / closed):** Combat surface is **4 family weapon actions + 3 persisted flexes** (+ Phase-Shift Reload + weapon Ultimate outside strip). Transitional incomplete-family fallback removed in W.5. Chamber remains retired.
+- **Envoy weapon-kit Phases E.1–E.5 (live / closed):** Combat surface is **4 family weapon actions + 3 persisted flexes** (+ Rift Ward + weapon Ultimate outside strip). Pure three-flex persistence; Actions 2–4 player-facing; Catalyst cast authority centralized. Authority: `docs/envoy-weapon-kit-contract.md`.
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Run World Brief + Procedural Director + Sector Aftermath v1 (complete):** Unified deploy brief with crisis theme/resource stress/threat profile; director validation, pressure scoring, manifestation checks, safety caps, explainability; 10-rule sector aftermath with stackKey merge, intensity, sector-local ticking, debrief preview + persistence, brief bias application, idempotency guard, validation + dev sim tools. See Run World Brief section above.

@@ -143,6 +143,13 @@ export interface ClassCombatEncounterState {
   currentCatalyst: 'NULL' | 'ECHO' | 'BLOOD' | 'ASH' | null;
   previousCatalyst: 'NULL' | 'ECHO' | 'BLOOD' | 'ASH' | null;
   catalystPrimedThisTurn: boolean;
+  /**
+   * E.4 — Heart’s Due sanguineExposure marks (encounter-local; never persisted).
+   * Cleared on unit death, encounter end, or end of next enemy turn if unconsumed.
+   */
+  sanguineExposure: Record<string, boolean>;
+  /** E.4 — Smoke Arc accuracy pressure; cleared at end of next enemy turn. */
+  smokeArcAccuracyDown: Record<string, boolean>;
 }
 
 export function createDefaultClassCombatEncounterState(): ClassCombatEncounterState {
@@ -185,6 +192,8 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     currentCatalyst: null,
     previousCatalyst: null,
     catalystPrimedThisTurn: false,
+    sanguineExposure: {},
+    smokeArcAccuracyDown: {},
   };
 }
 

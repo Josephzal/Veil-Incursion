@@ -22,6 +22,10 @@ import {
   formatHexWeaponActionLabel,
   isDefinedHexWeaponActionId,
 } from './hexWeaponActionCatalog';
+import {
+  formatEnvoyWeaponActionLabel,
+  getEnvoyWeaponActionDefinition,
+} from './envoyWeaponActionCatalog';
 import { getAbilityDefinition } from './aegisAbilities';
 import { getAegisTechniqueDefinition, isAegisTechniqueId } from './aegisTechniqueCatalog';
 import { CLASS_DEFINITIONS } from './classes';
@@ -133,6 +137,9 @@ export function formatAbilityLabel(
     return getHexShotAbilityDefinition(abilityId as HexShotAbilityId).label;
   }
   if (classId === 'ENVOY') {
+    if (getEnvoyWeaponActionDefinition(abilityId)) {
+      return formatEnvoyWeaponActionLabel(abilityId);
+    }
     return getEnvoyAbilityDefinition(abilityId as EnvoyAbilityId).label;
   }
   if (isAegisTechniqueId(abilityId)) {

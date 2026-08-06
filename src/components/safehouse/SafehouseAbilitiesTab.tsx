@@ -23,15 +23,30 @@ import { formatClassAbilityCostLine } from '../../data/classAbilityResolver';
 import { getAegisTechniqueDefinition, isAegisTechniqueId } from '../../data/aegisTechniqueCatalog';
 import {
   deriveHexWeaponActions,
-  isHexWeaponKitComplete,
+  isHexWeaponFamilyId,
 } from '../../data/hexWeaponActionRegistry';
 import {
   formatHexWeaponActionLabel,
   getHexWeaponActionDefinition,
 } from '../../data/hexWeaponActionCatalog';
+import {
+  deriveEnvoyWeaponActions,
+  isEnvoyWeaponFamilyId,
+} from '../../data/envoyWeaponActionRegistry';
+import {
+  formatEnvoyWeaponActionLabel,
+  getEnvoyWeaponActionDefinition,
+} from '../../data/envoyWeaponActionCatalog';
+import { sanitizeEnvoyFlexLoadout } from '../../data/envoyFlexLoadoutEngine';
 import { getEquippedWeaponForClass } from '../../data/weaponProgressionEngine';
 import type { AegisTechniqueId, AegisTechniqueLoadout } from '../../types/aegisCombat';
-import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../../types/operativeClass';
+import type {
+  EnvoyAbilityId,
+  EnvoyFlexAbilityId,
+  EnvoyLoadout,
+  HexShotAbilityId,
+  HexShotLoadout,
+} from '../../types/operativeClass';
 import {
   validateAegisTechniqueLoadoutCommit,
 } from '../../utils/aegisLoadoutUtils';
@@ -54,9 +69,10 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
 
   const [aegisDraft, setAegisDraft] = useState<AegisTechniqueId[]>([...account.aegisTechniqueLoadout]);
   const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...account.hexShotLoadout]);
-  const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...account.envoyLoadout]);
+  const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([
+    ...sanitizeEnvoyFlexLoadout(account.envoyLoadout),
+  ]);
   const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2>(0);
-  const [selectedFlexSlot, setSelectedFlexSlot] = useState<1 | 2 | 3>(1);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,7 +84,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   }, [account.hexShotLoadout]);
 
   useEffect(() => {
-    setEnvoyDraft([...account.envoyLoadout]);
+    setEnvoyDraft([...sanitizeEnvoyFlexLoadout(account.envoyLoadout)]);
   }, [account.envoyLoadout]);
 
   useEffect(() => {
@@ -97,8 +113,13 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   useEffect(() => {
     if (account.activeClass !== 'ENVOY') return;
     if (validateEnvoyLoadoutCommit(envoyDraft, account.unlockedEnvoyAbilities)) return;
-    const committed: EnvoyLoadout = [envoyDraft[0], envoyDraft[1], envoyDraft[2], envoyDraft[3]];
-    if (committed.some((id, index) => id !== account.envoyLoadout[index])) {
+    const committed: EnvoyLoadout = [
+      envoyDraft[0]! as EnvoyFlexAbilityId,
+      envoyDraft[1]! as EnvoyFlexAbilityId,
+      envoyDraft[2]! as EnvoyFlexAbilityId,
+    ];
+    const current = sanitizeEnvoyFlexLoadout(account.envoyLoadout);
+    if (committed.some((id, index) => id !== current[index])) {
       setEnvoyLoadout(committed);
     }
   }, [envoyDraft, account.activeClass, account.envoyLoadout, account.unlockedEnvoyAbilities, setEnvoyLoadout]);
@@ -126,7 +147,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
       weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     }, 'HEX_SHOT');
-    if (!isHexWeaponKitComplete(familyId)) return undefined;
+    if (!isHexWeaponFamilyId(familyId)) return undefined;
     const actions = deriveHexWeaponActions(familyId);
     if (!actions) return undefined;
     return actions.map((id) => {
@@ -160,6 +181,32 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     ),
     [],
   );
+
+  const envoyReadOnlyWeaponActions = useMemo(() => {
+    if (account.activeClass !== 'ENVOY') return undefined;
+    const familyId = getEquippedWeaponForClass({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, 'ENVOY');
+    if (!isEnvoyWeaponFamilyId(familyId)) return undefined;
+    const actions = deriveEnvoyWeaponActions(familyId);
+    if (!actions) return undefined;
+    return actions.map((id) => {
+      const def = getEnvoyWeaponActionDefinition(id);
+      return {
+        id,
+        label: def?.label ?? formatEnvoyWeaponActionLabel(id),
+        costLine: formatClassAbilityCostLine('ENVOY', id) ?? '',
+        description: def?.description ?? 'Fixed weapon action.',
+      };
+    });
+  }, [
+    account.activeClass,
+    account.equippedWeaponByClass,
+    account.weaponTiers,
+    account.weaponUnlocks,
+  ]);
 
   const editorTheme = {
     accentColor: SELECT_ACCENT,
@@ -212,11 +259,15 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     }
     setEnvoyDraft((prev) => {
       const next: EnvoyAbilityId[] = [...prev];
-      next[selectedFlexSlot] = abilityId;
+      const existing = next.indexOf(abilityId);
+      if (existing >= 0 && existing !== selectedSlot) {
+        next[existing] = next[selectedSlot]!;
+      }
+      next[selectedSlot] = abilityId;
       return next;
     });
     setLoadoutStatus(null);
-  }, [account.unlockedEnvoyAbilities, selectedFlexSlot]);
+  }, [account.unlockedEnvoyAbilities, selectedSlot]);
 
   const commitAegisLoadout = useCallback(() => {
     const rejection = validateAegisTechniqueLoadoutCommit(aegisDraft);
@@ -248,9 +299,13 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
       setLoadoutStatus(rejection);
       return;
     }
-    const committed: EnvoyLoadout = [envoyDraft[0], envoyDraft[1], envoyDraft[2], envoyDraft[3]];
+    const committed: EnvoyLoadout = [
+      envoyDraft[0]! as EnvoyFlexAbilityId,
+      envoyDraft[1]! as EnvoyFlexAbilityId,
+      envoyDraft[2]! as EnvoyFlexAbilityId,
+    ];
     setEnvoyLoadout(committed);
-    appendHubLog('>> ENVOY LOADOUT LOCKED — spell deck staged for next incursion.');
+    appendHubLog('>> ENVOY LOADOUT LOCKED — three flex abilities staged for next incursion.');
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
   }, [account.unlockedEnvoyAbilities, appendHubLog, envoyDraft, setEnvoyLoadout]);
 
@@ -318,10 +373,8 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             anchorLabel={ENVOY_ABILITY_CATALOG[ENVOY_ANCHOR].label}
             assignableIds={getAssignableEnvoyAbilities()}
             catalog={envoyCatalog}
-            selectedSlot={selectedFlexSlot}
-            onSelectSlot={(slot) => {
-              if (slot === 1 || slot === 2 || slot === 3) setSelectedFlexSlot(slot);
-            }}
+            selectedSlot={selectedSlot}
+            onSelectSlot={(slot) => setSelectedSlot(slot as 0 | 1 | 2)}
             onAssignAbility={assignEnvoyAbility}
             onCommit={commitEnvoyLoadout}
             theme={editorTheme}
@@ -335,6 +388,10 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             }}
             statusMessage={loadoutStatus}
             hideCommit
+            flexOnly
+            readOnlyWeaponActions={envoyReadOnlyWeaponActions}
+            title="ENVOY FLEX // 3 OF 11"
+            hint="Select three flex abilities. Weapon actions derive from the equipped family. Rift Ward and Ultimates stay outside the strip."
           />
         ) : null}
     </>

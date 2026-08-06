@@ -1,65 +1,78 @@
 /**
- * Hex Shot W.2 combat surface — complete kits use 4+3; incomplete kits use legacy basic+3 flex.
+ * Hex Shot W.5 combat surface — total 4+3 authority.
+ * Transitional LEGACY_BASIC_FLEX fallback removed.
  */
 import type { HexFlexLoadout } from '../types/operativeClass';
 import type { HexWeaponActionId } from '../types/hexWeaponAction';
 import { DEFAULT_HEX_FLEX_LOADOUT } from '../types/operativeClass';
-import { HEX_SHOT_ANCHOR } from './classAbilityUnlockEngine';
 import { sanitizeHexFlexLoadout } from './hexFlexLoadoutEngine';
 import {
-  deriveHexWeaponActions,
   getHexWeaponActionSet,
-  isHexWeaponKitComplete,
+  isHexWeaponFamilyId,
+  requireHexWeaponActions,
   type HexWeaponFamilyId,
 } from './hexWeaponActionRegistry';
 import type { WeaponFamilyId } from '../types/weapon';
 
-export type HexCombatSurfaceMode = 'WEAPON_KIT' | 'LEGACY_BASIC_FLEX';
+/** W.5 — only WEAPON_KIT remains. LEGACY_BASIC_FLEX deleted. */
+export type HexCombatSurfaceMode = 'WEAPON_KIT';
 
 export interface HexCombatSurface {
   familyId: HexWeaponFamilyId | null;
   mode: HexCombatSurfaceMode;
-  /** Derived WA when mode is WEAPON_KIT; empty for legacy. */
   weaponActions: readonly HexWeaponActionId[];
   flex: HexFlexLoadout;
   /**
-   * Flat HUD order.
-   * WEAPON_KIT: 4 WA + 3 flex.
-   * LEGACY: SILVER_CORE_SIDEARM + 3 flex.
+   * Flat HUD order: 4 WA + 3 flex when family resolves; flex-only when family missing.
+   * Typed as string[] so Reload/Ultimate exclusion checks stay uncoupled from ability unions.
    */
   hudCards: readonly string[];
   weaponActionCount: number;
   techniqueCount: number;
 }
 
+/**
+ * Build the Hex combat strip for an equipped family.
+ * Registered families always yield 4 WA + 3 flex.
+ * Unknown/missing family never inserts a historical fixed basic.
+ */
 export function buildHexCombatSurface(args: {
   weaponFamilyId: WeaponFamilyId | HexWeaponFamilyId | null | undefined;
   flex: HexFlexLoadout | readonly string[] | null | undefined;
 }): HexCombatSurface {
   const flex = sanitizeHexFlexLoadout(args.flex ?? DEFAULT_HEX_FLEX_LOADOUT);
-  const set = getHexWeaponActionSet(args.weaponFamilyId);
-  const familyId = set?.familyId ?? null;
 
-  if (isHexWeaponKitComplete(args.weaponFamilyId) && set) {
-    const actions = deriveHexWeaponActions(args.weaponFamilyId)!;
+  if (!isHexWeaponFamilyId(args.weaponFamilyId)) {
     return {
-      familyId,
+      familyId: null,
       mode: 'WEAPON_KIT',
-      weaponActions: actions,
+      weaponActions: [],
       flex,
-      hudCards: [...actions, ...flex],
-      weaponActionCount: 4,
+      hudCards: [...flex],
+      weaponActionCount: 0,
       techniqueCount: 3,
     };
   }
 
+  const set = getHexWeaponActionSet(args.weaponFamilyId)!;
+  const actions = requireHexWeaponActions(args.weaponFamilyId);
   return {
-    familyId,
-    mode: 'LEGACY_BASIC_FLEX',
-    weaponActions: [],
+    familyId: set.familyId,
+    mode: 'WEAPON_KIT',
+    weaponActions: actions,
     flex,
-    hudCards: [HEX_SHOT_ANCHOR, ...flex],
-    weaponActionCount: 0,
-    techniqueCount: 0,
+    hudCards: [...actions, ...flex],
+    weaponActionCount: 4,
+    techniqueCount: 3,
   };
+}
+
+/** True when the surface is the canonical playable 4+3 kit. */
+export function isHexCombatSurfaceComplete(surface: HexCombatSurface): boolean {
+  return surface.familyId != null
+    && surface.mode === 'WEAPON_KIT'
+    && surface.weaponActionCount === 4
+    && surface.techniqueCount === 3
+    && surface.weaponActions.length === 4
+    && surface.hudCards.length === 7;
 }

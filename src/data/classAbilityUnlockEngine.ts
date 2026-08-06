@@ -21,6 +21,7 @@ import {
   formatAbilityUnlockCost,
   isUnlockCostEmpty,
 } from './aegisAbilityUnlockEngine';
+import { sanitizeEnvoyFlexLoadout } from './envoyFlexLoadoutEngine';
 
 export {
   canAffordAbilityUnlock,
@@ -81,24 +82,22 @@ export {
   validateHexFlexLoadoutCommit,
 } from './hexFlexLoadoutEngine';
 
-export function sanitizeEnvoyCombatLoadout(loadout: readonly EnvoyAbilityId[]): EnvoyLoadout {
-  const migrated = loadout.map((id) => migrateEnvoyAbilityId(id));
-  if (migrated.length !== 4 || migrated[0] !== ENVOY_ANCHOR) {
-    return [...DEFAULT_ENVOY_LOADOUT];
-  }
-  const used = new Set<string>([migrated[0]]);
-  const flex = migrated.slice(1).map((id) => {
-    if (!isEnvoyProcUltimate(id)) {
-      used.add(id);
-      return id;
-    }
-    const replacement = DEFAULT_ENVOY_LOADOUT.slice(1).find((d) => !used.has(d))
-      ?? getAssignableEnvoyAbilities().find((d) => !used.has(d))
-      ?? 'ASTRAL_LANCE';
-    used.add(replacement);
-    return replacement;
-  });
-  return [migrated[0], flex[0], flex[1], flex[2]] as EnvoyLoadout;
+export {
+  sanitizeEnvoyFlexLoadout,
+  projectEnvoyLiveFourSlotDeck,
+  validateEnvoyFlexLoadoutCommit,
+  DEFAULT_ENVOY_FLEX_LOADOUT,
+} from './envoyFlexLoadoutEngine';
+
+/**
+ * E.5 — account / active-incursion Envoy loadout authority.
+ * Returns canonical three-flex `EnvoyLoadout`. Accepts legacy 4-slot projections.
+ * Never mutates input. Never persists weapon actions or VEIL_SPLINTER.
+ */
+export function sanitizeEnvoyCombatLoadout(
+  loadout: readonly EnvoyAbilityId[] | readonly string[] | null | undefined,
+): EnvoyLoadout {
+  return sanitizeEnvoyFlexLoadout(loadout);
 }
 
 export function isHexShotAbilityUnlocked(

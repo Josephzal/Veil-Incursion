@@ -53,12 +53,36 @@ export type EnvoyAbilityId =
   | 'PARALYTIC_MIASMA'
   | 'MIND_SUNDER';
 
-export type EnvoyLoadout = readonly [
-  EnvoyAbilityId,
-  EnvoyAbilityId,
-  EnvoyAbilityId,
-  EnvoyAbilityId,
+/** Flex-eligible Envoy ability IDs (eleven). Weapon actions / anchor / intrinsics excluded. */
+export type EnvoyFlexAbilityId =
+  | 'ASTRAL_LANCE'
+  | 'ENTROPY_HEX'
+  | 'NECROTIC_BLOOM'
+  | 'FLUX_PURGE'
+  | 'DIMENSIONAL_SHEAR'
+  | 'PHASE_STEP'
+  | 'AETHERIC_TRANSFUSION'
+  | 'SOUL_TETHER'
+  | 'FLESH_WARP'
+  | 'PARALYTIC_MIASMA'
+  | 'MIND_SUNDER';
+
+/**
+ * E.3 — canonical persisted Envoy flex selections (exactly three).
+ * Weapon actions are derived from the equipped family and never stored here.
+ * Legacy 4-tuples `[VEIL_SPLINTER, f0, f1, f2]` are migrated by sanitizeEnvoyFlexLoadout.
+ */
+export type EnvoyFlexLoadout = readonly [
+  EnvoyFlexAbilityId,
+  EnvoyFlexAbilityId,
+  EnvoyFlexAbilityId,
 ];
+
+/**
+ * E.5 — EnvoyLoadout is the persisted three-flex shape (alias of EnvoyFlexLoadout).
+ * Legacy 4-tuples `[VEIL_SPLINTER|Action1, f1, f2, f3]` migrate via sanitizeEnvoyFlexLoadout.
+ */
+export type EnvoyLoadout = EnvoyFlexLoadout;
 
 export const ALL_OPERATIVE_CLASSES: readonly ClassType[] = ['AEGIS', 'HEX_SHOT', 'ENVOY'];
 
@@ -71,12 +95,14 @@ export const DEFAULT_HEX_FLEX_LOADOUT: HexFlexLoadout = [
 /** @deprecated Prefer DEFAULT_HEX_FLEX_LOADOUT */
 export const DEFAULT_HEX_SHOT_LOADOUT: HexShotLoadout = DEFAULT_HEX_FLEX_LOADOUT;
 
-export const DEFAULT_ENVOY_LOADOUT: EnvoyLoadout = [
-  'VEIL_SPLINTER',
+export const DEFAULT_ENVOY_FLEX_LOADOUT: EnvoyFlexLoadout = [
   'ASTRAL_LANCE',
   'ENTROPY_HEX',
   'NECROTIC_BLOOM',
 ];
+
+/** Canonical persisted Envoy loadout — three flex abilities. */
+export const DEFAULT_ENVOY_LOADOUT: EnvoyLoadout = DEFAULT_ENVOY_FLEX_LOADOUT;
 
 export const DEFAULT_HEX_SHOT_UNLOCKED: readonly HexShotAbilityId[] = [...DEFAULT_HEX_SHOT_LOADOUT];
 

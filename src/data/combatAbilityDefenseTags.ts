@@ -2,6 +2,7 @@ import type { ClassType } from '../types/game';
 import { getAbilityDefinition } from './aegisAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from './hexShotAbilities';
 import { ENVOY_ABILITY_CATALOG } from './envoyAbilities';
+import { getEnvoyWeaponActionDefinition } from './envoyWeaponActionCatalog';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 
@@ -39,6 +40,13 @@ export function readAbilityTags(classId: ClassType, abilityId: string): readonly
     return HEX_SHOT_ABILITY_CATALOG[abilityId as HexShotAbilityId]?.tags ?? [];
   }
   if (classId === 'ENVOY') {
+    const wa = getEnvoyWeaponActionDefinition(abilityId);
+    if (wa) {
+      const tags = [...wa.boonTags];
+      if (wa.wardStrip > 0) tags.push('WARD_BREAK');
+      if (wa.damageChannel === 'OCCULT') tags.push('OCCULT');
+      return tags;
+    }
     return ENVOY_ABILITY_CATALOG[abilityId as EnvoyAbilityId]?.tags ?? [];
   }
   return [];

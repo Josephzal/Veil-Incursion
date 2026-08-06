@@ -94,6 +94,19 @@ function run(): void {
     assert.ok(r.resourceRequirements.length > 0);
     assert.ok(r.expectedSuccessfulRunTiming.includes('10–15'));
   });
+  // WU-1 Envoy starter = Vambrace; unlock-path slots must match live registry authority
+  const envoyById = Object.fromEntries(
+    unlockRows.filter((r) => r.id.startsWith('envoy-')).map((r) => [r.id, r]),
+  );
+  assert.equal(envoyById['envoy-echo-lantern']?.slot, 1, 'Vambrace is Envoy slot 1 / starter');
+  assert.equal(envoyById['envoy-null-conduit']?.slot, 2, 'Scythe is Envoy slot 2');
+  assert.equal(envoyById['envoy-sanguine-prism']?.slot, 3, "Heart's Due is Envoy slot 3");
+  assert.equal(envoyById['envoy-echo-lantern']?.resourceRequirements.length, 0);
+  assert.ok(envoyById['envoy-null-conduit']!.resourceRequirements.length > 0);
+  assert.ok(envoyById['envoy-sanguine-prism']!.resourceRequirements.length > 0);
+  assert.equal(envoyById['envoy-echo-lantern']?.liveDisplayName, 'Vambrace');
+  assert.equal(envoyById['envoy-null-conduit']?.liveDisplayName, 'Scythe');
+  assert.equal(envoyById['envoy-sanguine-prism']?.liveDisplayName, "Heart's Due");
   // Existing-save ownership preserved
   const migrated = normalizeWeaponProgression({
     weaponUnlocks: ['aegis-rift-edge', 'hex-void-cannon'],

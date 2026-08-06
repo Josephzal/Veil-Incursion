@@ -1,6 +1,6 @@
 /**
  * Hex Shot weapon-kit actions — derived from equipped family, never persisted as selections.
- * W.2–W.4: Revolver, Carbine, and Black Door kits executable when kitComplete.
+ * W.2–W.5: Revolver, Carbine, and Black Door kits — total family authority (all kit-complete).
  */
 
 export type HexWeaponActionId =

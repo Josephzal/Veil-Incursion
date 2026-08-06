@@ -957,9 +957,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
 
   const setEnvoyLoadout = useCallback(
     (loadout: EnvoyLoadout) => {
+      const sanitized = normalizeEnvoyLoadoutForCommit(loadout);
       updateAccount((prev) => ({
         ...prev,
-        envoyLoadout: [...loadout],
+        envoyLoadout: [...sanitized],
       }));
     },
     [updateAccount],

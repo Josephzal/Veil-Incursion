@@ -5,22 +5,38 @@ import {
   HEX_SHOT_INTRINSIC,
   isHexShotDeprecatedAbility,
   sanitizeEnvoyCombatLoadout,
+  sanitizeEnvoyFlexLoadout,
   sanitizeHexFlexLoadout,
+  validateEnvoyFlexLoadoutCommit,
   validateHexFlexLoadoutCommit,
 } from '../data/classAbilityUnlockEngine';
 import {
   isEnvoyProcUltimate,
   isHexShotProcUltimate,
 } from '../data/combatMasteryEngine';
-import type { EnvoyLoadout, HexFlexLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
+import type {
+  EnvoyFlexLoadout,
+  EnvoyLoadout,
+  HexFlexLoadout,
+  HexShotAbilityId,
+  HexShotLoadout,
+} from '../types/operativeClass';
 
 export function normalizeHexShotLoadoutForCommit(input: readonly string[]): HexShotLoadout {
   return sanitizeHexFlexLoadout(input);
 }
 
+/** E.5 — Sanctuary / account commit normalizes to canonical three-flex. */
 export function normalizeEnvoyLoadoutForCommit(input: readonly string[]): EnvoyLoadout {
-  return sanitizeEnvoyCombatLoadout(input as EnvoyLoadout);
+  return sanitizeEnvoyCombatLoadout(input);
 }
+
+/** Canonical three-flex normalize (structural / migration). */
+export function normalizeEnvoyFlexLoadoutForCommit(input: readonly string[]): EnvoyFlexLoadout {
+  return sanitizeEnvoyFlexLoadout(input);
+}
+
+export { validateEnvoyFlexLoadoutCommit };
 
 export function validateHexShotLoadoutCommit(
   loadout: readonly string[],
@@ -40,24 +56,21 @@ export function validateEnvoyLoadoutCommit(
   loadout: readonly string[],
   unlocked?: readonly string[],
 ): string | null {
-  if (loadout.length !== 4) return '>> LOADOUT REJECTED — FOUR SLOTS REQUIRED.';
-  if (loadout[0] !== ENVOY_ANCHOR) {
-    return '>> LOADOUT REJECTED — SLOT 1 MUST REMAIN VEIL-SPLINTER.';
+  // Accept legacy 4-slot drafts — validate the extracted flex triple.
+  if (loadout.length === 4 && (
+    loadout[0] === ENVOY_ANCHOR
+    || loadout[0] === 'VEIL_SPLINTER'
+    || loadout[0] === 'BLACK_WICK'
+    || loadout[0] === 'GRAVEWEAVE'
+    || loadout[0] === 'NULL_ARC'
+    || loadout[0] === 'BLOOD_REFRACTION'
+  )) {
+    return validateEnvoyFlexLoadoutCommit(loadout.slice(1), unlocked);
   }
-  const flex = loadout.slice(1);
-  if (flex.some((id) => isEnvoyProcUltimate(id))) {
-    return '>> LOADOUT REJECTED — NULL CIRCUIT is a weapon ultimate, not a deck slot.';
+  if (loadout.length === 3) {
+    return validateEnvoyFlexLoadoutCommit(loadout, unlocked);
   }
-  if (new Set(flex).size < flex.length) {
-    return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';
-  }
-  if (unlocked) {
-    const locked = flex.find((id) => !unlocked.includes(id));
-    if (locked) {
-      return `>> LOADOUT REJECTED — ${locked.replace(/_/g, ' ')} NOT UNLOCKED.`;
-    }
-  }
-  return null;
+  return '>> LOADOUT REJECTED — THREE FLEX SLOTS REQUIRED.';
 }
 
 export type { HexFlexLoadout, HexShotAbilityId };

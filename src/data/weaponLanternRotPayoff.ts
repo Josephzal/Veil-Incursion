@@ -44,8 +44,8 @@ export function resolveLanternFluxPurgePayoff(args: {
     lanternDetonation: extra > 0,
     logLines: [
       extra > 0
-        ? `[ECHO LANTERN] >> Rot siphon detonation — consumed ${rotConsume} stacks (+${extra * LANTERN_FLUX_PURGE_DAMAGE_PER_EXTRA_ROT} occult).`
-        : '[ECHO LANTERN] >> Rot siphon — single stack (bank more Rot before Flux-Purge).',
+        ? `[VAMBRACE] >> Rot siphon detonation — consumed ${rotConsume} stacks (+${extra * LANTERN_FLUX_PURGE_DAMAGE_PER_EXTRA_ROT} occult).`
+        : '[VAMBRACE] >> Rot siphon — single stack (bank more Rot before Flux-Purge).',
     ],
   };
 }

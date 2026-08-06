@@ -6,7 +6,7 @@ import { isEnemyFractured } from './combatFractureEngine';
 import type { EnvoyCatalystType } from './envoyCatalystEngine';
 import { applyBlackDoorBacklineFalloffForUnit } from './hexBlackDoorPositionEngine';
 
-/** Brink Flux threshold for Sanguine Prism amp (live Void-Siphoned is at 0). */
+/** Brink Flux threshold for Heart’s Due amp (live Void-Siphoned is at 0). */
 export const PRISM_BRINK_FLUX_THRESHOLD = 25;
 /** Max HP% sacrificed on Prism basic (telegraphed, capped). */
 export const PRISM_BASIC_HP_SACRIFICE_PCT = 0.05;
@@ -14,10 +14,10 @@ export const PRISM_BASIC_HP_SACRIFICE_MAX = 8;
 export const PRISM_BRINK_DAMAGE_MULT = 1.2;
 /** Extra occult mult when the full intended HP sacrifice was actually paid. */
 export const PRISM_SACRIFICE_PAYOFF_DAMAGE_MULT = 1.15;
-/** Null Conduit Clean Catalyst cycle — Flux refund + damage amp after NULL/BLOOD. */
+/** Scythe Clean Catalyst cycle — Flux refund + damage amp after NULL/BLOOD. */
 export const CONDUIT_CLEAN_CYCLE_FLUX_BONUS = 4;
 export const CONDUIT_CLEAN_CYCLE_DAMAGE_MULT = 1.12;
-/** Echo Lantern Flux-Purge Rot detonation bonus per extra stack consumed. */
+/** Vambrace Flux-Purge Rot detonation bonus per extra stack consumed. */
 export const LANTERN_FLUX_PURGE_EXTRA_ROT_CONSUME = 1;
 export const LANTERN_FLUX_PURGE_DAMAGE_PER_EXTRA_ROT = 8;
 /** Nullbreach innate Kinetic Armor layer pressure on basic (reuse strip hook). */
@@ -311,7 +311,7 @@ export function resolveEnvoySplinterBasic(args: {
   veilFlux: number;
   operativeHp: number;
   maxHp: number;
-  /** Prior catalyst for Null Conduit Clean Cycle (NULL/BLOOD reward sequencing). */
+  /** Prior catalyst for Scythe Clean Cycle (NULL/BLOOD reward sequencing). */
   previousCatalyst?: EnvoyCatalystType | null;
 }): EnvoySplinterBasicPlan {
   const {
@@ -353,10 +353,10 @@ export function resolveEnvoySplinterBasic(args: {
         fluxBonus += CONDUIT_CLEAN_CYCLE_FLUX_BONUS;
         occultDamage = Math.floor(occultDamage * CONDUIT_CLEAN_CYCLE_DAMAGE_MULT);
         logLines.push(
-          `[NULL CONDUIT] >> Clean Catalyst cycle (${previousCatalyst}→NULL) — Flux + damage.`,
+          `[SCYTHE] >> Clean Catalyst cycle (${previousCatalyst}→NULL) — Flux + damage.`,
         );
       } else {
-        logLines.push('[NULL CONDUIT] >> Clean Flux cycle — sequence Catalyst for payoff.');
+        logLines.push('[SCYTHE] >> Clean Flux cycle — sequence Catalyst for payoff.');
       }
       break;
     case 'envoy-echo-lantern':
@@ -364,7 +364,7 @@ export function resolveEnvoySplinterBasic(args: {
       fluxCost = catalogFluxCost || 5;
       rotStacks = 2;
       invokeDebuffHook = true;
-      logLines.push('[ECHO LANTERN] >> Echo brand — extra Veil Rot for later detonation.');
+      logLines.push('[VAMBRACE] >> Graveweave — extra Veil Rot for later detonation.');
       break;
     case 'envoy-sanguine-prism': {
       occultDamage = scalePct(Math.max(catalogDamage || 10, 12), mods.occultDamagePct);
@@ -380,19 +380,19 @@ export function resolveEnvoySplinterBasic(args: {
       if (veilFlux <= PRISM_BRINK_FLUX_THRESHOLD) {
         occultDamage = Math.floor(occultDamage * PRISM_BRINK_DAMAGE_MULT);
         brinkAmplified = true;
-        logLines.push(`[SANGUINE PRISM] >> Brink amp (Flux ≤${PRISM_BRINK_FLUX_THRESHOLD}%).`);
+        logLines.push(`[HEART'S DUE] >> Brink amp (Flux ≤${PRISM_BRINK_FLUX_THRESHOLD}%).`);
       }
       if (sacrificePaidFully) {
         occultDamage = Math.floor(occultDamage * PRISM_SACRIFICE_PAYOFF_DAMAGE_MULT);
         logLines.push(
-          `[SANGUINE PRISM] >> Blood price paid in full — ${hpSacrifice} HP (cap ${PRISM_BASIC_HP_SACRIFICE_MAX}).`,
+          `[HEART'S DUE] >> Blood price paid in full — ${hpSacrifice} HP (cap ${PRISM_BASIC_HP_SACRIFICE_MAX}).`,
         );
       } else if (hpSacrifice > 0) {
         logLines.push(
-          `[SANGUINE PRISM] >> Partial blood price ${hpSacrifice}/${intendedHpSacrifice} HP — sacrifice payoff withheld.`,
+          `[HEART'S DUE] >> Partial blood price ${hpSacrifice}/${intendedHpSacrifice} HP — sacrifice payoff withheld.`,
         );
       } else {
-        logLines.push('[SANGUINE PRISM] >> No HP to sacrifice — sacrifice payoff withheld.');
+        logLines.push(`[HEART'S DUE] >> No HP to sacrifice — sacrifice payoff withheld.`);
       }
       break;
     }

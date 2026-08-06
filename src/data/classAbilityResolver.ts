@@ -19,6 +19,11 @@ import {
 } from './hexWeaponActionCatalog';
 import type { HexWeaponActionId } from '../types/hexWeaponAction';
 import { isDefinedHexWeaponActionId } from './hexWeaponActionCatalog';
+import {
+  formatEnvoyWeaponActionLabel,
+  getEnvoyWeaponActionDefinition,
+} from './envoyWeaponActionCatalog';
+import { isEnvoyWeaponActionId } from './envoyWeaponActionRegistry';
 
 export interface ClassAbilityCostSummary {
   apCost: number;
@@ -89,6 +94,27 @@ export function resolveClassAbilityCost(
     };
   }
   if (classId === 'ENVOY') {
+    const waDef = getEnvoyWeaponActionDefinition(abilityId);
+    if (waDef) {
+      return {
+        apCost: waDef.apCost,
+        ammoCost: 0,
+        fluxRegen: waDef.fluxGain,
+        fluxCost: waDef.fluxCost,
+        staminaCost: waDef.staminaCost,
+        staminaCostPct: 0,
+        reserveCost: 0,
+        reserveCostPct: 0,
+        minReservePct: 0,
+        requiresFullMag: false,
+        label: formatEnvoyWeaponActionLabel(abilityId),
+        description: waDef.description,
+        tags: waDef.boonTags,
+        isUltimate: false,
+        consumesFlux: waDef.fluxCost > 0,
+        restoresFlux: waDef.fluxGain > 0,
+      };
+    }
     const def = getEnvoyAbilityDefinition(abilityId as EnvoyAbilityId);
     const tags = getEnvoyAbilityTags(abilityId as EnvoyAbilityId);
     return {
@@ -185,8 +211,13 @@ export function formatClassAbilityCostLine(classId: ClassType, abilityId: string
     parts.push(`${cost.ammoCost} AMMO`);
   }
   if (classId === 'ENVOY') {
+    if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
     if (cost.fluxCost > 0) parts.push(`−${cost.fluxCost}% FLUX`);
     else if (cost.fluxRegen > 0) parts.push(`+${cost.fluxRegen}% FLUX`);
+    if (isEnvoyWeaponActionId(abilityId)) {
+      const wa = getEnvoyWeaponActionDefinition(abilityId);
+      if (wa?.hasHpSacrifice) parts.push('HP SAC');
+    }
   }
   if (classId === 'AEGIS') {
     if (isAegisWeaponActionCatalogId(abilityId)) {

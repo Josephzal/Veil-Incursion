@@ -182,13 +182,15 @@ import {
 import type { CombatJuiceFeedbackEvent } from '../types/combatJuiceFeedback';
 import { resolveStartOfTurnDangerPulse } from '../data/combatDangerPulseEngine';
 import { formatHexAmmoCounterHint, getHexAmmoProfileForAbility } from '../data/hexShotAmmoProfiles';
+import { formatCatalystChip } from '../data/envoyCatalystEngine';
 import {
-  applyEnvoyCatalystPayoffToTarget,
-  catalystForEnvoyAbility,
-  formatCatalystChip,
-  primeEnvoyCatalyst,
-  resolveEnvoyCatalystSequence,
-} from '../data/envoyCatalystEngine';
+  catalystPrimeForEnvoyCast,
+  resolveEnvoyCatalystCast,
+} from '../data/envoyCatalystCastEngine';
+import {
+  clearSmokeArcAccuracyDownEndOfEnemyTurn,
+  expireSanguineExposureEndOfEnemyTurn,
+} from '../data/envoySanguineExposureEngine';
 import { formatIntentWarningBanner } from '../utils/enemyIntentDescriptions';
 
 /** Player-side kinetic armor bonus — soft % mitigation (not enemy stack model). */
@@ -551,7 +553,6 @@ import {
   traceUltimateActivation,
 } from '../utils/ultimateActivationTrace';
 import {
-  sanitizeEnvoyCombatLoadout,
   sanitizeHexShotCombatLoadout,
 } from '../data/classAbilityUnlockEngine';
 import { planFractureBreachStrike } from '../data/combatFractureBreachEngine';
@@ -685,6 +686,26 @@ import {
 } from '../data/hexShotAbilityExecutor';
 import { buildHexCombatSurface } from '../data/hexCombatCompatibility';
 import { sanitizeHexFlexLoadout } from '../data/hexFlexLoadoutEngine';
+import { buildEnvoyCombatSurface } from '../data/envoyCombatCompatibility';
+import { sanitizeEnvoyFlexLoadout } from '../data/envoyFlexLoadoutEngine';
+import {
+  executeEnvoyWeaponAction,
+} from '../data/envoyWeaponActionExecutor';
+import {
+  formatEnvoyWeaponActionEffectLine,
+  formatEnvoyWeaponActionExpandedDescription,
+  previewEnvoyWeaponAction,
+} from '../data/envoyWeaponActionPreviewEngine';
+import {
+  formatEnvoyWeaponActionLabel,
+  getEnvoyWeaponActionDefinition,
+} from '../data/envoyWeaponActionCatalog';
+import {
+  isEnvoyWeaponActionId,
+  isEnvoyWeaponActionLiveExecutable,
+  isEnvoyWeaponFamilyId,
+} from '../data/envoyWeaponActionRegistry';
+import type { EnvoyWeaponActionId } from '../types/envoyWeaponAction';
 import {
   executeHexWeaponAction,
   isHexWeaponActionEnabled,
@@ -1696,6 +1717,13 @@ export default function TacticalCombatHub({
       flex: sanitizeHexFlexLoadout(hexShotLoadout),
     });
   }, [operativeClass, activeWeaponFamilyId, hexShotLoadout]);
+  const envoyCombatSurface = useMemo(() => {
+    if (operativeClass !== 'ENVOY') return null;
+    return buildEnvoyCombatSurface({
+      weaponFamilyId: activeWeaponFamilyId,
+      flex: sanitizeEnvoyFlexLoadout(envoyLoadout),
+    });
+  }, [operativeClass, activeWeaponFamilyId, envoyLoadout]);
   const activeLoadout = useMemo((): readonly string[] => {
     if (operativeClass === 'HEX_SHOT') {
       return hexCombatSurface?.hudCards ?? buildHexCombatSurface({
@@ -1703,12 +1731,26 @@ export default function TacticalCombatHub({
         flex: sanitizeHexFlexLoadout(hexShotLoadout),
       }).hudCards;
     }
-    if (operativeClass === 'ENVOY') return sanitizeEnvoyCombatLoadout(envoyLoadout);
+    if (operativeClass === 'ENVOY') {
+      return envoyCombatSurface?.hudCards ?? buildEnvoyCombatSurface({
+        weaponFamilyId: activeWeaponFamilyId,
+        flex: sanitizeEnvoyFlexLoadout(envoyLoadout),
+      }).hudCards;
+    }
     return aegisCombatSurface?.hudCards ?? buildAegisCombatSurface({
       weaponFamilyId: activeWeaponFamilyId,
       techniques: aegisLoadout,
     }).hudCards;
-  }, [operativeClass, hexShotLoadout, envoyLoadout, aegisCombatSurface, hexCombatSurface, activeWeaponFamilyId, aegisLoadout]);
+  }, [
+    operativeClass,
+    hexShotLoadout,
+    envoyLoadout,
+    aegisCombatSurface,
+    hexCombatSurface,
+    envoyCombatSurface,
+    activeWeaponFamilyId,
+    aegisLoadout,
+  ]);
   const aegisTargetOpts = () => ({
     doomfallReleaseAvailable: aegisWeaponCombatRef.current.doomfallReleaseAvailable,
   });
@@ -4800,6 +4842,16 @@ export default function TacticalCombatHub({
         publishSquadUi(squadRef.current);
         apparitionRef?.current?.triggerStatEvade();
         log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+        // Still swing — evade is a miss outcome, not a cancelled cast.
+        if (
+          isPlayerTurnRef.current
+          && Boolean(options?.abilityId)
+          && !options?.indirectDamage
+          && !options?.echoHit
+          && !options?.nestedPresentation
+        ) {
+          triggerPlayerAttackPose(working);
+        }
         if (
           source
           && options?.abilityId
@@ -5464,7 +5516,8 @@ export default function TacticalCombatHub({
     if (
       source
       && source !== 'COUNTER'
-      && dmg > 0
+      // Pose on the swing even when wards/mitigation zero the packet.
+      && (dmg > 0 || Boolean(options?.abilityId) || ultimateAttackPose)
       && (isPlayerTurnRef.current || ultimateAttackPose)
       && Boolean(options?.abilityId || ultimateAttackPose)
       && !options?.indirectDamage
@@ -6617,11 +6670,17 @@ export default function TacticalCombatHub({
     }
   };
 
-  const scheduleNextEnemyAction = (countering: boolean) => {
+  const scheduleNextEnemyAction = (countering: boolean, waitedMs = 0) => {
     if (isCombatTerminal() || enemyActionQueueRef.current.length === 0) return;
     if (isHitstopActive() || combatPausedRef.current) {
-      setTimeout(() => scheduleNextEnemyAction(countering), 50);
-      return;
+      // Safety: never park the hostile queue forever behind a stuck pause/hitstop.
+      if (waitedMs >= 5000) {
+        combatPausedRef.current = false;
+        log('[COMBAT] >> Hostile queue resume — pause/hitstop watchdog cleared.');
+      } else {
+        setTimeout(() => scheduleNextEnemyAction(countering, waitedMs + 50), 50);
+        return;
+      }
     }
     if (enemyTurnGapTimerRef.current) {
       clearTimeout(enemyTurnGapTimerRef.current);
@@ -7145,6 +7204,8 @@ export default function TacticalCombatHub({
         }),
         log,
       );
+      expireSanguineExposureEndOfEnemyTurn(classCombatRef.current);
+      clearSmokeArcAccuracyDownEndOfEnemyTurn(classCombatRef.current);
     }
     const nextTarget = nextDefaultTarget(squadRef.current);
     if (nextTarget) selectTarget(nextTarget);
@@ -7404,12 +7465,28 @@ export default function TacticalCombatHub({
   };
 
 
-  const resolveEnemyAction = (countering: boolean) => {
+  const resolveEnemyAction = (countering: boolean, actedUnitId?: string | null) => {
     if (isCombatTerminal()) return;
-    const currentEnemy = enemyRef.current;
+    const resolvedActor = (
+      actedUnitId
+        ? getUnitById(squadRef.current, actedUnitId)
+        : null
+    ) ?? enemyRef.current;
+    const currentEnemy = resolvedActor;
     if (!currentEnemy || operativeHpRef.current <= 0) {
       setEnemyActionStage(null);
+      if (operativeHpRef.current <= 0) return;
+      // Never stall the hostile phase when the acting ref was cleared mid-animation.
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
+      if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
+      else endEnemyTurn(true);
       return;
+    }
+    if (currentEnemy.unitId && enemyRef.current?.unitId !== currentEnemy.unitId) {
+      focusEnemy(currentEnemy);
     }
     if (!isUnitAlive(currentEnemy)) {
       setEnemyActionStage(null);
@@ -7820,8 +7897,13 @@ export default function TacticalCombatHub({
 
       enemyStrikeTimerRef.current = setTimeout(() => {
         enemyStrikeTimerRef.current = null;
+        const actedUnitId = enemyActionQueueRef.current[0] ?? acting.unitId ?? null;
+        if (actedUnitId) {
+          const acted = getUnitById(squadRef.current, actedUnitId);
+          if (acted) focusEnemy(acted);
+        }
         enemyActionQueueRef.current.shift();
-        resolveEnemyAction(countering);
+        resolveEnemyAction(countering, actedUnitId);
       }, animDurationMs);
     }, ENEMY_INTENT_READ_MS);
   };
@@ -9042,40 +9124,44 @@ export default function TacticalCombatHub({
         playerApRef.current += execResult.refundAp;
         setPlayerActionPoints(playerApRef.current);
       } else {
-        // Phase 3 — prime Envoy catalyst + sequence payoff.
-        const cat = catalystForEnvoyAbility(abilityId);
+        // E.4 — Envoy Catalyst cast authority (Hub orchestration only).
+        const cat = catalystPrimeForEnvoyCast(abilityId);
         if (cat) {
-          const { previous, current } = primeEnvoyCatalyst(classCombatRef.current, cat);
+          const targetId = selectedTargetIdRef.current;
+          const target = targetId ? getUnitById(squadRef.current, targetId) : null;
+          const cast = resolveEnvoyCatalystCast({
+            classState: classCombatRef.current,
+            prime: cat,
+            target,
+            originActionId: abilityId,
+            applyTargetPayoff: true,
+          });
           classLoopTelemetryRef.current.catalystsPrimed += 1;
           if (cat === 'ASH' || abilityId === 'RIFT_WARD' || abilityId === 'PHASE_STEP') {
             classLoopTelemetryRef.current.defensiveCatalystUses += 1;
           }
-          const targetId = selectedTargetIdRef.current;
-          const target = targetId ? getUnitById(squadRef.current, targetId) : null;
-          const payoff = resolveEnvoyCatalystSequence(previous, current, target);
-          if (previous) classLoopTelemetryRef.current.catalystSequencesTriggered += 1;
-          payoff.logMessages.forEach((m) => log(`[CATALYST] >> ${m}`));
-          if (previous && payoff.logMessages.length > 0) {
+          if (cast.previous) classLoopTelemetryRef.current.catalystSequencesTriggered += 1;
+          cast.payoff?.logMessages.forEach((m) => log(`[CATALYST] >> ${m}`));
+          if (cast.previous && cast.payoff?.logMessages.length) {
             emitJuice('ENVOY_CATALYST_RESONANCE', {
-              text: payoff.logMessages[0],
+              text: cast.payoff.logMessages[0],
             });
           }
-          if (target?.unitId && (payoff.extraWardBreak || payoff.fractureTarget)) {
-            const patched = applyEnvoyCatalystPayoffToTarget(target, payoff);
-            patchUnit(target.unitId, patched);
-            if (payoff.extraWardBreak) {
-              classLoopTelemetryRef.current.wardsBroken += payoff.extraWardBreak;
+          if (cast.patchedTarget?.unitId) {
+            patchUnit(cast.patchedTarget.unitId, cast.patchedTarget);
+            if (cast.payoff?.extraWardBreak) {
+              classLoopTelemetryRef.current.wardsBroken += cast.payoff.extraWardBreak;
             }
-            if (payoff.fractureTarget) {
+            if (cast.payoff?.fractureTarget) {
               classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
             }
           }
-          if (payoff.healAmount) {
-            applyHealRef.current(payoff.healAmount);
+          if (cast.payoff?.healAmount) {
+            applyHealRef.current(cast.payoff.healAmount);
           }
-          if (payoff.shieldAmount) {
+          if (cast.payoff?.shieldAmount) {
             sessionExtrasRef.current.playerShield =
-              (sessionExtrasRef.current.playerShield ?? 0) + payoff.shieldAmount;
+              (sessionExtrasRef.current.playerShield ?? 0) + cast.payoff.shieldAmount;
           }
           if (target && isEnemyFractured(target)) {
             classLoopTelemetryRef.current.fractureExploits += 1;
@@ -9622,6 +9708,208 @@ export default function TacticalCombatHub({
     publishSquadUi(squadRef.current);
   };
 
+  const executeEnvoyWeaponActionClassAbility = (actionId: EnvoyWeaponActionId) => {
+    if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand()) return;
+    if (!isEnvoyWeaponActionLiveExecutable(activeWeaponFamilyId, actionId)) {
+      log('[REJECTED] >> Weapon action unavailable for equipped family.');
+      return;
+    }
+    const def = getEnvoyWeaponActionDefinition(actionId);
+    if (!def) {
+      log('[REJECTED] >> Weapon action not implemented.');
+      return;
+    }
+    const graftId = envoyAbilityGraftsRef.current[actionId as EnvoyAbilityId];
+    const graftPlan = buildClassGraftCastPlan('ENVOY', actionId, graftId);
+    activeClassGraftPlanRef.current = graftPlan;
+    if (isEnvoyCastBlockedByVoidSiphon(
+      graftPlan.effectiveTags,
+      envoyCombatStateRef.current.isVoidSiphoned,
+      envoyBoonModsRef.current.masochisticChannel,
+    )) {
+      log('[REJECTED] >> VOID-SIPHONED — SPELL and CURSE channels sealed until flux regenerates.');
+      activeClassGraftPlanRef.current = null;
+      return;
+    }
+    let effectiveAp = applyEnvoyWardWeaverApDiscount(
+      envoyBoons,
+      actionId as EnvoyAbilityId,
+      graftPlan.apCost,
+      classBoonEncounterRef.current,
+      log,
+    );
+    const bloodMagic = tryEnvoyBloodMagicCast(
+      envoyBoons,
+      effectiveAp,
+      playerApRef.current,
+      maxSoulAnchor,
+      operativeHpRef.current,
+      log,
+    );
+    let apSpent = effectiveAp;
+    if (bloodMagic) {
+      apSpent = 0;
+      setOperativeHp((p) => {
+        const n = Math.max(1, p - bloodMagic.hpCost);
+        operativeHpRef.current = n;
+        return n;
+      });
+    } else if (!spendActionPoints(effectiveAp)) {
+      log('[REJECTED] >> Insufficient action points.');
+      activeClassGraftPlanRef.current = null;
+      return;
+    }
+    activeClassGraftApCostRef.current = apSpent;
+    if (!applyClassGraftCastSetup(graftPlan, selectedTargetIdRef.current)) {
+      playerApRef.current += apSpent;
+      setPlayerActionPoints(playerApRef.current);
+      activeClassGraftPlanRef.current = null;
+      return;
+    }
+    lastPlayerAbilityRef.current = actionId;
+    if (!activeWeaponFamilyId || !isEnvoyWeaponFamilyId(activeWeaponFamilyId)) {
+      log('[REJECTED] >> Equipped Envoy family unavailable.');
+      playerApRef.current += apSpent;
+      setPlayerActionPoints(playerApRef.current);
+      activeClassGraftPlanRef.current = null;
+      return;
+    }
+    const dual = dualTargetIdsRef.current;
+    const secondaryTargetId = actionId === 'GRAVE_TRANSFER'
+      && dual[0]
+      && dual[1]
+      && dual[0] !== dual[1]
+      ? dual[1]
+      : null;
+    const primaryTargetId = actionId === 'GRAVE_TRANSFER'
+      ? (dual[0] ?? selectedTargetIdRef.current)
+      : selectedTargetIdRef.current;
+    const envoyHurt = buildEnvoyHurtEnemy();
+    let result: ReturnType<typeof executeEnvoyWeaponAction>;
+    try {
+      result = executeEnvoyWeaponAction({
+        actionId,
+        familyId: activeWeaponFamilyId,
+        squad: squadRef.current,
+        targetId: primaryTargetId,
+        secondaryTargetId,
+        veilFlux: veilFluxRef.current,
+        maxHp: maxSoulAnchor,
+        operativeHp: operativeHpRef.current,
+        classState: classCombatRef.current,
+        log,
+        resolvedWeapon,
+        weaponRuntime: weaponRuntimeRef.current,
+        sessionExtras: sessionExtrasRef.current,
+        resolveCatalyst: true,
+        spendStamina: spendStam,
+        applyHpSacrifice: (amount) => {
+          if (amount <= 0) return;
+          setOperativeHp((p) => {
+            const n = Math.max(1, p - amount);
+            operativeHpRef.current = n;
+            return n;
+          });
+        },
+        applyVeilFluxBonus: (delta) => applyVeilFlux(delta),
+        applyWeaponRuntimePatch,
+        hurtEnemy: (raw, tag, options, targetId) => envoyHurt(
+          raw,
+          tag,
+          {
+            channel: options?.channel,
+            targetId: options?.targetId,
+            abilityId: options?.abilityId as EnvoyAbilityId | undefined,
+            rollCrit: options?.rollCrit,
+          },
+          targetId,
+        ),
+        patchUnit,
+        healOperative: (amount) => {
+          applyHealRef.current(amount);
+        },
+        applyPlayerShield: (amount) => {
+          sessionExtrasRef.current.playerShield =
+            (sessionExtrasRef.current.playerShield ?? 0) + amount;
+        },
+      });
+    } catch (err) {
+      playerApRef.current += apSpent;
+      setPlayerActionPoints(playerApRef.current);
+      activeClassGraftPlanRef.current = null;
+      if (actionId === 'GRAVE_TRANSFER') clearAegisDualTargets();
+      log(`[REJECTED] >> Weapon action failed — ${err instanceof Error ? err.message : 'unknown error'}.`);
+      return;
+    }
+    if (!result.ok) {
+      playerApRef.current += result.refundAp;
+      setPlayerActionPoints(playerApRef.current);
+      activeClassGraftPlanRef.current = null;
+      if (result.message) log(`[REJECTED] >> ${result.message}`);
+      if (actionId === 'GRAVE_TRANSFER') clearAegisDualTargets();
+      return;
+    }
+    // Pose even when the packet was fully mitigated — WA casts must read as swings.
+    if (actionId !== 'CRIMSON_VENT') {
+      const poseTarget = primaryTargetId
+        ? getUnitById(squadRef.current, primaryTargetId)
+        : enemyRef.current;
+      triggerPlayerAttackPose(poseTarget);
+    }
+    if (result.catalyst?.primed) {
+      classLoopTelemetryRef.current.catalystsPrimed += 1;
+      if (result.catalyst.previous) {
+        classLoopTelemetryRef.current.catalystSequencesTriggered += 1;
+      }
+      if (result.catalyst.payoff?.extraWardBreak) {
+        classLoopTelemetryRef.current.wardsBroken += result.catalyst.payoff.extraWardBreak;
+      }
+      if (result.catalyst.payoff?.fractureTarget) {
+        classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
+      }
+      if (result.catalyst.previous && result.catalyst.payoff?.logMessages.length) {
+        emitJuice('ENVOY_CATALYST_RESONANCE', {
+          text: result.catalyst.payoff.logMessages[0],
+        });
+      }
+    }
+    let fluxDelta = result.fluxDelta;
+    fluxDelta = runEnvoyOnAbilityResolveBoons({
+      boons: envoyBoons,
+      abilityId: actionId as EnvoyAbilityId,
+      ok: true,
+      squad: squadRef.current,
+      targetId: primaryTargetId,
+      classState: classCombatRef.current,
+      encounter: classBoonEncounterRef.current,
+      fluxDelta,
+      veilFluxBeforeCast: veilFluxRef.current,
+      fluxMaxCap: envoyCombatStateRef.current.fluxMaxCap,
+      maxHp: maxSoulAnchor,
+      log,
+      patchUnit,
+      applyOccultShield: (amount) => {
+        sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + amount;
+      },
+      healOperative: (amount) => {
+        applyHealRef.current(amount);
+      },
+      echoSpellDamage: (amount, targetId) => {
+        hurtEnemy(amount, '[ECHOING AETHER]', 'STRIKE', {
+          channel: 'OCCULT',
+          targetId,
+          abilityId: actionId as AegisAbilityId,
+          rollCrit: false,
+          echoHit: true,
+        });
+      },
+    });
+    if (fluxDelta !== 0) applyVeilFlux(fluxDelta);
+    activeClassGraftPlanRef.current = null;
+    if (actionId === 'GRAVE_TRANSFER') clearAegisDualTargets();
+    publishSquadUi(squadRef.current);
+  };
+
   const executeOperativeAbility = (abilityId: string) => {
     if (operativeClass === 'HEX_SHOT') {
       if (isDefinedHexWeaponActionId(abilityId)) {
@@ -9632,6 +9920,10 @@ export default function TacticalCombatHub({
       return;
     }
     if (operativeClass === 'ENVOY') {
+      if (isEnvoyWeaponActionId(abilityId)) {
+        executeEnvoyWeaponActionClassAbility(abilityId);
+        return;
+      }
       executeEnvoyClassAbility(abilityId as EnvoyAbilityId);
       return;
     }
@@ -10697,7 +10989,9 @@ export default function TacticalCombatHub({
             }, unit.unitId);
           }
           consumeVeilRotStacks(classCombatRef.current, unit.unitId, lantern.rotConsume);
-          lantern.logLines.forEach((line) => log(line.replace('ECHO LANTERN', 'FUNERAL KNOT')));
+          lantern.logLines.forEach((line) => log(
+            line.replace('ECHO LANTERN', 'FUNERAL KNOT').replace('VAMBRACE', 'FUNERAL KNOT'),
+          ));
         }
       }
       plan.notes.forEach((n) => log(`>> ${tag} ${n}`));
@@ -12087,6 +12381,27 @@ export default function TacticalCombatHub({
       );
     }
     if (operativeClass === 'ENVOY') {
+      if (isEnvoyWeaponActionId(abilityId)) {
+        if (!isEnvoyWeaponActionLiveExecutable(activeWeaponFamilyId, abilityId)) return false;
+        const wa = getEnvoyWeaponActionDefinition(abilityId);
+        if (!wa) return false;
+        const graftPlan = buildClassGraftCastPlan(
+          'ENVOY',
+          abilityId,
+          envoyAbilityGraftsRef.current[abilityId as EnvoyAbilityId],
+        );
+        if (playerActionPoints < graftPlan.apCost) return false;
+        if (isEnvoyCastBlockedByVoidSiphon(
+          graftPlan.effectiveTags,
+          envoyCombatStateRef.current.isVoidSiphoned,
+          envoyBoonModsRef.current.masochisticChannel,
+        )) {
+          return false;
+        }
+        if (wa.staminaCost > 0 && stamina < wa.staminaCost) return false;
+        if (wa.fluxCost > 0 && veilFlux < wa.fluxCost) return false;
+        return true;
+      }
       const graftPlan = buildClassGraftCastPlan(
         'ENVOY',
         abilityId,
@@ -12828,16 +13143,24 @@ export default function TacticalCombatHub({
           ? 4
           : operativeClass === 'HEX_SHOT'
             ? (hexCombatSurface?.weaponActionCount ?? 0)
-            : 0
+            : operativeClass === 'ENVOY'
+              ? (envoyCombatSurface?.weaponActionCount ?? 4)
+              : 0
       }
       techniqueCount={
         operativeClass === 'AEGIS'
           ? 3
           : operativeClass === 'HEX_SHOT'
             ? (hexCombatSurface?.techniqueCount ?? 0)
-            : 0
+            : operativeClass === 'ENVOY'
+              ? (envoyCombatSurface?.flexCount ?? 3)
+              : 0
       }
-      techniqueGroupLabel={operativeClass === 'HEX_SHOT' ? 'FLEX ABILITIES' : 'TECHNIQUES'}
+      techniqueGroupLabel={
+        operativeClass === 'HEX_SHOT' || operativeClass === 'ENVOY'
+          ? 'FLEX ABILITIES'
+          : 'TECHNIQUES'
+      }
       dualTargetsReady={
         (operativeClass === 'AEGIS'
           && dualTargetIds[0] != null
@@ -12851,6 +13174,10 @@ export default function TacticalCombatHub({
         || (operativeClass === 'AEGIS'
           && selectedAbility === 'DREAD_HORIZON'
           && selectedTargetId != null)
+        || (operativeClass === 'ENVOY'
+          && selectedAbility === 'GRAVE_TRANSFER'
+          && dualTargetIds[0] != null
+          && dualTargetIds[1] != null)
       }
       dualTargetLabel={
         operativeClass === 'AEGIS' && selectedAbility === 'DIVERGENCE'
@@ -12869,7 +13196,13 @@ export default function TacticalCombatHub({
               ? selectedTargetId == null
                 ? 'SELECT COLUMN LANE'
                 : 'CONFIRM FATAL FUNNEL LANE'
-              : null
+              : operativeClass === 'ENVOY' && selectedAbility === 'GRAVE_TRANSFER'
+                ? dualTargetPickStep === 0
+                  ? 'SOURCE — SELECT ROTTED TARGET'
+                  : dualTargetIds[0] != null && dualTargetIds[1] == null
+                    ? 'DESTINATION — SELECT LIVING TARGET'
+                    : 'GRAVE TRANSFER ×2'
+                : null
       }
       actionPoints={playerActionPoints}
       displayActionPoints={apRollupDisplay}
@@ -12887,6 +13220,24 @@ export default function TacticalCombatHub({
       )}
       getAbilityCategory={(abilityId) => resolveAbilityUiCategory(operativeClass, abilityId)}
       getAbilityEffectTags={(abilityId) => {
+        if (operativeClass === 'ENVOY' && isEnvoyWeaponActionId(abilityId) && activeWeaponFamilyId) {
+          const dual = dualTargetIdsRef.current;
+          const preview = previewEnvoyWeaponAction({
+            actionId: abilityId,
+            familyId: activeWeaponFamilyId,
+            classState: classCombatRef.current,
+            squad,
+            targetId: abilityId === 'GRAVE_TRANSFER'
+              ? (dual[0] ?? selectedTargetId)
+              : selectedTargetId,
+            secondaryTargetId: abilityId === 'GRAVE_TRANSFER' ? dual[1] : null,
+            veilFlux,
+            operativeHp,
+            maxHp: combatMaxSoulAnchor,
+            resolvedWeapon,
+          });
+          return formatEnvoyWeaponActionEffectLine(preview);
+        }
         if (resolvedWeapon && activeWeaponFamilyId) {
           const living = Math.max(1, aliveUnits(squad).length || 1);
           const card = resolveWeaponAnchorCardPresentation({
@@ -12933,6 +13284,28 @@ export default function TacticalCombatHub({
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedCostImpact={getStagedCostImpact}
       getStagedAbilityDescription={(abilityId) => {
+        if (operativeClass === 'ENVOY' && isEnvoyWeaponActionId(abilityId) && activeWeaponFamilyId) {
+          const dual = dualTargetIdsRef.current;
+          const def = getEnvoyWeaponActionDefinition(abilityId);
+          const preview = previewEnvoyWeaponAction({
+            actionId: abilityId,
+            familyId: activeWeaponFamilyId,
+            classState: classCombatRef.current,
+            squad,
+            targetId: abilityId === 'GRAVE_TRANSFER'
+              ? (dual[0] ?? selectedTargetId)
+              : selectedTargetId,
+            secondaryTargetId: abilityId === 'GRAVE_TRANSFER' ? dual[1] : null,
+            veilFlux,
+            operativeHp,
+            maxHp: combatMaxSoulAnchor,
+            resolvedWeapon,
+          });
+          return formatEnvoyWeaponActionExpandedDescription(
+            preview,
+            def?.description ?? formatEnvoyWeaponActionLabel(abilityId),
+          );
+        }
         if (resolvedWeapon && activeWeaponFamilyId) {
           const living = Math.max(1, aliveUnits(squad).length || 1);
           const card = resolveWeaponAnchorCardPresentation({
@@ -13414,7 +13787,8 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
     position: 'relative',
-    overflow: 'hidden',
+    // E.5V — allow the stacked 4+3 strip to paint fully; prior overflow clipped FLEX ABILITIES.
+    overflow: 'visible',
   },
   statusFeedCompact: {
     flexShrink: 0,
