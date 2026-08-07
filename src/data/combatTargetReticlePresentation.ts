@@ -34,12 +34,13 @@ export type DualAllocationRole = 'SOURCE' | 'DESTINATION';
 
 export function resolveTargetReticleOpacity(intensity: TargetReticleIntensity): number {
   switch (intensity) {
+    // Passive inspection reads as a faint accent, not a lock.
     case 'inspect':
-      return 0.55;
+      return 0.34;
     case 'inspectFocus':
-      return 0.82;
+      return 0.55;
     case 'candidate':
-      return 0.4;
+      return 0.42;
     case 'focus':
       return 1;
     case 'confirm':
@@ -52,9 +53,9 @@ export function resolveTargetReticleOpacity(intensity: TargetReticleIntensity): 
 export function resolveTargetReticleStroke(intensity: TargetReticleIntensity): number {
   switch (intensity) {
     case 'inspect':
-      return 1.35;
+      return 1.1;
     case 'inspectFocus':
-      return 1.7;
+      return 1.35;
     case 'candidate':
       return 1.2;
     case 'focus':
@@ -64,6 +65,17 @@ export function resolveTargetReticleStroke(intensity: TargetReticleIntensity): n
     default:
       return 1.6;
   }
+}
+
+/**
+ * Complete bright brackets belong to the active target and its confirmation
+ * only. Inspection and candidacy use short exterior corner ticks, so several
+ * enemies can be legible at once without any of them reading as committed.
+ */
+export function resolveTargetReticleVariant(
+  mode: TargetReticleMode,
+): 'full' | 'candidate' {
+  return mode === 'focus' || mode === 'confirm' ? 'full' : 'candidate';
 }
 
 /**
@@ -150,8 +162,7 @@ export function resolveEnemyTargetReticlePresentation(input: {
       ? '2 • DESTINATION'
       : null;
 
-  // At most one full bright reticle: hover / keyboard focus only.
-  // Committed dual picks and other valid candidates use restrained ticks.
+  // Hover / keyboard focus during an armed cast — the intense glow.
   if (hovered || input.isFocused) {
     return {
       mode: 'focus',
@@ -162,7 +173,19 @@ export function resolveEnemyTargetReticlePresentation(input: {
     };
   }
 
-  if (dualIdx != null || valid || aoe || input.isSelected) {
+  // Committed pick while armed keeps the same restrained dim glow used when
+  // inspecting without an ability. Valid-but-unpicked candidates stay ticks.
+  if (dualIdx != null || input.isSelected) {
+    return {
+      mode: 'inspect',
+      intensity: 'inspect',
+      color,
+      dualLabel,
+      showCandidateTick: false,
+    };
+  }
+
+  if (valid || aoe) {
     return {
       mode: 'candidate',
       intensity: 'candidate',

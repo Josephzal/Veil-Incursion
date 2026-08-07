@@ -14,6 +14,11 @@ export interface CombatTurnOrderEntry {
   label: string;
   state: CombatTurnOrderEntryState;
   intentLabel?: string;
+  /**
+   * Canonical Slumped flag, passed through so the timeline can mark a
+   * non-acting actor without modelling slump timing itself. Never affects order.
+   */
+  isSlumped?: boolean;
 }
 
 export interface CombatTurnOrderSnapshot {
@@ -105,6 +110,7 @@ export function buildCombatTurnOrder(input: {
         label: hostileLabel(unit),
         state: hostileStateForPhase(unitId, operativeActive, enemyQueue),
         intentLabel: formatIntentReadout(unit.intent),
+        isSlumped: unit.isSlumped === true,
       };
     }),
   ];

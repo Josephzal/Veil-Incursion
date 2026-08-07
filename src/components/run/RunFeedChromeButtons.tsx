@@ -22,6 +22,8 @@ interface RunFeedChromeButtonsProps {
   consoleScale?: boolean;
   /** Compact horizontal utility row above End Turn (combat system module). */
   systemModule?: boolean;
+  /** Combat arena hosts STATUS/CARGO top-right — keep ITEMS only here. */
+  hideStatusCargo?: boolean;
 }
 
 function TerminalChromeButton({
@@ -79,12 +81,13 @@ export default function RunFeedChromeButtons({
   stack = false,
   consoleScale = false,
   systemModule = false,
+  hideStatusCargo = false,
 }: RunFeedChromeButtonsProps): React.JSX.Element | null {
   const cargo = useCargoOverlay();
   const status = useRunStatusOverlay();
   const runItems = useRunItemOverlay();
-  const showStatus = status?.statusEnabled ?? false;
-  const showCargo = cargo?.cargoEnabled ?? false;
+  const showStatus = !hideStatusCargo && (status?.statusEnabled ?? false);
+  const showCargo = !hideStatusCargo && (cargo?.cargoEnabled ?? false);
   const showItems = runItems?.itemsEnabled ?? false;
 
   if (!showStatus && !showCargo && !showItems) return null;

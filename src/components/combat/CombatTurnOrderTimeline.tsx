@@ -1,6 +1,12 @@
 import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import type { CombatTurnOrderSnapshot, CombatTurnOrderEntry } from '../../utils/combatTurnOrder';
+import {
+  resolveTurnOrderEmphasis,
+  resolveTurnOrderOpacity,
+  windowTurnOrderEntries,
+  type TurnOrderEmphasis,
+} from '../../utils/combatTurnOrderWindow';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
@@ -12,40 +18,53 @@ interface CombatTurnOrderTimelineProps {
   portraitsById?: Record<string, ImageSourcePropType>;
 }
 
-function chipColors(
-  entry: CombatTurnOrderEntry,
-): { border: string; glow: string; opacity: number; label: string } {
-  if (entry.state === 'defeated') {
+interface ChipPalette {
+  border: string;
+  fill: string;
+  glow: string;
+  label: string;
+}
+
+function chipColors(entry: CombatTurnOrderEntry, emphasis: TurnOrderEmphasis): ChipPalette {
+  if (emphasis === 'inactive') {
     return {
       border: OTT.borderMuted,
+      fill: 'rgba(5, 7, 8, 0.88)',
       glow: 'transparent',
-      opacity: 0.35,
-      label: OTT.textMuted,
+      label: OTT.textSecondary,
     };
   }
-  if (entry.kind === 'operative') {
-    const active = entry.state === 'active';
+  if (emphasis === 'current') {
+    const hostile = entry.kind === 'hostile';
     return {
-      border: active ? OTT.terminalGreen : OTT.cyanDim,
-      glow: active ? OTT.terminalGreen : 'transparent',
-      opacity: 1,
-      label: active ? OTT.terminalGreen : OTT.textSecondary,
+      border: hostile ? OTT.soulRed : OTT.cyanSelect,
+      // Filled marker — the current actor is unambiguous at a glance.
+      fill: hostile ? 'rgba(158, 40, 48, 0.55)' : 'rgba(98, 220, 229, 0.4)',
+      glow: hostile ? OTT.soulRed : OTT.cyanSelect,
+      label: OTT.textPrimary,
     };
   }
-  if (entry.state === 'active') {
+  if (emphasis === 'next') {
     return {
-      border: OTT.soulRed,
-      glow: OTT.soulRed,
-      opacity: 1,
-      label: OTT.soulRed,
+      border: entry.kind === 'hostile' ? 'rgba(158, 40, 48, 0.75)' : OTT.cyanDim,
+      fill: 'rgba(10, 16, 18, 0.9)',
+      glow: 'transparent',
+      label: OTT.textPrimary,
     };
   }
   return {
     border: OTT.borderSubtle,
+    fill: 'rgba(8, 12, 14, 0.85)',
     glow: 'transparent',
-    opacity: entry.state === 'queued' ? 0.8 : 0.55,
     label: OTT.textSecondary,
   };
+}
+
+/** Compact canonical state marks — no HP, defenses, or intent copy. */
+function stateGlyph(entry: CombatTurnOrderEntry): string | null {
+  if (entry.state === 'defeated') return '✕';
+  if (entry.isSlumped === true) return '◌';
+  return null;
 }
 
 function shortLabel(entry: CombatTurnOrderEntry): string {
@@ -55,7 +74,7 @@ function shortLabel(entry: CombatTurnOrderEntry): string {
   return upper.length > 12 ? `${upper.slice(0, 11)}…` : upper;
 }
 
-/** Compact diamond turn-order timeline — no oversized empty frame. */
+/** Compact diamond turn-order timeline — current actor plus the next few. */
 export default function CombatTurnOrderTimeline({
   turnOrder,
   mutedColor,
@@ -70,33 +89,44 @@ export default function CombatTurnOrderTimeline({
         ? 'ROUND // HOSTILE'
         : 'TURN ORDER';
 
+  const windowed = windowTurnOrderEntries(entries);
+  const hasCurrentActor = windowed.some((entry) => entry.state === 'active');
+
   return (
     <View style={styles.host}>
       <Text style={styles.header}>{roundLabel}</Text>
-      {entries.length === 0 ? (
+      {windowed.length === 0 ? (
         <Text style={[styles.empty, { color: mutedColor }]}>AWAITING…</Text>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {entries.map((entry, index) => {
-            const palette = chipColors(entry);
+        <View style={styles.sequence}>
+          {windowed.map((entry, index) => {
+            const emphasis = resolveTurnOrderEmphasis({
+              state: entry.state,
+              indexInWindow: index,
+              hasCurrentActor,
+            });
+            const palette = chipColors(entry, emphasis);
             const portrait = portraitsById?.[entry.id];
-            const active = entry.state === 'active';
+            const glyph = stateGlyph(entry);
             return (
               <React.Fragment key={`${entry.id}-${index}`}>
                 {index > 0 ? <View style={styles.connector} /> : null}
-                <View style={[styles.chipCol, { opacity: palette.opacity }]}>
+                <View
+                  style={[styles.chipCol, { opacity: resolveTurnOrderOpacity(emphasis, index) }]}
+                  accessibilityLabel={`${shortLabel(entry)}${
+                    emphasis === 'current' ? ' — acting now' : ''
+                  }${entry.isSlumped ? ' — slumped' : ''}`}
+                >
                   <View
                     style={[
                       styles.diamondFrame,
                       {
                         borderColor: palette.border,
+                        backgroundColor: palette.fill,
                         shadowColor: palette.glow,
                       },
-                      active && styles.diamondActive,
+                      emphasis === 'current' ? styles.diamondCurrent : null,
+                      emphasis === 'next' ? styles.diamondNext : null,
                     ]}
                   >
                     <View style={styles.diamondInner}>
@@ -109,14 +139,24 @@ export default function CombatTurnOrderTimeline({
                       )}
                     </View>
                   </View>
-                  <Text style={[styles.chipLabel, { color: palette.label }]} numberOfLines={1}>
-                    {shortLabel(entry)}
-                  </Text>
+                  <View style={styles.labelRow}>
+                    {glyph ? <Text style={styles.stateGlyph}>{glyph}</Text> : null}
+                    <Text
+                      style={[
+                        styles.chipLabel,
+                        { color: palette.label },
+                        emphasis === 'current' ? styles.chipLabelCurrent : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {shortLabel(entry)}
+                    </Text>
+                  </View>
                 </View>
               </React.Fragment>
             );
           })}
-        </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -130,17 +170,15 @@ const styles = StyleSheet.create({
     gap: 2,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: OTT.borderMuted,
-    backgroundColor: 'rgba(8, 12, 14, 0.55)',
+    // Softened outer frame — the sequence carries the read, not the container.
+    backgroundColor: 'rgba(8, 12, 14, 0.4)',
   },
   header: {
     fontFamily: OTT.mono,
     fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.4,
-    color: OTT.terminalGreenMuted,
+    color: OTT.textSecondary,
     textAlign: 'center',
   },
   empty: {
@@ -148,7 +186,7 @@ const styles = StyleSheet.create({
     fontSize: COMBAT_HUD_TYPE.micro,
     textAlign: 'center',
   },
-  scrollContent: {
+  sequence: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -175,16 +213,19 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(5, 7, 8, 0.88)',
     overflow: 'hidden',
     shadowOpacity: 0,
     shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
   },
-  diamondActive: {
+  diamondCurrent: {
+    borderWidth: 2,
     shadowOpacity: 0.45,
     shadowRadius: 6,
     elevation: 2,
+  },
+  diamondNext: {
+    borderWidth: 1.6,
   },
   diamondInner: {
     width: DIAMOND - 5,
@@ -203,11 +244,28 @@ const styles = StyleSheet.create({
     fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '800',
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    maxWidth: '100%',
+  },
+  stateGlyph: {
+    fontFamily: OTT.mono,
+    fontSize: COMBAT_HUD_TYPE.micro,
+    fontWeight: '800',
+    color: OTT.textMuted,
+  },
   chipLabel: {
+    flexShrink: 1,
     fontFamily: OTT.mono,
     fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '800',
     letterSpacing: 0.35,
     textAlign: 'center',
+  },
+  chipLabelCurrent: {
+    letterSpacing: 0.5,
   },
 });

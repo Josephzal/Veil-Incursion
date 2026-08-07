@@ -4,6 +4,7 @@ import {
   TARGET_BRACKET_INSET_X,
   TARGET_BRACKET_INSET_Y,
 } from './ui/TargetingBrackets';
+import { NAMEPLATE_SILHOUETTE_GAP } from '../../data/combatEnemyNameplatePresentation';
 
 interface EnemyEntityProps {
   /** Animated sprite subtree — breathing/motion applies here only. */
@@ -59,8 +60,10 @@ const styles = StyleSheet.create({
     opacity: 0.96,
   },
   /**
-   * Same width as TargetingBrackets. Anchored to the bracket top edge, then
-   * shifted fully upward so the plate sits above the L-corners (not inside).
+   * Same width as TargetingBrackets. The bracket frame is the shared silhouette
+   * proxy for every hostile, so anchoring here normalises the plate-to-artwork
+   * gap across small, wide, tall and irregular sprites without per-enemy values.
+   * Reticle geometry is unaffected by this offset.
    */
   nameplateOverlay: {
     position: 'absolute',
@@ -68,7 +71,7 @@ const styles = StyleSheet.create({
     right: TARGET_BRACKET_INSET_X,
     top: TARGET_BRACKET_INSET_Y,
     transform: [{ translateY: '-100%' }],
-    marginTop: -6,
+    marginTop: -NAMEPLATE_SILHOUETTE_GAP,
     zIndex: 24,
     elevation: 24,
     alignItems: 'stretch',

@@ -2649,7 +2649,10 @@ export default function TacticalCombatHub({
                 ? (u.unitId != null && columnPreviewIds?.has(u.unitId) === true)
                 : (u.unitId != null && rowPreviewIds?.has(u.unitId) === true)
                 || selectedTargetIdRef.current === u.unitId
-                || focusedUnitIdRef.current === u.unitId,
+                // While an ability is armed, focus alone must not look selected —
+                // the player chooses targets after committing the action.
+                || (selectedAbilityRef.current == null
+                  && focusedUnitIdRef.current === u.unitId),
           dualAllocationIndex: (targetMode === 'DUAL' || targetMode === 'ONE_OR_TWO')
             ? (dualTargetIdsRef.current[0] === u.unitId
               ? 1
@@ -2998,14 +3001,16 @@ export default function TacticalCombatHub({
         if (targetMode === 'ONE_OR_TWO') return;
         return;
       }
-      if (nextDual[0] === nextDual[1]) {
+      // Divergence (paired blades) may commit both blades to the same hostile.
+      // Contact Front 2+2 still requires two distinct targets.
+      if (nextDual[0] === nextDual[1] && (targetMode === 'ONE_OR_TWO' || staged !== 'DIVERGENCE')) {
         log(targetMode === 'ONE_OR_TWO'
           ? '[TARGET] >> Contact Front 2+2 requires two distinct targets.'
-          : '[TARGET] >> Divergence requires two distinct targets.');
+          : '[TARGET] >> Select two targets for this dual cast.');
         publishSquadUi(squadRef.current);
         return;
       }
-      // Second distinct pick — auto-execute (DUAL / Contact Front 2+2).
+      // Second pick — auto-execute (DUAL / Contact Front 2+2).
       executeOperativeAbilityRef.current(staged);
       selectedAbilityRef.current = null;
       setSelectedAbility(null);
@@ -12994,12 +12999,15 @@ export default function TacticalCombatHub({
     if (mode === 'DUAL') {
       const [bladeOne, bladeTwo] = dualTargetIdsRef.current;
       if (!bladeOne || !bladeTwo) {
-        log('[TARGET] >> Select two distinct targets for Divergence.');
+        log(selectedAbility === 'DIVERGENCE'
+          ? '[TARGET] >> Select two blade targets for Divergence.'
+          : '[TARGET] >> Select two distinct targets.');
         publishSquadUi(squadRef.current);
         return;
       }
-      if (bladeOne === bladeTwo) {
-        log('[TARGET] >> Divergence requires two distinct targets.');
+      // Divergence may double-commit one hostile; other dual casts stay distinct.
+      if (bladeOne === bladeTwo && selectedAbility !== 'DIVERGENCE') {
+        log('[TARGET] >> Select two distinct targets.');
         publishSquadUi(squadRef.current);
         return;
       }
@@ -13094,8 +13102,10 @@ export default function TacticalCombatHub({
       abyssalCommitLockRef.current = false;
     }
     clearAegisDualTargets();
+    // Clear battlefield selection so the player chooses targets after arming.
     selectedTargetIdRef.current = null;
     setSelectedTargetId(null);
+    focusedUnitIdRef.current = null;
     const aegisOpts = operativeClass === 'AEGIS' ? aegisTargetOpts() : undefined;
     const mode = classAbilityTargetMode(operativeClass, abilityId, aegisOpts);
     if (mode === 'ALL') {
@@ -13107,7 +13117,6 @@ export default function TacticalCombatHub({
         if (fallback) {
           enemyRef.current = fallback;
           setEnemy(fallback);
-          focusedUnitIdRef.current = fallback.unitId ?? null;
         }
       }
     }
@@ -13306,7 +13315,7 @@ export default function TacticalCombatHub({
           ? dualTargetPickStep === 0
             ? 'BLADE 1 — SELECT TARGET'
             : dualTargetIds[0] != null && dualTargetIds[1] == null
-              ? 'BLADE 2 — SELECT TARGET'
+              ? 'BLADE 2 — SAME OR OTHER'
               : 'TARGET ×2'
           : operativeClass === 'HEX_SHOT' && selectedAbility === 'CONTACT_FRONT'
             ? dualTargetIds[0] == null

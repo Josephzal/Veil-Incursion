@@ -7,6 +7,10 @@ import { COMBAT_HUD_TYPE } from '../../../constants/combatHudTypography';
 import type { CombatGridUnitSnapshot } from '../../../utils/combatTelemetryFormat';
 import { formatHostileId } from '../../../utils/combatTelemetryFormat';
 import { describeEnemyIntent } from '../../../utils/enemyIntentDescriptions';
+import {
+  resolveSlumpedPresentation,
+  shouldSuppressNextIntent,
+} from '../../../data/combatSlumpedPresentation';
 
 interface HostileIntelViewProps {
   enemy: CombatGridUnitSnapshot | null;
@@ -74,17 +78,24 @@ export default function HostileIntelView({
     const intent = unit.intentLabel ?? unit.intent;
     const tier = unit.isAlpha || unit.isElite ? 'ELITE' : 'STANDARD';
     const statuses = unit.activeStatuses ?? [];
+    // Same authority the battlefield plate reads, so the two cannot disagree.
+    const slump = resolveSlumpedPresentation(unit);
+    const suppressIntent = shouldSuppressNextIntent(unit);
 
     return (
       <View key={unit.unitId} style={styles.targetCard}>
-        <View style={styles.targetAccent} />
+        <View style={[styles.targetAccent, slump ? styles.targetAccentSlumped : null]} />
         <View style={styles.targetBody}>
           <HapticPressable onPress={() => onSelectEnemy?.(unit.unitId)}>
             <View style={styles.targetHeader}>
               <Text style={styles.targetTitle} numberOfLines={1}>
                 {`TARGET // ${formatHostileId(unit.designation)}`}
               </Text>
-              <Text style={styles.targetHp}>{`${unit.currentHp}`}</Text>
+              {slump ? (
+                <Text style={styles.slumpState}>{slump.stateLabel}</Text>
+              ) : (
+                <Text style={styles.targetHp}>{`${unit.currentHp}`}</Text>
+              )}
             </View>
             <Text style={styles.tierLine}>{`TIER // ${tier}`}</Text>
             <View style={styles.soulRow}>
@@ -139,10 +150,26 @@ export default function HostileIntelView({
           ) : null}
 
           <View style={styles.separator} />
-          <HapticPressable onPress={() => openIntentDetail(unit)} style={styles.intentBtn}>
-            <Text style={styles.intent}>{`NEXT // ${intent}`}</Text>
-            <Text style={styles.intentHint}>TAP FOR DETAILS</Text>
-          </HapticPressable>
+          {suppressIntent && slump ? (
+            <HapticPressable
+              onPress={() => openTraitDetail(
+                'SLUMPED',
+                `Collapsed but not destroyed. It takes no action while slumped and can be executed by a follow-up strike. ${slump.revivalLabel
+                  .charAt(0)}${slump.revivalLabel.slice(1).toLowerCase()} if left alive.`,
+              )}
+              style={styles.intentBtn}
+            >
+              <Text style={styles.intentSlumped}>{`NEXT // NONE — ${slump.stateLabel}`}</Text>
+              <Text style={styles.slumpExecutable}>{slump.executableLabel}</Text>
+              <Text style={styles.slumpRevival}>{slump.revivalLabel}</Text>
+              <Text style={styles.intentHint}>TAP FOR DETAILS</Text>
+            </HapticPressable>
+          ) : (
+            <HapticPressable onPress={() => openIntentDetail(unit)} style={styles.intentBtn}>
+              <Text style={styles.intent}>{`NEXT // ${intent}`}</Text>
+              <Text style={styles.intentHint}>TAP FOR DETAILS</Text>
+            </HapticPressable>
+          )}
         </View>
       </View>
     );
@@ -152,28 +179,25 @@ export default function HostileIntelView({
     <>
       <ScrollView style={styles.host} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {selected ? renderSelected(selected) : null}
-        {others.map((unit) => {
-          const intent = unit.intentLabel ?? unit.intent;
-          return (
-            <HapticPressable
-              key={unit.unitId}
-              onPress={() => onSelectEnemy?.(unit.unitId)}
-              style={styles.compactRow}
-            >
-              <View style={styles.compactNameRow}>
-                <Text style={styles.compactName} numberOfLines={1}>
+        {/* Switcher only — vitals and intent for other hostiles stay on the battlefield. */}
+        {others.length > 0 ? (
+          <View style={styles.switcher}>
+            {others.map((unit) => (
+              <HapticPressable
+                key={unit.unitId}
+                onPress={() => onSelectEnemy?.(unit.unitId)}
+                style={styles.switcherChip}
+                accessibilityRole="button"
+                accessibilityLabel={`Inspect ${formatHostileId(unit.designation)}`}
+              >
+                <Text style={styles.switcherLabel} numberOfLines={1}>
                   {formatHostileId(unit.designation)}
                 </Text>
-                <Text style={styles.compactHp}>{`${unit.currentHp}`}</Text>
-              </View>
-              <HapticPressable onPress={() => openIntentDetail(unit)}>
-                <Text style={styles.compactIntent} numberOfLines={1}>
-                  {`NEXT // ${intent}  ›`}
-                </Text>
+                {unit.isSlumped ? <Text style={styles.switcherGlyph}>◌</Text> : null}
               </HapticPressable>
-            </HapticPressable>
-          );
-        })}
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
 
       <Modal
@@ -238,6 +262,16 @@ const styles = StyleSheet.create({
   targetAccent: {
     width: 3,
     backgroundColor: OTT.cyanSelect,
+  },
+  targetAccentSlumped: {
+    backgroundColor: '#C45AAE',
+  },
+  slumpState: {
+    fontFamily: OTT.mono,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: '#C45AAE',
   },
   targetBody: {
     flex: 1,
@@ -350,40 +384,56 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: OTT.textMuted,
   },
-  compactRow: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: OTT.borderMuted,
-    backgroundColor: 'rgba(8, 12, 14, 0.45)',
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    gap: 2,
-    borderRadius: 2,
-  },
-  compactNameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 4,
-  },
-  compactName: {
-    flex: 1,
+  intentSlumped: {
     fontFamily: OTT.mono,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
+    color: '#C45AAE',
+  },
+  slumpExecutable: {
+    fontFamily: OTT.mono,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
     color: OTT.textPrimary,
   },
-  compactHp: {
-    fontFamily: OTT.mono,
-    fontSize: 12,
-    fontWeight: '700',
-    color: OTT.soulRed,
-  },
-  compactIntent: {
+  slumpRevival: {
     fontFamily: OTT.mono,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.4,
-    color: OTT.warningAmber,
+    color: OTT.textSecondary,
+  },
+  switcher: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  switcherChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: OTT.borderMuted,
+    backgroundColor: 'rgba(8, 12, 14, 0.45)',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 2,
+  },
+  switcherLabel: {
+    flexShrink: 1,
+    fontFamily: OTT.mono,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    color: OTT.textSecondary,
+  },
+  switcherGlyph: {
+    fontFamily: OTT.mono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#C45AAE',
   },
   detailBackdrop: {
     flex: 1,

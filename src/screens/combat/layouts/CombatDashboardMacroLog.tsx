@@ -5,7 +5,7 @@ import { useCargoOverlay } from '../../../context/CargoOverlayContext';
 import { useCombatTurnOptional } from '../../../context/CombatTurnContext';
 import { useRunStatusOverlay } from '../../../context/RunStatusOverlayContext';
 
-/** Macro log column — cargo/status controls inline in the terminal header. */
+/** Macro log pane — fills the shared Intel/Log dock body at a stable size. */
 export default function CombatDashboardMacroLog(): React.JSX.Element {
   const cargo = useCargoOverlay();
   const status = useRunStatusOverlay();
@@ -16,7 +16,7 @@ export default function CombatDashboardMacroLog(): React.JSX.Element {
     <View style={styles.host}>
       <PersistentTerminalLog
         visible
-        fillRemaining={false}
+        fillRemaining
         docked={false}
         showCargo={false}
         cargoDisabled={cargoDisabled}
@@ -25,6 +25,7 @@ export default function CombatDashboardMacroLog(): React.JSX.Element {
         onStatusPress={status?.openStatus}
         hideTopBorder
         hideHeader
+        instantStickToEnd
       />
     </View>
   );
@@ -32,10 +33,8 @@ export default function CombatDashboardMacroLog(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   host: {
-    flexGrow: 0,
-    flexShrink: 1,
-    minHeight: 36,
-    maxHeight: 120,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
   },
 });

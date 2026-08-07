@@ -11,17 +11,6 @@ import {
 
 type CardShellRef = React.ElementRef<typeof View>;
 
-function renderAbilityHoverPortal(node: React.ReactNode): React.ReactNode {
-  if (Platform.OS !== 'web' || typeof document === 'undefined') {
-    return node;
-  }
-  // Escape transformed / overflow-clipped combat ancestors on web.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  const reactDom = require('react-dom') as {
-    createPortal: (children: React.ReactNode, container: Element) => React.ReactNode;
-  };
-  return reactDom.createPortal(node, document.body);
-}
 import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import { textGlow, viewShadow } from '../utils/adaptiveStyles';
 import { combatConsoleChromeStyle } from '../theme/combatConsoleChrome';
@@ -35,6 +24,14 @@ import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { COMBAT_HUD_TYPE } from '../constants/combatHudTypography';
 import { OTT } from '../constants/occultTacticalTerminalTheme';
 import type { AbilityTargetMode } from '../data/combatTargeting';
+import {
+  formatActionDetailTitle,
+  formatRiposteModifierLabel,
+  resolveActionDetailSubject,
+  resolveRailStateLine,
+  shouldHoistLockToRail,
+} from '../data/combatActionRailPresentation';
+import { resolveEndTurnEmphasis } from '../data/combatEndTurnPresentation';
 
 /** Shared rest chrome for utility buttons (STATUS / muted End Turn). */
 const UTILITY_CARD_ACCENT = '#8AA0A8';
@@ -56,6 +53,8 @@ const INITIATIVE_GLOW_PALE = OTT.cyanSelect;
 const END_TURN_ENABLED = OTT.soulRed;
 const END_TURN_BORDER = OTT.dangerRedDark;
 const END_TURN_BORDER_MUTED = 'rgba(158, 40, 48, 0.45)';
+/** Pointer intent delay — stops the strip flickering while traversing the rail. */
+const DETAIL_HOVER_DELAY_MS = 200;
 
 /** Hover detail — prose only; strip tag dumps and card scan-line echoes. */
 function sanitizeAbilityHoverBody(raw: string): string {
@@ -276,61 +275,41 @@ export default function CombatCommandDeck({
   const floatScale = useRef(new Animated.Value(0.86)).current;
   const [floatVisible, setFloatVisible] = useState(false);
   const [hoveredAbility, setHoveredAbility] = useState<string | null>(null);
+  const [focusedAbility, setFocusedAbility] = useState<string | null>(null);
   const [endTurnHot, setEndTurnHot] = useState(false);
   const deckHostRef = useRef<CardShellRef | null>(null);
-  const cardShellRefs = useRef<Record<string, CardShellRef | null>>({});
-  const [hoverPopup, setHoverPopup] = useState<{
-    ability: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    body: string;
-  } | null>(null);
 
-  const clearHoverPopup = useCallback(() => {
-    setHoverPopup(null);
+  // Shared command-detail strip. Hover waits out an intent delay; keyboard and
+  // controller focus update immediately.
+  const [previewAbility, setPreviewAbility] = useState<string | null>(null);
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPreviewTimer = useCallback(() => {
+    if (previewTimer.current) {
+      clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+    }
   }, []);
 
-  const showHoverPopup = useCallback((ability: string, body: string) => {
-    if (!body) {
-      setHoverPopup(null);
-      return;
-    }
-    const node = cardShellRefs.current[ability];
-    if (!node || typeof node.measureInWindow !== 'function') {
-      setHoverPopup(null);
-      return;
-    }
-    node.measureInWindow((cardX, cardY, width, height) => {
-      if (Platform.OS === 'web') {
-        setHoverPopup({
-          ability,
-          x: cardX,
-          y: cardY,
-          width,
-          height,
-          body,
-        });
-        return;
-      }
-      const host = deckHostRef.current;
-      if (!host || typeof host.measureInWindow !== 'function') {
-        setHoverPopup(null);
-        return;
-      }
-      host.measureInWindow((hostX, hostY) => {
-        setHoverPopup({
-          ability,
-          x: cardX - hostX,
-          y: cardY - hostY,
-          width,
-          height,
-          body,
-        });
-      });
-    });
-  }, []);
+  const schedulePreview = useCallback((ability: string) => {
+    clearPreviewTimer();
+    previewTimer.current = setTimeout(() => {
+      previewTimer.current = null;
+      setPreviewAbility(ability);
+    }, DETAIL_HOVER_DELAY_MS);
+  }, [clearPreviewTimer]);
+
+  const setPreviewNow = useCallback((ability: string) => {
+    clearPreviewTimer();
+    setPreviewAbility(ability);
+  }, [clearPreviewTimer]);
+
+  const releasePreview = useCallback((ability: string) => {
+    clearPreviewTimer();
+    setPreviewAbility((current) => (current === ability ? null : current));
+  }, [clearPreviewTimer]);
+
+  useEffect(() => () => clearPreviewTimer(), [clearPreviewTimer]);
 
   useEffect(() => {
     if (!initiativeQueued) {
@@ -455,7 +434,8 @@ export default function CombatCommandDeck({
 
   /** E.5V — single horizontal 4+3 command rail (not stacked rows). */
   const groupedDashboard = dashboardLayout && weaponActionCount > 0 && techniqueCount > 0;
-  const groupedConceptCardHeight = desktopDeck ? 120 : 110;
+  // Sized to share a baseline with the ultimate module inside the console band.
+  const groupedConceptCardHeight = desktopDeck ? 128 : 118;
   const mechanicModuleHeight = desktopDeck ? 68 : 64;
   const railScrollRef = useRef<ScrollView>(null);
 
@@ -559,7 +539,14 @@ export default function CombatCommandDeck({
       const rawDisableReason = !enabled
         ? (getActionDisableReason?.(ability) ?? 'UNAVAILABLE')
         : null;
-      const lockCopy = rawDisableReason ? formatCompactLockReason(rawDisableReason) : null;
+      const rawLockCopy = rawDisableReason ? formatCompactLockReason(rawDisableReason) : null;
+      // The zero-AP lock is shared by the whole collection; the rail states it once.
+      const lockCopy = shouldHoistLockToRail({
+        lockDetail: rawLockCopy?.detail ?? null,
+        remainingAp: shownAp,
+      })
+        ? null
+        : rawLockCopy;
       const missingResource = Boolean(
         lockCopy
         && (
@@ -599,20 +586,25 @@ export default function CombatCommandDeck({
         ))
         : null;
       const spectrallyLit = hoveredAbility === ability;
+      const keyFocused = focusedAbility === ability;
       // Interaction = cyan/mint. Purple stays a restrained Technique category accent only.
       const chromeAccent = invalidTarget
         ? OTT.soulRed
-        : isSelected || spectrallyLit
+        : isSelected || spectrallyLit || keyFocused
           ? OTT.cyanSelect
           : strikeEligible && enabled
             ? OTT.warningAmber
             : OTT.cyanSelect;
+      // Idle stays near-black ink. Hover picks up cyan chrome; selection adds the
+      // hub-style bloom. Battlefield target remains the louder interaction event.
       const chromeTone = !enabled || invalidTarget
         ? 'disabled' as const
-        : (isSelected || spectrallyLit)
+        : isSelected
           ? 'awake' as const
-          : 'rest' as const;
-      const inkCard = chromeTone === 'rest' || chromeTone === 'disabled';
+          : spectrallyLit || keyFocused
+            ? 'rest' as const
+            : 'rest' as const;
+      const inkCard = enabled && !invalidTarget && !isSelected && !spectrallyLit && !keyFocused;
       const costColor = missingResource
         ? OTT.warningAmber
         : isSelected
@@ -620,14 +612,15 @@ export default function CombatCommandDeck({
           : enabled
             ? OTT.textSecondary
             : OTT.textMuted;
-      const tooltipBody = sanitizeAbilityHoverBody(getStagedAbilityDescription(ability));
-      const hideCardScanLines = isSelected || spectrallyLit;
+      const detailBody = sanitizeAbilityHoverBody(getStagedAbilityDescription(ability));
+      // Full prose stays reachable even when the compact strip clamps it, and
+      // keeps every lock reason discoverable including the rail-hoisted one.
+      const accessibleDetail = rawDisableReason
+        ? `${detailBody} — ${rawDisableReason}`
+        : detailBody;
       return (
         <View
           key={ability}
-          ref={(node) => {
-            cardShellRefs.current[ability] = node;
-          }}
           style={[
             styles.conceptCardShell,
             groupedDashboard ? styles.conceptCardShellGrouped : null,
@@ -649,33 +642,46 @@ export default function CombatCommandDeck({
             disabled={!canSelectActions}
             onHoverIn={() => {
               setHoveredAbility(ability);
-              showHoverPopup(ability, tooltipBody);
+              schedulePreview(ability);
             }}
             onHoverOut={() => {
               setHoveredAbility((current) => (current === ability ? null : current));
-              clearHoverPopup();
+              releasePreview(ability);
             }}
-            accessibilityHint={tooltipBody}
+            onFocus={() => {
+              setFocusedAbility(ability);
+              setPreviewNow(ability);
+            }}
+            onBlur={() => {
+              setFocusedAbility((current) => (current === ability ? null : current));
+              releasePreview(ability);
+            }}
+            accessibilityHint={accessibleDetail}
             style={[
               styles.conceptCard,
               groupedDashboard ? styles.conceptCardGrouped : null,
               group === 'weapon' ? styles.conceptCardWeapon : null,
               group === 'technique' ? styles.conceptCardTechnique : null,
-              isSelected ? styles.conceptCardSelected : null,
-              spectrallyLit && !isSelected ? styles.conceptCardHover : null,
               combatConsoleChromeStyle({
                 accent: chromeAccent,
                 tone: chromeTone,
                 ink: inkCard,
               }),
+              // Applied after the chrome so the state hierarchy holds:
+              // selected > focus > hover > idle.
+              spectrallyLit && !isSelected && !keyFocused ? styles.conceptCardHover : null,
+              keyFocused && !isSelected ? styles.conceptCardFocused : null,
+              isSelected ? styles.conceptCardSelected : null,
+              isSelected && !invalidTarget ? styles.conceptCardSelectedSurface : null,
               { height: '100%' },
             ]}
           >
-            {(isSelected || spectrallyLit) ? (
+            {(isSelected || spectrallyLit || keyFocused) ? (
               <View
                 style={[
                   styles.conceptCardSelectEdge,
-                  spectrallyLit && !isSelected ? styles.conceptCardHoverEdge : null,
+                  !isSelected && keyFocused ? styles.conceptCardFocusEdge : null,
+                  !isSelected && !keyFocused ? styles.conceptCardHoverEdge : null,
                 ]}
                 pointerEvents="none"
               />
@@ -710,21 +716,17 @@ export default function CombatCommandDeck({
               styles.conceptCardPressDecision,
               groupedDashboard ? styles.conceptCardPressGrouped : null,
             ]}>
-              {strikeEligible ? (
-                <Text
-                  style={[styles.riposteBadge, { opacity: enabled ? 1 : 0.55 }]}
-                  numberOfLines={1}
-                >
-                  RIPOSTE +16
+              {isSelected ? (
+                <Text style={styles.targetingGlyph} numberOfLines={1}>
+                  ◈ TARGETING
                 </Text>
               ) : null}
-              {/* Hover/selected: name + AP only — damage/tags stay off the popup stack. */}
-              {!hideCardScanLines && dualHint ? (
+              {dualHint ? (
                 <Text style={[styles.conceptCardEffect, { color: OTT.cyanSelect }]} numberOfLines={1}>
                   {dualHint}
                 </Text>
               ) : null}
-              {!hideCardScanLines && !dualHint && decision.effectLine ? (
+              {!dualHint && decision.effectLine ? (
                 <Text
                   style={[
                     styles.conceptCardEffect,
@@ -735,7 +737,7 @@ export default function CombatCommandDeck({
                   {decision.effectLine}
                 </Text>
               ) : null}
-              {!hideCardScanLines && decision.keyword ? (
+              {decision.keyword ? (
                 <Text
                   style={[
                     styles.conceptCardKeyword,
@@ -828,28 +830,32 @@ export default function CombatCommandDeck({
     lineHeight: scaleCombatFont(12),
   } : null;
 
-  // Dashboard: neutral default; cyan/mint on hover/focus; amber if staged action would be abandoned.
-  const abandonWarning = dashboardLayout && Boolean(selectedAbility);
-  const endTurnEmphasized = dashboardLayout
-    ? (endTurnHot || abandonWarning || initiativeQueued)
-    : true;
+  // Dashboard: neutral default; cyan/mint on hover/focus; amber only when
+  // canonical spendable AP would actually be discarded.
+  const endTurnEmphasis = resolveEndTurnEmphasis({
+    canEndTurn,
+    remainingAp: shownAp,
+    interactive: endTurnHot,
+  });
+  const apWasteWarning = dashboardLayout && endTurnEmphasis.warnsResourceWaste;
   const endTurnAccent = !canEndTurn
     ? UTILITY_CARD_ACCENT
-    : abandonWarning
+    : apWasteWarning
       ? OTT.warningAmber
       : (dashboardLayout ? OTT.cyanSelect : END_TURN_BORDER);
   const endTurnText = !canEndTurn
     ? mutedColor
-    : abandonWarning
+    : apWasteWarning
       ? OTT.warningAmber
-      : endTurnEmphasized
-        ? (dashboardLayout ? OTT.cyanSelect : END_TURN_ENABLED)
-        : OTT.textSecondary;
+      : dashboardLayout
+        ? (endTurnHot || initiativeQueued ? OTT.cyanSelect : OTT.textSecondary)
+        : END_TURN_ENABLED;
   const endTurnChromeTone = !canEndTurn
     ? 'disabled' as const
-    : (endTurnHot || endTurnEmphasized)
+    : (endTurnHot || apWasteWarning || initiativeQueued || !dashboardLayout)
       ? 'awake' as const
       : 'rest' as const;
+  const endTurnLabel = dashboardLayout ? endTurnEmphasis.shortLabel : 'END TURN';
 
   const renderEndTurnButton = () => (
     initiativeQueued ? (
@@ -886,6 +892,10 @@ export default function CombatCommandDeck({
         disabled={!canEndTurn}
         onHoverIn={() => setEndTurnHot(true)}
         onHoverOut={() => setEndTurnHot(false)}
+        onFocus={() => setEndTurnHot(true)}
+        onBlur={() => setEndTurnHot(false)}
+        accessibilityRole="button"
+        accessibilityLabel={endTurnEmphasis.label}
         style={[
           styles.endTurnBtn,
           dashboardLayout ? styles.endTurnBtnConsole : null,
@@ -906,7 +916,7 @@ export default function CombatCommandDeck({
           adjustsFontSizeToFit
           minimumFontScale={0.65}
         >
-          END TURN
+          {endTurnLabel}
         </Text>
       </HapticPressable>
     )
@@ -1527,25 +1537,91 @@ export default function CombatCommandDeck({
     );
   };
 
+  const detailSubject = resolveActionDetailSubject({
+    selectedAbility,
+    previewAbility,
+  });
+  const detailAbility = detailSubject.abilityId;
+  const detailTitle = detailAbility
+    ? formatActionDetailTitle({
+      name: labelFor(detailAbility).replace(/^\[\s*/, '').replace(/\s*\]$/, ''),
+      costImpact: getStagedCostImpact(detailAbility),
+    })
+    : 'COMMAND DETAIL';
+  const detailBodyText = detailAbility
+    ? sanitizeAbilityHoverBody(getStagedAbilityDescription(detailAbility))
+    : 'Hover or focus an action for its briefing.';
+  const railState = resolveRailStateLine({
+    remainingAp: shownAp,
+    riposteReady,
+    riposteModifierLabel: formatRiposteModifierLabel(riposteStatusShort ?? riposteStatusTitle),
+  });
+
+  /**
+   * One shared, fixed-height detail region above the rail. Its height never
+   * changes with description length, so the lower HUD cannot shift.
+   */
+  const renderActionDetailStrip = () => (
+    <View
+      style={[styles.actionDetailStrip, { height: desktopDeck ? 28 : 24 }]}
+      pointerEvents="none"
+    >
+      <View style={styles.actionDetailTopRow}>
+        <Text
+          style={[
+            styles.actionDetailTitle,
+            detailAbility ? null : styles.actionDetailTitleIdle,
+          ]}
+          numberOfLines={1}
+        >
+          {detailSubject.pinned && detailAbility ? `▸ ${detailTitle}` : detailTitle}
+        </Text>
+        {railState ? (
+          <Text
+            style={[
+              styles.railStateLine,
+              railState.tone === 'modifier' ? styles.railStateModifier : styles.railStateResource,
+            ]}
+            numberOfLines={1}
+          >
+            {railState.text}
+          </Text>
+        ) : null}
+      </View>
+      <Text
+        style={[
+          styles.actionDetailBody,
+          detailAbility ? null : styles.actionDetailBodyIdle,
+        ]}
+        numberOfLines={1}
+      >
+        {detailBodyText}
+      </Text>
+    </View>
+  );
+
   const renderConceptDashboard = () => (
     <View style={styles.conceptDeck}>
       <View style={styles.conceptDockStage}>
         <View style={styles.commandDockPlate}>
-          <View style={styles.conceptApBand}>
-            <CombatApPipRow
-              current={shownAp}
-              max={maxActionPoints}
-              accent={OTT.cyanSelect}
-              mutedColor={OTT.cyanSelect}
-              queued={initiativeQueued}
-              conceptBand
-              centered
-              hexSize={12}
-              labelFontSize={11}
-            />
-          </View>
           <View style={styles.commandRailWithMechanic}>
-            {renderAbilityGrid()}
+            <View style={styles.abilityColumn}>
+              <View style={styles.conceptApBand}>
+                <CombatApPipRow
+                  current={shownAp}
+                  max={maxActionPoints}
+                  accent={OTT.cyanSelect}
+                  mutedColor={OTT.cyanSelect}
+                  queued={initiativeQueued}
+                  conceptBand
+                  centered
+                  hexSize={12}
+                  labelFontSize={11}
+                />
+              </View>
+              {renderActionDetailStrip()}
+              {renderAbilityGrid()}
+            </View>
             <View style={styles.mechanicEndCapDivider} />
             <View style={styles.mechanicColumn}>
               {renderClassMechanicControl()}
@@ -1565,6 +1641,7 @@ export default function CombatCommandDeck({
             mutedColor={OTT.textMuted}
             terminal
             systemModule
+            hideStatusCargo
           />
         </View>
         <View style={styles.systemModuleEndTurn}>
@@ -1574,45 +1651,12 @@ export default function CombatCommandDeck({
     </View>
   );
 
-  const activeHoverPopup =
-    hoverPopup
-    && hoveredAbility === hoverPopup.ability
-    && hoverPopup.body
-      ? hoverPopup
-      : null;
-  const hoverPanelTop = activeHoverPopup
-    ? (Platform.OS === 'web'
-      ? Math.max(8, activeHoverPopup.y - activeHoverPopup.height - 6)
-      : activeHoverPopup.y - activeHoverPopup.height - 6)
-    : 0;
-  const hoverPanel = activeHoverPopup
-    ? (
-      <View
-        pointerEvents="none"
-        style={[
-          styles.cardHoverDetailFloating,
-          {
-            left: activeHoverPopup.x,
-            top: hoverPanelTop,
-            width: activeHoverPopup.width,
-            height: activeHoverPopup.height,
-          },
-        ]}
-      >
-        <Text style={styles.cardHoverDetailText}>
-          {activeHoverPopup.body}
-        </Text>
-      </View>
-    )
-    : null;
-
   return (
     <View
       ref={deckHostRef}
       style={[styles.deckHost, dashboardLayout && styles.deckHostDashboard]}
       collapsable={false}
     >
-      {Platform.OS === 'web' ? renderAbilityHoverPortal(hoverPanel) : hoverPanel}
       {floatVisible ? (
         <Animated.Text
           style={[
@@ -1970,7 +2014,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minHeight: 0,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'center',
     gap: 14,
     overflow: 'visible',
@@ -1979,7 +2023,8 @@ const styles = StyleSheet.create({
   mechanicEndCapDivider: {
     width: 2,
     alignSelf: 'stretch',
-    marginVertical: 10,
+    marginTop: 34,
+    marginBottom: 10,
     backgroundColor: 'rgba(98, 220, 229, 0.35)',
   },
   commandRailShell: {
@@ -2058,7 +2103,7 @@ const styles = StyleSheet.create({
     flexBasis: 0,
     maxWidth: 146,
     minWidth: 72,
-    height: 198,
+    height: 128,
     position: 'relative',
     overflow: 'visible',
   },
@@ -2083,10 +2128,23 @@ const styles = StyleSheet.create({
   conceptCardSelected: {
     transform: [{ translateY: -2 }],
   },
+  /**
+   * Committed action: hub glow chrome (awake) already supplies cyan fill + bloom.
+   * Keep only a firm border so selection stays stronger than hover.
+   */
+  conceptCardSelectedSurface: {
+    borderColor: OTT.cyanSelect,
+  },
   conceptCardHover: {
     transform: [{ translateY: -1 }],
+    borderColor: 'rgba(98, 220, 229, 0.45)',
   },
-  /** Lift hovered shell so the above-card detail panel stacks over AP / siblings. */
+  /** Focus stays visible and distinct from hover without implying commitment. */
+  conceptCardFocused: {
+    transform: [{ translateY: -1 }],
+    borderColor: OTT.cyanDim,
+  },
+  /** Lift hovered shell so its edge and elevation stack over AP / siblings. */
   conceptCardHoverElevated: {
     zIndex: 80,
     elevation: 80,
@@ -2096,14 +2154,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 3,
+    height: 2,
     backgroundColor: OTT.cyanSelect,
     zIndex: 2,
   },
+  /** Hover and focus stay strictly weaker than the committed selection. */
   conceptCardHoverEdge: {
     backgroundColor: 'rgba(98, 220, 229, 0.7)',
+    height: 1,
+    opacity: 0.8,
+  },
+  conceptCardFocusEdge: {
+    backgroundColor: OTT.cyanDim,
     height: 2,
-    opacity: 0.85,
   },
   conceptCardHeader: {
     flexDirection: 'row',
@@ -2118,8 +2181,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 14, 16, 0.55)',
   },
   conceptCardHeaderSelected: {
-    backgroundColor: 'rgba(98, 220, 229, 0.14)',
-    borderBottomColor: 'rgba(98, 220, 229, 0.4)',
+    backgroundColor: 'rgba(98, 220, 229, 0.1)',
+    borderBottomColor: 'rgba(98, 220, 229, 0.35)',
   },
   conceptCardHeaderHover: {
     backgroundColor: 'rgba(98, 220, 229, 0.08)',
@@ -2197,29 +2260,80 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     color: '#E8D4A0',
   },
-  /** Window-fixed hover detail — portaled on web so dock/arena clips cannot crop it. */
-  cardHoverDetailFloating: {
-    ...(Platform.OS === 'web'
-      ? ({ position: 'fixed' } as object)
-      : { position: 'absolute' as const }),
-    zIndex: 100000,
-    elevation: 100000,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(98, 220, 229, 0.45)',
-    backgroundColor: 'rgba(4, 7, 10, 0.96)',
-    justifyContent: 'flex-start',
+  /** Ability column owns AP + detail + cards so detail aligns with the first card. */
+  abilityColumn: {
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
+    alignItems: 'stretch',
+    justifyContent: 'flex-end',
+    gap: 2,
+    overflow: 'visible',
+  },
+  /**
+   * Shared command-detail strip — one stable region just above the ability
+   * cards. Width matches the weapon/technique rail (not the mechanic end-cap).
+   * Text starts on the first card’s left edge.
+   */
+  actionDetailStrip: {
+    alignSelf: 'stretch',
+    marginBottom: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
-  cardHoverDetailText: {
+  actionDetailTopRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  actionDetailTitle: {
+    flexShrink: 1,
     fontFamily: MONO,
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.1,
+    fontWeight: '800',
+    letterSpacing: 0.9,
     lineHeight: 13,
+    color: OTT.cyanSelect,
+  },
+  actionDetailTitleIdle: {
+    color: OTT.textMuted,
+  },
+  actionDetailBody: {
+    fontFamily: MONO,
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    lineHeight: 11,
     color: OTT.textSecondary,
+  },
+  actionDetailBodyIdle: {
+    color: OTT.textMuted,
+  },
+  /** Rail-level line for state shared by the whole collection. */
+  railStateLine: {
+    flexShrink: 0,
+    fontFamily: MONO,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    lineHeight: 13,
+  },
+  railStateModifier: {
+    color: OTT.warningAmber,
+  },
+  railStateResource: {
+    color: OTT.textSecondary,
+  },
+  targetingGlyph: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    color: OTT.cyanSelect,
   },
   cardTooltipText: {
     fontFamily: MONO,
@@ -2401,14 +2515,6 @@ const styles = StyleSheet.create({
   },
   conceptCardTopSpacer: {
     flex: 1,
-  },
-  riposteBadge: {
-    fontFamily: MONO,
-    fontSize: 8,
-    letterSpacing: 0.6,
-    color: OTT.warningAmber,
-    marginRight: 4,
-    alignSelf: 'center',
   },
   riposteStatusChip: {
     borderWidth: StyleSheet.hairlineWidth,

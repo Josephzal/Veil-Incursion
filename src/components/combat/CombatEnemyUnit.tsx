@@ -24,7 +24,10 @@ import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
 import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
 import TargetingBrackets from './ui/TargetingBrackets';
-import { resolveEnemyTargetReticlePresentation } from '../../data/combatTargetReticlePresentation';
+import {
+  resolveEnemyTargetReticlePresentation,
+  resolveTargetReticleVariant,
+} from '../../data/combatTargetReticlePresentation';
 import AbyssalVerdictTargetBrackets from './AbyssalVerdictTargetBrackets';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
@@ -197,6 +200,7 @@ export default function CombatEnemyUnit({
         vitals={<CombatEnemyOverheadBars
           unit={unit}
           intentGlyph={arenaGlyph}
+          reticleHovered={reticleHovered || abilityHovered}
         />}
         sprite={(
           <View style={styles.spriteRoot} pointerEvents="box-none">
@@ -274,11 +278,7 @@ export default function CombatEnemyUnit({
               <TargetingBrackets
                 active={targetReticle.mode !== 'hidden'}
                 intensity={targetReticle.intensity}
-                variant={
-                  targetReticle.mode === 'candidate' || targetReticle.showCandidateTick
-                    ? 'candidate'
-                    : 'full'
-                }
+                variant={resolveTargetReticleVariant(targetReticle.mode)}
               />
               {targetReticle.dualLabel ? (
                 <Text style={styles.targetAllocLabel} numberOfLines={1}>

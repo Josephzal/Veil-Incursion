@@ -38,9 +38,12 @@ export const TARGET_BRACKET_INSET_X = '8%';
 /** Vertical inset of the bracket frame. */
 export const TARGET_BRACKET_INSET_Y = '6%';
 
-/** Steady glow floor — former pulse dimmest point (no animation). */
+/**
+ * Steady glow floor — former pulse dimmest point (no animation). The floor sits
+ * low enough that passive inspect ticks stay restrained.
+ */
 function steadyReticleOpacity(baseOpacity: number, bright: boolean): number {
-  return Math.max(0.35, baseOpacity - (bright ? 0.06 : 0.12));
+  return Math.max(0.18, baseOpacity - (bright ? 0.06 : 0.12));
 }
 
 /**

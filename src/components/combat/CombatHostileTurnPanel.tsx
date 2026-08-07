@@ -17,6 +17,7 @@ interface CombatHostileTurnPanelProps {
 /**
  * Replaces the ability deck during hostile turns —
  * red title, thin OTT framing, deck clearly offline.
+ * Bottom-aligns with the ultimate module baseline.
  */
 export default function CombatHostileTurnPanel({
   intentLabel,
@@ -81,7 +82,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 6,
+    paddingBottom: 0,
   },
   turnColumnSpacer: {
     width: OTT_LAYOUT.consoleSideWidth,
@@ -95,6 +98,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 920,
     paddingHorizontal: 4,
+    flexShrink: 0,
   },
   offlineLabel: {
     fontFamily: OTT.mono,
@@ -129,7 +133,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     width: '100%',
     maxWidth: 920,
-    height: 198,
+    // Fill remaining console height so the bottom shares the ultimate baseline.
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 120,
+    maxHeight: 168,
     borderWidth: 1.25,
     borderColor: HOSTILE_BORDER,
     borderRadius: 2,
@@ -151,6 +159,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 6,
     backgroundColor: 'rgba(8, 12, 14, 0.82)',
+    justifyContent: 'center',
   },
   eyebrow: {
     fontFamily: OTT.mono,
@@ -178,8 +187,6 @@ const styles = StyleSheet.create({
     fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '600',
     letterSpacing: 0.35,
-    lineHeight: COMBAT_HUD_TYPE.lineBody,
     color: OTT.textSecondary,
-    marginTop: 2,
   },
 });

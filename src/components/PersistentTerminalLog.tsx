@@ -37,6 +37,11 @@ interface PersistentTerminalLogProps {
   hideTopBorder?: boolean;
   /** Hide RUN TERMINAL header (parent rail already labels the panel). */
   hideHeader?: boolean;
+  /**
+   * When true, stick to the latest line without animating. Used by the combat
+   * Intel/Log dock so opening LOG never scrolls rapidly down the feed.
+   */
+  instantStickToEnd?: boolean;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -72,6 +77,7 @@ export default function PersistentTerminalLog({
   onStatusPress,
   hideTopBorder = false,
   hideHeader = false,
+  instantStickToEnd = false,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
@@ -89,11 +95,20 @@ export default function PersistentTerminalLog({
     && contentHeight > 0
     && contentHeight <= scrollHeight;
 
+  const stickToEnd = (animated: boolean) => {
+    scrollRef.current?.scrollToEnd({ animated });
+  };
+
   useEffect(() => {
-    if (runLog.length > 0) {
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    if (runLog.length <= 0) return;
+    if (instantStickToEnd) {
+      // Jump immediately so a tab reveal never animates through the feed.
+      stickToEnd(false);
+      return;
     }
-  }, [runLog.length]);
+    const timer = setTimeout(() => stickToEnd(true), 50);
+    return () => clearTimeout(timer);
+  }, [runLog.length, instantStickToEnd]);
 
   if (!visible) return null;
   if (!fillRemaining && !showCargo && !showStatus && runLog.length === 0) return null;
@@ -163,7 +178,12 @@ export default function PersistentTerminalLog({
         ]}
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={(_width, height) => setContentHeight(height)}
+        onContentSizeChange={(_width, height) => {
+          setContentHeight(height);
+          if (instantStickToEnd && runLog.length > 0) {
+            stickToEnd(false);
+          }
+        }}
       >
         {feedLines.map((line, idx) => {
           const age = feedLines.length - 1 - idx;

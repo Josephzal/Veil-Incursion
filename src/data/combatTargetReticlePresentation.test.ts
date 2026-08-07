@@ -6,6 +6,8 @@ import {
   TARGET_RETICLE_COLOR,
   isForbiddenTargetReticleHue,
   resolveEnemyTargetReticlePresentation,
+  resolveTargetReticleOpacity,
+  resolveTargetReticleVariant,
 } from './combatTargetReticlePresentation';
 
 describe('combatTargetReticlePresentation', () => {
@@ -97,6 +99,7 @@ describe('combatTargetReticlePresentation', () => {
       dualAllocationIndex: 1,
     });
     assert.equal(source.dualLabel, '1 • SOURCE');
+    assert.equal(source.mode, 'inspect');
     assert.equal(source.color, OTT.cyanSelect);
 
     const destination = resolveEnemyTargetReticlePresentation({
@@ -111,6 +114,47 @@ describe('combatTargetReticlePresentation', () => {
     assert.equal(destination.dualLabel, '2 • DESTINATION');
     assert.equal(destination.mode, 'focus');
     assert.equal(destination.color, source.color);
+  });
+
+  it('keeps committed armed picks dim until hover intensifies them', () => {
+    const committed = resolveEnemyTargetReticlePresentation({
+      targetingActive: true,
+      abilityArmed: true,
+      isSelected: true,
+      isFocused: false,
+      isTargetable: true,
+      reticleHovered: false,
+    });
+    assert.equal(committed.mode, 'inspect');
+
+    const hovering = resolveEnemyTargetReticlePresentation({
+      targetingActive: true,
+      abilityArmed: true,
+      isSelected: true,
+      isFocused: false,
+      isTargetable: true,
+      reticleHovered: true,
+    });
+    assert.equal(hovering.mode, 'focus');
+    assert.ok(
+      resolveTargetReticleOpacity(committed.intensity)
+        < resolveTargetReticleOpacity(hovering.intensity),
+    );
+  });
+
+  it('reserves complete brackets for the active target and its confirmation', () => {
+    assert.equal(resolveTargetReticleVariant('focus'), 'full');
+    assert.equal(resolveTargetReticleVariant('confirm'), 'full');
+    // Passive inspection and candidacy stay on short exterior ticks.
+    assert.equal(resolveTargetReticleVariant('inspect'), 'candidate');
+    assert.equal(resolveTargetReticleVariant('candidate'), 'candidate');
+    assert.equal(resolveTargetReticleVariant('hidden'), 'candidate');
+  });
+
+  it('keeps passive inspection dimmer than an active lock', () => {
+    assert.ok(resolveTargetReticleOpacity('inspect') < resolveTargetReticleOpacity('inspectFocus'));
+    assert.ok(resolveTargetReticleOpacity('inspectFocus') < resolveTargetReticleOpacity('focus'));
+    assert.equal(resolveTargetReticleOpacity('focus'), 1);
   });
 
   it('does not arm reticles for zero-target presentation inputs', () => {

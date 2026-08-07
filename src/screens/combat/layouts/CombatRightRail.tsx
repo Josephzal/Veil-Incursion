@@ -1,62 +1,122 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import CombatPanel, { CombatSectionHeader } from '../../../components/combat/ui/CombatPanel';
+import CombatPanel from '../../../components/combat/ui/CombatPanel';
 import HapticPressable from '../../../components/HapticPressable';
 import { useRun } from '../../../context/RunContext';
-import { OTT, OTT_LAYOUT } from '../../../constants/occultTacticalTerminalTheme';
+import { OTT } from '../../../constants/occultTacticalTerminalTheme';
 
 interface CombatRightRailProps {
   combatLog: React.ReactNode;
   hostileIntel: React.ReactNode;
 }
 
+type DockTab = 'intel' | 'log';
+
+/** Restrained new-event notice; long enough to read, short enough to ignore. */
+const TOAST_MS = 2600;
+
 /**
- * Right stack — combat log + enemy intel.
- * Empty combat log collapses to a narrow header; expands on first event or tap.
+ * Right side-dock — one surface holding Enemy Intel and the Combat Log behind
+ * tabs. Intel is the resting view; new combat events announce themselves with a
+ * brief toast and an unread badge instead of seizing the panel.
+ *
+ * Both panes stay mounted at a fixed size so tab switches never resize the dock
+ * or animate the log scrolling into place.
  */
 export default function CombatRightRail({
   combatLog,
   hostileIntel,
 }: CombatRightRailProps): React.JSX.Element {
   const { runLog } = useRun();
-  const hasEntries = runLog.length > 0;
-  const [expanded, setExpanded] = useState(hasEntries);
+  const [tab, setTab] = useState<DockTab>('intel');
+  const [unread, setUnread] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const seenCount = useRef(runLog.length);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (hasEntries) setExpanded(true);
-  }, [hasEntries]);
+    if (runLog.length < seenCount.current) {
+      // Log cleared between encounters.
+      seenCount.current = runLog.length;
+      setUnread(0);
+      return;
+    }
+    const fresh = runLog.length - seenCount.current;
+    seenCount.current = runLog.length;
+    if (fresh <= 0) return;
+    if (tab === 'log') return;
 
-  const showLogBody = hasEntries || expanded;
+    setUnread((count) => count + fresh);
+    const latest = runLog[runLog.length - 1];
+    if (!latest) return;
+    setToast(latest);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  }, [runLog, tab]);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  const selectTab = (next: DockTab) => {
+    setTab(next);
+    if (next === 'log') {
+      setUnread(0);
+      setToast(null);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    }
+  };
+
+  const renderTab = (id: DockTab, label: string, badge?: number) => {
+    const active = tab === id;
+    return (
+      <HapticPressable
+        onPress={() => selectTab(id)}
+        haptic={false}
+        style={[styles.tab, active ? styles.tabActive : null]}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={
+          badge && badge > 0 ? `${label}, ${badge} new events` : label
+        }
+      >
+        <Text style={[styles.tabLabel, active ? styles.tabLabelActive : null]} numberOfLines={1}>
+          {badge && badge > 0 ? `${label} • ${badge}` : label}
+        </Text>
+      </HapticPressable>
+    );
+  };
 
   return (
     <View style={styles.host} pointerEvents="box-none">
-      {showLogBody ? (
-        <CombatPanel raised style={styles.logPanel}>
-          <HapticPressable
-            onPress={() => setExpanded((open) => !open)}
-            haptic={false}
-            sfx={false}
-            accessibilityRole="button"
-            accessibilityLabel={expanded ? 'Collapse combat log' : 'Expand combat log'}
+      {toast ? (
+        <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite">
+          <Text style={styles.toastText} numberOfLines={2}>{toast}</Text>
+        </View>
+      ) : null}
+      <CombatPanel raised style={styles.dock}>
+        <View style={styles.tabRow} accessibilityRole="tablist">
+          {renderTab('intel', 'INTEL')}
+          {renderTab('log', 'LOG', unread)}
+        </View>
+        <View style={styles.body}>
+          <View
+            style={[styles.pane, tab === 'intel' ? styles.paneActive : styles.paneIdle]}
+            pointerEvents={tab === 'intel' ? 'auto' : 'none'}
+            accessibilityElementsHidden={tab !== 'intel'}
+            importantForAccessibility={tab === 'intel' ? 'yes' : 'no-hide-descendants'}
           >
-            <CombatSectionHeader label="COMBAT LOG" accent={OTT.terminalGreenMuted} />
-          </HapticPressable>
-          {expanded ? <View style={styles.logBody}>{combatLog}</View> : null}
-        </CombatPanel>
-      ) : (
-        <HapticPressable
-          onPress={() => setExpanded(true)}
-          style={styles.logCollapsed}
-          accessibilityRole="button"
-          accessibilityLabel="Expand combat log"
-        >
-          <Text style={styles.logCollapsedLabel}>COMBAT LOG</Text>
-          <Text style={styles.logCollapsedHint}>TAP TO EXPAND</Text>
-        </HapticPressable>
-      )}
-      <CombatPanel raised style={styles.intelPanel}>
-        <CombatSectionHeader label="ENEMY INTEL" accent={OTT.textSecondary} />
-        <View style={styles.intelBody}>{hostileIntel}</View>
+            {hostileIntel}
+          </View>
+          <View
+            style={[styles.pane, tab === 'log' ? styles.paneActive : styles.paneIdle]}
+            pointerEvents={tab === 'log' ? 'auto' : 'none'}
+            accessibilityElementsHidden={tab !== 'log'}
+            importantForAccessibility={tab === 'log' ? 'yes' : 'no-hide-descendants'}
+          >
+            {combatLog}
+          </View>
+        </View>
       </CombatPanel>
     </View>
   );
@@ -65,9 +125,10 @@ export default function CombatRightRail({
 const styles = StyleSheet.create({
   host: {
     position: 'absolute',
-    top: 36,
+    // Vertically mid-screen on the right — clear of mission readout and console.
+    top: '28%',
+    height: '38%',
     right: 10,
-    bottom: OTT_LAYOUT.consoleHeightPercent,
     width: '17%',
     minWidth: 156,
     maxWidth: 220,
@@ -76,54 +137,77 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
     justifyContent: 'flex-start',
   },
-  logCollapsed: {
+  toast: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: -40,
     flexGrow: 0,
     flexShrink: 0,
-    paddingHorizontal: OTT.panelPad,
-    paddingVertical: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: OTT.borderMuted,
-    backgroundColor: 'rgba(8, 12, 14, 0.72)',
-    gap: 1,
+    borderLeftWidth: 2,
+    borderLeftColor: OTT.cyanDim,
+    backgroundColor: 'rgba(6, 10, 12, 0.9)',
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    zIndex: 1,
   },
-  logCollapsedLabel: {
+  toastText: {
+    fontFamily: OTT.mono,
+    fontSize: 9,
+    lineHeight: 12,
+    letterSpacing: 0.2,
+    color: OTT.textSecondary,
+  },
+  dock: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: OTT.panelPad,
+    paddingTop: 5,
+    paddingBottom: 4,
+    gap: 4,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    gap: 4,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: OTT.cyanSelect,
+  },
+  tabLabel: {
     fontFamily: OTT.mono,
     fontSize: OTT.headerSize,
     fontWeight: '800',
     letterSpacing: OTT.headerTracking,
-    color: OTT.terminalGreenMuted,
-  },
-  logCollapsedHint: {
-    fontFamily: OTT.mono,
-    fontSize: 7,
-    letterSpacing: 0.8,
     color: OTT.textMuted,
+    textAlign: 'center',
   },
-  logPanel: {
-    flexGrow: 0,
-    flexShrink: 1,
-    maxHeight: '30%',
+  tabLabelActive: {
+    color: OTT.cyanSelect,
+  },
+  body: {
+    flex: 1,
     minHeight: 0,
-    paddingHorizontal: OTT.panelPad,
-    paddingTop: 6,
-    paddingBottom: 4,
+    position: 'relative',
   },
-  logBody: {
-    flexGrow: 0,
-    flexShrink: 1,
-    minHeight: 36,
-    maxHeight: 120,
+  pane: {
+    ...StyleSheet.absoluteFill,
+    minHeight: 0,
   },
-  intelPanel: {
-    flexGrow: 0,
-    flexShrink: 1,
-    maxHeight: '58%',
-    paddingHorizontal: OTT.panelPad,
-    paddingTop: 6,
-    paddingBottom: 4,
+  paneActive: {
+    opacity: 1,
+    zIndex: 2,
   },
-  intelBody: {
-    flexGrow: 0,
-    flexShrink: 1,
+  paneIdle: {
+    opacity: 0,
+    zIndex: 1,
   },
 });

@@ -85,13 +85,14 @@ import CombatMissionReadout, {
   type CombatQuestLogInfo,
 } from './combat/layouts/CombatMissionReadout';
 import CombatRightRail from './combat/layouts/CombatRightRail';
+import { RunUtilityActions } from '../components/runField/RunFieldHeader';
 import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
 import CombatHudAtmosphereOverlay from '../components/combat/ui/CombatHudAtmosphereOverlay';
 import CombatTopDockFade from '../components/combat/ui/CombatTopDockFade';
 import CombatOperativeHud, {
   type CombatOperativeTelemetry,
 } from '../components/combat/CombatOperativeHud';
-import { OTT } from '../constants/occultTacticalTerminalTheme';
+import { OTT, OTT_LAYOUT } from '../constants/occultTacticalTerminalTheme';
 import { subscribeAbyssalVerdictPresentation } from '../data/abyssalVerdictPresentation';
 import type { AbyssalVerdictHudSnapshot } from '../data/abyssalVerdictReadyUi';
 import AbyssalVerdictReadyBanner from '../components/combat/AbyssalVerdictReadyBanner';
@@ -895,7 +896,7 @@ export default function CombatScreen(): React.JSX.Element {
   ]);
 
   const missionDepth = depthFromNodesCleared(activeIncursion.nodesCleared);
-  const missionDepthLabel = `DEPTH ${missionDepth} // LEVEL ${activeIncursion.nodesCleared + 1}`;
+  const missionDepthLabel = `DEPTH ${missionDepth} · LEVEL ${activeIncursion.nodesCleared + 1}`;
   const rawSectorCandidate =
     activeIncursion.runGenerationContext?.sectorState?.activeAnchor?.displayName
     ?? activeIncursion.currentDistrict
@@ -1018,6 +1019,10 @@ export default function CombatScreen(): React.JSX.Element {
                         objectiveLabel={missionObjective ? String(missionObjective).replace(/_/g, ' ') : null}
                         questLog={combatQuestLog}
                       />
+
+                      <View style={styles.arenaUtilities} pointerEvents="box-none">
+                        <RunUtilityActions />
+                      </View>
 
                       <TurnOrderTopBar
                         turnOrder={squadUi?.turnOrder}
@@ -1249,5 +1254,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 2,
     pointerEvents: 'box-none',
+  },
+  /** STATUS / CARGO — mirrors narrative/sanctuary field utilities, top-right. */
+  arenaUtilities: {
+    position: 'absolute',
+    top: OTT_LAYOUT.missionTop,
+    right: OTT_LAYOUT.missionLeft,
+    zIndex: 26,
   },
 });
