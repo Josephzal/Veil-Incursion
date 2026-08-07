@@ -489,7 +489,8 @@ async function main(): Promise<void> {
     const idleH = layoutsH.idle.renderedBodyHeight;
     const attackH = layoutsH.attack.renderedBodyHeight;
     const ratio = attackH / idleH;
-    assert.ok(Math.abs(ratio - 1) < 0.02, `idle/attack body height ratio ${ratio}`);
+    // Attack may be slightly under idle (LONGSWORD_ATTACK_VISUAL_SCALE).
+    assert.ok(ratio <= 1.02 && ratio >= 0.94, `idle/attack body height ratio ${ratio}`);
     assert.equal(layoutsH.idle.footX, layoutsH.attack.footX);
     assert.equal(layoutsH.idle.footY, layoutsH.attack.footY);
   }

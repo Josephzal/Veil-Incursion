@@ -13,8 +13,8 @@ interface CombatTacticalDashboardProps {
 }
 
 /**
- * Unified bottom combat console — equal side rails | centered command deck.
- * No top rule; dock fade only.
+ * Unified bottom combat console — left status/ultimate | centered command rail | turn chrome.
+ * Content is bottom-anchored so cards and ultimate share one baseline.
  */
 export default function CombatTacticalDashboard({
   operativeStatus,
@@ -59,8 +59,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: OTT_LAYOUT.consoleHeightPercent,
-    zIndex: 28,
-    overflow: 'hidden',
+    zIndex: 40,
+    // Visible so ability hover panels can extend above the dock without clipping.
+    overflow: 'visible',
     backgroundColor: 'transparent',
   },
   dashboardDimmed: {
@@ -80,31 +81,34 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minHeight: 0,
     backgroundColor: 'transparent',
+    overflow: 'visible',
   },
   sideContent: {
     flex: 1,
     minHeight: 0,
     width: '100%',
-    /** Match deck: paddingTop 4 + AP band 24 + gap 6 → ability of ability cards. */
-    paddingTop: 34,
-    paddingBottom: 8,
-    paddingHorizontal: 8,
-    justifyContent: 'flex-start',
+    paddingTop: 2,
+    paddingBottom: 10,
+    paddingHorizontal: 10,
+    // Shared baseline with command dock / End Turn (~8–12px from viewport edge).
+    justifyContent: 'flex-end',
   },
   deckPanel: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     backgroundColor: 'transparent',
+    overflow: 'visible',
   },
   deckContent: {
     flex: 1,
     minHeight: 0,
     width: '100%',
-    paddingTop: 4,
-    paddingBottom: 12,
+    paddingTop: 0,
+    paddingBottom: 10,
     paddingRight: 8,
     paddingLeft: 4,
-    overflow: 'hidden',
+    overflow: 'visible',
+    justifyContent: 'flex-end',
   },
 });

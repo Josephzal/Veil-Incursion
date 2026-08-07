@@ -21,7 +21,8 @@ export default function CombatEnemyCritImpact({
   onHitStopChange,
   children,
 }: CombatEnemyCritImpactProps): React.JSX.Element {
-  const lastSeqRef = useRef(0);
+  // Seed so remounts do not replay hit-stop for a stale crit seq.
+  const lastSeqRef = useRef(critImpactSeq);
 
   useEffect(() => {
     if (critImpactSeq <= 0 || critImpactSeq === lastSeqRef.current) return;

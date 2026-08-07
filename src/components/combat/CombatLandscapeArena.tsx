@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import Animated, {
   Easing,
@@ -27,6 +27,7 @@ import type { WeaponFamilyId } from '../../types/weapon';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
 import CombatGroundContact from './ui/CombatGroundContact';
 import { WARDEN_ARENA_PLANE } from '../../data/wardenArenaPlanes';
+import { PLAYER_SPRITE_LOWER_RATIO } from './combatEnemyBarLayout';
 import { subscribeWardenStrikePresentation } from '../../data/wardenStrikePresentation';
 import {
   getAbyssalVerdictCameraSegment,
@@ -196,10 +197,10 @@ export default function CombatLandscapeArena({
           <CombatArenaCombatUiHost />
         </View>
 
-        {/* Player camera host — zoom in/out Aegis only. */}
+        {/* Player camera host — zoom in/out Aegis only. Never steal enemy taps. */}
         <Animated.View
           style={[styles.playerCameraHost, playerCamStyle]}
-          pointerEvents="box-none"
+          pointerEvents="none"
           onLayout={(event) => {
             const { width, height } = event.nativeEvent.layout;
             // Character center in the arena — keeps the release pose planted while scaling.
@@ -219,17 +220,24 @@ export default function CombatLandscapeArena({
                 paddingTop: scaleCombatSize(OPERATIVE_ARENA_TOP_INSET),
               } : { left: operativeLeft },
             ]}
-            pointerEvents="box-none"
+            pointerEvents="none"
           >
             <CombatOperativeAugmentRow icons={augmentIcons} />
             <View
               style={[
                 styles.operativeSpriteSlot,
                 { width: spriteSlotWidth },
-                operativeScale !== 1 ? {
-                  transform: [{ scale: operativeScale }],
-                  ...(Platform.OS === 'web' ? { transformOrigin: 'bottom center' } : null),
-                } : null,
+                // Scale from the soles — center-origin scale floats the figure mid-arena.
+                // Slight downward tuck so boots sit on the floor plane above the console.
+                {
+                  transform: [
+                    { translateY: scaleCombatSize(120) * PLAYER_SPRITE_LOWER_RATIO },
+                    ...(operativeScale !== 1 ? [{ scale: operativeScale }] : []),
+                  ],
+                  ...(operativeScale !== 1
+                    ? { transformOrigin: 'bottom center' } as object
+                    : null),
+                },
                 abyssalHideOperative ? { opacity: 0 } : null,
               ]}
               pointerEvents="none"
@@ -306,7 +314,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flex: 1,
     minHeight: 100,
-    maxHeight: '92%',
+    maxHeight: '100%',
     justifyContent: 'flex-end',
     alignItems: 'flex-start',
     overflow: 'visible',
@@ -316,9 +324,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     overflow: 'visible',
   },
+  /**
+   * Above the player camera host — FL_0 sits under the wide Aegis sprite, and
+   * Reanimated full-screen hosts do not reliably pass clicks with pointerEvents:none.
+   * Hit overlays must live in a higher stacking context than the operative.
+   */
   enemyGridHostSelectable: {
-    zIndex: WARDEN_ARENA_PLANE.operative + 1,
-    elevation: WARDEN_ARENA_PLANE.operative + 1,
+    zIndex: WARDEN_ARENA_PLANE.operative + 3,
+    elevation: WARDEN_ARENA_PLANE.operative + 3,
   },
   enemyGridHostUnderWarden: {
     zIndex: WARDEN_ARENA_PLANE.enemyGrid,

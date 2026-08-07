@@ -12,7 +12,10 @@ import { getWeaponCombatPresentationProfile } from './profiles';
 import { WEAPON_ANCHOR_ATTACK_BY_FAMILY } from '../weaponAnchorAttackRegistry';
 import { WEAPON_ULTIMATE_BY_FAMILY } from '../weaponUltimateRegistry';
 import { isWeaponUltimateActionId } from '../weaponUltimateSurfaceEngine';
-import { dispatchWeaponCombatPresentation } from '../../utils/combatPresentationBus';
+import {
+  dispatchWeaponCombatPresentation,
+  revealWeaponCombatContact,
+} from '../../utils/combatPresentationBus';
 import { playCombatPresentationCue } from '../../utils/combatPresentationAudio';
 
 let lastCastKey = '';
@@ -73,6 +76,15 @@ export function presentResolvedWeaponHit(input: {
     }
     if (input.critical && input.damage > 0) {
       playCombatPresentationCue('sfx.critical_hit');
+    }
+    // No scheduled CONTACT step on burst follow-ups — reveal hit FX immediately.
+    if (input.damage > 0) {
+      revealWeaponCombatContact({
+        targetId: input.targetId,
+        packetId: `burst-${castKey}-${now}`,
+        critical: input.critical === true,
+        damage: input.damage,
+      });
     }
     return;
   }

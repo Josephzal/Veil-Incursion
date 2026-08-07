@@ -238,11 +238,16 @@ const WEB_CONTAIN_BOTTOM: ImageStyle = Platform.OS === 'web'
   } as ImageStyle
   : {};
 
-function registeredPoseLayoutToImageStyle(layout: RegisteredPoseLayout): ImageStyle {
+function registeredPoseLayoutToImageStyle(
+  layout: RegisteredPoseLayout,
+  boxHeight: number,
+): ImageStyle {
+  // Anchor by bottom so soles stay on the art-box floor even when scale/overflow shifts top.
+  const bottom = boxHeight - (layout.top + layout.height);
   return {
     position: 'absolute',
     left: layout.left,
-    top: layout.top,
+    bottom,
     width: layout.width,
     height: layout.height,
     backgroundColor: 'transparent',
@@ -271,7 +276,7 @@ export function computeFootprintIdleLayout(
   const family = resolvePortraitFamily(classId, weaponFamilyId);
   if (usesAnatomyPoseRegistration(family)) {
     const layouts = computeAnatomyRegisteredLayouts(box);
-    if (layouts) return registeredPoseLayoutToImageStyle(layouts.idle);
+    if (layouts) return registeredPoseLayoutToImageStyle(layouts.idle, box.height);
   }
 
   const cal = POSE_CALIBRATION[family].idle;
@@ -315,7 +320,7 @@ export function computeFootprintAttackLayout(
   const family = resolvePortraitFamily(classId, weaponFamilyId);
   if (usesAnatomyPoseRegistration(family)) {
     const layouts = computeAnatomyRegisteredLayouts(box);
-    if (layouts) return registeredPoseLayoutToImageStyle(layouts.attack);
+    if (layouts) return registeredPoseLayoutToImageStyle(layouts.attack, box.height);
   }
 
   const attackCal = POSE_CALIBRATION[family].attack;

@@ -1,69 +1,70 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useId, useState } from 'react';
 import { LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
-import { OTT } from '../../../constants/occultTacticalTerminalTheme';
+import {
+  TARGET_RETICLE_COLOR,
+  resolveTargetReticleOpacity,
+  resolveTargetReticleStroke,
+  type TargetReticleIntensity,
+} from '../../../data/combatTargetReticlePresentation';
 import {
   RETICLE_HOVER_GLOW as GLOW,
   reticleHoverWebGlowStyle,
 } from '../../../data/reticleHoverGlow';
 
+export type TargetingBracketVariant = 'full' | 'candidate';
+
 interface TargetingBracketsProps {
   active?: boolean;
+  /** @deprecated Ignored — player target brackets always use canonical cyan/mint. */
   color?: string;
+  /** Brighten without resizing — prefer `intensity`. */
   focused?: boolean;
-  /** Match enemy portrait scale while keeping the glow host untransformed. */
+  intensity?: TargetReticleIntensity;
+  /** Full exterior corners vs restrained candidate ticks. */
+  variant?: TargetingBracketVariant;
+  /**
+   * Deprecated for player targeting — scaling the reticle onto the portrait
+   * caused artwork overlap. Kept for API compat; no longer applied.
+   */
   contentScale?: number;
 }
 
-const ARM = 0.22;
+/** Corner arm length as a fraction of the (already inset) frame. */
+const ARM = 0.18;
 
-/** Occult scanner lock — SVG L-corners. Hover glow tuned in `data/reticleHoverGlow.ts`. */
+/** Horizontal inset of the bracket frame — keep overhead bars matched to this. */
+export const TARGET_BRACKET_INSET_X = '8%';
+/** Vertical inset of the bracket frame. */
+export const TARGET_BRACKET_INSET_Y = '6%';
+
+/** Steady glow floor — former pulse dimmest point (no animation). */
+function steadyReticleOpacity(baseOpacity: number, bright: boolean): number {
+  return Math.max(0.35, baseOpacity - (bright ? 0.06 : 0.12));
+}
+
+/**
+ * Occult scanner lock — SVG L-corners outside the enemy silhouette.
+ * State uses opacity/stroke only — never hue swaps, inward zoom, or pulse.
+ */
 export default function TargetingBrackets({
   active = true,
-  color = OTT.terminalGreen,
   focused = false,
-  contentScale = 1,
+  intensity: intensityProp,
+  variant = 'full',
 }: TargetingBracketsProps): React.JSX.Element | null {
-  const pulse = useSharedValue(0.7);
+  const intensity: TargetReticleIntensity = intensityProp
+    ?? (focused ? 'focus' : 'inspect');
+  const baseOpacity = resolveTargetReticleOpacity(intensity);
+  const stroke = resolveTargetReticleStroke(intensity);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const reactId = useId();
   const filterSafeId = reactId.replace(/:/g, '');
-
-  useEffect(() => {
-    if (!active) {
-      cancelAnimation(pulse);
-      pulse.value = 0.7;
-      return;
-    }
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(focused ? 1 : 0.92, {
-          duration: focused ? 700 : 1200,
-          easing: Easing.inOut(Easing.quad),
-        }),
-        withTiming(focused ? 0.9 : 0.68, {
-          duration: focused ? 700 : 1200,
-          easing: Easing.inOut(Easing.quad),
-        }),
-      ),
-      -1,
-      false,
-    );
-    return () => cancelAnimation(pulse);
-  }, [active, focused, pulse]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: focused ? 1 : pulse.value,
-  }));
+  const color = TARGET_RETICLE_COLOR;
+  const bright = intensity === 'focus'
+    || intensity === 'inspectFocus'
+    || intensity === 'confirm';
+  const glowOpacity = steadyReticleOpacity(baseOpacity, bright);
 
   if (!active) return null;
 
@@ -77,8 +78,8 @@ export default function TargetingBrackets({
   const inset = 3;
   const w = size.w;
   const h = size.h;
-  const arm = Math.max(16, Math.min(w, h) * ARM);
-  const stroke = focused ? GLOW.strokeHover : GLOW.strokeIdle;
+  const armFull = Math.max(16, Math.min(w, h) * ARM);
+  const arm = variant === 'candidate' ? Math.max(8, armFull * 0.42) : armFull;
   const ready = w > 0 && h > 0;
   const paths = ready
     ? [
@@ -89,53 +90,45 @@ export default function TargetingBrackets({
       ]
     : [];
 
-  const glowStyle = focused && Platform.OS === 'web'
+  const glowStyle = bright && Platform.OS === 'web'
     ? reticleHoverWebGlowStyle(color)
     : null;
 
   return (
     <View style={styles.root} pointerEvents="none" onLayout={onLayout}>
-      <View style={[styles.glowHost, glowStyle]} pointerEvents="none">
-        <View
-          style={[
-            styles.scaleHost,
-            contentScale !== 1 ? { transform: [{ scale: contentScale }] } : null,
-          ]}
-          pointerEvents="none"
-        >
-          <Animated.View style={[styles.fill, animStyle]} pointerEvents="none">
-            {ready ? (
-              <Svg width={w} height={h} style={styles.svg}>
-                {focused
-                  ? paths.flatMap((d, i) =>
-                    GLOW.passes.map((pass, pi) => (
-                      <Path
-                        key={`${filterSafeId}-g-${i}-${pi}`}
-                        d={d}
-                        stroke={color}
-                        strokeWidth={stroke + pass.extra}
-                        strokeLinecap="square"
-                        strokeLinejoin="miter"
-                        fill="none"
-                        opacity={pass.opacity}
-                      />
-                    )))
-                  : null}
-                {paths.map((d, i) => (
-                  <Path
-                    key={`${filterSafeId}-c-${i}`}
-                    d={d}
-                    stroke={color}
-                    strokeWidth={stroke}
-                    strokeLinecap="square"
-                    strokeLinejoin="miter"
-                    fill="none"
-                    opacity={1}
-                  />
-                ))}
-              </Svg>
-            ) : null}
-          </Animated.View>
+      <View style={[styles.glowHost, glowStyle, { opacity: glowOpacity }]} pointerEvents="none">
+        <View style={styles.fill} pointerEvents="none">
+          {ready ? (
+            <Svg width={w} height={h} style={styles.svg}>
+              {bright && variant === 'full'
+                ? paths.flatMap((d, i) =>
+                  GLOW.passes.map((pass, pi) => (
+                    <Path
+                      key={`${filterSafeId}-g-${i}-${pi}`}
+                      d={d}
+                      stroke={color}
+                      strokeWidth={stroke + pass.extra}
+                      strokeLinecap="square"
+                      strokeLinejoin="miter"
+                      fill="none"
+                      opacity={pass.opacity}
+                    />
+                  )))
+                : null}
+              {paths.map((d, i) => (
+                <Path
+                  key={`${filterSafeId}-c-${i}`}
+                  d={d}
+                  stroke={color}
+                  strokeWidth={stroke}
+                  strokeLinecap="square"
+                  strokeLinejoin="miter"
+                  fill="none"
+                  opacity={variant === 'candidate' ? 0.85 : 1}
+                />
+              ))}
+            </Svg>
+          ) : null}
         </View>
       </View>
     </View>
@@ -144,19 +137,16 @@ export default function TargetingBrackets({
 
 const styles = StyleSheet.create({
   root: {
+    // Tight frame inside the enemy selectable shell (not the oversized outer pad).
     position: 'absolute',
-    top: '2%',
-    right: '6%',
-    bottom: '4%',
-    left: '6%',
+    top: TARGET_BRACKET_INSET_Y,
+    right: TARGET_BRACKET_INSET_X,
+    bottom: TARGET_BRACKET_INSET_Y,
+    left: TARGET_BRACKET_INSET_X,
     zIndex: 16,
     overflow: 'visible',
   },
   glowHost: {
-    ...StyleSheet.absoluteFill,
-    overflow: 'visible',
-  },
-  scaleHost: {
     ...StyleSheet.absoluteFill,
     overflow: 'visible',
   },

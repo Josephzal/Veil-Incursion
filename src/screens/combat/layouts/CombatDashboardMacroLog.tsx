@@ -16,7 +16,7 @@ export default function CombatDashboardMacroLog(): React.JSX.Element {
     <View style={styles.host}>
       <PersistentTerminalLog
         visible
-        fillRemaining
+        fillRemaining={false}
         docked={false}
         showCargo={false}
         cargoDisabled={cargoDisabled}
@@ -32,8 +32,10 @@ export default function CombatDashboardMacroLog(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   host: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 36,
+    maxHeight: 120,
     width: '100%',
   },
 });

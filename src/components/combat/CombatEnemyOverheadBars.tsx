@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   plate: {
-    backgroundColor: 'rgba(5, 8, 10, 0.62)',
+    backgroundColor: 'rgba(5, 8, 10, 0.55)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: OTT.borderMuted,
     paddingHorizontal: 5,
@@ -190,13 +190,13 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.body,
+    fontSize: COMBAT_HUD_TYPE.label,
     fontWeight: '800',
     letterSpacing: 0.55,
   },
   hpNum: {
     fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.body,
+    fontSize: COMBAT_HUD_TYPE.label,
     fontWeight: '700',
     letterSpacing: 0.3,
     color: OTT.soulRed,

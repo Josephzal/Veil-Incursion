@@ -53,7 +53,8 @@ function useFloatVisibility(
   scale: Animated.Value;
   translateY: Animated.Value;
 } {
-  const lastSeq = useRef(0);
+  // Seed to current seq so remounts never replay a stale float / CRITICAL.
+  const lastSeq = useRef(seq);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.92)).current;
   const translateY = useRef(new Animated.Value(0)).current;
@@ -65,21 +66,16 @@ function useFloatVisibility(
     lastSeq.current = seq;
     animRef.current?.stop();
     setVisible(true);
-    opacity.setValue(0);
+    // Snap opaque with contact VFX — any fade-in reads as late vs the hit spark.
+    opacity.setValue(1);
     scale.setValue(0.92);
     translateY.setValue(0);
-    const fadeInMs = 90;
+    const fadeInMs = 0;
     const fadeOutMs = Math.max(180, Math.floor(durationMs * 0.35));
     const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
     // One continuous rise — no mid-flight easing swap (avoids hitch/jitter).
     const anim = Animated.parallel([
       Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: fadeInMs,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
         Animated.delay(holdMs),
         Animated.timing(opacity, {
           toValue: 0,

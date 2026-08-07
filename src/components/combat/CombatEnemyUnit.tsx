@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
-import { ENEMY_HITBOX_DEBUG, resolveEnemyHitbox } from './combatEnemyBarLayout';
+import { ENEMY_HITBOX_DEBUG } from './combatEnemyBarLayout';
 import CombatEnemyAnchorMotion from './CombatEnemyAnchorMotion';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
 import CombatEnemyClassImpact from './CombatEnemyClassImpact';
@@ -24,6 +24,7 @@ import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
 import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
 import TargetingBrackets from './ui/TargetingBrackets';
+import { resolveEnemyTargetReticlePresentation } from '../../data/combatTargetReticlePresentation';
 import AbyssalVerdictTargetBrackets from './AbyssalVerdictTargetBrackets';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
@@ -124,9 +125,6 @@ export default function CombatEnemyUnit({
   const isArena = variant === 'arena';
   const isAlpha = unit.isAlpha === true;
   const isBacklineSlot = unit.slot?.startsWith('BL') === true;
-  const hitboxStyle = isArena
-    ? resolveEnemyHitbox(unit.slot, layoutUnitScale, isAlpha)
-    : null;
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
   const critLabelScale = layoutUnitScale > 0 ? 1 / layoutUnitScale : 1;
@@ -142,6 +140,18 @@ export default function CombatEnemyUnit({
   const showAbyssalReticle = abilityArmed
     && unit.abyssalVerdictTargetable === true
     && !breachTarget;
+  const targetReticle = resolveEnemyTargetReticlePresentation({
+    targetingActive,
+    abilityArmed: abilityArmed && !breachTarget && unit.abyssalVerdictTargetable !== true,
+    isSelected: unit.isSelected === true,
+    isFocused: unit.isFocused === true,
+    isTargetable: unit.isTargetable === true,
+    isAoeAffected: unit.isAoeAffected === true,
+    isBlocked: unit.isBlocked === true,
+    isActingEnemy: unit.isActingEnemy === true,
+    reticleHovered: reticleHovered || abilityHovered,
+    dualAllocationIndex: unit.dualAllocationIndex ?? null,
+  });
   useEffect(() => {
     if (!showAbyssalReticle) setAbyssalHovered(false);
   }, [showAbyssalReticle]);
@@ -262,28 +272,31 @@ export default function CombatEnemyUnit({
             {/* Brackets outside VFX stack so hover glow is not clipped by effect layers. */}
             <View style={styles.bracketHost} pointerEvents="none">
               <TargetingBrackets
-                active={
-                  showAbilityReticle
-                  || unit.isSlumped === true
-                  || unit.firingSolutionActive === true
-                }
-                focused={reticleHovered || abilityHovered || unit.firingSolutionActive === true}
-                contentScale={isAlpha ? 0.86 : 0.75}
-                color={
-                  unit.firingSolutionActive === true && !(reticleHovered || abilityHovered)
-                    ? '#c9a227'
-                    : (reticleHovered || abilityHovered)
-                      ? OTT.fluxViolet
-                      : OTT.terminalGreen
+                active={targetReticle.mode !== 'hidden'}
+                intensity={targetReticle.intensity}
+                variant={
+                  targetReticle.mode === 'candidate' || targetReticle.showCandidateTick
+                    ? 'candidate'
+                    : 'full'
                 }
               />
+              {targetReticle.dualLabel ? (
+                <Text style={styles.targetAllocLabel} numberOfLines={1}>
+                  {targetReticle.dualLabel}
+                </Text>
+              ) : null}
               <AbyssalVerdictTargetBrackets
                 active={showAbyssalReticle}
                 focused={reticleHovered || abyssalHovered}
-                contentScale={isAlpha ? 0.86 : 0.75}
+                contentScale={1}
                 collapsing={unit.abyssalVerdictCollapsing === true}
                 reducedMotion={getCombatPresentationSettings().reducedMotion === true}
               />
+              {unit.firingSolutionActive === true ? (
+                <Text style={styles.firingSolutionMark} numberOfLines={1}>
+                  FS
+                </Text>
+              ) : null}
               {unit.carbineSuppressedActive === true ? (
                 <Text style={styles.carbineSuppressedCallout} numberOfLines={2}>
                   SUPPRESSED −30%{'\n'}next direct
@@ -341,13 +354,12 @@ export default function CombatEnemyUnit({
               </CombatArenaUnitUiPortal>
             </View>
 
-            {onPress && !dissolving ? (
+            {/* Arena staggered grid uses SlotHitOverlay above the operative plane —
+                keep an in-unit hitbox only for compact / non-overlay layouts. */}
+            {onPress && !dissolving && !isArena ? (
               <View
                 style={[
-                  styles.hitboxArena,
-                  isArena && hitboxStyle
-                    ? hitboxStyle
-                    : (isBacklineSlot ? styles.hitbox : styles.hitboxFrontline),
+                  isBacklineSlot ? styles.hitbox : styles.hitboxFrontline,
                   ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
                 ]}
                 {...({
@@ -453,6 +465,30 @@ const styles = StyleSheet.create({
     lineHeight: 8,
     color: '#b8a070',
   },
+  targetAllocLabel: {
+    position: 'absolute',
+    top: '8%',
+    left: 0,
+    right: 0,
+    zIndex: 22,
+    textAlign: 'center',
+    fontFamily: MONO,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: OTT.cyanSelect,
+  },
+  firingSolutionMark: {
+    position: 'absolute',
+    top: '12%',
+    right: '18%',
+    zIndex: 21,
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: OTT.warningAmber,
+  },
   localDecalTucked: {
     zIndex: 1,
     elevation: 1,
@@ -493,11 +529,12 @@ const styles = StyleSheet.create({
   },
   bracketHost: {
     position: 'absolute',
-    width: '120%',
-    height: '120%',
-    top: '-10%',
-    left: '-10%',
-    zIndex: 16,
+    width: '100%',
+    height: '100%',
+    top: 0,
+    left: 0,
+    // Below EnemyEntity nameplate (z24) so vitals sit over the reticle.
+    zIndex: 14,
     overflow: 'visible',
   },
   portraitDefenseStack: {

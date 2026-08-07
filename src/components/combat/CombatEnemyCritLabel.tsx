@@ -25,7 +25,8 @@ export default function CombatEnemyCritLabel({
   critImpactSeq = 0,
   channel,
 }: CombatEnemyCritLabelProps): React.JSX.Element | null {
-  const lastSeqRef = useRef(0);
+  // Seed to current seq so remounts never replay a stale CRITICAL.
+  const lastSeqRef = useRef(critImpactSeq);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.85)).current;
   const translateY = useRef(new Animated.Value(0)).current;
@@ -43,23 +44,16 @@ export default function CombatEnemyCritLabel({
     opacity.stopAnimation();
     scale.stopAnimation();
     translateY.stopAnimation();
-    opacity.setValue(0);
+    opacity.setValue(1);
     scale.setValue(0.92);
     translateY.setValue(0);
 
     const durationMs = 860;
-    const fadeInMs = 70;
     const fadeOutMs = 220;
-    const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
+    const holdMs = Math.max(0, durationMs - fadeOutMs);
 
     Animated.parallel([
       Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: fadeInMs,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
         Animated.delay(holdMs),
         Animated.timing(opacity, {
           toValue: 0,

@@ -20,14 +20,14 @@ export const ARENA_STAGE_PADDING_BOTTOM = 20;
 /** Toggle red hitbox overlay — set false once overlap is verified. */
 export const ENEMY_HITBOX_DEBUG = false;
 
-/** Hit-test layer for backline — above frontline draw order without changing visuals. */
-export const BACKLINE_TARGET_OVERLAY_Z_INDEX = 30;
+/** Hit-test layer for backline — below frontline so BL frames cannot steal FL taps. */
+export const BACKLINE_TARGET_OVERLAY_Z_INDEX = 26;
 
-/** Hit-test layer for frontline — above slot art so wide operative overlap cannot steal taps. */
-export const FRONTLINE_TARGET_OVERLAY_Z_INDEX = 28;
+/** Hit-test layer for frontline — above backline overlays and slot art. */
+export const FRONTLINE_TARGET_OVERLAY_Z_INDEX = 32;
 
 function clampHitboxPercent(value: number): number {
-  return Math.max(8, Math.min(92, Math.round(value)));
+  return Math.max(8, Math.min(100, Math.round(value)));
 }
 
 function scaleHitboxPercent(base: number, layoutUnitScale: number): number {
@@ -35,8 +35,8 @@ function scaleHitboxPercent(base: number, layoutUnitScale: number): number {
   return clampHitboxPercent(base * scaleFactor);
 }
 
-/** Horizontally centers the tap target under the sprite torso. */
-function centerHitboxStyle(widthPct: number, heightPct: number): ViewStyle {
+/** Full-slot tap target — avoids dead zones on the left of frontline units. */
+function fullSlotHitboxStyle(widthPct: number, heightPct: number): ViewStyle {
   return {
     width: `${widthPct}%`,
     height: `${heightPct}%`,
@@ -45,25 +45,23 @@ function centerHitboxStyle(widthPct: number, heightPct: number): ViewStyle {
   };
 }
 
-/** Torso-focused tap target — scales with slot depth and sprite scale. */
+/** Slot tap target — full coverage; frontline must not use a narrow torso strip. */
 export function resolveEnemyHitbox(
   slot: CombatGridSlotId | undefined,
   layoutUnitScale: number,
-  isAlpha: boolean,
+  _isAlpha: boolean,
 ): ViewStyle {
   const isBackline = slot?.startsWith('BL') === true;
   if (isBackline) {
-    return centerHitboxStyle(
-      scaleHitboxPercent(90, layoutUnitScale),
+    return fullSlotHitboxStyle(
+      scaleHitboxPercent(96, layoutUnitScale),
       scaleHitboxPercent(110, layoutUnitScale),
-      
     );
   }
 
-  const widthBase = isAlpha ? 90 : 70;
-  return centerHitboxStyle(
-    scaleHitboxPercent(widthBase, layoutUnitScale),
+  return fullSlotHitboxStyle(
     scaleHitboxPercent(100, layoutUnitScale),
+    scaleHitboxPercent(120, layoutUnitScale),
   );
 }
 
@@ -83,7 +81,7 @@ export type ArenaLayoutMode = 'solo' | 'group';
 export type ArenaGridVariant = 'flex' | 'staggered';
 
 export const STAGGERED_ARENA_WIDTH = '48%' as const;
-export const STAGGERED_SLOT_WIDTH_PCT = 34;
+export const STAGGERED_SLOT_WIDTH_PCT = 33;
 
 export interface StaggeredSlotStyle {
   bottom: `${number}%`;
@@ -94,26 +92,27 @@ export interface StaggeredSlotStyle {
 }
 
 /**
- * Concept arc — hostiles occupy mid/right with open center field.
- * Frontline lower/larger; backline higher/smaller and inset.
+ * Concept zigzag — L→R centers: FL_0 → BL_0 → FL_1 → BL_1.
+ * Shared bottom per lane so front/back feet share one baseline; matched
+ * lane scales + bottom-origin scaling keep sprites lined up.
+ * Overhead vitals sit on the sprites; bottoms clear the command dock.
  */
-/** Bottoms clear the console dock; right inset keeps labels clear of Enemy Intel. */
 export const STAGGERED_GROUP_SLOTS: Record<CombatGridSlotId, StaggeredSlotStyle> = {
-  FL_0: { bottom: '36%', left: '2%', zIndex: 4, scale: 1.08 },
-  FL_1: { bottom: '32%', right: '18%', zIndex: 5, scale: 1.14 },
-  BL_0: { bottom: '56%', left: '22%', zIndex: 2, scale: 0.86 },
-  BL_1: { bottom: '60%', right: '28%', zIndex: 1, scale: 0.78 },
+  FL_0: { bottom: '28%', left: '2%', zIndex: 4, scale: 1.22 },
+  FL_1: { bottom: '28%', left: '46%', zIndex: 5, scale: 1.22 },
+  BL_0: { bottom: '50%', left: '24%', zIndex: 2, scale: 0.92 },
+  BL_1: { bottom: '50%', left: '68%', zIndex: 1, scale: 0.92 },
 };
 
 export const STAGGERED_SOLO_SLOT: StaggeredSlotStyle = {
-  bottom: '40%',
+  bottom: '38%',
   left: '28%',
   zIndex: 4,
   scale: 1.12,
 };
 
-/** Slight lift so feet clear the console without crowding turn-order chrome. */
-export const ENEMY_ARENA_VERTICAL_SHIFT_RATIO = -0.02;
+/** No extra downward bias — slot bottoms already clear the AP / ability dock. */
+export const ENEMY_ARENA_VERTICAL_SHIFT_RATIO = 0;
 
 function shiftSlotBottom(bottom: `${number}%`): `${number}%` {
   const shifted = Math.max(

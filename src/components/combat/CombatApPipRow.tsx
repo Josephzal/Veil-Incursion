@@ -34,8 +34,8 @@ export default function CombatApPipRow({
   conceptBand = false,
 }: CombatApPipRowProps): React.JSX.Element {
   const bandAccent = conceptBand ? OTT.cyanSelect : accent;
-  const resolvedLabelSize = labelFontSize ?? (conceptBand ? COMBAT_HUD_TYPE.emphasis : COMBAT_HUD_TYPE.caption * fontScale);
-  const resolvedHexSize = hexSize ?? (conceptBand ? 16 : HEX_SIZE * fontScale);
+  const resolvedLabelSize = labelFontSize ?? (conceptBand ? COMBAT_HUD_TYPE.label : COMBAT_HUD_TYPE.caption * fontScale);
+  const resolvedHexSize = hexSize ?? (conceptBand ? 12 : HEX_SIZE * fontScale);
 
   return (
     <View style={[
@@ -85,13 +85,13 @@ export default function CombatApPipRow({
                   },
                   filled && {
                     shadowColor: bandAccent,
-                    shadowOpacity: conceptBand ? 0.9 : 0.75,
-                    shadowRadius: conceptBand ? 7 : 5,
+                    shadowOpacity: conceptBand ? 0.45 : 0.75,
+                    shadowRadius: conceptBand ? 3 : 5,
                     shadowOffset: { width: 0, height: 0 },
-                    elevation: conceptBand ? 3 : 2,
+                    elevation: conceptBand ? 1 : 2,
                   },
                   filled && conceptBand && Platform.OS === 'web'
-                    ? { boxShadow: `0 0 8px ${bandAccent}` } as object
+                    ? { boxShadow: `0 0 3px ${bandAccent}` } as object
                     : null,
                 ]}
               />
@@ -130,8 +130,10 @@ const styles = StyleSheet.create({
     flex: 0,
     alignSelf: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 2,
+    gap: 5,
+    paddingVertical: 0,
+    minHeight: 24,
+    maxHeight: 28,
   },
   label: {
     fontFamily: 'monospace',
@@ -140,7 +142,8 @@ const styles = StyleSheet.create({
   },
   labelConcept: {
     fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 0.9,
+    fontSize: COMBAT_HUD_TYPE.label,
   },
   pipRow: {
     flexDirection: 'row',
@@ -148,7 +151,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   pipRowConcept: {
-    gap: 6,
+    gap: 4,
   },
   /** Transparent cell — avoids square shadow/bg around the rotated diamond. */
   pipCell: {

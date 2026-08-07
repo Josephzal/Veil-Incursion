@@ -293,6 +293,11 @@ export interface CombatGridUnitSnapshot {
   isDead: boolean;
   isSelected: boolean;
   isTargetable: boolean;
+  /**
+   * Presentation-only dual-allocation badge (1 = source, 2 = destination).
+   * Does not alter eligibility or dispatch.
+   */
+  dualAllocationIndex?: 1 | 2 | null;
   /** AoE footprint highlight — ability hits the whole group, not a single pick. */
   isAoeAffected?: boolean;
   /** ABYSSAL VERDICT targeting — eligible for ultimate commit. */

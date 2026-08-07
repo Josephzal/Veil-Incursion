@@ -38,7 +38,8 @@ for (const box of boxes) {
     `${box.label} ΔfootY=${attack.footY - idle.footY}`,
   );
   const ratio = attack.renderedBodyHeight / idle.renderedBodyHeight;
-  assert.ok(Math.abs(ratio - 1) <= 0.02, `${box.label} body ratio=${ratio}`);
+  // Attack may be slightly under idle (LONGSWORD_ATTACK_VISUAL_SCALE).
+  assert.ok(ratio <= 1.02 && ratio >= 0.94, `${box.label} body ratio=${ratio}`);
 }
 
 {
@@ -71,7 +72,8 @@ for (const box of boxes) {
   assert.ok(Math.abs(bodyPct) < Math.abs(legacyBodyPct));
   assert.ok(Math.abs(ΔfootX) <= 2);
   assert.ok(Math.abs(ΔfootY) <= 2);
-  assert.ok(Math.abs(bodyPct) <= 2);
+  // Allow small attack shrink via LONGSWORD_ATTACK_VISUAL_SCALE (~3%).
+  assert.ok(Math.abs(bodyPct) <= 4);
   console.log(
     `[longsword pose] AFTER Δfoot=(${ΔfootX.toFixed(2)}, ${ΔfootY.toFixed(2)}) `
     + `bodyΔ=${bodyPct.toFixed(2)}%  (legacy ≈ ΔfootX ${legacyΔfootX}, body ${legacyBodyPct}%)`,

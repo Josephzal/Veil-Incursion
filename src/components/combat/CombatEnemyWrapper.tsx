@@ -25,7 +25,11 @@ export default function CombatEnemyWrapper({
 }: CombatEnemyWrapperProps): React.JSX.Element {
   const scaled =
     scale !== 1
-      ? { transform: [{ scale }] as ViewStyle['transform'] }
+      ? ({
+          transform: [{ scale }],
+          // Keep vitals / feet planted so lane mates share one bar baseline.
+          transformOrigin: 'bottom center',
+        } as ViewStyle)
       : undefined;
 
   return (

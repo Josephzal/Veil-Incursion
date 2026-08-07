@@ -252,14 +252,14 @@ export const WARDEN_STRIKE_TIMELINE_MS = {
   releaseStart: 0,
   smearStart: 70,
   /**
-   * Crit sting slightly ahead of float/callout reveal — still after smear starts.
+   * Crit sting slightly ahead of contact — still after smear starts.
    */
   critStingAt: 100,
   /**
-   * Damage floats / CRITICAL callouts — earlier than authored contact VFX so
-   * readout lands closer to the swing kickoff.
+   * Feedback phase stamp — kept at contact so portal gating and authored VFX align.
+   * Damage floats / hit reveal fire via contactListeners on contactAt.
    */
-  feedbackAt: 120,
+  feedbackAt: 174,
   contactAt: 174,
   /** contactAt + holdMs (500) */
   holdEnd: 674,
@@ -833,24 +833,29 @@ export function beginWardenStrikePresentation(
     }
   });
 
-  // Floats / CRITICAL callouts ahead of authored contact burst.
+  // Feedback phase (portal gate) — same stamp as contact when timelines match.
   schedule(timeline.feedbackAt, () => {
     if (gen !== generation) return;
+    if (timeline.feedbackAt === timeline.contactAt) return; // merged into contact beat
     const feedbackResult = activeMutableResult ?? owned;
     emit({ ...base, result: feedbackResult, phase: 'feedback', atMs: timeline.feedbackAt });
+  });
+
+  // Authored enemy contact VFX + damage floats / HP reveal (same beat).
+  schedule(timeline.contactAt, () => {
+    if (gen !== generation) return;
+    const contactResult = activeMutableResult ?? owned;
+    if (timeline.feedbackAt === timeline.contactAt) {
+      emit({ ...base, result: contactResult, phase: 'feedback', atMs: timeline.feedbackAt });
+    }
+    emit({ ...base, result: contactResult, phase: 'contact', atMs: timeline.contactAt });
     contactListeners.forEach((fn) => {
       try {
-        fn(feedbackResult);
+        fn(contactResult);
       } catch {
         // ignore
       }
     });
-  });
-
-  schedule(timeline.contactAt, () => {
-    if (gen !== generation) return;
-    const contactResult = activeMutableResult ?? owned;
-    emit({ ...base, result: contactResult, phase: 'contact', atMs: timeline.contactAt });
   });
 
   schedule(timeline.holdEnd, () => {

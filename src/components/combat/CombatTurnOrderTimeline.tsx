@@ -51,7 +51,8 @@ function chipColors(
 function shortLabel(entry: CombatTurnOrderEntry): string {
   if (entry.kind === 'operative') return 'YOU';
   const raw = entry.label.replace(/^HOSTILE[_\s]*/i, '').trim();
-  return raw.length > 9 ? `${raw.slice(0, 8)}…` : raw.toUpperCase();
+  const upper = raw.toUpperCase();
+  return upper.length > 12 ? `${upper.slice(0, 11)}…` : upper;
 }
 
 /** Compact diamond turn-order timeline — no oversized empty frame. */
@@ -163,7 +164,8 @@ const styles = StyleSheet.create({
   chipCol: {
     alignItems: 'center',
     gap: 2,
-    width: 44,
+    width: 62,
+    minWidth: 56,
   },
   diamondFrame: {
     width: DIAMOND,
@@ -203,8 +205,9 @@ const styles = StyleSheet.create({
   },
   chipLabel: {
     fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.micro,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '800',
-    letterSpacing: 0.4,
+    letterSpacing: 0.35,
+    textAlign: 'center',
   },
 });

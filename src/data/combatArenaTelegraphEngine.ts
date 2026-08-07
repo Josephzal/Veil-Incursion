@@ -89,7 +89,7 @@ function glyphKindForType(type: EnemyIntentType): ArenaIntentGlyphKind {
 function symbolForKind(kind: ArenaIntentGlyphKind): string {
   switch (kind) {
     case 'ATTACK':
-      return '/';
+      return '>';
     case 'HEAVY':
       return '*';
     case 'LOCK_ON':
@@ -121,9 +121,9 @@ function symbolForKind(kind: ArenaIntentGlyphKind): string {
 function shortLabelForKind(kind: ArenaIntentGlyphKind): string {
   switch (kind) {
     case 'ATTACK':
-      return 'ATK';
+      return 'STRIKE';
     case 'HEAVY':
-      return 'HVY';
+      return 'HEAVY';
     case 'LOCK_ON':
       return 'LOCK';
     case 'CHANNEL':

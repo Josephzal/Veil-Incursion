@@ -58,6 +58,8 @@ export default function CombatArenaUnitUiPortal({
   children,
 }: CombatArenaUnitUiPortalProps): React.JSX.Element {
   const ui = useCombatArenaCombatUiOptional();
+  const setEntryRef = useRef(ui?.setEntry);
+  setEntryRef.current = ui?.setEntry;
   const anchorRef = useRef<View>(null);
   const [gate, setGate] = useState<PortalGate>({
     active: false,
@@ -72,6 +74,8 @@ export default function CombatArenaUnitUiPortal({
   });
   const lastWin = useRef<{ x: number; y: number; width: number } | null>(null);
   const reportedKeys = useRef<Set<string>>(new Set());
+  const gateRef = useRef(gate);
+  gateRef.current = gate;
 
   useEffect(() => subscribeWardenStrikePresentation((event) => {
     const isOwnerTarget = event.result.targetId === unitId
@@ -120,89 +124,119 @@ export default function CombatArenaUnitUiPortal({
   });
   const publishedCritSeq = criticalAuthorized ? critImpactSeq : 0;
 
+  const propsRef = useRef({
+    damageSeq,
+    damageLabel,
+    statusSeq,
+    statusLabel,
+    statusTone,
+    publishedCritSeq,
+    critImpactChannel,
+    evadeImpactSeq,
+    criticalAuthorized,
+  });
+  propsRef.current = {
+    damageSeq,
+    damageLabel,
+    statusSeq,
+    statusLabel,
+    statusTone,
+    publishedCritSeq,
+    critImpactChannel,
+    evadeImpactSeq,
+    criticalAuthorized,
+  };
+
+  const writeEntry = (x: number, y: number, width: number) => {
+    const g = gateRef.current;
+    if (!g.active) return;
+    const p = propsRef.current;
+    lastWin.current = { x, y, width };
+    setEntryRef.current?.(`unit-ui-${unitId}`, {
+      unitId,
+      left: x,
+      top: y,
+      width: Math.max(width, 72),
+      damageSeq: p.damageSeq,
+      damageLabel: p.damageLabel ?? '',
+      statusSeq: p.statusSeq,
+      statusLabel: p.statusLabel ?? '',
+      statusTone: p.statusTone ?? 'neutral',
+      critImpactSeq: p.publishedCritSeq,
+      critImpactChannel: p.criticalAuthorized ? p.critImpactChannel : undefined,
+      evadeImpactSeq: p.evadeImpactSeq,
+      criticalAuthorized: p.criticalAuthorized,
+      presentationId: g.presentationId,
+      playerActionId: g.playerActionId,
+      resolvedResultId: g.resolvedResultId,
+      sourceActionKind: g.sourceActionKind,
+      sourceAbilityId: g.sourceAbilityId,
+    });
+
+    const anchor = { x, y };
+    const base = {
+      presentationInstanceId: g.presentationId,
+      playerActionId: g.playerActionId,
+      resolvedResultId: g.resolvedResultId,
+      sourceActionKind: g.sourceActionKind,
+      sourceAbilityId: g.sourceAbilityId,
+      targetId: unitId,
+      critical: p.criticalAuthorized,
+      portalHost: `arena-unit-ui-${unitId}`,
+      targetAnchor: anchor,
+    };
+    if (p.damageSeq > 0 && p.damageLabel) {
+      const key = `DAMAGE:${p.damageSeq}`;
+      if (!reportedKeys.current.has(key)) {
+        reportedKeys.current.add(key);
+        reportWardenCallout({ ...base, calloutType: 'DAMAGE' });
+      }
+    }
+    if (p.statusSeq > 0 && p.statusLabel) {
+      const key = `DEFENSE:${p.statusSeq}`;
+      if (!reportedKeys.current.has(key)) {
+        reportedKeys.current.add(key);
+        reportWardenCallout({ ...base, calloutType: 'DEFENSE', critical: false });
+      }
+    }
+    if (p.publishedCritSeq > 0 && p.criticalAuthorized) {
+      const key = `CRITICAL:${p.publishedCritSeq}`;
+      if (!reportedKeys.current.has(key)) {
+        reportedKeys.current.add(key);
+        reportWardenCallout({ ...base, calloutType: 'CRITICAL', critical: true });
+      }
+    }
+  };
+
   const publish = () => {
-    if (!ui || !gate.active) return;
+    if (!gateRef.current.active) return;
+    // Use cached window coords immediately so contact-beat floats aren't gated on measure.
+    if (lastWin.current) {
+      writeEntry(lastWin.current.x, lastWin.current.y, lastWin.current.width);
+    }
     const node = anchorRef.current as (View & {
       measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
     }) | null;
     node?.measureInWindow?.((x, y, width) => {
-      const prev = lastWin.current;
-      if (!(prev && prev.x === x && prev.y === y && prev.width === width)) {
-        lastWin.current = { x, y, width };
-      }
-      ui.setEntry(`unit-ui-${unitId}`, {
-        unitId,
-        left: x,
-        top: y,
-        width: Math.max(width, 72),
-        damageSeq,
-        damageLabel: damageLabel ?? '',
-        statusSeq,
-        statusLabel: statusLabel ?? '',
-        statusTone: statusTone ?? 'neutral',
-        critImpactSeq: publishedCritSeq,
-        critImpactChannel: criticalAuthorized ? critImpactChannel : undefined,
-        evadeImpactSeq,
-        criticalAuthorized,
-        presentationId: gate.presentationId,
-        playerActionId: gate.playerActionId,
-        resolvedResultId: gate.resolvedResultId,
-        sourceActionKind: gate.sourceActionKind,
-        sourceAbilityId: gate.sourceAbilityId,
-      });
-
-      const anchor = { x, y };
-      const base = {
-        presentationInstanceId: gate.presentationId,
-        playerActionId: gate.playerActionId,
-        resolvedResultId: gate.resolvedResultId,
-        sourceActionKind: gate.sourceActionKind,
-        sourceAbilityId: gate.sourceAbilityId,
-        targetId: unitId,
-        critical: criticalAuthorized,
-        portalHost: `arena-unit-ui-${unitId}`,
-        targetAnchor: anchor,
-      };
-      if (damageSeq > 0 && damageLabel) {
-        const key = `DAMAGE:${damageSeq}`;
-        if (!reportedKeys.current.has(key)) {
-          reportedKeys.current.add(key);
-          reportWardenCallout({ ...base, calloutType: 'DAMAGE' });
-        }
-      }
-      if (statusSeq > 0 && statusLabel) {
-        const key = `DEFENSE:${statusSeq}`;
-        if (!reportedKeys.current.has(key)) {
-          reportedKeys.current.add(key);
-          reportWardenCallout({ ...base, calloutType: 'DEFENSE', critical: false });
-        }
-      }
-      if (publishedCritSeq > 0 && criticalAuthorized) {
-        const key = `CRITICAL:${publishedCritSeq}`;
-        if (!reportedKeys.current.has(key)) {
-          reportedKeys.current.add(key);
-          reportWardenCallout({ ...base, calloutType: 'CRITICAL', critical: true });
-        }
-      }
+      writeEntry(x, y, width);
     });
   };
 
+  // Keep entry in sync while active. Do NOT put context `ui` in deps — setEntry updates
+  // entries and would retrigger cleanup(null) → publish → infinite setState loop.
   useLayoutEffect(() => {
     if (!gate.active) {
-      ui?.setEntry(`unit-ui-${unitId}`, null);
-      lastWin.current = null;
+      setEntryRef.current?.(`unit-ui-${unitId}`, null);
       return undefined;
     }
     publish();
     const handle = setInterval(publish, 80);
     return () => {
       clearInterval(handle);
-      ui?.setEntry(`unit-ui-${unitId}`, null);
     };
-  // Primitive deps only — never depend on `children`.
+  // Primitive deps only — never depend on `children` or context value identity.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    ui,
     unitId,
     gate.active,
     gate.critical,
@@ -220,6 +254,21 @@ export default function CombatArenaUnitUiPortal({
     criticalAuthorized,
   ]);
 
+  // Clear portal entry on unmount or when leaving the owning target.
+  useEffect(() => () => {
+    setEntryRef.current?.(`unit-ui-${unitId}`, null);
+  }, [unitId]);
+
+  const warmAnchor = () => {
+    const node = anchorRef.current as (View & {
+      measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
+    }) | null;
+    node?.measureInWindow?.((x, y, width) => {
+      lastWin.current = { x, y, width };
+      if (gateRef.current.active) writeEntry(x, y, width);
+    });
+  };
+
   return (
     <View
       ref={anchorRef}
@@ -227,7 +276,7 @@ export default function CombatArenaUnitUiPortal({
       pointerEvents="none"
       collapsable={false}
       onLayout={() => {
-        if (gate.active) publish();
+        warmAnchor();
       }}
     >
       {gate.active ? <View style={styles.spacer} /> : children}

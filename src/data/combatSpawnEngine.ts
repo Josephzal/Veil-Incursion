@@ -314,6 +314,23 @@ export function squadFromSingleEnemy(enemy: EnemyCombatProfile): EnemyCombatProf
   return [assignGrid({ ...enemy, unitId: enemy.unitId ?? nextUnitId('hostile') }, slot as CombatGridSlotId)];
 }
 
+/** DevTest — full 2×2 grid (FL_0 / FL_1 / BL_0 / BL_1) for layout and targeting checks. */
+export function createFourEnemyTestSquad(nodeIndex = 0): EnemyCombatProfile[] {
+  const ids: Array<{ rosterId: 'scuttler' | 'thrall' | 'spall' | 'hook-weaver'; slot: CombatGridSlotId }> = [
+    { rosterId: 'scuttler', slot: 'FL_0' },
+    { rosterId: 'thrall', slot: 'FL_1' },
+    { rosterId: 'spall', slot: 'BL_0' },
+    { rosterId: 'hook-weaver', slot: 'BL_1' },
+  ];
+  return normalizeSquad(
+    ids.map(({ rosterId, slot }) => {
+      const entry = ENEMY_ROSTER[rosterId];
+      const unit = spawnRosterUnit(entry, nodeIndex, { district: 1 });
+      return { ...unit, gridSlot: slot };
+    }),
+  );
+}
+
 export function normalizeSquad(enemies: EnemyCombatProfile[]): EnemyCombatProfile[] {
   if (enemies.length === 0) return [];
   const used = new Set<CombatGridSlotId>();

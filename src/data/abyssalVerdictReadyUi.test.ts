@@ -13,6 +13,7 @@ import {
   previewAbyssalVerdictDamage,
   resolveAbyssalVerdictCommitDamage,
   resolveAbyssalVerdictPresentationState,
+  resolveConsoleUltimateMeterHeader,
   shouldFireAbyssalVerdictReadyNotification,
   shouldShowOrbitalUltimatePing,
 } from './abyssalVerdictReadyUi';
@@ -51,11 +52,16 @@ function main(): void {
   assert.equal(isAbyssalVerdictEnemyEligible({ alive: false }), false);
   assert.equal(isAbyssalVerdictEnemyEligible({ alive: true, dissolveHidden: true }), false);
 
-  // Old floating red center circle must never show for Abyssal Verdict.
+  // Orbital ping retired — console module is the sole ultimate CTA.
   assert.equal(shouldShowOrbitalUltimatePing('eviscerate'), false);
   assert.equal(shouldShowOrbitalUltimatePing(null), false);
-  assert.equal(shouldShowOrbitalUltimatePing('zero_protocol'), true);
-  assert.equal(shouldShowOrbitalUltimatePing('cataclysm'), true);
+  assert.equal(shouldShowOrbitalUltimatePing('zero_protocol'), false);
+  assert.equal(shouldShowOrbitalUltimatePing('cataclysm'), false);
+
+  assert.equal(resolveConsoleUltimateMeterHeader('AEGIS'), 'ULTIMATE // RESERVE');
+  assert.equal(resolveConsoleUltimateMeterHeader('HEX_SHOT'), 'ULTIMATE // PROTOCOL');
+  assert.equal(resolveConsoleUltimateMeterHeader('ENVOY'), 'ULTIMATE // VEIL ROT');
+  assert.ok(ABYSSAL_VERDICT_UI_COPY.displayName.length > 0);
 
   assert.ok(ABYSSAL_VERDICT_READY_NOTIFY_MS >= 700 && ABYSSAL_VERDICT_READY_NOTIFY_MS <= 900);
   assert.ok(ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS >= 60 && ABYSSAL_VERDICT_BRACKET_COLLAPSE_MS <= 90);

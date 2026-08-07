@@ -562,8 +562,12 @@ import {
   triggerHaptic,
   triggerShake,
 } from '../utils/combatJuice';
-import { dispatchCombatPresentationFromJuice } from '../utils/combatPresentationBus';
+import {
+  dispatchCombatPresentationFromJuice,
+  registerCombatPresentationContactRevealListener,
+} from '../utils/combatPresentationBus';
 import { presentResolvedWeaponHit } from '../data/weaponCombatPresentation/presentResolvedWeaponHit';
+import { scalePresentationMs } from '../data/weaponCombatPresentation/presentationSettings';
 import {
   AEGIS_RIPOSTE_BONUS_KINETIC,
   abilityCarriesStrikeTag,
@@ -600,6 +604,7 @@ import {
   isAbyssalVerdictEnemyEligible,
   previewAbyssalVerdictDamage,
   resolveAbyssalVerdictPresentationState,
+  resolveConsoleUltimateMeterHeader,
   shouldFireAbyssalVerdictReadyNotification,
   type AbyssalVerdictHudSnapshot,
 } from '../data/abyssalVerdictReadyUi';
@@ -1317,6 +1322,8 @@ export default function TacticalCombatHub({
   const [catalyticConsoleVisible, setCatalyticConsoleVisible] = useState(false);
   const combatPausedRef = useRef(false);
   const riftWardReadyRef = useRef(false);
+  /** Presentation mirror of riftWardReadyRef for the pinned CLASS MECHANIC control. */
+  const [riftWardReadyUi, setRiftWardReadyUi] = useState(false);
 
   const operativeHpRef = useRef(initialOperativeHp);
   const balanceEncounterRef = useRef({
@@ -1406,6 +1413,18 @@ export default function TacticalCombatHub({
   const riposteCashedActionIdRef = useRef<string | null>(null);
   /** Crit channel staged until Warden contact (same strike). */
   const wardenDeferredCritChannelRef = useRef<'KINETIC' | 'OCCULT' | 'TRUE' | null>(null);
+  /**
+   * Weapon-bus hits: stash hitFlash / damage float / CRITICAL until presentation CONTACT
+   * so numbers land with impact_spark (not at resolve time).
+   */
+  const pendingWeaponHitRevealRef = useRef<Record<string, {
+    damage: number;
+    critical: boolean;
+    critChannel?: 'KINETIC' | 'OCCULT' | 'TRUE';
+    bloodBurstRepeats: number;
+    bloodMistScale: number;
+    fallbackTimer: ReturnType<typeof setTimeout> | null;
+  }>>({});
   /** Player-intent action that owns the active Warden presentation. */
   const wardenPlayerActionIdRef = useRef<string | null>(null);
   /** Defense response latched to the owning presentation — published at contact only. */
@@ -1427,6 +1446,50 @@ export default function TacticalCombatHub({
   const damageFloatLabelsRef = useRef<Record<string, string>>({});
   const lifecycleFloatLabelsRef = useRef<Record<string, string>>({});
   const lifecycleFloatTonesRef = useRef<Record<string, import('../utils/combatTelemetryFormat').StatusFloatTone>>({});
+  /**
+   * Enemy HP damage number for every class/weapon.
+   * Call on the same beat as hitFlash / blood / contact / IMPACT VFX.
+   */
+  const publishEnemyDamageFloat = (unitId: string, amount: number) => {
+    if (!(amount > 0) || !unitId) return;
+    const dmgLabel = String(Math.max(0, Math.round(amount)));
+    damageFloatSeqRef.current[unitId] = (damageFloatSeqRef.current[unitId] ?? 0) + 1;
+    damageFloatLabelsRef.current[unitId] = dmgLabel;
+    setTimeout(() => {
+      if (damageFloatLabelsRef.current[unitId] === dmgLabel) {
+        delete damageFloatLabelsRef.current[unitId];
+      }
+    }, 900);
+  };
+
+  const flushWeaponHitReveal = (unitId: string) => {
+    const pending = pendingWeaponHitRevealRef.current[unitId];
+    if (!pending) return;
+    delete pendingWeaponHitRevealRef.current[unitId];
+    if (pending.fallbackTimer) {
+      clearTimeout(pending.fallbackTimer);
+      pending.fallbackTimer = null;
+    }
+    hitFlashSeqRef.current[unitId] = (hitFlashSeqRef.current[unitId] ?? 0) + 1;
+    bloodBurstRepeatsRef.current[unitId] = pending.bloodBurstRepeats;
+    bloodMistScaleRef.current[unitId] = pending.bloodMistScale;
+    if (pending.damage > 0) {
+      publishEnemyDamageFloat(unitId, pending.damage);
+    }
+    if (pending.critical && pending.damage > 0) {
+      const prev = critImpactSeqRef.current[unitId]?.seq ?? 0;
+      critImpactSeqRef.current[unitId] = {
+        seq: prev + 1,
+        channel: pending.critChannel ?? 'KINETIC',
+      };
+      onPlayerCritImpact?.({
+        unitId,
+        channel: pending.critChannel ?? 'KINETIC',
+      });
+    }
+    Vibration.vibrate(18);
+    publishSquadUi(squadRef.current);
+  };
   const skipTurnUnitIdsRef = useRef<Set<string>>(new Set());
   const [centerSkipFloatSeq, setCenterSkipFloatSeq] = useState(0);
   const backlineDashSeqRef = useRef<Record<string, number>>({});
@@ -1658,21 +1721,6 @@ export default function TacticalCombatHub({
     abyssalVerdictPrimedRef.current = abyssalVerdictPrimed;
   }, [abyssalVerdictPrimed]);
 
-  useEffect(() => {
-    if (shouldFireAbyssalVerdictReadyNotification(abyssalReadyLatchedRef.current, sliceReady)) {
-      setAbyssalReadyNotifySeq((n) => n + 1);
-    }
-    abyssalReadyLatchedRef.current = sliceReady;
-    if (!sliceReady) {
-      setAbyssalVerdictPrimed(false);
-      abyssalVerdictPrimedRef.current = false;
-      abyssalStagedCommitRef.current = null;
-      setAbyssalStagedCommit(null);
-      setAbyssalCollapsingUnitId(null);
-      abyssalCommitLockRef.current = false;
-    }
-  }, [sliceReady]);
-
   const zeroProtocolReady = operativeClass === 'HEX_SHOT'
     && hexShotState.isUltimateAvailable
     && !isExhausted
@@ -1693,6 +1741,10 @@ export default function TacticalCombatHub({
     && canFireWeaponUltimate(activeWeaponFamilyId)
     && activeUltimateRecord != null
     && isWu4NewUltimateId(activeUltimateRecord.id);
+  const consoleUltimateReady = sliceReady
+    || zeroProtocolReady
+    || cataclysmReady
+    || stagedUltimateReady;
   const ultimatePingVariant: UltimatePingVariant | null = zeroProtocolReady || (
     stagedUltimateReady && operativeClass === 'HEX_SHOT'
   )
@@ -1703,6 +1755,21 @@ export default function TacticalCombatHub({
         ? 'eviscerate'
         : null;
   const ultimatePingReady = ultimatePingVariant != null;
+
+  useEffect(() => {
+    if (shouldFireAbyssalVerdictReadyNotification(abyssalReadyLatchedRef.current, consoleUltimateReady)) {
+      setAbyssalReadyNotifySeq((n) => n + 1);
+    }
+    abyssalReadyLatchedRef.current = consoleUltimateReady;
+    if (!sliceReady) {
+      setAbyssalVerdictPrimed(false);
+      abyssalVerdictPrimedRef.current = false;
+      abyssalStagedCommitRef.current = null;
+      setAbyssalStagedCommit(null);
+      setAbyssalCollapsingUnitId(null);
+      abyssalCommitLockRef.current = false;
+    }
+  }, [consoleUltimateReady, sliceReady]);
   const aegisCombatSurface = useMemo(() => {
     if (operativeClass !== 'AEGIS') return null;
     return buildAegisCombatSurface({
@@ -1884,6 +1951,21 @@ export default function TacticalCombatHub({
   }, [hexShotState]);
 
   useEffect(() => {
+    registerCombatPresentationContactRevealListener((reveal) => {
+      flushWeaponHitReveal(reveal.targetId);
+    });
+    return () => {
+      registerCombatPresentationContactRevealListener(null);
+      Object.values(pendingWeaponHitRevealRef.current).forEach((pending) => {
+        if (pending.fallbackTimer) clearTimeout(pending.fallbackTimer);
+      });
+      pendingWeaponHitRevealRef.current = {};
+    };
+  // flushWeaponHitReveal closes over stable refs / callbacks.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = subscribeWardenStrikeContact((result) => {
       if (result.replayOnly) return;
       const pending = wardenPendingRevealRef.current;
@@ -1920,21 +2002,12 @@ export default function TacticalCombatHub({
         && result.damage > 0
         && WARDEN_STRIKE_VFX_LAYER_TOGGLES.damageCritNumbers
       ) {
-        // Publish even for Armor/Ward when authoritative HP damage > 0.
-        // Uses a dedicated channel so it does not overwrite ARMOR BROKEN / WARD.
+        // Same beat as contact VFX / hit flash — Armor/Ward still show HP damage.
         const riposteBonus = Math.max(0, pending.riposteBonusKinetic ?? 0);
         const baseShown = riposteBonus > 0
           ? Math.max(0, result.damage - riposteBonus)
           : result.damage;
-        const dmgLabel = String(baseShown > 0 ? baseShown : result.damage);
-        damageFloatSeqRef.current[pending.unitId] =
-          (damageFloatSeqRef.current[pending.unitId] ?? 0) + 1;
-        damageFloatLabelsRef.current[pending.unitId] = dmgLabel;
-        setTimeout(() => {
-          if (damageFloatLabelsRef.current[pending.unitId] === dmgLabel) {
-            delete damageFloatLabelsRef.current[pending.unitId];
-          }
-        }, 900);
+        publishEnemyDamageFloat(pending.unitId, baseShown > 0 ? baseShown : result.damage);
         if (riposteBonus > 0) {
           const riposteLabel = `RIPOSTE +${riposteBonus}`;
           statusFloatSeqRef.current[pending.unitId] =
@@ -2016,9 +2089,7 @@ export default function TacticalCombatHub({
       if (successfulHit) {
         // Hit flash drives blood / flash only — recoil is suppressed while Abyssal is active.
         hitFlashSeqRef.current[primaryId] = (hitFlashSeqRef.current[primaryId] ?? 0) + 1;
-        damageFloatSeqRef.current[primaryId] = (damageFloatSeqRef.current[primaryId] ?? 0) + 1;
-        lifecycleFloatLabelsRef.current[primaryId] = String(pending.damage);
-        lifecycleFloatTonesRef.current[primaryId] = 'neutral';
+        publishEnemyDamageFloat(primaryId, pending.damage);
         bloodBurstRepeatsRef.current[primaryId] = 1;
         bloodMistScaleRef.current[primaryId] = 1;
         const prevImpact = classImpactFxRef.current[primaryId]?.seq ?? 0;
@@ -2579,6 +2650,13 @@ export default function TacticalCombatHub({
                 : (u.unitId != null && rowPreviewIds?.has(u.unitId) === true)
                 || selectedTargetIdRef.current === u.unitId
                 || focusedUnitIdRef.current === u.unitId,
+          dualAllocationIndex: (targetMode === 'DUAL' || targetMode === 'ONE_OR_TWO')
+            ? (dualTargetIdsRef.current[0] === u.unitId
+              ? 1
+              : dualTargetIdsRef.current[1] === u.unitId
+                ? 2
+                : null)
+            : null,
           firingSolutionActive: operativeClass === 'HEX_SHOT'
             && u.unitId != null
             && classCombatRef.current.firingSolutionUnitId === u.unitId,
@@ -4016,10 +4094,12 @@ export default function TacticalCombatHub({
       };
       if (unblockable) {
         riftWardReadyRef.current = false;
+        setRiftWardReadyUi(false);
         runEnvoyRiftWardTriggerBoons(wardBoonCtx);
         return;
       }
       riftWardReadyRef.current = false;
+      setRiftWardReadyUi(false);
       runEnvoyRiftWardTriggerBoons(wardBoonCtx);
       const reflect = Math.floor(raw * 0.5);
       if (reflect > 0) {
@@ -5323,8 +5403,22 @@ export default function TacticalCombatHub({
           playerActionKind: options?.playerActionKind,
           nestedPresentation: options?.nestedPresentation,
         }) && !options?.indirectDamage && !options?.echoHit && !isWardenStrikeInputGuarded();
+        const deferCritForWeaponBus = Boolean(
+          resolvedWeapon
+          && source
+          && !options?.echoHit
+          && !options?.nestedPresentation
+          && !options?.indirectDamage
+          && options?.abilityId !== 'RUIN'
+          && !options?.deferAbyssalVerdict
+          && !deferCritForWarden
+          && !isWardenStrikeInputGuarded()
+          && !isAbyssalVerdictInputGuarded(),
+        );
         if (deferCritForWarden) {
           wardenDeferredCritChannelRef.current = critChannel;
+        } else if (deferCritForWeaponBus) {
+          // CRITICAL UI flushes with presentation CONTACT (pendingWeaponHitRevealRef).
         } else {
           const prev = critImpactSeqRef.current[e.unitId]?.seq ?? 0;
           critImpactSeqRef.current[e.unitId] = { seq: prev + 1, channel: critChannel };
@@ -5661,41 +5755,55 @@ export default function TacticalCombatHub({
         log('>> FOLDED — phased silhouette forced into true position.');
       }
       const deferAbyssalHitFx = options?.deferAbyssalVerdict === true;
-      if (!deferAbyssalHitFx) {
+      const useWardenStrike = shouldUseWardenStrikePresentation({
+        weaponFamilyId: resolvedWeapon?.familyId,
+        abilityId: options?.abilityId,
+        actionKind: options?.actionKind,
+        playerActionKind: options?.playerActionKind,
+        nestedPresentation: options?.nestedPresentation,
+      }) && !options?.indirectDamage && !options?.echoHit;
+      // Follow-up hits (e.g. Veil Edge rider) while presentation is locked.
+      const wardenFollowUp = useWardenStrike && isWardenStrikeInputGuarded();
+      const willPresentWeaponHit = Boolean(
+        resolvedWeapon
+        && source
+        && !options?.echoHit
+        && !options?.nestedPresentation
+        && options?.abilityId !== 'RUIN'
+        && !options?.deferAbyssalVerdict
+        && !useWardenStrike
+        && !isWardenStrikeInputGuarded()
+        && !isAbyssalVerdictInputGuarded(),
+      );
+      const burstAbilityId = options?.abilityId ?? lastPlayerAbilityRef.current;
+      const burstTags = options?.abilityTags?.length
+        ? options.abilityTags
+        : resolveOperativeAbilityTags(burstAbilityId);
+      const directWeaponHit = Boolean(
+        resolvedWeapon
+        && !options?.indirectDamage
+        && !options?.echoHit,
+      );
+      const carbineRangedBurst = Boolean(
+        directWeaponHit
+        && resolvedWeapon?.familyId === 'hex-pulse-rifle'
+        && burstTags.includes('RANGED'),
+      );
+      const pairedBladesBurst = Boolean(
+        directWeaponHit
+        && resolvedWeapon?.familyId === 'aegis-rift-edge',
+      );
+      const bloodBurstRepeats = carbineRangedBurst ? 3 : pairedBladesBurst ? 2 : 1;
+      const bloodMistScale = (
+        resolvedWeapon?.familyId === 'hex-void-cannon'
+        || resolvedWeapon?.familyId === 'aegis-claymore-blade'
+      ) ? 1.5 : 1;
+      // Immediate hit FX for DoTs / class abilities. Weapon-bus + Warden + Abyssal
+      // defer flash/blood/numbers to their CONTACT / IMPACT beat.
+      if (!deferAbyssalHitFx && !willPresentWeaponHit && !(useWardenStrike && !wardenFollowUp)) {
         hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
-      }
-      // Multi-pulse blood burst: Ash Shotgun RANGED ×3, Paired Blades ×2.
-      // ABYSSAL VERDICT owns hit FX at the delayed IMPACT beat.
-      if (!deferAbyssalHitFx) {
-        const burstAbilityId = options?.abilityId ?? lastPlayerAbilityRef.current;
-        const burstTags = options?.abilityTags?.length
-          ? options.abilityTags
-          : resolveOperativeAbilityTags(burstAbilityId);
-        const directWeaponHit = Boolean(
-          resolvedWeapon
-          && !options?.indirectDamage
-          && !options?.echoHit,
-        );
-        const carbineRangedBurst = Boolean(
-          directWeaponHit
-          && resolvedWeapon?.familyId === 'hex-pulse-rifle'
-          && burstTags.includes('RANGED'),
-        );
-        const pairedBladesBurst = Boolean(
-          directWeaponHit
-          && resolvedWeapon?.familyId === 'aegis-rift-edge',
-        );
-        bloodBurstRepeatsRef.current[e.unitId] = carbineRangedBurst
-          ? 3
-          : pairedBladesBurst
-            ? 2
-            : 1;
-        bloodMistScaleRef.current[e.unitId] = (
-          resolvedWeapon?.familyId === 'hex-void-cannon'
-          || resolvedWeapon?.familyId === 'aegis-claymore-blade'
-        ) ? 1.5 : 1;
-        // Prefer weapon-specific presentation; skip generic class flashes when a
-        // permanent weapon is resolving (Phase 3M repair — removes mustard/purple/red fills).
+        bloodBurstRepeatsRef.current[e.unitId] = bloodBurstRepeats;
+        bloodMistScaleRef.current[e.unitId] = bloodMistScale;
         if (
           source
           && !options?.indirectDamage
@@ -5713,22 +5821,6 @@ export default function TacticalCombatHub({
         }
         Vibration.vibrate(18);
       }
-      const useWardenStrike = shouldUseWardenStrikePresentation({
-        weaponFamilyId: resolvedWeapon?.familyId,
-        abilityId: options?.abilityId,
-        actionKind: options?.actionKind,
-        playerActionKind: options?.playerActionKind,
-        nestedPresentation: options?.nestedPresentation,
-      }) && !options?.indirectDamage && !options?.echoHit;
-      // Follow-up hits (e.g. Veil Edge rider) while presentation is locked.
-      const wardenFollowUp = useWardenStrike && isWardenStrikeInputGuarded();
-      if (useWardenStrike && !wardenFollowUp) {
-        // Undo immediate flash — contact frame owns recoil + steel impact.
-        hitFlashSeqRef.current[e.unitId] = Math.max(
-          0,
-          (hitFlashSeqRef.current[e.unitId] ?? 1) - 1,
-        );
-      }
       if (wardenFollowUp || (options?.nestedPresentation && isWardenStrikeInputGuarded())) {
         contributeWardenStrikeContactDamage({
           playerActionId: options?.playerActionId ?? wardenPlayerActionIdRef.current,
@@ -5739,6 +5831,14 @@ export default function TacticalCombatHub({
           defenseMaterial: wardenDefenseMaterialRef.current,
         });
       }
+      // Damage numbers with hit VFX. Warden / Abyssal / weapon-bus defer to contact.
+      const deferDamageFloat = deferAbyssalHitFx
+        || useWardenStrike
+        || willPresentWeaponHit
+        || (options?.nestedPresentation === true && isWardenStrikeInputGuarded());
+      if (!deferDamageFloat) {
+        publishEnemyDamageFloat(e.unitId, dmg);
+      }
       if (options?.indirectDamage && dmg > 0) {
         // Class DoT / triggered damage — exclusive cue (no weapon attack SFX).
         if (operativeClass === 'ENVOY') {
@@ -5748,26 +5848,36 @@ export default function TacticalCombatHub({
           unlockCombatPresentationAudio();
           playCombatPresentationCue('sfx.hex.dot');
         }
-      } else if (
-        resolvedWeapon
-        && source
-        && !options?.echoHit
-        && !options?.nestedPresentation
-        && options?.abilityId !== 'RUIN'
-        && !options?.deferAbyssalVerdict
-        && !(useWardenStrike && !wardenFollowUp)
-        && !wardenFollowUp
-        && !isWardenStrikeInputGuarded()
-        && !isAbyssalVerdictInputGuarded()
-      ) {
+      } else if (willPresentWeaponHit && resolvedWeapon) {
+        const revealUnitId = e.unitId;
+        const prevPending = pendingWeaponHitRevealRef.current[revealUnitId];
+        if (prevPending?.fallbackTimer) clearTimeout(prevPending.fallbackTimer);
+        const critChannelForReveal = critical
+          ? (options?.abilityId === 'VEIL_PIERCER'
+            ? 'KINETIC' as const
+            : (options?.channel === 'OCCULT' || options?.channel === 'TRUE'
+              ? options.channel
+              : 'KINETIC' as const))
+          : undefined;
+        const fallbackTimer = setTimeout(() => {
+          flushWeaponHitReveal(revealUnitId);
+        }, scalePresentationMs(360));
+        pendingWeaponHitRevealRef.current[revealUnitId] = {
+          damage: dmg,
+          critical: Boolean(critical && dmg > 0),
+          critChannel: critical && dmg > 0 ? critChannelForReveal : undefined,
+          bloodBurstRepeats,
+          bloodMistScale,
+          fallbackTimer,
+        };
         try {
           unlockCombatPresentationAudio();
           presentResolvedWeaponHit({
             weaponFamilyId: resolvedWeapon.familyId,
             abilityId: options?.abilityId,
-            targetId: e.unitId,
+            targetId: revealUnitId,
             damage: dmg,
-            critical,
+            critical: Boolean(critical && dmg > 0),
             // Thrall slump is not a true kill — skip kill-confirm SFX.
             killed: hp <= 0 && !working.isSlumped,
             channel: options?.channel === 'OCCULT'
@@ -5781,7 +5891,8 @@ export default function TacticalCombatHub({
             actionKind: isWeaponUltimateActionId(options?.abilityId) ? 'ULTIMATE' : undefined,
           });
         } catch {
-          // Presentation must never block combat.
+          // Presentation must never block combat — still reveal FX.
+          flushWeaponHitReveal(revealUnitId);
         }
       }
       if (
@@ -7298,6 +7409,7 @@ export default function TacticalCombatHub({
     }
     runeboundCarapaceRef.current = clearRuneboundCarapace(runeboundCarapaceRef.current);
     riftWardReadyRef.current = operativeClass === 'ENVOY';
+    setRiftWardReadyUi(operativeClass === 'ENVOY');
     if (operativeClass === 'ENVOY') {
       applyPlayerTurnBlueprintHooks();
       const fluxRestore = Math.round(envoyCombatStateRef.current.fluxMaxCap * 0.15);
@@ -8271,6 +8383,7 @@ export default function TacticalCombatHub({
     setRunicBrands(0);
     classCombatRef.current.runicBrands = 0;
     riftWardReadyRef.current = operativeClass === 'ENVOY';
+    setRiftWardReadyUi(operativeClass === 'ENVOY');
     combatBuffRef.current = {
       demonLungCooldown: 0,
       crimsonPactCharges: 0,
@@ -11959,17 +12072,6 @@ export default function TacticalCombatHub({
     && !cataclysmSigilVisible
     && !encounterUltimateDisabled;
 
-  const cancelAbyssalVerdictTargeting = useCallback(() => {
-    if (!abyssalVerdictPrimedRef.current) return;
-    setAbyssalVerdictPrimed(false);
-    abyssalVerdictPrimedRef.current = false;
-    setAbyssalCollapsingUnitId(null);
-    abyssalCommitLockRef.current = false;
-    abyssalStagedCommitRef.current = null;
-    setAbyssalStagedCommit(null);
-    publishSquadUiRef.current(squadRef.current);
-  }, []);
-
   const primeAbyssalVerdict = useCallback(() => {
     if (!sliceReady) return;
     if (!(
@@ -12089,59 +12191,81 @@ export default function TacticalCombatHub({
   commitAbyssalVerdictOnTargetRef.current = commitAbyssalVerdictOnTarget;
   primeAbyssalVerdictRef.current = primeAbyssalVerdict;
 
+  const consoleUltimatePrimed = abyssalVerdictPrimed
+    || zeroProtocolVisible
+    || cataclysmSigilVisible
+    || stagedWeaponUltimateId != null;
+  const consoleUltimateMeter = (() => {
+    if (operativeClass === 'HEX_SHOT') {
+      return {
+        reserve: hexShotState.protocolCharges,
+        cap: Math.max(1, hexShotState.maxProtocolCharges),
+      };
+    }
+    if (operativeClass === 'ENVOY') {
+      return {
+        reserve: Math.min(envoyRotStacksUi, CATACLYSM_ROT_GATE),
+        cap: CATACLYSM_ROT_GATE,
+      };
+    }
+    return {
+      reserve: abyssalReserve,
+      cap: COMBAT_ACTION.ABYSSAL_RESERVE_CAP,
+    };
+  })();
+
   useEffect(() => {
     if (!onAbyssalVerdictUiChange) return;
-    if (operativeClass !== 'AEGIS') {
-      onAbyssalVerdictUiChange(null);
-      return;
-    }
     const settings = getCombatPresentationSettings();
     const snapshot: AbyssalVerdictHudSnapshot = {
       state: resolveAbyssalVerdictPresentationState({
-        ultimateReady: sliceReady,
-        primed: abyssalVerdictPrimed,
+        ultimateReady: consoleUltimateReady,
+        primed: consoleUltimatePrimed,
       }),
-      reserve: abyssalReserve,
-      cap: COMBAT_ACTION.ABYSSAL_RESERVE_CAP,
+      reserve: consoleUltimateMeter.reserve,
+      cap: consoleUltimateMeter.cap,
       notifySeq: abyssalReadyNotifySeq,
       canInteract: abyssalVerdictCanInteract,
       collapsingUnitId: abyssalCollapsingUnitId,
       reducedMotion: settings.reducedMotion === true,
       stagedGrade: abyssalStagedCommit?.grade ?? null,
       stagedDamage: abyssalStagedCommit?.damage ?? null,
+      displayName: activeUltimateRecord?.displayName ?? 'ULTIMATE',
+      meterHeader: resolveConsoleUltimateMeterHeader(operativeClass),
     };
     onAbyssalVerdictUiChange(snapshot);
   }, [
     abyssalCollapsingUnitId,
     abyssalReadyNotifySeq,
-    abyssalReserve,
     abyssalStagedCommit,
     abyssalVerdictCanInteract,
-    abyssalVerdictPrimed,
+    activeUltimateRecord?.displayName,
+    consoleUltimateMeter.cap,
+    consoleUltimateMeter.reserve,
+    consoleUltimatePrimed,
+    consoleUltimateReady,
     onAbyssalVerdictUiChange,
     operativeClass,
-    sliceReady,
   ]);
 
   useEffect(() => {
     if (!registerAbyssalVerdictHandlers) return;
     registerAbyssalVerdictHandlers({
-      prime: primeAbyssalVerdict,
-      cancel: cancelAbyssalVerdictTargeting,
+      prime: onUltimatePing,
+      cancel: cancelWeaponUltimateInteraction,
     });
-    return () => registerAbyssalVerdictHandlers(null);
-  }, [
-    cancelAbyssalVerdictTargeting,
-    primeAbyssalVerdict,
-    registerAbyssalVerdictHandlers,
-  ]);
+  });
 
+  // Unmount-only cleanup — must NOT depend on inline CombatScreen callbacks
+  // (new identity every render was wiping the console ultimate snapshot).
   useEffect(() => () => {
     abyssalVerdictPrimedRef.current = false;
     abyssalCollapsingUnitIdRef.current = null;
     abyssalCommitLockRef.current = false;
+    registerAbyssalVerdictHandlers?.(null);
     onAbyssalVerdictUiChange?.(null);
-  }, [onAbyssalVerdictUiChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
+  }, []);
 
   const queueSlice = (idx: number) => {
     if (isCombatTerminal()) return;
@@ -12662,7 +12786,6 @@ export default function TacticalCombatHub({
 
   const getStagedAbilityDescription = (abilityId: string): string => {
     const cost = resolveClassAbilityCost(operativeClass, abilityId);
-    const tagLine = cost.tags.length > 0 ? `TAGS: ${cost.tags.join(' // ')}` : '';
     const isHexWa = operativeClass === 'HEX_SHOT' && isDefinedHexWeaponActionId(abilityId);
     const graftTags = operativeClass === 'HEX_SHOT' && !isHexWa
       ? buildClassGraftCastPlan(
@@ -12846,7 +12969,6 @@ export default function TacticalCombatHub({
     }
     return [
       cost.description,
-      tagLine,
       ammoTypeLine,
       zeroProtocolLine,
       ammoLine,
@@ -13157,7 +13279,7 @@ export default function TacticalCombatHub({
               : 0
       }
       techniqueGroupLabel={
-        operativeClass === 'HEX_SHOT' || operativeClass === 'ENVOY'
+        operativeClass === 'HEX_SHOT'
           ? 'FLEX ABILITIES'
           : 'TECHNIQUES'
       }
@@ -13388,6 +13510,8 @@ export default function TacticalCombatHub({
       }
       catalyticConsoleRotStacks={envoyRotStacksTotal}
       onCatalyticConsole={onCatalyticConsole}
+      riftWardAvailable={operativeClass === 'ENVOY'}
+      riftWardReady={riftWardReadyUi}
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
@@ -13482,9 +13606,9 @@ export default function TacticalCombatHub({
 
   const chromeSnapshot = useMemo(
     () => ({
-      // Aegis Longsword never uses the center-screen red ping — Reserve module only.
-      ultimatePingVisible: ultimatePingReady && enemyAlive && ultimatePingVariant !== 'eviscerate',
-      ultimatePingReady: ultimatePingReady && enemyAlive && ultimatePingVariant !== 'eviscerate',
+      // Console ultimate module owns activation for every class/weapon — no orbital ping.
+      ultimatePingVisible: false,
+      ultimatePingReady: false,
       ultimatePingDisabled: !isPlayerTurn
         || cycleState !== 'TEXT_COMBAT'
         || isExhausted
@@ -13787,7 +13911,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
     position: 'relative',
-    // E.5V — allow the stacked 4+3 strip to paint fully; prior overflow clipped FLEX ABILITIES.
+    // E.5V — single-row rail; keep callouts/tooltips from clipping at the deck edge.
     overflow: 'visible',
   },
   statusFeedCompact: {

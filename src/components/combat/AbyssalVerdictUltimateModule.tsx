@@ -1,11 +1,11 @@
 /**
- * Persistent ABYSSAL VERDICT ultimate module — sits in the Aegis Reserve / console status region.
- * Rectangular cut-corner panel. Never a circle. Primes only — does not commit damage/Reserve.
+ * Persistent console ultimate module — bottom-left under operative status.
+ * Used for every class/weapon family (Aegis longsword pattern).
+ * Rectangular cut-corner panel. Never a circle. Primes / opens interaction only.
  */
 
 import React, { useState } from 'react';
 import {
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +18,7 @@ import {
 } from '../../data/abyssalVerdictReadyUi';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { combatConsoleChromeStyle } from '../../theme/combatConsoleChrome';
 
 export interface AbyssalVerdictUltimateModuleProps {
   state: AbyssalVerdictPresentationState;
@@ -25,6 +26,8 @@ export interface AbyssalVerdictUltimateModuleProps {
   cap: number;
   disabled?: boolean;
   reducedMotion?: boolean;
+  displayName?: string;
+  meterHeader?: string;
   onPrime: () => void;
   onCancel: () => void;
 }
@@ -34,26 +37,33 @@ export default function AbyssalVerdictUltimateModule({
   reserve,
   cap,
   disabled = false,
+  displayName = COPY.displayName,
+  meterHeader = COPY.moduleHeader,
   onPrime,
   onCancel,
 }: AbyssalVerdictUltimateModuleProps): React.JSX.Element | null {
   const [hot, setHot] = useState(false);
   const interactive = state === 'ready' && !disabled;
   const targeting = state === 'targeting';
-  const showReadyGlow = state === 'ready' || targeting;
+  const intenseGlow = targeting || (hot && interactive);
+  const idleReady = state === 'ready' && !intenseGlow;
+  const title = displayName.toUpperCase();
 
   if (state === 'unavailable') {
     return (
       <View
-        style={[styles.root, styles.rootUnavailable]}
+        style={[
+          styles.root,
+          combatConsoleChromeStyle({ accent: C.crimsonBright, tone: 'disabled' }),
+        ]}
         pointerEvents="none"
         testID="abyssal-verdict-module-unavailable"
-        accessibilityLabel={`${COPY.displayName} unavailable`}
+        accessibilityLabel={`${title} unavailable`}
       >
         <Text style={styles.header}>
-          {COPY.moduleHeader} {Math.round(reserve)}/{cap}
+          {meterHeader} {Math.round(reserve)}/{cap}
         </Text>
-        <Text style={styles.titleMuted}>{COPY.displayName}</Text>
+        <Text style={styles.titleMuted}>{title}</Text>
         <Text style={styles.statusMuted}>LOCKED</Text>
       </View>
     );
@@ -63,16 +73,11 @@ export default function AbyssalVerdictUltimateModule({
     <View
       style={[
         styles.root,
-        styles.rootReady,
-        showReadyGlow ? styles.rootGlow : null,
+        combatConsoleChromeStyle({
+          accent: C.crimsonBright,
+          tone: intenseGlow ? 'awake' : idleReady ? 'rest' : 'disabled',
+        }),
         targeting || (hot && interactive) ? styles.rootHot : null,
-        Platform.OS === 'web' && showReadyGlow
-          ? ({
-              boxShadow: targeting || (hot && interactive)
-                ? `0 0 12px 2px ${C.crimsonBright}`
-                : `0 0 10px 1px rgba(196, 58, 74, 0.85)`,
-            } as object)
-          : null,
       ]}
       testID="abyssal-verdict-module-wrap"
     >
@@ -95,25 +100,22 @@ export default function AbyssalVerdictUltimateModule({
         accessibilityState={{ disabled: disabled && !targeting, selected: targeting }}
         accessibilityLabel={
           targeting
-            ? `${COPY.displayName} targeting — ${COPY.cancelLabel}`
-            : `${COPY.displayName} ready — ${COPY.primeHint}`
+            ? `${title} targeting — ${COPY.cancelLabel}`
+            : `${title} ready — ${COPY.primeHint}`
         }
         testID={targeting ? 'abyssal-verdict-module-targeting' : 'abyssal-verdict-module-ready'}
       >
         <View style={styles.trace} pointerEvents="none" />
         <Text style={styles.header}>
-          {COPY.moduleHeader} {Math.round(reserve)}/{cap}
+          {meterHeader} {Math.round(reserve)}/{cap}
         </Text>
-        <Text style={styles.title}>{COPY.displayName}</Text>
+        <Text style={styles.title}>{title}</Text>
         <Text style={styles.status}>
           {targeting ? COPY.selectTarget : COPY.readyStatus}
         </Text>
         <Text style={styles.hint}>
           {targeting ? COPY.cancelLabel : hot && interactive ? COPY.primeHint : '[ U ]'}
         </Text>
-        {targeting || (hot && interactive) ? null : (
-          <Text style={styles.glyph}>[ U ]</Text>
-        )}
       </Pressable>
     </View>
   );
@@ -121,36 +123,28 @@ export default function AbyssalVerdictUltimateModule({
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: 6,
-    borderWidth: 1.5,
-    backgroundColor: C.panel,
+    marginTop: 4,
     borderTopLeftRadius: 2,
-    borderTopRightRadius: 10,
+    borderTopRightRadius: 8,
     borderBottomRightRadius: 2,
-    borderBottomLeftRadius: 8,
-    overflow: 'hidden',
-  },
-  rootReady: {
-    borderColor: C.crimsonBright,
-  },
-  rootGlow: {
-    shadowColor: C.crimsonBright,
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
+    borderBottomLeftRadius: 6,
+    overflow: 'visible',
+    alignSelf: 'stretch',
   },
   rootHot: {
     borderColor: '#E85A68',
   },
-  rootUnavailable: {
-    borderColor: 'rgba(120, 90, 90, 0.35)',
-  },
   hit: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 72,
+    paddingHorizontal: 9,
+    paddingTop: 6,
+    paddingBottom: 7,
+    minHeight: 54,
     justifyContent: 'center',
+    overflow: 'hidden',
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 2,
+    borderBottomLeftRadius: 6,
   },
   hitHot: {
     backgroundColor: 'rgba(28, 8, 12, 0.95)',
@@ -176,24 +170,24 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.body,
-    letterSpacing: 1.6,
+    fontSize: COMBAT_HUD_TYPE.label,
+    letterSpacing: 1.4,
     fontWeight: '700',
     color: C.bone,
   },
   titleMuted: {
     fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.body,
-    letterSpacing: 1.4,
+    fontSize: COMBAT_HUD_TYPE.label,
+    letterSpacing: 1.2,
     color: C.boneMuted,
     opacity: 0.7,
   },
   status: {
     fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.caption,
-    letterSpacing: 1.8,
+    fontSize: COMBAT_HUD_TYPE.micro,
+    letterSpacing: 1.6,
     color: C.crimsonBright,
-    marginTop: 2,
+    marginTop: 1,
   },
   statusMuted: {
     fontFamily: OTT.mono,
@@ -208,13 +202,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
     color: C.boneMuted,
     marginTop: 4,
-  },
-  glyph: {
-    position: 'absolute',
-    right: 8,
-    bottom: 6,
-    fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.micro,
-    color: C.violet,
   },
 });

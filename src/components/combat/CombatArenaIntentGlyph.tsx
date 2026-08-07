@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 2,
     backgroundColor: 'rgba(5, 7, 8, 0.82)',
-    maxWidth: 72,
+    maxWidth: 96,
   },
   symbol: {
     fontFamily: OTT.mono,
@@ -84,8 +84,8 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '800',
-    letterSpacing: 0.4,
+    letterSpacing: 0.45,
   },
 });

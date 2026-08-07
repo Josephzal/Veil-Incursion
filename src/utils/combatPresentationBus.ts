@@ -139,9 +139,18 @@ export type CombatPresentationVisualEvent = {
 
 type VisualListener = (event: CombatPresentationVisualEvent) => void;
 type PacketListener = (packet: WeaponCombatFeedbackPacket) => void;
+/** Fires when damaging CONTACT should reveal enemy hit FX / damage numbers. */
+export type CombatPresentationContactReveal = {
+  targetId: string;
+  packetId: string;
+  critical: boolean;
+  damage: number;
+};
+type ContactRevealListener = (reveal: CombatPresentationContactReveal) => void;
 
 let visualListener: VisualListener | null = null;
 let packetListener: PacketListener | null = null;
+let contactRevealListener: ContactRevealListener | null = null;
 const activeTimers = new Set<ReturnType<typeof setTimeout>>();
 let burstHitStopAccumMs = 0;
 let burstHitStopWindowUntil = 0;
@@ -154,6 +163,26 @@ export function registerCombatPresentationVisualListener(listener: VisualListene
 
 export function registerCombatPresentationPacketListener(listener: PacketListener | null): void {
   packetListener = listener;
+}
+
+export function registerCombatPresentationContactRevealListener(
+  listener: ContactRevealListener | null,
+): void {
+  contactRevealListener = listener;
+}
+
+function emitContactReveal(reveal: CombatPresentationContactReveal): void {
+  if (!(reveal.damage > 0) || !reveal.targetId) return;
+  try {
+    contactRevealListener?.(reveal);
+  } catch {
+    // Presentation must never throw into combat.
+  }
+}
+
+/** Immediate contact reveal for multi-hit burst follow-ups (no scheduled CONTACT). */
+export function revealWeaponCombatContact(reveal: CombatPresentationContactReveal): void {
+  emitContactReveal(reveal);
 }
 
 export function setCombatPresentationMounted(next: boolean): void {
@@ -270,6 +299,7 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
   const firstHit = orderedHits[0];
   const aegisMissPlayed = { value: false };
   const critStingPlayed = { value: false };
+  const contactRevealed = { value: false };
 
   for (const step of sequence) {
     const delay = scalePresentationMs(step.delayMs);
@@ -344,15 +374,24 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
           return;
         }
         // Crit sting once per packet (including Scythe release-only contact).
+        // Miss/evade already returned above — remaining CONTACT is a real hit path.
         if (
           !critStingPlayed.value
           && firstHit.critical
           && firstHit.damage > 0
-          && firstHit.outcome !== 'MISS'
-          && firstHit.outcome !== 'EVADE'
         ) {
           critStingPlayed.value = true;
           playCombatPresentationCue('sfx.critical_hit');
+        }
+        // Damage numbers / hitFlash flush on the same beat as CONTACT VFX.
+        if (!contactRevealed.value && firstHit.damage > 0) {
+          contactRevealed.value = true;
+          emitContactReveal({
+            targetId: firstHit.targetId,
+            packetId: packet.id,
+            critical: firstHit.critical === true,
+            damage: firstHit.damage,
+          });
         }
       } else if (step.cueId) {
         playAegisAwareCue({
@@ -413,6 +452,14 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
         durationMs: scalePresentationMs(70),
         createdAt: Date.now(),
       });
+      if (hit.damage > 0) {
+        emitContactReveal({
+          targetId: hit.targetId,
+          packetId: `${packet.id}-extra-${hit.order}`,
+          critical: hit.critical === true,
+          damage: hit.damage,
+        });
+      }
     });
   }
 }

@@ -23,10 +23,12 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'column',
     justifyContent: 'flex-start',
+    overflow: 'visible',
   },
   deckHost: {
     flex: 1,
     minHeight: 0,
     width: '100%',
+    overflow: 'visible',
   },
 });

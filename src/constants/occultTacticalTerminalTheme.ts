@@ -33,7 +33,8 @@ export const OTT = {
 } as const;
 
 export const OTT_LAYOUT = {
-  consoleHeightPercent: '28%' as const,
+  /** Bottom command dock — content-sized strip near the viewport edge. */
+  consoleHeightPercent: '20%' as const,
   /** Matching left status + right turn chrome width so ability cards sit screen-center. */
   consoleSideWidth: 312,
   statusWidthFlex: 0.2,
@@ -51,7 +52,7 @@ export const OTT_LAYOUT = {
 /** Cinematic battlefield staging (viewport-relative). */
 export const OTT_STAGE = {
   playerLeftPercent: '15%' as const,
-  playerBottomPercent: '28%' as const,
+  playerBottomPercent: '20%' as const,
   enemyGridWidthPercent: '48%' as const,
   enemyGridRightInset: 210,
 } as const;

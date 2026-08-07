@@ -100,13 +100,13 @@ export function isAbyssalVerdictEnemyEligible(input: {
 }
 
 /**
- * Center-screen orbital ping must never appear for Abyssal Verdict (eviscerate).
- * Hex/Envoy keep their orbital ready pings.
+ * Center-screen orbital ping is retired — every class/weapon uses the
+ * bottom-left console ultimate module (Aegis longsword pattern).
  */
 export function shouldShowOrbitalUltimatePing(
-  variant: 'eviscerate' | 'zero_protocol' | 'cataclysm' | null | undefined,
+  _variant: 'eviscerate' | 'zero_protocol' | 'cataclysm' | null | undefined,
 ): boolean {
-  return variant != null && variant !== 'eviscerate';
+  return false;
 }
 
 export const ABYSSAL_VERDICT_UI_COPY = {
@@ -147,4 +147,16 @@ export type AbyssalVerdictHudSnapshot = {
   /** Staged grade after slice / simplified resolve; null before grade input. */
   stagedGrade: string | null;
   stagedDamage: number | null;
+  /** Player-facing ultimate name for the equipped family. */
+  displayName: string;
+  /** Meter header above the title (e.g. ULTIMATE // RESERVE). */
+  meterHeader: string;
 };
+
+export function resolveConsoleUltimateMeterHeader(
+  operativeClass: 'AEGIS' | 'HEX_SHOT' | 'ENVOY',
+): string {
+  if (operativeClass === 'HEX_SHOT') return 'ULTIMATE // PROTOCOL';
+  if (operativeClass === 'ENVOY') return 'ULTIMATE // VEIL ROT';
+  return 'ULTIMATE // RESERVE';
+}

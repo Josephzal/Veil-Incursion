@@ -13,6 +13,7 @@ export type DevSandboxPreset =
   | 'narrative-tumbler'
   | 'standard-combat'
   | 'elite-combat'
+  | 'combat-four'
   | 'sanctuary'
   | 'extraction'
   | 'black-market'
@@ -38,6 +39,7 @@ export const DEV_SANDBOX_COMBAT_PRESETS = [
   'elite-combat',
   'combat-easy',
   'combat-hard',
+  'combat-four',
   'hostile-echo-combat',
 ] as const satisfies readonly DevSandboxPreset[];
 

@@ -92,7 +92,7 @@ interface CombatOperativeHudProps {
   arenaOverlay?: boolean;
   /** Bottom-console operative status (Occult Tactical Terminal). */
   consolePanel?: boolean;
-  /** Aegis Longsword ultimate module (replaces floating center ping). */
+  /** Console ultimate module under status (all classes / weapon families). */
   abyssalVerdictUi?: AbyssalVerdictHudSnapshot | null;
   onAbyssalVerdictPrime?: () => void;
   onAbyssalVerdictCancel?: () => void;
@@ -241,7 +241,16 @@ export default function CombatOperativeHud({
       : operativeClass === 'HEX_SHOT'
         ? OTT.terminalGreenMuted
         : '#9BB0B8';
-    const showAbyssalModule = operativeClass === 'AEGIS' && abyssalVerdictUi != null;
+    const showConsoleUltimate = abyssalVerdictUi != null;
+    // Console ultimate module owns reserve/protocol/rot meter + READY CTA —
+    // drop duplicate informational chips so the crimson button is the only ultimate UI.
+    const consoleCallouts = showConsoleUltimate
+      ? statusCallouts.filter((c) => (
+        c.id !== 'weapon-ultimate'
+        && c.id !== 'aegis-reserve'
+        && c.id !== 'protocol'
+      ))
+      : statusCallouts;
     return (
       <View style={styles.rootConsole} pointerEvents="box-none">
         <Text style={styles.consoleClass} pointerEvents="none">{className}</Text>
@@ -285,27 +294,17 @@ export default function CombatOperativeHud({
               readyUltimateLabel={ultimateLabel}
             />
           ) : null}
-          {showAbyssalModule
-            ? (protectionHits > 0 && protectionLabel
-              ? (
-                <WeaponCombatCalloutStrip
-                  callouts={[{
-                    id: 'hit-absorb-protection',
-                    label: `${protectionLabel} ×${protectionHits}`,
-                    tone: 'ready',
-                  }]}
-                />
-              )
-              : null)
-            : <WeaponCombatCalloutStrip callouts={statusCallouts} />}
+          <WeaponCombatCalloutStrip callouts={consoleCallouts} />
         </View>
-        {showAbyssalModule ? (
+        {showConsoleUltimate ? (
           <AbyssalVerdictUltimateModule
             state={abyssalVerdictUi.state}
             reserve={abyssalVerdictUi.reserve}
             cap={abyssalVerdictUi.cap}
             disabled={!abyssalVerdictUi.canInteract}
             reducedMotion={abyssalVerdictUi.reducedMotion}
+            displayName={abyssalVerdictUi.displayName}
+            meterHeader={abyssalVerdictUi.meterHeader}
             onPrime={() => onAbyssalVerdictPrime?.()}
             onCancel={() => onAbyssalVerdictCancel?.()}
           />
@@ -428,7 +427,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 2,
     paddingTop: 0,
-    justifyContent: 'flex-start',
+    // Keep vitals + ultimate docked to the command-rail baseline.
+    justifyContent: 'flex-end',
   },
   consoleClass: {
     fontFamily: OTT.mono,

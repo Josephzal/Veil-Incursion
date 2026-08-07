@@ -315,7 +315,12 @@ import { districtBossLogLine } from '../data/districtBosses';
 import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
-import { spawnCombatSquad, resolveEngagedEncounterSnapshot, squadFromSingleEnemy } from '../data/combatSpawnEngine';
+import {
+  spawnCombatSquad,
+  resolveEngagedEncounterSnapshot,
+  squadFromSingleEnemy,
+  createFourEnemyTestSquad,
+} from '../data/combatSpawnEngine';
 import {
   buildCompatibilityRunWorldBrief,
   attachBriefToRunGenerationContext,
@@ -4053,6 +4058,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
       appendRunLog(`>> HOSTILE: ${pendingEnemy?.designation ?? 'UNKNOWN'}.`);
+      return;
+    }
+
+    if (preset === 'combat-four') {
+      const pendingEnemies = createFourEnemyTestSquad(0);
+      const pendingEnemy = pendingEnemies[0] ?? null;
+      setRunState((prev) => {
+        const next = { ...prev, pendingEnemy, pendingEnemies };
+        runStateRef.current = next;
+        return next;
+      });
+      appendRunLog(
+        `>> HOSTILE CLUSTER ×${pendingEnemies.length} — ${pendingEnemies.map((e) => e.designation).join(' / ')}.`,
+      );
       return;
     }
 

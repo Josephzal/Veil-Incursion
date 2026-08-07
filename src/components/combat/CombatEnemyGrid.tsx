@@ -52,7 +52,11 @@ interface SlotHitOverlayProps {
   overlayZIndex: number;
 }
 
-/** Transparent tap layer — lives above slot art so overlapping sprites cannot steal presses. */
+/**
+ * Transparent tap layer — full slot frame, no nested scale.
+ * Scaling the hit wrapper shrank/shifted the pressable vs the visible brackets
+ * and left FL_0 only clickable on a thin right strip under the operative.
+ */
 function SlotHitOverlay({
   slot,
   unit,
@@ -65,10 +69,6 @@ function SlotHitOverlay({
   const presentation = resolveSlotPresentation(slot, layoutMode, 'staggered');
   const anchor = staggeredSlotStyle(slot, layoutMode);
   const hitbox = resolveEnemyHitbox(slot, presentation.unitScale, unit.isAlpha === true);
-  const scaled =
-    presentation.unitScale !== 1
-      ? { transform: [{ scale: presentation.unitScale }] as ViewStyle['transform'] }
-      : undefined;
 
   const hoverIn = () => onUnitHoverIn?.(unit.unitId);
   const hoverOut = () => onUnitHoverOut?.(unit.unitId);
@@ -86,23 +86,21 @@ function SlotHitOverlay({
       ]}
       pointerEvents="box-none"
     >
-      <View style={[styles.slotHitInner, scaled]} pointerEvents="box-none">
-        <HapticPressable
-          sfx={false}
-          onPress={() => onUnitPress(unit.unitId)}
-          onHoverIn={hoverIn}
-          onHoverOut={hoverOut}
-          {...({
-            onMouseEnter: hoverIn,
-            onMouseLeave: hoverOut,
-          } as object)}
-          style={[
-            styles.slotHitPressable,
-            hitbox,
-            ENEMY_HITBOX_DEBUG ? styles.slotHitDebug : null,
-          ]}
-        />
-      </View>
+      <HapticPressable
+        sfx={false}
+        onPress={() => onUnitPress(unit.unitId)}
+        onHoverIn={hoverIn}
+        onHoverOut={hoverOut}
+        {...({
+          onMouseEnter: hoverIn,
+          onMouseLeave: hoverOut,
+        } as object)}
+        style={[
+          styles.slotHitPressable,
+          hitbox,
+          ENEMY_HITBOX_DEBUG ? styles.slotHitDebug : null,
+        ]}
+      />
     </View>
   );
 }
@@ -428,7 +426,9 @@ export default function CombatEnemyGrid({
               />
             );
           })}
-          {targetingActive && layoutMode === 'solo' && soloUnit?.isTargetable
+          {/* Always mount hit overlays for targetable units — intel select + ability
+              targeting. Operative plane is pointerEvents:none so these stay clickable. */}
+          {layoutMode === 'solo' && soloUnit?.isTargetable
             ? (
               <SlotHitOverlay
                 key={`solo-target-${soloUnit.unitId}`}
@@ -441,7 +441,7 @@ export default function CombatEnemyGrid({
               />
             )
             : null}
-          {targetingActive && layoutMode === 'group'
+          {layoutMode === 'group'
             ? FRONTLINE_SLOTS.map((slot) => {
               const unit = unitForSlot(slot);
               if (!unit?.isTargetable) return null;
@@ -458,7 +458,7 @@ export default function CombatEnemyGrid({
               );
             })
             : null}
-          {targetingActive && layoutMode === 'group'
+          {layoutMode === 'group'
             ? BACKLINE_SLOTS.map((slot) => {
               const unit = unitForSlot(slot);
               if (!unit?.isTargetable) return null;
@@ -625,12 +625,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     aspectRatio: ENEMY_WRAPPER_ASPECT_RATIO,
     justifyContent: 'flex-end',
-    overflow: 'visible',
-  },
-  slotHitInner: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
     overflow: 'visible',
   },
   slotHitPressable: {

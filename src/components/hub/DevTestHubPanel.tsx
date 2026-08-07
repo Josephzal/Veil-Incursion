@@ -652,6 +652,11 @@ export default function DevTestHubPanel(): React.JSX.Element {
           onPress={() => launchSandbox('combat-hard', startCombat)}
         />
         <SandboxLaunchButton
+          label="[ 4-ENEMY COMBAT ]"
+          accentColor={theme.statusColor}
+          onPress={() => launchSandbox('combat-four', startCombat)}
+        />
+        <SandboxLaunchButton
           label="[ HOSTILE ECHO ]"
           accentColor={theme.statusColor}
           onPress={() => launchSandbox('hostile-echo-combat', startCombat)}

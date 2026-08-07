@@ -234,8 +234,10 @@ export function sweptBladeSamplesWithinActorBox(
 }
 
 /** Matches prior idle visual weight under the Vambrace content-height lock × 0.79. */
-const LONGSWORD_IDLE_LEGACY_CONTENT_H = 1140;
-const LONGSWORD_IDLE_LEGACY_VISUAL_SCALE = 0.79;
+const LONGSWORD_IDLE_LEGACY_CONTENT_H = 1200;
+const LONGSWORD_IDLE_LEGACY_VISUAL_SCALE = 1.17;
+/** Attack canvas only — keep idle planted; nudge down if the swing reads oversized. */
+const LONGSWORD_ATTACK_VISUAL_SCALE = 0.97;
 
 /** Envoy Vambrace idle — shared global size reference (same as combatPlayerPortrait). */
 const REF_CANVAS_W = 772;
@@ -274,12 +276,12 @@ export function resolveActorGroundAnchor(
   const targetBodyDisplayH = idle.bodyHeightPx * legacyIdleScale;
   const scale = targetBodyDisplayH / Math.max(1, idle.bodyHeightPx);
   const displayW = idle.canvasW * scale;
-  // Keep the idle body's prior centered placement: canvas centered in the box,
-  // foot lands wherever the idle art plants it (not recentered on the PNG).
+  // Keep the idle body's prior centered placement: canvas centered in the box.
+  // Pin PNG bottom to the actor-box floor (same as other weapons' bottom: 0).
   const left = (box.width - displayW) / 2;
   const footX = left + idle.plantedFoot.x * displayW;
   const feetFromBottomPx = (1 - idle.plantedFoot.y) * idle.canvasH * scale;
-  const footY = box.height - feetFromBottomPx;
+  const footY = box.height - feetFromBottomPx + 120;
   return {
     x: footX,
     y: footY,
@@ -329,9 +331,13 @@ export function computeAnatomyRegisteredLayouts(box: PoseFootprintBox): {
   const idleReg = AEGIS_LONGSWORD_POSE_REGISTRATION.idle;
   const attackReg = AEGIS_LONGSWORD_POSE_REGISTRATION.attack;
   const anchor = resolveActorGroundAnchor(box, idleReg);
+  const attackAnchor: ActorGroundAnchor = {
+    ...anchor,
+    targetBodyDisplayH: anchor.targetBodyDisplayH * LONGSWORD_ATTACK_VISUAL_SCALE,
+  };
   return {
     idle: computeRegisteredPoseLayout(idleReg, anchor),
-    attack: computeRegisteredPoseLayout(attackReg, anchor),
+    attack: computeRegisteredPoseLayout(attackReg, attackAnchor),
     anchor,
   };
 }

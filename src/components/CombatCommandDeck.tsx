@@ -1,7 +1,30 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+type CardShellRef = React.ElementRef<typeof View>;
+
+function renderAbilityHoverPortal(node: React.ReactNode): React.ReactNode {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    return node;
+  }
+  // Escape transformed / overflow-clipped combat ancestors on web.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const reactDom = require('react-dom') as {
+    createPortal: (children: React.ReactNode, container: Element) => React.ReactNode;
+  };
+  return reactDom.createPortal(node, document.body);
+}
 import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import { textGlow, viewShadow } from '../utils/adaptiveStyles';
+import { combatConsoleChromeStyle } from '../theme/combatConsoleChrome';
 import HapticPressable from './HapticPressable';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
@@ -10,8 +33,11 @@ import RunFeedChromeButtons from './run/RunFeedChromeButtons';
 import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
 import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { COMBAT_HUD_TYPE } from '../constants/combatHudTypography';
-import { OTT, OTT_LAYOUT } from '../constants/occultTacticalTerminalTheme';
+import { OTT } from '../constants/occultTacticalTerminalTheme';
 import type { AbilityTargetMode } from '../data/combatTargeting';
+
+/** Shared rest chrome for utility buttons (STATUS / muted End Turn). */
+const UTILITY_CARD_ACCENT = '#8AA0A8';
 
 const MONO = OTT.mono;
 const TILE_HEIGHT = 40;
@@ -30,6 +56,86 @@ const INITIATIVE_GLOW_PALE = OTT.cyanSelect;
 const END_TURN_ENABLED = OTT.soulRed;
 const END_TURN_BORDER = OTT.dangerRedDark;
 const END_TURN_BORDER_MUTED = 'rgba(158, 40, 48, 0.45)';
+
+/** Hover detail — prose only; strip tag dumps and card scan-line echoes. */
+function sanitizeAbilityHoverBody(raw: string): string {
+  return raw
+    .replace(/\s*\/\/\s*TAGS:\s*.+$/i, '')
+    .replace(/\s*TAGS:\s*.+$/i, '')
+    .replace(/\s*\/\/\s*\d+\s+DAMAGE\b.*$/i, '')
+    .trim();
+}
+
+/** Decision-card scan lines — name / AP / effect / one keyword. Details stay in tooltip. */
+function parseDecisionCardLines(costImpact: string, effectTags: string): {
+  apCost: string;
+  effectLine: string | null;
+  keyword: string | null;
+} {
+  const apMatch = costImpact.match(/(\d+)\s*AP/i);
+  const apCost = apMatch?.[1] ?? '1';
+  const chips = effectTags
+    .split(/\s*\/\/\s*/)
+    .map((chip) => chip.trim())
+    .filter(Boolean);
+  let effectLine: string | null = null;
+  let effectIdx = -1;
+  for (let i = 0; i < chips.length; i += 1) {
+    const chip = chips[i];
+    const dmg = chip.match(/^(\d+)\s+(KINETIC|OCCULT|TRUE)(?:\s+DAMAGE)?$/i);
+    if (dmg) {
+      effectLine = `${dmg[1]} DAMAGE`;
+      effectIdx = i;
+      break;
+    }
+    if (/^\d+\s/.test(chip) || /(?:DAMAGE|HEAL|RESTORE|WARD|ARMOR|DEFENSE)/i.test(chip)) {
+      effectLine = chip.toUpperCase();
+      effectIdx = i;
+      break;
+    }
+  }
+  const keywordChip = chips.find((chip, i) => (
+    i !== effectIdx
+    && !/^\d+\s*AP/i.test(chip)
+    && !/^COST:/i.test(chip)
+  ));
+  return {
+    apCost,
+    effectLine,
+    keyword: keywordChip ? keywordChip.toUpperCase() : null,
+  };
+}
+
+/** Compact amber footer copy — replace long REQUIRE sentences. */
+function formatCompactLockReason(reason: string): { headline: string; detail: string } {
+  const raw = reason.replace(/\s+/g, ' ').trim();
+  const upper = raw.toUpperCase();
+  const brand = upper.match(/(\d+)\s*RUNIC BRAND/);
+  if (upper.includes('RUNIC BRAND')) {
+    return { headline: 'LOCKED', detail: `NEED ${brand?.[1] ?? '1'} RUNIC BRAND` };
+  }
+  const ap = upper.match(/(\d+)\s*AP/);
+  if (ap && (upper.includes('REQUIRE') || upper.includes('NEED') || upper.includes('INSUFFICIENT') || upper.includes('NOT ENOUGH'))) {
+    return { headline: 'LOCKED', detail: `NEED ${ap[1]} AP` };
+  }
+  const ammo = upper.match(/(\d+)\s*(ROUND|AMMO|SHELL)/);
+  if (ammo || upper.includes('AMMO') || upper.includes('MAGAZINE') || upper.includes('RELOAD')) {
+    return { headline: 'LOCKED', detail: ammo ? `NEED ${ammo[1]} ${ammo[2]}` : 'NEED AMMO' };
+  }
+  if (upper.includes('TARGET') || upper.includes('NO VALID') || upper.includes('INVALID')) {
+    return { headline: 'NO TARGET', detail: 'SELECT VALID FOE' };
+  }
+  let detail = upper
+    .replace(/^REQUIRES?\s+(AT LEAST\s+)?/i, 'NEED ')
+    .replace(/\s*\(HAVE\s*\d+\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!detail.startsWith('NEED ') && !detail.startsWith('NO ')) {
+    detail = detail.length > 0 ? detail : 'UNAVAILABLE';
+  }
+  if (detail.length > 22) detail = `${detail.slice(0, 21)}…`;
+  return { headline: 'LOCKED', detail };
+}
 
 export const COMMAND_DECK_MIN_HEIGHT = AP_ROW_HEIGHT + GRID_GAP + GRID_BODY_HEIGHT + 10;
 export const COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE = COMMAND_DECK_MIN_HEIGHT;
@@ -92,6 +198,9 @@ interface CombatCommandDeckProps {
   catalyticConsoleEnabled?: boolean;
   catalyticConsoleRotStacks?: number;
   onCatalyticConsole?: () => void;
+  /** Envoy intrinsic Rift Ward — status only; outside the seven-card rail. */
+  riftWardAvailable?: boolean;
+  riftWardReady?: boolean;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -114,7 +223,7 @@ export default function CombatCommandDeck({
   getActionDisableReason,
   canEndTurn,
   getAbilityLabel,
-  getAbilityCategory,
+  getAbilityCategory: _getAbilityCategory,
   getAbilityEffectTags,
   getAbilityTargetMode,
   weaponActionCount = 0,
@@ -146,6 +255,8 @@ export default function CombatCommandDeck({
   catalyticConsoleEnabled = false,
   catalyticConsoleRotStacks = 0,
   onCatalyticConsole,
+  riftWardAvailable = false,
+  riftWardReady = false,
   borderColor,
   primaryColor,
   mutedColor,
@@ -165,6 +276,61 @@ export default function CombatCommandDeck({
   const floatScale = useRef(new Animated.Value(0.86)).current;
   const [floatVisible, setFloatVisible] = useState(false);
   const [hoveredAbility, setHoveredAbility] = useState<string | null>(null);
+  const [endTurnHot, setEndTurnHot] = useState(false);
+  const deckHostRef = useRef<CardShellRef | null>(null);
+  const cardShellRefs = useRef<Record<string, CardShellRef | null>>({});
+  const [hoverPopup, setHoverPopup] = useState<{
+    ability: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    body: string;
+  } | null>(null);
+
+  const clearHoverPopup = useCallback(() => {
+    setHoverPopup(null);
+  }, []);
+
+  const showHoverPopup = useCallback((ability: string, body: string) => {
+    if (!body) {
+      setHoverPopup(null);
+      return;
+    }
+    const node = cardShellRefs.current[ability];
+    if (!node || typeof node.measureInWindow !== 'function') {
+      setHoverPopup(null);
+      return;
+    }
+    node.measureInWindow((cardX, cardY, width, height) => {
+      if (Platform.OS === 'web') {
+        setHoverPopup({
+          ability,
+          x: cardX,
+          y: cardY,
+          width,
+          height,
+          body,
+        });
+        return;
+      }
+      const host = deckHostRef.current;
+      if (!host || typeof host.measureInWindow !== 'function') {
+        setHoverPopup(null);
+        return;
+      }
+      host.measureInWindow((hostX, hostY) => {
+        setHoverPopup({
+          ability,
+          x: cardX - hostX,
+          y: cardY - hostY,
+          width,
+          height,
+          body,
+        });
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (!initiativeQueued) {
@@ -287,9 +453,11 @@ export default function CombatCommandDeck({
 
   const labelFor = (ability: string) => getAbilityLabel(ability);
 
-  /** E.5V — two stacked rows (4 WA + 3 flex/tech) must both fit inside the clipped command deck. */
+  /** E.5V — single horizontal 4+3 command rail (not stacked rows). */
   const groupedDashboard = dashboardLayout && weaponActionCount > 0 && techniqueCount > 0;
-  const groupedConceptCardHeight = desktopDeck ? 112 : 104;
+  const groupedConceptCardHeight = desktopDeck ? 120 : 110;
+  const mechanicModuleHeight = desktopDeck ? 68 : 64;
+  const railScrollRef = useRef<ScrollView>(null);
 
   const tileHeight = dashboardLayout
     ? (desktopDeck
@@ -365,27 +533,42 @@ export default function CombatCommandDeck({
     </View>
   );
 
-  const renderTile = (ability: string) => {
+  const renderTile = (
+    ability: string,
+    opts?: { group?: 'weapon' | 'technique' },
+  ) => {
     const enabled = isActionEnabled(ability);
     const accent = getActionAccent?.(ability);
     const costImpact = getStagedCostImpact(ability);
     const isSelected = selectedAbility === ability;
     const strikeEligible = Boolean(riposteReady && isStrikeAbility?.(ability));
+    const group = opts?.group;
     const tileBorderColor = isSelected
       ? OTT.terminalGreen
       : strikeEligible
         ? (enabled ? OTT.warningAmber : 'rgba(224, 180, 90, 0.35)')
       : enabled && accent
         ? accent
-        : OTT.borderSubtle;
-    // Pull a rough AP digit from cost strings like "1 AP" when present.
-    const apMatch = costImpact.match(/(\d+)\s*AP/i);
-    const apCost = apMatch?.[1] ?? '1';
-
+        : group === 'technique'
+          ? 'rgba(176, 124, 255, 0.35)'
+          : OTT.borderSubtle;
     if (dashboardLayout) {
-      const category = getAbilityCategory?.(ability) ?? 'ACTION';
       const abilityName = labelFor(ability).toUpperCase().replace(/^\[\s*/, '').replace(/\s*\]$/, '');
       const effectTags = getAbilityEffectTags?.(ability) ?? '';
+      const decision = parseDecisionCardLines(costImpact, effectTags);
+      const rawDisableReason = !enabled
+        ? (getActionDisableReason?.(ability) ?? 'UNAVAILABLE')
+        : null;
+      const lockCopy = rawDisableReason ? formatCompactLockReason(rawDisableReason) : null;
+      const missingResource = Boolean(
+        lockCopy
+        && (
+          /NEED \d+ AP|RUNIC BRAND|AMMO|ROUND|SHELL|FLUX|STAMINA/i.test(lockCopy.detail)
+          || lockCopy.headline === 'LOCKED'
+        )
+        && lockCopy.headline !== 'NO TARGET',
+      );
+      const invalidTarget = lockCopy?.headline === 'NO TARGET';
       const targetMode = getAbilityTargetMode?.(ability) ?? 'SINGLE';
       const needsConfirm = isSelected
         && enabled
@@ -416,133 +599,178 @@ export default function CombatCommandDeck({
         ))
         : null;
       const spectrallyLit = hoveredAbility === ability;
-      // Selected = mint; hover (unselected) = occult purple.
-      const hoverAccent = isSelected
-        ? OTT.terminalGreen
-        : spectrallyLit
-          ? OTT.fluxViolet
-          : tileBorderColor;
-      const hoverFill = isSelected
-        ? 'rgba(69, 247, 160, 0.12)'
-        : spectrallyLit
-          ? 'rgba(176, 124, 255, 0.14)'
-          : strikeEligible
-            ? (enabled ? 'rgba(224, 180, 90, 0.1)' : 'rgba(8, 12, 14, 0.42)')
-          : 'rgba(8, 12, 14, 0.42)';
+      // Interaction = cyan/mint. Purple stays a restrained Technique category accent only.
+      const chromeAccent = invalidTarget
+        ? OTT.soulRed
+        : isSelected || spectrallyLit
+          ? OTT.cyanSelect
+          : strikeEligible && enabled
+            ? OTT.warningAmber
+            : OTT.cyanSelect;
+      const chromeTone = !enabled || invalidTarget
+        ? 'disabled' as const
+        : (isSelected || spectrallyLit)
+          ? 'awake' as const
+          : 'rest' as const;
+      const inkCard = chromeTone === 'rest' || chromeTone === 'disabled';
+      const costColor = missingResource
+        ? OTT.warningAmber
+        : isSelected
+          ? OTT.cyanSelect
+          : enabled
+            ? OTT.textSecondary
+            : OTT.textMuted;
+      const tooltipBody = sanitizeAbilityHoverBody(getStagedAbilityDescription(ability));
+      const hideCardScanLines = isSelected || spectrallyLit;
       return (
-        <HapticPressable
+        <View
           key={ability}
-          onPress={() => {
-            if (!canSelectActions) return;
-            if (isSelected) {
-              // AoE / self casts wait on CONFIRM — don't cancel via card body taps.
-              if (targetMode === 'NONE' || targetMode === 'ALL') return;
-              onAbort();
-              return;
-            }
-            onSelectAbility(ability);
+          ref={(node) => {
+            cardShellRefs.current[ability] = node;
           }}
-          disabled={!canSelectActions}
-          onHoverIn={() => setHoveredAbility(ability)}
-          onHoverOut={() => setHoveredAbility((current) => (current === ability ? null : current))}
           style={[
-            styles.conceptCard,
-            groupedDashboard ? styles.conceptCardGrouped : null,
-            {
-              borderColor: hoverAccent,
-              backgroundColor: hoverFill,
-              shadowColor: isSelected || spectrallyLit ? hoverAccent : 'transparent',
-              shadowOpacity: isSelected || spectrallyLit ? 0.5 : 0,
-              shadowRadius: isSelected || spectrallyLit ? 10 : 0,
-              opacity: enabled ? 1 : 0.4,
-              ...(tileHeight != null ? { height: tileHeight } : null),
-            },
+            styles.conceptCardShell,
+            groupedDashboard ? styles.conceptCardShellGrouped : null,
+            spectrallyLit ? styles.conceptCardHoverElevated : null,
+            tileHeight != null ? { height: tileHeight } : null,
           ]}
         >
-          <View style={[
-            styles.conceptCardPress,
-            groupedDashboard ? styles.conceptCardPressGrouped : null,
-          ]}>
-            <View style={styles.conceptCardTop}>
-              <View style={styles.conceptCardTopSpacer} />
+          <HapticPressable
+            onPress={() => {
+              if (!canSelectActions) return;
+              if (isSelected) {
+                // AoE / self casts wait on CONFIRM — don't cancel via card body taps.
+                if (targetMode === 'NONE' || targetMode === 'ALL') return;
+                onAbort();
+                return;
+              }
+              onSelectAbility(ability);
+            }}
+            disabled={!canSelectActions}
+            onHoverIn={() => {
+              setHoveredAbility(ability);
+              showHoverPopup(ability, tooltipBody);
+            }}
+            onHoverOut={() => {
+              setHoveredAbility((current) => (current === ability ? null : current));
+              clearHoverPopup();
+            }}
+            accessibilityHint={tooltipBody}
+            style={[
+              styles.conceptCard,
+              groupedDashboard ? styles.conceptCardGrouped : null,
+              group === 'weapon' ? styles.conceptCardWeapon : null,
+              group === 'technique' ? styles.conceptCardTechnique : null,
+              isSelected ? styles.conceptCardSelected : null,
+              spectrallyLit && !isSelected ? styles.conceptCardHover : null,
+              combatConsoleChromeStyle({
+                accent: chromeAccent,
+                tone: chromeTone,
+                ink: inkCard,
+              }),
+              { height: '100%' },
+            ]}
+          >
+            {(isSelected || spectrallyLit) ? (
+              <View
+                style={[
+                  styles.conceptCardSelectEdge,
+                  spectrallyLit && !isSelected ? styles.conceptCardHoverEdge : null,
+                ]}
+                pointerEvents="none"
+              />
+            ) : null}
+            <View style={[
+              styles.conceptCardHeader,
+              isSelected ? styles.conceptCardHeaderSelected : null,
+              spectrallyLit && !isSelected ? styles.conceptCardHeaderHover : null,
+              strikeEligible && !isSelected ? styles.conceptCardHeaderRiposte : null,
+            ]}>
+              <Text
+                style={[
+                  styles.conceptCardName,
+                  styles.conceptCardNameDecision,
+                  { color: enabled ? '#E8EFEC' : OTT.textSecondary },
+                ]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
+                {abilityName}
+              </Text>
+              <Text
+                style={[styles.conceptCardApCost, { color: costColor }]}
+                numberOfLines={1}
+              >
+                {`${decision.apCost} AP`}
+              </Text>
+            </View>
+            <View style={[
+              styles.conceptCardPress,
+              styles.conceptCardPressDecision,
+              groupedDashboard ? styles.conceptCardPressGrouped : null,
+            ]}>
               {strikeEligible ? (
                 <Text
-                  style={[
-                    styles.riposteBadge,
-                    { opacity: enabled ? 1 : 0.45 },
-                  ]}
+                  style={[styles.riposteBadge, { opacity: enabled ? 1 : 0.55 }]}
                   numberOfLines={1}
                 >
                   RIPOSTE +16
                 </Text>
               ) : null}
-              <View style={styles.apDiamondHost}>
-                <View style={[
-                  styles.apDiamond,
-                  { borderColor: isSelected ? OTT.terminalGreen : OTT.borderSubtle },
-                ]}>
-                  <Text style={[
-                    styles.apDiamondText,
-                    { color: isSelected ? OTT.terminalGreen : OTT.textPrimary },
-                  ]}>
-                    {apCost}
-                  </Text>
-                </View>
-              </View>
+              {/* Hover/selected: name + AP only — damage/tags stay off the popup stack. */}
+              {!hideCardScanLines && dualHint ? (
+                <Text style={[styles.conceptCardEffect, { color: OTT.cyanSelect }]} numberOfLines={1}>
+                  {dualHint}
+                </Text>
+              ) : null}
+              {!hideCardScanLines && !dualHint && decision.effectLine ? (
+                <Text
+                  style={[
+                    styles.conceptCardEffect,
+                    { color: enabled ? '#F2F6F4' : OTT.textSecondary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {decision.effectLine}
+                </Text>
+              ) : null}
+              {!hideCardScanLines && decision.keyword ? (
+                <Text
+                  style={[
+                    styles.conceptCardKeyword,
+                    { color: OTT.textSecondary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {decision.keyword}
+                </Text>
+              ) : null}
+              {needsConfirm ? (
+                <HapticPressable
+                  onPress={onConfirm}
+                  style={[
+                    styles.conceptConfirmBtn,
+                    combatConsoleChromeStyle({ accent: OTT.cyanSelect, tone: 'awake' }),
+                  ]}
+                >
+                  <Text style={styles.conceptConfirmLabel}>{confirmLabel}</Text>
+                </HapticPressable>
+              ) : null}
             </View>
-            <Text
-              style={[
-                styles.conceptCardName,
-                groupedDashboard ? styles.conceptCardNameGrouped : null,
-                { color: enabled ? OTT.textPrimary : OTT.textMuted },
-              ]}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-            >
-              {abilityName}
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardCategory,
-                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
-              ]}
-              numberOfLines={1}
-            >
-              {category}
-            </Text>
-            {dualHint ? (
-              <Text
-                style={[styles.conceptCardTags, { color: OTT.cyanSelect }]}
-                numberOfLines={1}
-              >
-                {dualHint}
-              </Text>
+            {lockCopy ? (
+              <View style={[
+                styles.conceptCardLockFooter,
+                invalidTarget ? styles.conceptCardLockFooterTarget : null,
+              ]}>
+                <Text style={styles.conceptCardLockHeadline}>{lockCopy.headline}</Text>
+                <Text style={styles.conceptCardLockDetail} numberOfLines={1}>
+                  {lockCopy.detail}
+                </Text>
+              </View>
             ) : null}
-            {effectTags ? (
-              <Text
-                style={[
-                  styles.conceptCardTags,
-                  groupedDashboard ? styles.conceptCardTagsGrouped : null,
-                  { color: isSelected ? OTT.terminalGreen : OTT.textMuted },
-                ]}
-                numberOfLines={groupedDashboard ? 2 : 3}
-              >
-                {effectTags}
-              </Text>
-            ) : (
-              <View style={styles.conceptCardSpacer} />
-            )}
-            {needsConfirm ? (
-              <HapticPressable
-                onPress={onConfirm}
-                style={styles.conceptConfirmBtn}
-              >
-                <Text style={styles.conceptConfirmLabel}>{confirmLabel}</Text>
-              </HapticPressable>
-            ) : null}
-          </View>
-        </HapticPressable>
+          </HapticPressable>
+        </View>
       );
     }
 
@@ -600,20 +828,38 @@ export default function CombatCommandDeck({
     lineHeight: scaleCombatFont(12),
   } : null;
 
-  const endTurnBorder = dashboardLayout
-    ? (canEndTurn ? OTT.terminalGreen : OTT.borderMuted)
-    : (canEndTurn ? END_TURN_BORDER : END_TURN_BORDER_MUTED);
-  const endTurnText = dashboardLayout
-    ? (canEndTurn ? OTT.terminalGreen : OTT.textMuted)
-    : (canEndTurn ? END_TURN_ENABLED : mutedColor);
+  // Dashboard: neutral default; cyan/mint on hover/focus; amber if staged action would be abandoned.
+  const abandonWarning = dashboardLayout && Boolean(selectedAbility);
+  const endTurnEmphasized = dashboardLayout
+    ? (endTurnHot || abandonWarning || initiativeQueued)
+    : true;
+  const endTurnAccent = !canEndTurn
+    ? UTILITY_CARD_ACCENT
+    : abandonWarning
+      ? OTT.warningAmber
+      : (dashboardLayout ? OTT.cyanSelect : END_TURN_BORDER);
+  const endTurnText = !canEndTurn
+    ? mutedColor
+    : abandonWarning
+      ? OTT.warningAmber
+      : endTurnEmphasized
+        ? (dashboardLayout ? OTT.cyanSelect : END_TURN_ENABLED)
+        : OTT.textSecondary;
+  const endTurnChromeTone = !canEndTurn
+    ? 'disabled' as const
+    : (endTurnHot || endTurnEmphasized)
+      ? 'awake' as const
+      : 'rest' as const;
 
   const renderEndTurnButton = () => (
     initiativeQueued ? (
       <Animated.View
         style={[
-          dashboardLayout ? styles.endTurnBtnDashboard : styles.endTurnBtn,
+          styles.endTurnBtn,
+          dashboardLayout ? styles.endTurnBtnConsole : null,
+          combatConsoleChromeStyle({ accent: OTT.cyanSelect, tone: 'awake' }),
           {
-            borderColor: dashboardLayout ? OTT.terminalGreen : queuedBorderColor,
+            borderColor: queuedBorderColor,
             opacity: canEndTurn ? 1 : 0.4,
             ...(dashboardLayout ? null : desktopBtnStyle),
           },
@@ -626,9 +872,9 @@ export default function CombatCommandDeck({
         >
           <Text style={[
             styles.endTurnLabel,
-            dashboardLayout && styles.endTurnLabelDashboard,
+            dashboardLayout && styles.endTurnLabelConsole,
             dashboardLayout ? null : desktopActionLabelStyle,
-            { color: OTT.terminalGreen },
+            { color: END_TURN_ENABLED },
           ]}>
             END TURN
           </Text>
@@ -638,21 +884,21 @@ export default function CombatCommandDeck({
       <HapticPressable
         onPress={onEndTurn}
         disabled={!canEndTurn}
+        onHoverIn={() => setEndTurnHot(true)}
+        onHoverOut={() => setEndTurnHot(false)}
         style={[
-          dashboardLayout ? styles.endTurnBtnDashboard : styles.endTurnBtn,
+          styles.endTurnBtn,
+          dashboardLayout ? styles.endTurnBtnConsole : null,
+          combatConsoleChromeStyle({ accent: endTurnAccent, tone: endTurnChromeTone }),
           {
-            borderColor: endTurnBorder,
-            backgroundColor: dashboardLayout
-              ? 'rgba(69, 247, 160, 0.06)'
-              : (canEndTurn ? '#1a1212' : DOSSIER_ROW_BG),
-            opacity: canEndTurn ? 1 : 0.4,
+            opacity: canEndTurn ? 1 : 0.55,
             ...(dashboardLayout ? null : desktopBtnStyle),
           },
         ]}
       >
         <Text style={[
           styles.endTurnLabel,
-          dashboardLayout && styles.endTurnLabelDashboard,
+          dashboardLayout && styles.endTurnLabelConsole,
           dashboardLayout ? null : desktopActionLabelStyle,
           { color: endTurnText },
         ]}
@@ -1013,303 +1259,253 @@ export default function CombatCommandDeck({
     </View>
   );
 
-  const renderClassActionDeckCard = () => {
+  /**
+   * Dedicated class-core mechanic module — outside the seven-card rail.
+   * Shared silhouette for Parry / Reload / Rift Ward.
+   */
+  const renderClassMechanicControl = () => {
     if (!dashboardLayout) return null;
+
+    type MechanicSpec = {
+      key: string;
+      coreLabel: string;
+      title: string;
+      glyph: string;
+      status: string;
+      binding: string;
+      accent: string;
+      fill: string;
+      ready: boolean;
+      pressable: boolean;
+      onPress?: () => void;
+      hoverKey: string;
+      detail: string;
+    };
+
+    let spec: MechanicSpec | null = null;
 
     if (combatReloadAvailable) {
       const ready = combatReloadEnabled;
-      const classAccent = OTT.warningAmber;
-      const accent = ready ? classAccent : OTT.borderSubtle;
-      const hovered = hoveredAbility === '__CLASS_RELOAD__';
-      return (
-        <HapticPressable
-          key="class-action-reload"
-          onPress={onCombatReload}
-          disabled={!ready}
-          onHoverIn={() => setHoveredAbility('__CLASS_RELOAD__')}
-          onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_RELOAD__' ? null : current))}
-          style={[
-            styles.conceptCard,
-            groupedDashboard ? styles.conceptCardGrouped : null,
-            {
-              borderColor: hovered ? classAccent : (ready ? accent : OTT.borderSubtle),
-              backgroundColor: hovered
-                ? 'rgba(224, 180, 90, 0.14)'
-                : 'rgba(8, 12, 14, 0.42)',
-              shadowColor: hovered ? classAccent : 'transparent',
-              shadowOpacity: hovered ? 0.5 : 0,
-              shadowRadius: hovered ? 10 : 0,
-              opacity: ready ? 1 : 0.42,
-              ...(tileHeight != null ? { height: tileHeight } : null),
-            },
-          ]}
-        >
-          <View style={[
-            styles.conceptCardPress,
-            groupedDashboard ? styles.conceptCardPressGrouped : null,
-          ]}>
-            <View style={styles.conceptCardTop}>
-              <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
-              <Text style={[styles.conceptClassBadge, { color: accent }]}>CA</Text>
-            </View>
-            <Text
-              style={[
-                styles.conceptCardName,
-                groupedDashboard ? styles.conceptCardNameGrouped : null,
-                { color: ready ? OTT.warningAmber : OTT.textMuted },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-            >
-              RELOAD
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardCategory,
-                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
-              ]}
-              numberOfLines={1}
-            >
-              CLASS ACTION
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardDesc,
-                groupedDashboard ? styles.conceptCardTagsGrouped : null,
-              ]}
-              numberOfLines={groupedDashboard ? 2 : 3}
-            >
-              {ready ? 'Chamber tactical reload.' : 'Reload locked.'}
-            </Text>
-            <Text style={[styles.conceptArmed, { color: accent }]}>
-              {ready ? 'READY' : 'LOCKED'}
-            </Text>
-          </View>
-        </HapticPressable>
-      );
-    }
-
-    if (catalyticConsoleAvailable) {
-      const ready = catalyticConsoleEnabled && catalyticConsoleRotStacks > 0;
-      const classAccent = OTT.terminalGreen;
-      const accent = ready ? classAccent : OTT.borderSubtle;
-      const statusLabel = ready ? 'READY' : catalyticConsoleRotStacks > 0 ? 'LOCKED' : 'CHARGING';
-      const hovered = hoveredAbility === '__CLASS_CATALYST__';
-      return (
-        <HapticPressable
-          key="class-action-catalyst"
-          onPress={onCatalyticConsole}
-          disabled={!catalyticConsoleEnabled}
-          onHoverIn={() => setHoveredAbility('__CLASS_CATALYST__')}
-          onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_CATALYST__' ? null : current))}
-          style={[
-            styles.conceptCard,
-            groupedDashboard ? styles.conceptCardGrouped : null,
-            {
-              borderColor: hovered ? classAccent : (ready ? accent : OTT.borderSubtle),
-              backgroundColor: hovered
-                ? 'rgba(69, 247, 160, 0.14)'
-                : 'rgba(8, 12, 14, 0.42)',
-              shadowColor: hovered ? classAccent : 'transparent',
-              shadowOpacity: hovered ? 0.5 : 0,
-              shadowRadius: hovered ? 10 : 0,
-              opacity: catalyticConsoleEnabled ? 1 : 0.42,
-              ...(tileHeight != null ? { height: tileHeight } : null),
-            },
-          ]}
-        >
-          <View style={[
-            styles.conceptCardPress,
-            groupedDashboard ? styles.conceptCardPressGrouped : null,
-          ]}>
-            <View style={styles.conceptCardTop}>
-              <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
-              <Text style={[styles.conceptClassBadge, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}>CA</Text>
-            </View>
-            <Text
-              style={[
-                styles.conceptCardName,
-                groupedDashboard ? styles.conceptCardNameGrouped : null,
-                { color: ready ? OTT.terminalGreen : OTT.textMuted },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-            >
-              CATALYST
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardCategory,
-                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
-              ]}
-              numberOfLines={1}
-            >
-              CLASS ACTION
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardDesc,
-                groupedDashboard ? styles.conceptCardTagsGrouped : null,
-              ]}
-              numberOfLines={groupedDashboard ? 2 : 3}
-            >
-              {`Discharge Veil Rot payload. ${catalyticConsoleRotStacks} stacks.`}
-            </Text>
-            <Text style={[styles.conceptArmed, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}>
-              {statusLabel}
-            </Text>
-          </View>
-        </HapticPressable>
-      );
-    }
-
-    if (voidWardAvailable) {
+      spec = {
+        key: 'class-mechanic-reload',
+        coreLabel: 'HEX CORE',
+        title: 'RELOAD',
+        glyph: '◈',
+        status: ready ? 'READY' : 'LOCKED',
+        binding: 'R',
+        accent: ready ? OTT.cyanSelect : OTT.borderSubtle,
+        fill: 'rgba(8, 14, 16, 0.92)',
+        ready,
+        pressable: true,
+        onPress: onCombatReload,
+        hoverKey: '__CLASS_RELOAD__',
+        detail: ready ? 'Phase-Shift Reload — spend 1 AP to refill the magazine.' : 'Reload locked.',
+      };
+    } else if (voidWardAvailable) {
       const primed = voidWardPrimed;
       const enabled = voidWardEnabled && !primed;
-      const classAccent = OTT.terminalGreen;
-      const accent = primed || enabled
-        ? classAccent
-        : OTT.borderSubtle;
-      const title = 'PARRY';
-      const statusLabel = primed ? 'WARD PRIMED' : enabled ? 'READY' : 'LOCKED';
-      const hovered = hoveredAbility === '__CLASS_PARRY__';
-      const cardAccent = hovered ? OTT.fluxViolet : accent;
-      return (
-        <HapticPressable
-          key="class-action-parry"
-          onPress={onVoidWardPrime}
-          disabled={!enabled}
-          onHoverIn={() => setHoveredAbility('__CLASS_PARRY__')}
-          onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_PARRY__' ? null : current))}
-          style={[
-            styles.conceptCard,
-            groupedDashboard ? styles.conceptCardGrouped : null,
-            {
-              borderColor: cardAccent,
-              backgroundColor: hovered
-                ? 'rgba(176, 124, 255, 0.14)'
-                : primed || enabled
-                  ? 'rgba(69, 247, 160, 0.08)'
-                  : 'rgba(8, 12, 14, 0.42)',
-              shadowColor: hovered || primed || enabled ? cardAccent : 'transparent',
-              shadowOpacity: hovered || primed || enabled ? 0.45 : 0,
-              shadowRadius: hovered || primed || enabled ? 10 : 0,
-              opacity: primed || enabled ? 1 : 0.42,
-              ...(tileHeight != null ? { height: tileHeight } : null),
-            },
-          ]}
-        >
-          <View style={[
-            styles.conceptCardPress,
-            groupedDashboard ? styles.conceptCardPressGrouped : null,
-          ]}>
-            <View style={styles.conceptCardTop}>
-              <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
-              <Text style={[styles.conceptClassBadge, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>CA</Text>
-            </View>
-            <Text
-              style={[
-                styles.conceptCardName,
-                groupedDashboard ? styles.conceptCardNameGrouped : null,
-                { color: accent === OTT.borderSubtle ? OTT.textMuted : accent },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-            >
-              {title}
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardCategory,
-                groupedDashboard ? styles.conceptCardCategoryGrouped : null,
-              ]}
-              numberOfLines={1}
-            >
-              CLASS ACTION
-            </Text>
-            <Text
-              style={[
-                styles.conceptCardDesc,
-                groupedDashboard ? styles.conceptCardTagsGrouped : null,
-              ]}
-              numberOfLines={groupedDashboard ? 2 : 3}
-            >
-              {primed
-                ? 'Ward primed — kinetic intercept armed.'
-                : enabled
-                  ? 'Prime for next enemy attack. Perfect Parry grants riposte on next strike.'
-                  : 'Parry locked.'}
-            </Text>
-            <Text style={[styles.conceptArmed, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>
-              {statusLabel}
-            </Text>
-          </View>
-        </HapticPressable>
-      );
+      const ready = primed || enabled;
+      spec = {
+        key: 'class-mechanic-parry',
+        coreLabel: 'AEGIS CORE',
+        title: 'PARRY',
+        glyph: '⬡',
+        status: primed ? 'PRIMED' : enabled ? 'READY' : 'LOCKED',
+        binding: 'P',
+        accent: ready ? OTT.cyanSelect : OTT.borderSubtle,
+        fill: 'rgba(8, 14, 16, 0.92)',
+        ready,
+        pressable: true,
+        onPress: onVoidWardPrime,
+        hoverKey: '__CLASS_PARRY__',
+        detail: primed
+          ? 'Void Ward primed — intercept the next qualifying strike.'
+          : enabled
+            ? 'Prime Void Ward for a kinetic intercept window.'
+            : 'Parry locked.',
+      };
+    } else if (riftWardAvailable) {
+      const ready = riftWardReady;
+      spec = {
+        key: 'class-mechanic-rift-ward',
+        coreLabel: 'ENVOY CORE',
+        title: 'RIFT WARD',
+        glyph: '◈',
+        status: ready ? 'ARMED' : 'SPENT',
+        binding: '',
+        accent: ready ? OTT.cyanSelect : OTT.borderSubtle,
+        fill: 'rgba(8, 14, 16, 0.92)',
+        ready,
+        pressable: false,
+        hoverKey: '__CLASS_RIFT_WARD__',
+        detail: ready
+          ? 'Intrinsic reactive ward — armed this cycle.'
+          : 'Ward spent this cycle.',
+      };
     }
 
-    return null;
+    if (!spec) return null;
+
+    const hovered = hoveredAbility === spec.hoverKey;
+    const ring = hovered && spec.ready ? OTT.cyanSelect : spec.accent;
+    const readyColor = spec.ready ? OTT.terminalGreenMuted : OTT.textMuted;
+    const body = (
+      <View style={styles.mechanicModuleInner}>
+        <View style={styles.mechanicTitleRow}>
+          <Text style={[styles.mechanicGlyph, { color: spec.ready ? OTT.cyanSelect : OTT.textMuted }]}>
+            {spec.glyph}
+          </Text>
+          <Text
+            style={[styles.mechanicTitle, { color: spec.ready ? '#E8EFEC' : OTT.textMuted }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {spec.title}
+          </Text>
+        </View>
+        <View style={styles.mechanicStatusRow}>
+          <Text style={[styles.mechanicStatus, { color: readyColor }]}>
+            {spec.status}
+          </Text>
+          {spec.binding ? (
+            <View style={[styles.mechanicKeycap, { borderColor: spec.ready ? OTT.cyanSelect : OTT.borderSubtle }]}>
+              <Text style={[styles.mechanicKeycapLabel, { color: spec.ready ? OTT.cyanSelect : OTT.textMuted }]}>
+                {spec.binding}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    );
+
+    const shellStyle = [
+      styles.mechanicModuleShell,
+      combatConsoleChromeStyle({
+        accent: ring,
+        tone: !spec.ready ? 'disabled' : hovered ? 'awake' : 'rest',
+      }),
+      {
+        height: mechanicModuleHeight,
+        opacity: spec.ready ? 1 : 0.7,
+      },
+    ];
+
+    const module = (
+      <View key={spec.key} style={styles.mechanicModule}>
+        <Text style={[styles.mechanicCoreLabel, { color: spec.ready ? ring : OTT.textMuted }]}>
+          {spec.coreLabel}
+        </Text>
+        {spec.pressable ? (
+          <HapticPressable
+            onPress={spec.onPress}
+            disabled={!spec.ready || (voidWardAvailable && voidWardPrimed)}
+            onHoverIn={() => setHoveredAbility(spec!.hoverKey)}
+            onHoverOut={() => setHoveredAbility((current) => (current === spec!.hoverKey ? null : current))}
+            accessibilityHint={spec.detail}
+            style={shellStyle}
+          >
+            {body}
+          </HapticPressable>
+        ) : (
+          <HapticPressable
+            onPress={() => undefined}
+            haptic={false}
+            sfx={false}
+            onHoverIn={() => setHoveredAbility(spec!.hoverKey)}
+            onHoverOut={() => setHoveredAbility((current) => (current === spec!.hoverKey ? null : current))}
+            accessibilityHint={spec.detail}
+            style={shellStyle}
+          >
+            {body}
+          </HapticPressable>
+        )}
+        {hovered ? (
+          <View style={styles.mechanicTooltip} pointerEvents="none">
+            <Text style={styles.cardTooltipText} numberOfLines={3}>{spec.detail}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+
+    return module;
   };
 
   const renderAbilityGrid = () => {
-    const groupedAegis = weaponActionCount > 0 && techniqueCount > 0;
-    const weaponCards = groupedAegis
+    const groupedSurface = weaponActionCount > 0 && techniqueCount > 0;
+    const weaponCards = groupedSurface
       ? loadout.slice(0, weaponActionCount)
       : loadout.slice(0, 4);
-    const techniqueCards = groupedAegis
+    const techniqueCards = groupedSurface
       ? loadout.slice(weaponActionCount, weaponActionCount + techniqueCount)
       : [];
 
     if (dashboardLayout) {
-      if (groupedAegis) {
-        return (
+      if (groupedSurface) {
+        const railBody = (
           <View style={styles.conceptGroupedHost}>
             <View style={styles.conceptGroupBlock}>
-              <Text style={styles.conceptGroupLabel}>WEAPON ACTIONS</Text>
               <View style={styles.conceptCardRow}>
-                {weaponCards.map((ability) => renderTile(ability))}
+                {weaponCards.map((ability) => renderTile(ability, { group: 'weapon' }))}
               </View>
             </View>
+            <View style={styles.railDivider} accessibilityLabel="weapon-technique divider" />
             <View style={styles.conceptGroupBlock}>
-              <Text style={styles.conceptGroupLabel}>{techniqueGroupLabel}</Text>
               <View style={styles.conceptCardRow}>
-                {techniqueCards.map((ability) => renderTile(ability))}
-                {renderClassActionDeckCard()}
+                {techniqueCards.map((ability) => renderTile(ability, { group: 'technique' }))}
               </View>
             </View>
+          </View>
+        );
+        return (
+          <View style={styles.commandRailShell}>
+            {desktopDeck ? (
+              <View style={styles.commandRailScrollContent}>{railBody}</View>
+            ) : (
+              <ScrollView
+                ref={railScrollRef}
+                horizontal
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator
+                style={styles.commandRailScroll}
+                contentContainerStyle={styles.commandRailScrollContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                {railBody}
+              </ScrollView>
+            )}
+            {!desktopDeck ? (
+              <Text style={styles.railScrollHint} numberOfLines={1}>
+                SWIPE FOR MORE
+              </Text>
+            ) : null}
           </View>
         );
       }
       return (
         <View style={styles.conceptCardRow}>
-          {weaponCards.map((ability) => renderTile(ability))}
-          {renderClassActionDeckCard()}
+          {weaponCards.map((ability) => renderTile(ability, { group: 'weapon' }))}
         </View>
       );
     }
-    if (groupedAegis) {
+    if (groupedSurface) {
       return (
         <View style={styles.deckBody}>
-          <Text style={styles.conceptGroupLabel}>WEAPON ACTIONS</Text>
           <View style={styles.abilityGrid}>
             <View style={styles.abilityRow}>
-              {renderTile(weaponCards[0])}
-              {renderTile(weaponCards[1])}
+              {renderTile(weaponCards[0], { group: 'weapon' })}
+              {renderTile(weaponCards[1], { group: 'weapon' })}
             </View>
             <View style={styles.abilityRow}>
-              {renderTile(weaponCards[2])}
-              {renderTile(weaponCards[3])}
+              {renderTile(weaponCards[2], { group: 'weapon' })}
+              {renderTile(weaponCards[3], { group: 'weapon' })}
             </View>
           </View>
-          <Text style={[styles.conceptGroupLabel, { marginTop: 8 }]}>{techniqueGroupLabel}</Text>
-          <View style={styles.abilityGrid}>
+          <View style={[styles.abilityGrid, { marginTop: 8 }]}>
             <View style={styles.abilityRow}>
-              {renderTile(techniqueCards[0])}
-              {renderTile(techniqueCards[1])}
-              {renderTile(techniqueCards[2])}
+              {renderTile(techniqueCards[0], { group: 'technique' })}
+              {renderTile(techniqueCards[1], { group: 'technique' })}
+              {renderTile(techniqueCards[2], { group: 'technique' })}
             </View>
           </View>
         </View>
@@ -1333,40 +1529,90 @@ export default function CombatCommandDeck({
 
   const renderConceptDashboard = () => (
     <View style={styles.conceptDeck}>
-      <View style={styles.conceptMain}>
-        <View style={styles.conceptApBand}>
-          <CombatApPipRow
-            current={shownAp}
-            max={maxActionPoints}
-            accent={OTT.cyanSelect}
-            mutedColor={OTT.cyanSelect}
-            queued={initiativeQueued}
-            conceptBand
-            centered
-          />
-        </View>
-        {renderAbilityGrid()}
-      </View>
-      <View style={styles.conceptTurnCol}>
-        <View style={styles.conceptTurnActions}>
-          <View style={styles.conceptActionSlot}>
-            {renderEndTurnButton()}
+      <View style={styles.conceptDockStage}>
+        <View style={styles.commandDockPlate}>
+          <View style={styles.conceptApBand}>
+            <CombatApPipRow
+              current={shownAp}
+              max={maxActionPoints}
+              accent={OTT.cyanSelect}
+              mutedColor={OTT.cyanSelect}
+              queued={initiativeQueued}
+              conceptBand
+              centered
+              hexSize={12}
+              labelFontSize={11}
+            />
+          </View>
+          <View style={styles.commandRailWithMechanic}>
+            {renderAbilityGrid()}
+            <View style={styles.mechanicEndCapDivider} />
+            <View style={styles.mechanicColumn}>
+              {renderClassMechanicControl()}
+            </View>
           </View>
         </View>
-        <View style={styles.conceptChromeSpacer} />
-        <View style={styles.conceptChrome}>
+      </View>
+      <View style={styles.systemModule}>
+        {catalyticConsoleAvailable ? (
+          <View style={styles.conceptActionSlotTall}>
+            {renderCatalyticConsoleButton()}
+          </View>
+        ) : null}
+        <View style={styles.systemModuleChrome}>
           <RunFeedChromeButtons
-            accent={OTT.terminalGreen}
+            accent={OTT.cyanSelect}
             mutedColor={OTT.textMuted}
             terminal
+            systemModule
           />
+        </View>
+        <View style={styles.systemModuleEndTurn}>
+          {renderEndTurnButton()}
         </View>
       </View>
     </View>
   );
 
+  const activeHoverPopup =
+    hoverPopup
+    && hoveredAbility === hoverPopup.ability
+    && hoverPopup.body
+      ? hoverPopup
+      : null;
+  const hoverPanelTop = activeHoverPopup
+    ? (Platform.OS === 'web'
+      ? Math.max(8, activeHoverPopup.y - activeHoverPopup.height - 6)
+      : activeHoverPopup.y - activeHoverPopup.height - 6)
+    : 0;
+  const hoverPanel = activeHoverPopup
+    ? (
+      <View
+        pointerEvents="none"
+        style={[
+          styles.cardHoverDetailFloating,
+          {
+            left: activeHoverPopup.x,
+            top: hoverPanelTop,
+            width: activeHoverPopup.width,
+            height: activeHoverPopup.height,
+          },
+        ]}
+      >
+        <Text style={styles.cardHoverDetailText}>
+          {activeHoverPopup.body}
+        </Text>
+      </View>
+    )
+    : null;
+
   return (
-    <View style={[styles.deckHost, dashboardLayout && styles.deckHostDashboard]}>
+    <View
+      ref={deckHostRef}
+      style={[styles.deckHost, dashboardLayout && styles.deckHostDashboard]}
+      collapsable={false}
+    >
+      {Platform.OS === 'web' ? renderAbilityHoverPortal(hoverPanel) : hoverPanel}
       {floatVisible ? (
         <Animated.Text
           style={[
@@ -1460,16 +1706,20 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   deckHostDashboard: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
+    justifyContent: 'flex-end',
+    overflow: 'visible',
   },
   deckShellWrap: {
     width: '100%',
     position: 'relative',
   },
   deckShellWrapDashboard: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
   },
   surgeRing: {
     ...StyleSheet.absoluteFill,
@@ -1502,13 +1752,15 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   commandDeckDashboard: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
     flexDirection: 'column',
     borderTopWidth: 0,
     paddingTop: 0,
     paddingBottom: 0,
-    gap: 4,
+    gap: 0,
+    justifyContent: 'flex-end',
   },
   topBand: {
     flexShrink: 0,
@@ -1634,39 +1886,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: DOSSIER_ROW_BG,
   },
-  endTurnBtnDashboard: {
+  endTurnBtnConsole: {
     width: '100%',
-    height: 40,
-    maxHeight: 40,
-    paddingHorizontal: 8,
+    minHeight: 42,
+    height: 42,
+    paddingHorizontal: 10,
     paddingVertical: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: OTT.terminalGreen,
-    backgroundColor: 'rgba(69, 247, 160, 0.06)',
-    overflow: 'hidden',
+    borderRadius: 2,
+    overflow: 'visible',
+  },
+  endTurnLabelConsole: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   conceptDeck: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
     flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    gap: 20,
+    overflow: 'visible',
+  },
+  conceptDockStage: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    overflow: 'visible',
+  },
+  commandDockPlate: {
+    flexGrow: 0,
+    flexShrink: 0,
+    alignSelf: 'center',
+    gap: 2,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
   },
   conceptMain: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     minWidth: 0,
-    minHeight: 0,
-    gap: 6,
+    gap: 4,
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   conceptApBand: {
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 24,
+    maxHeight: 28,
     width: '100%',
+    marginBottom: 0,
+    zIndex: 1,
   },
   conceptHeader: {
     flexDirection: 'row',
@@ -1681,53 +1965,409 @@ const styles = StyleSheet.create({
     gap: 4,
     flexShrink: 1,
   },
-  conceptGroupedHost: {
-    width: '100%',
-    gap: 4,
+  commandRailWithMechanic: {
     flexGrow: 0,
     flexShrink: 0,
     minHeight: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    overflow: 'visible',
+    zIndex: 2,
+  },
+  mechanicEndCapDivider: {
+    width: 2,
+    alignSelf: 'stretch',
+    marginVertical: 10,
+    backgroundColor: 'rgba(98, 220, 229, 0.35)',
+  },
+  commandRailShell: {
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'visible',
+    zIndex: 2,
+  },
+  commandRailScroll: {
+    flexGrow: 0,
+    overflow: 'visible',
+  },
+  commandRailScrollContent: {
+    flexGrow: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 0,
+    overflow: 'visible',
+  },
+  railScrollHint: {
+    marginTop: 2,
+    fontFamily: MONO,
+    fontSize: 7,
+    letterSpacing: 0.8,
+    color: OTT.textMuted,
+    textAlign: 'center',
+  },
+  conceptGroupedHost: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 0,
+    overflow: 'visible',
   },
   conceptGroupBlock: {
-    width: '100%',
-    gap: 2,
+    flexGrow: 0,
     flexShrink: 0,
+    gap: 1,
+    minWidth: 0,
+    overflow: 'visible',
   },
   conceptGroupLabel: {
     fontFamily: MONO,
     fontSize: 9,
-    letterSpacing: 1.2,
-    color: OTT.textMuted,
+    letterSpacing: 1.5,
+    fontWeight: '800',
+    color: '#B8C4C0',
     textAlign: 'center',
+    marginBottom: 1,
+  },
+  railDivider: {
+    width: 1,
+    alignSelf: 'stretch',
     marginBottom: 2,
+    marginTop: 2,
+    backgroundColor: 'rgba(120, 140, 150, 0.28)',
   },
   conceptCardRow: {
     flexGrow: 0,
     flexShrink: 0,
     minHeight: 0,
-    width: '100%',
-    maxWidth: 980,
     flexDirection: 'row',
     alignItems: 'stretch',
-    justifyContent: 'center',
-    gap: 8,
-    alignSelf: 'center',
+    justifyContent: 'flex-start',
+    gap: 7,
+    overflow: 'visible',
   },
-  conceptCard: {
+  /** Outer shell — hover detail lives here so Pressable overflow cannot clip it. */
+  conceptCardShell: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 0,
-    maxWidth: 148,
-    minWidth: 88,
+    maxWidth: 146,
+    minWidth: 72,
     height: 198,
-    borderWidth: 1.25,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  conceptCardShellGrouped: {
+    maxWidth: 146,
+    minWidth: 138,
+    width: 142,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 142,
+  },
+  conceptCard: {
+    width: '100%',
+    height: '100%',
     borderRadius: 2,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 0 },
+    overflow: 'visible',
+    position: 'relative',
   },
   conceptCardGrouped: {
-    maxWidth: 132,
-    minWidth: 76,
+    width: '100%',
+  },
+  conceptCardSelected: {
+    transform: [{ translateY: -2 }],
+  },
+  conceptCardHover: {
+    transform: [{ translateY: -1 }],
+  },
+  /** Lift hovered shell so the above-card detail panel stacks over AP / siblings. */
+  conceptCardHoverElevated: {
+    zIndex: 80,
+    elevation: 80,
+  },
+  conceptCardSelectEdge: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 3,
+    backgroundColor: OTT.cyanSelect,
+    zIndex: 2,
+  },
+  conceptCardHoverEdge: {
+    backgroundColor: 'rgba(98, 220, 229, 0.7)',
+    height: 2,
+    opacity: 0.85,
+  },
+  conceptCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(120, 140, 150, 0.22)',
+    backgroundColor: 'rgba(10, 14, 16, 0.55)',
+  },
+  conceptCardHeaderSelected: {
+    backgroundColor: 'rgba(98, 220, 229, 0.14)',
+    borderBottomColor: 'rgba(98, 220, 229, 0.4)',
+  },
+  conceptCardHeaderHover: {
+    backgroundColor: 'rgba(98, 220, 229, 0.08)',
+  },
+  conceptCardHeaderRiposte: {
+    backgroundColor: 'rgba(224, 180, 90, 0.1)',
+  },
+  conceptCardNameDecision: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    marginTop: 0,
+  },
+  conceptCardApCost: {
+    fontFamily: MONO,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  conceptCardPressDecision: {
+    paddingTop: 8,
+    gap: 4,
+  },
+  conceptCardEffect: {
+    fontFamily: MONO,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.55,
+    lineHeight: 15,
+  },
+  conceptCardKeyword: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    lineHeight: 12,
+  },
+  conceptCardLocked: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    lineHeight: 10,
+    color: OTT.warningAmber,
+    marginTop: 2,
+  },
+  conceptCardLockFooter: {
+    marginTop: 'auto',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(224, 180, 90, 0.45)',
+    backgroundColor: 'rgba(224, 180, 90, 0.12)',
+    gap: 1,
+  },
+  conceptCardLockFooterTarget: {
+    borderTopColor: 'rgba(255, 90, 98, 0.5)',
+    backgroundColor: 'rgba(255, 90, 98, 0.1)',
+  },
+  conceptCardLockHeadline: {
+    fontFamily: MONO,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: OTT.warningAmber,
+  },
+  conceptCardLockDetail: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    color: '#E8D4A0',
+  },
+  /** Window-fixed hover detail — portaled on web so dock/arena clips cannot crop it. */
+  cardHoverDetailFloating: {
+    ...(Platform.OS === 'web'
+      ? ({ position: 'fixed' } as object)
+      : { position: 'absolute' as const }),
+    zIndex: 100000,
+    elevation: 100000,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(98, 220, 229, 0.45)',
+    backgroundColor: 'rgba(4, 7, 10, 0.96)',
+    justifyContent: 'flex-start',
+    overflow: 'hidden',
+  },
+  cardHoverDetailText: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    lineHeight: 13,
+    color: OTT.textSecondary,
+  },
+  cardTooltipText: {
+    fontFamily: MONO,
+    fontSize: 8,
+    lineHeight: 11,
+    letterSpacing: 0.2,
+    color: OTT.textSecondary,
+  },
+  conceptCardWeapon: {
+    borderStyle: 'solid',
+  },
+  conceptCardTechnique: {
+    borderStyle: 'solid',
+  },
+  mechanicColumn: {
+    flexGrow: 0,
+    flexShrink: 0,
+    width: 132,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    paddingBottom: 0,
+  },
+  mechanicModule: {
+    width: '100%',
+    position: 'relative',
+    gap: 3,
+  },
+  mechanicCoreLabel: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textAlign: 'center',
+  },
+  mechanicModuleShell: {
+    width: '100%',
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    overflow: 'visible',
+    justifyContent: 'center',
+  },
+  mechanicModuleInner: {
+    gap: 6,
+    justifyContent: 'center',
+  },
+  mechanicTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mechanicStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  mechanicGlyph: {
+    fontFamily: MONO,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  mechanicControl: {
+    width: '100%',
+    borderWidth: 2,
+    borderRadius: 2,
+    borderColor: OTT.terminalGreen,
+    backgroundColor: 'rgba(69, 247, 160, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    overflow: 'hidden',
+  },
+  mechanicInner: {
+    flex: 1,
+    gap: 4,
+    justifyContent: 'center',
+  },
+  mechanicEyebrow: {
+    fontFamily: MONO,
+    fontSize: 7,
+    letterSpacing: 0.8,
+    color: OTT.terminalGreen,
+    fontWeight: '800',
+  },
+  mechanicTitle: {
+    fontFamily: MONO,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 1,
+    lineHeight: 17,
+    flexShrink: 1,
+  },
+  mechanicStatus: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  mechanicKeycap: {
+    minWidth: 22,
+    height: 20,
+    paddingHorizontal: 5,
+    borderWidth: 1,
+    borderRadius: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(4, 7, 10, 0.75)',
+  },
+  mechanicKeycapLabel: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  mechanicBinding: {
+    fontFamily: MONO,
+    fontSize: 8,
+    letterSpacing: 0.8,
+    color: OTT.textMuted,
+    marginTop: 1,
+    textAlign: 'center',
+  },
+  mechanicDetail: {
+    fontFamily: MONO,
+    fontSize: 8,
+    lineHeight: 10,
+    color: OTT.textMuted,
+  },
+  mechanicTooltip: {
+    position: 'absolute',
+    left: -8,
+    right: -8,
+    bottom: '108%',
+    zIndex: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(130, 150, 160, 0.4)',
+    backgroundColor: 'rgba(4, 7, 10, 0.96)',
+  },
+  conceptActionSlotTall: {
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 64,
+    width: '100%',
+    overflow: 'hidden',
   },
   conceptCardPress: {
     flex: 1,
@@ -1736,13 +2376,14 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   conceptCardPressGrouped: {
-    paddingHorizontal: 7,
-    paddingVertical: 6,
-    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 4,
   },
   conceptCardNameGrouped: {
     fontSize: 11,
     lineHeight: 13,
+    fontWeight: '800',
   },
   conceptCardCategoryGrouped: {
     fontSize: 8,
@@ -1869,20 +2510,40 @@ const styles = StyleSheet.create({
   },
   conceptConfirmBtn: {
     marginTop: 4,
-    borderWidth: 1,
-    borderColor: OTT.terminalGreen,
-    backgroundColor: 'rgba(69, 247, 160, 0.12)',
     borderRadius: 2,
     paddingVertical: 5,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   conceptConfirmLabel: {
     fontFamily: MONO,
     fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '800',
     letterSpacing: 1.2,
-    color: OTT.terminalGreen,
+    color: OTT.cyanSelect,
+  },
+  systemModule: {
+    width: 148,
+    flexShrink: 0,
+    alignSelf: 'flex-end',
+    justifyContent: 'flex-end',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 2,
+    overflow: 'visible',
+  },
+  systemModuleChrome: {
+    width: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  systemModuleEndTurn: {
+    width: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 42,
   },
   conceptClassBadge: {
     fontFamily: MONO,
@@ -1928,30 +2589,29 @@ const styles = StyleSheet.create({
     color: OTT.textMuted,
   },
   conceptTurnCol: {
-    width: OTT_LAYOUT.consoleSideWidth,
+    width: 132,
     flexShrink: 0,
-    alignSelf: 'stretch',
+    alignSelf: 'flex-end',
     justifyContent: 'flex-end',
     gap: 0,
-    paddingTop: 28,
-    paddingBottom: 2,
-    overflow: 'hidden',
+    paddingBottom: 0,
+    overflow: 'visible',
   },
   conceptTurnActions: {
     flexGrow: 0,
     flexShrink: 0,
-    gap: 6,
+    gap: 8,
     justifyContent: 'flex-end',
   },
   conceptActionSlot: {
     flexGrow: 0,
     flexShrink: 0,
-    height: 40,
+    minHeight: 42,
     width: '100%',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   conceptChromeSpacer: {
-    height: 14,
+    height: 6,
     flexGrow: 0,
     flexShrink: 0,
   },
@@ -1959,9 +2619,9 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     width: '100%',
-    minHeight: 28,
+    minHeight: 96,
     alignItems: 'stretch',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     zIndex: 2,
   },
   catalystTile: {

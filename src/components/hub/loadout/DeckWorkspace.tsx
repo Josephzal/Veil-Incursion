@@ -35,6 +35,15 @@ import {
 } from '../../../utils/classLoadoutUtils';
 import { getEquippedWeaponForClass } from '../../../data/weaponProgressionEngine';
 import {
+  deriveAegisWeaponActions,
+  isAegisWeaponFamilyId,
+} from '../../../data/aegisWeaponActionRegistry';
+import {
+  aegisWeaponActionTags,
+  formatAegisWeaponActionLabel,
+  getAegisWeaponActionDefinition,
+} from '../../../data/aegisWeaponActionCatalog';
+import {
   deriveHexWeaponActions,
   isHexWeaponFamilyId,
 } from '../../../data/hexWeaponActionRegistry';
@@ -50,6 +59,7 @@ import {
   formatEnvoyWeaponActionLabel,
   getEnvoyWeaponActionDefinition,
 } from '../../../data/envoyWeaponActionCatalog';
+import { getEnvoyAbilityTags } from '../../../data/envoyAbilities';
 import { sanitizeEnvoyFlexLoadout } from '../../../data/envoyFlexLoadoutEngine';
 import { resolveAbilityGuidanceForWeapon } from '../../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import type { OperativeAbilityId } from '../../../types/weaponLoadoutRecommendation';
@@ -67,7 +77,16 @@ import {
 
 export type DeckSelection =
   | { kind: 'SLOT'; index: 0 | 1 | 2 | 3 }
-  | { kind: 'POOL'; abilityId: string };
+  | { kind: 'POOL'; abilityId: string }
+  | { kind: 'WA'; abilityId: string };
+
+type ReadOnlyWeaponActionCard = {
+  id: string;
+  label: string;
+  costLine: string;
+  description: string;
+  tagsLine: string;
+};
 
 const AEGIS_TECHNIQUE_SLOT_INDICES = [0, 1, 2] as const;
 
@@ -125,9 +144,12 @@ export default function DeckWorkspace({
     appendHubLog,
   } = usePlayerAccount();
 
-  const [aegisDraft, setAegisDraft] = useState<AegisTechniqueId[]>([...account.aegisTechniqueLoadout]);
-  const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...account.hexShotLoadout]);
-  const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([
+  /** Local draft may include emptied slots (`null`) until the player refills a valid triple. */
+  const [aegisDraft, setAegisDraft] = useState<(AegisTechniqueId | null)[]>([
+    ...account.aegisTechniqueLoadout,
+  ]);
+  const [hexDraft, setHexDraft] = useState<(HexShotAbilityId | null)[]>([...account.hexShotLoadout]);
+  const [envoyDraft, setEnvoyDraft] = useState<(EnvoyAbilityId | null)[]>([
     ...sanitizeEnvoyFlexLoadout(account.envoyLoadout),
   ]);
 
@@ -139,8 +161,13 @@ export default function DeckWorkspace({
 
   useEffect(() => {
     if (account.activeClass !== 'AEGIS') return;
-    if (validateAegisTechniqueLoadoutCommit(aegisDraft)) return;
-    const committed: AegisTechniqueLoadout = [aegisDraft[0]!, aegisDraft[1]!, aegisDraft[2]!];
+    if (aegisDraft.some((id) => id == null)) return;
+    if (validateAegisTechniqueLoadoutCommit(aegisDraft as string[])) return;
+    const committed: AegisTechniqueLoadout = [
+      aegisDraft[0] as AegisTechniqueId,
+      aegisDraft[1] as AegisTechniqueId,
+      aegisDraft[2] as AegisTechniqueId,
+    ];
     if (committed.some((id, index) => id !== account.aegisTechniqueLoadout[index])) {
       setAegisTechniqueLoadout(committed);
     }
@@ -148,8 +175,13 @@ export default function DeckWorkspace({
 
   useEffect(() => {
     if (account.activeClass !== 'HEX_SHOT') return;
-    if (validateHexShotLoadoutCommit(hexDraft, account.unlockedHexShotAbilities)) return;
-    const committed: HexShotLoadout = [hexDraft[0]!, hexDraft[1]!, hexDraft[2]!];
+    if (hexDraft.some((id) => id == null)) return;
+    if (validateHexShotLoadoutCommit(hexDraft as string[], account.unlockedHexShotAbilities)) return;
+    const committed: HexShotLoadout = [
+      hexDraft[0] as HexShotAbilityId,
+      hexDraft[1] as HexShotAbilityId,
+      hexDraft[2] as HexShotAbilityId,
+    ];
     if (committed.some((id, index) => id !== account.hexShotLoadout[index])) {
       setHexShotLoadout(committed);
     }
@@ -157,11 +189,12 @@ export default function DeckWorkspace({
 
   useEffect(() => {
     if (account.activeClass !== 'ENVOY') return;
-    if (validateEnvoyLoadoutCommit(envoyDraft, account.unlockedEnvoyAbilities)) return;
+    if (envoyDraft.some((id) => id == null)) return;
+    if (validateEnvoyLoadoutCommit(envoyDraft as string[], account.unlockedEnvoyAbilities)) return;
     const committed: EnvoyLoadout = [
-      envoyDraft[0]! as EnvoyFlexAbilityId,
-      envoyDraft[1]! as EnvoyFlexAbilityId,
-      envoyDraft[2]! as EnvoyFlexAbilityId,
+      envoyDraft[0] as EnvoyFlexAbilityId,
+      envoyDraft[1] as EnvoyFlexAbilityId,
+      envoyDraft[2] as EnvoyFlexAbilityId,
     ];
     const current = sanitizeEnvoyFlexLoadout(account.envoyLoadout);
     if (committed.some((id, index) => id !== current[index])) {
@@ -184,7 +217,24 @@ export default function DeckWorkspace({
     [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks],
   );
 
-  const hexReadOnlyWeaponActions = useMemo(() => {
+  const aegisReadOnlyWeaponActions = useMemo((): ReadOnlyWeaponActionCard[] | null => {
+    if (account.activeClass !== 'AEGIS' || !equippedWeaponId) return null;
+    if (!isAegisWeaponFamilyId(equippedWeaponId)) return null;
+    const actions = deriveAegisWeaponActions(equippedWeaponId);
+    if (!actions) return null;
+    return actions.map((id) => {
+      const def = getAegisWeaponActionDefinition(id);
+      return {
+        id,
+        label: def?.label ?? formatAegisWeaponActionLabel(id),
+        costLine: formatClassAbilityCostLine('AEGIS', id) ?? '',
+        description: def?.description ?? '',
+        tagsLine: aegisWeaponActionTags(id).join(' · '),
+      };
+    });
+  }, [account.activeClass, equippedWeaponId]);
+
+  const hexReadOnlyWeaponActions = useMemo((): ReadOnlyWeaponActionCard[] | null => {
     if (account.activeClass !== 'HEX_SHOT' || !equippedWeaponId) return null;
     if (!isHexWeaponFamilyId(equippedWeaponId)) return null;
     const actions = deriveHexWeaponActions(equippedWeaponId);
@@ -195,11 +245,13 @@ export default function DeckWorkspace({
         id,
         label: def?.label ?? formatHexWeaponActionLabel(id),
         costLine: formatClassAbilityCostLine('HEX_SHOT', id) ?? '',
+        description: def?.description ?? '',
+        tagsLine: def?.tags?.join(' · ') ?? 'WEAPON ACTION',
       };
     });
   }, [account.activeClass, equippedWeaponId]);
 
-  const envoyReadOnlyWeaponActions = useMemo(() => {
+  const envoyReadOnlyWeaponActions = useMemo((): ReadOnlyWeaponActionCard[] | null => {
     if (account.activeClass !== 'ENVOY' || !equippedWeaponId) return null;
     if (!isEnvoyWeaponFamilyId(equippedWeaponId)) return null;
     const actions = deriveEnvoyWeaponActions(equippedWeaponId);
@@ -208,11 +260,18 @@ export default function DeckWorkspace({
       const def = getEnvoyWeaponActionDefinition(id);
       return {
         id,
-        label: def?.label ?? formatEnvoyWeaponActionLabel(id),
+        label: def?.displayName ?? formatEnvoyWeaponActionLabel(id),
         costLine: formatClassAbilityCostLine('ENVOY', id) ?? '',
+        description: def?.description ?? '',
+        tagsLine: getEnvoyAbilityTags(id).join(' · ') || 'WEAPON ACTION',
       };
     });
   }, [account.activeClass, equippedWeaponId]);
+
+  const readOnlyWeaponActions = useMemo(
+    () => aegisReadOnlyWeaponActions ?? hexReadOnlyWeaponActions ?? envoyReadOnlyWeaponActions,
+    [aegisReadOnlyWeaponActions, hexReadOnlyWeaponActions, envoyReadOnlyWeaponActions],
+  );
 
   const pool: PoolEntry[] = useMemo(() => {
     const withGuidance = (id: string, base: Omit<PoolEntry, 'guidanceLabel' | 'guidanceReason'>): PoolEntry => {
@@ -299,10 +358,10 @@ export default function DeckWorkspace({
     if (account.activeClass === 'AEGIS') {
       if (!isAegisTechniqueId(abilityId)) return;
       setAegisDraft((prev) => {
-        const next = [...prev] as AegisTechniqueId[];
+        const next = [...prev] as (AegisTechniqueId | null)[];
         const existing = next.indexOf(abilityId);
         if (existing >= 0 && existing !== selectedAegisSlot) {
-          next[existing] = next[selectedAegisSlot]!;
+          next[existing] = next[selectedAegisSlot];
         }
         next[selectedAegisSlot] = abilityId;
         return next;
@@ -318,10 +377,10 @@ export default function DeckWorkspace({
         return;
       }
       setHexDraft((prev) => {
-        const next: HexShotAbilityId[] = [...prev];
+        const next = [...prev] as (HexShotAbilityId | null)[];
         const existing = next.indexOf(id);
         if (existing >= 0 && existing !== selectedHexFlexSlot) {
-          next[existing] = next[selectedHexFlexSlot]!;
+          next[existing] = next[selectedHexFlexSlot];
         }
         next[selectedHexFlexSlot] = id;
         return next;
@@ -336,10 +395,10 @@ export default function DeckWorkspace({
       return;
     }
     setEnvoyDraft((prev) => {
-      const next: EnvoyAbilityId[] = [...prev];
+      const next = [...prev] as (EnvoyAbilityId | null)[];
       const existing = next.indexOf(id);
       if (existing >= 0 && existing !== selectedEnvoyFlexSlot) {
-        next[existing] = next[selectedEnvoyFlexSlot]!;
+        next[existing] = next[selectedEnvoyFlexSlot];
       }
       next[selectedEnvoyFlexSlot] = id;
       return next;
@@ -356,9 +415,54 @@ export default function DeckWorkspace({
     unlockHexShotAbility,
   ]);
 
+  const removeFromSlot = useCallback((slotIndex: 0 | 1 | 2) => {
+    if (account.activeClass === 'AEGIS') {
+      setAegisDraft((prev) => {
+        const next = [...prev] as (AegisTechniqueId | null)[];
+        next[slotIndex] = null;
+        return next;
+      });
+      return;
+    }
+    if (account.activeClass === 'HEX_SHOT') {
+      setHexDraft((prev) => {
+        const next = [...prev] as (HexShotAbilityId | null)[];
+        next[slotIndex] = null;
+        return next;
+      });
+      return;
+    }
+    setEnvoyDraft((prev) => {
+      const next = [...prev] as (EnvoyAbilityId | null)[];
+      next[slotIndex] = null;
+      return next;
+    });
+  }, [account.activeClass]);
+
   useEffect(() => {
     if (!selection) {
       onSelect({ kind: 'SLOT', index: 0 });
+      return;
+    }
+
+    if (selection.kind === 'WA') {
+      const wa = readOnlyWeaponActions?.find((entry) => entry.id === selection.abilityId);
+      onInspectChange({
+        title: (wa?.label ?? selection.abilityId).replace(/[\[\]]/g, '').trim(),
+        status: 'FIXED · WEAPON ACTION',
+        typeLine: account.activeClass.replace(/_/g, ' '),
+        costLine: wa?.costLine || '—',
+        tags: wa?.tagsLine || 'WEAPON ACTION',
+        description: wa?.description
+          || 'Fixed weapon action — derived from the equipped chassis. Not editable.',
+        slotLine: 'WEAPON ACTIONS',
+        guidanceLine: null,
+        actions: [{
+          label: '[ FIXED WEAPON ACTION ]',
+          disabled: true,
+          tone: 'muted',
+        }],
+      });
       return;
     }
 
@@ -379,17 +483,15 @@ export default function DeckWorkspace({
         typeLine: `SLOT ${(slotIndex ?? 0) + 1}`,
         costLine: '—',
         tags: '—',
-        description: 'Select an ability from the pool to assign here.',
+        description: 'Select an ability from the pool, then assign it to this slot.',
         slotLine: `SLOT ${(slotIndex ?? 0) + 1}`,
         guidanceLine: null,
-        actions: [{ label: '[ SELECT ABILITY FROM POOL ]', disabled: true, tone: 'muted' }],
+        actions: [],
       });
       return;
     }
 
     const poolEntry = pool.find((entry) => entry.id === abilityId);
-    const isAegis = account.activeClass === 'AEGIS';
-    const isAnchor = false;
     const assignSlotLabel = (
       account.activeClass === 'AEGIS'
         ? selectedAegisSlot
@@ -399,18 +501,12 @@ export default function DeckWorkspace({
     ) + 1;
 
     const actions: DeckDossierAction[] = [];
-    if (isAnchor && slotIndex === 0) {
-      actions.push({ label: '[ FIXED CLASS ANCHOR ]', disabled: true, tone: 'muted' });
-    } else if (slotIndex != null && selection.kind === 'SLOT') {
+    if (slotIndex != null && selection.kind === 'SLOT') {
+      const flexIndex = slotIndex as 0 | 1 | 2;
       actions.push({
         label: `[ REMOVE FROM SLOT ${slotIndex + 1} ]`,
-        disabled: true,
-        tone: 'muted',
-      });
-      actions.push({
-        label: '[ SELECT POOL ABILITY TO REPLACE ]',
-        disabled: true,
-        tone: 'muted',
+        onPress: () => removeFromSlot(flexIndex),
+        tone: 'danger',
       });
     } else if (selection.kind === 'POOL') {
       if (!poolEntry?.unlocked) {
@@ -443,11 +539,9 @@ export default function DeckWorkspace({
 
     onInspectChange({
       title: (poolEntry?.label ?? abilityId).replace(/[\[\]]/g, '').trim(),
-      status: isAnchor && slotIndex === 0
-        ? 'ANCHOR · FIXED'
-        : slotIndex != null
-          ? `IN DECK · SLOT ${slotIndex + 1}`
-          : poolEntry?.unlocked ? 'AVAILABLE' : 'LOCKED',
+      status: slotIndex != null
+        ? `IN DECK · SLOT ${slotIndex + 1}`
+        : poolEntry?.unlocked ? 'AVAILABLE' : 'LOCKED',
       typeLine: account.activeClass.replace(/_/g, ' '),
       costLine: poolEntry?.costLine || '—',
       tags: poolEntry?.tagsLine || '—',
@@ -465,6 +559,8 @@ export default function DeckWorkspace({
     onInspectChange,
     onSelect,
     pool,
+    readOnlyWeaponActions,
+    removeFromSlot,
     selectedAegisSlot,
     selectedHexFlexSlot,
     selectedEnvoyFlexSlot,
@@ -474,14 +570,24 @@ export default function DeckWorkspace({
   const slotIndices = [0, 1, 2];
   const activeSlots = slotIndices.map((index) => {
     const abilityId = draft[index];
-    const entry = pool.find((item) => item.id === abilityId)
-      ?? {
-        id: abilityId ?? 'EMPTY',
-        label: abilityId ?? 'EMPTY',
+    const entry = abilityId
+      ? (pool.find((item) => item.id === abilityId)
+        ?? {
+          id: abilityId,
+          label: abilityId,
+          description: '',
+          costLine: formatClassAbilityCostLine(account.activeClass, abilityId as never) ?? '',
+          tagsLine: '',
+          unlocked: true,
+          inDeckSlot: index,
+          guidanceLabel: null,
+          guidanceReason: null,
+        })
+      : {
+        id: 'EMPTY',
+        label: 'EMPTY',
         description: '',
-        costLine: abilityId
-          ? (formatClassAbilityCostLine(account.activeClass, abilityId as never) ?? '')
-          : '',
+        costLine: '',
         tagsLine: '',
         unlocked: true,
         inDeckSlot: index,
@@ -493,30 +599,44 @@ export default function DeckWorkspace({
     return { index: index as 0 | 1 | 2 | 3, entry, isAnchor, selected, abilityId };
   });
 
-  const readOnlyWeaponActions = hexReadOnlyWeaponActions ?? envoyReadOnlyWeaponActions;
-
   return (
     <View style={styles.root}>
       {readOnlyWeaponActions ? (
         <View style={[styles.activeDeck, compact && styles.activeDeckCompact, { marginBottom: 8 }]}>
-          {readOnlyWeaponActions.map((wa) => (
-            <View key={wa.id} style={[styles.deckSlot, { opacity: 0.88 }]}>
-              <View style={styles.slotTopline}>
-                <TerminalText size={7} letterSpacing={0.9} style={styles.slotMeta}>
-                  WA
+          {readOnlyWeaponActions.map((wa) => {
+            const selected = selection?.kind === 'WA' && selection.abilityId === wa.id;
+            return (
+              <HapticPressable
+                key={wa.id}
+                onPress={() => onSelect({ kind: 'WA', abilityId: wa.id })}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Fixed weapon action ${wa.label}`}
+                style={({ pressed }) => ([
+                  styles.deckSlot,
+                  selected && styles.deckSlotSelected,
+                  !selected && { opacity: 0.92 },
+                  pressed && { opacity: 0.88 },
+                ])}
+              >
+                {selected ? <OccultNeonRail style={styles.slotAccent} /> : null}
+                <View style={styles.slotTopline}>
+                  <TerminalText size={7} letterSpacing={0.9} style={styles.slotMeta}>
+                    WA
+                  </TerminalText>
+                  <TerminalText size={7} letterSpacing={0.9} style={{ color: MUTED, fontWeight: '700' }}>
+                    FIXED
+                  </TerminalText>
+                </View>
+                <TerminalText size={9.5} letterSpacing={0.3} style={styles.slotTitle} numberOfLines={1}>
+                  {wa.label.replace(/[\[\]]/g, '').trim().toUpperCase()}
                 </TerminalText>
-                <TerminalText size={7} letterSpacing={0.9} style={{ color: MUTED, fontWeight: '700' }}>
-                  FIXED
+                <TerminalText size={7.5} style={styles.slotCost} numberOfLines={1}>
+                  {wa.costLine || '—'}
                 </TerminalText>
-              </View>
-              <TerminalText size={9.5} letterSpacing={0.3} style={styles.slotTitle} numberOfLines={1}>
-                {wa.label.replace(/[\[\]]/g, '').trim().toUpperCase()}
-              </TerminalText>
-              <TerminalText size={7.5} style={styles.slotCost} numberOfLines={1}>
-                {wa.costLine || '—'}
-              </TerminalText>
-            </View>
-          ))}
+              </HapticPressable>
+            );
+          })}
         </View>
       ) : null}
       <View style={[styles.activeDeck, compact && styles.activeDeckCompact]}>

@@ -1,6 +1,9 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import CombatGroundContact from './ui/CombatGroundContact';
+import {
+  TARGET_BRACKET_INSET_X,
+  TARGET_BRACKET_INSET_Y,
+} from './ui/TargetingBrackets';
 
 interface EnemyEntityProps {
   /** Animated sprite subtree — breathing/motion applies here only. */
@@ -9,7 +12,9 @@ interface EnemyEntityProps {
   showVitals?: boolean;
 }
 
-/** Static hostile shell — sprite animates independently of concept nameplate. */
+/**
+ * Static hostile shell — vitals overlay the upper sprite, matched to bracket width.
+ */
 export default function EnemyEntity({
   sprite,
   vitals,
@@ -17,14 +22,13 @@ export default function EnemyEntity({
 }: EnemyEntityProps): React.JSX.Element {
   return (
     <View style={styles.staticContainer}>
-      {showVitals && vitals ? (
-        <View style={styles.nameplateContainer} pointerEvents="none">
-          {vitals}
-        </View>
-      ) : null}
       <View style={styles.spriteSlot}>
-        <CombatGroundContact hostile />
         <View style={styles.spriteLift}>{sprite}</View>
+        {showVitals && vitals ? (
+          <View style={styles.nameplateOverlay} pointerEvents="none">
+            {vitals}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -41,7 +45,9 @@ const styles = StyleSheet.create({
   },
   spriteSlot: {
     width: '100%',
-    height: '100%',
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'visible',
@@ -50,15 +56,21 @@ const styles = StyleSheet.create({
   spriteLift: {
     width: '100%',
     height: '100%',
-    // Slight local contrast lift so hostiles separate from the background.
     opacity: 0.96,
   },
-  /** Concept: designation + thin HP rail float above the sprite head. */
-  nameplateContainer: {
+  /**
+   * Same width as TargetingBrackets. Anchored to the bracket top edge, then
+   * shifted fully upward so the plate sits above the L-corners (not inside).
+   */
+  nameplateOverlay: {
     position: 'absolute',
-    top: -58,
-    width: '96%',
-    alignSelf: 'center',
-    zIndex: 16,
+    left: TARGET_BRACKET_INSET_X,
+    right: TARGET_BRACKET_INSET_X,
+    top: TARGET_BRACKET_INSET_Y,
+    transform: [{ translateY: '-100%' }],
+    marginTop: -6,
+    zIndex: 24,
+    elevation: 24,
+    alignItems: 'stretch',
   },
 });

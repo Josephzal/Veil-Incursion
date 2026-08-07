@@ -292,6 +292,12 @@ export default function CombatScreen(): React.JSX.Element {
     intelTargetHandlerRef.current = handler;
   }, []);
 
+  const registerAbyssalVerdictHandlers = useCallback((
+    handlers: { prime: () => void; cancel: () => void } | null,
+  ) => {
+    abyssalVerdictHandlersRef.current = handlers;
+  }, []);
+
   const handleEnemyUnitPress = useCallback((unitId: string) => {
     pulseCombatTargetSelect();
     targetHandlerRef.current(unitId);
@@ -1089,9 +1095,7 @@ export default function CombatScreen(): React.JSX.Element {
                       registerTargetHandler={registerTargetHandler}
                       registerIntelTargetHandler={registerIntelTargetHandler}
                       onAbyssalVerdictUiChange={setAbyssalVerdictUi}
-                      registerAbyssalVerdictHandlers={(handlers) => {
-                        abyssalVerdictHandlersRef.current = handlers;
-                      }}
+                      registerAbyssalVerdictHandlers={registerAbyssalVerdictHandlers}
                       onSquadUiChange={handleSquadUiChange}
                       onOperativeTelemetryChange={handleOperativeTelemetryChange}
                       enemySquad={combatSquad}
@@ -1217,14 +1221,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     position: 'relative',
-    overflow: 'hidden',
+    // Visible so console hover detail can paint above the dock without clipping.
+    overflow: 'visible',
   },
   body: {
     flex: 1,
     minHeight: 0,
     flexDirection: 'column',
     position: 'relative',
-    overflow: 'hidden',
+    // Visible so ability hover panels can extend above the console band.
+    overflow: 'visible',
   },
   arenaPanel: {
     ...StyleSheet.absoluteFill,
