@@ -9,7 +9,6 @@ import {
   SectorDefinition,
   SkillCheckEvent,
   TOTAL_RUN_NODES,
-  Trinket,
 } from '../types/run';
 import { getClusterBiomes } from './climateClusters';
 import { pickSectorFromUnlocked } from './biomes';
@@ -89,23 +88,6 @@ const ENCOUNTER_LABELS: Record<EncounterType, string[]> = {
   SKILL_CHECK: ['Signal Anomaly', 'Rift Disturbance', 'Calibration Event'],
   REST: ['Sanctuary Anchor', 'Safe Room', 'Recovery Node'],
 };
-
-export const TRINKET_POOL: Trinket[] = [
-  { id: 'tuning-fork', name: 'Tuning Fork', description: 'Resonates with parry windows.', effect: '+20% Parry Window, -5% Slice Damage', parryWindowBonus: 0.2, sliceDamagePenalty: 0.05 },
-  { id: 'ghost-battery', name: 'Ghost Battery', description: 'Stores abyssal bleed from the veil.', effect: 'Start fights with 25% Abyssal', startingAbyssalReservePercent: 25 },
-  { id: 'anchor-plate', name: 'Anchor Plate', description: 'Reinforced soul plating.', effect: '+15 Max Soul Anchor HP', maxHpBonus: 15 },
-  { id: 'counter-matrix', name: 'Counter Matrix', description: 'Enhanced deflection firmware.', effect: '+10% Parry Counter Damage', parryMultiplierBonus: 0.1 },
-  { id: 'ley-suture', name: 'Ley Suture', description: 'Stitches wounds across dimensions.', effect: 'Restore 20 Soul Anchor HP', hpRestore: 20 },
-  { id: 'stamina-coil', name: 'Stamina Coil', description: 'Overclocked metabolic capacitor.', effect: 'Restore 30 Stamina', staminaRestore: 30 },
-];
-
-export const POST_COMBAT_BOON_POOL: Trinket[] = [
-  { id: 'combat-fork', name: 'Tuning Fork', description: 'Parry timing harmonics improved.', effect: '+20% Parry Window', parryWindowBonus: 0.2 },
-  { id: 'combat-matrix', name: 'Aegis Matrix', description: 'Counter-strike amplification.', effect: '+10% Parry Counter', parryMultiplierBonus: 0.1 },
-  { id: 'combat-coil', name: 'Reservoir Coil', description: 'Abyssal pre-charge on entry.', effect: '+25% Start Abyssal Reserve', startingAbyssalReservePercent: 25 },
-  { id: 'combat-plate', name: 'Veil Plate', description: 'Emergency anchor reinforcement.', effect: '+10 Max HP', maxHpBonus: 10 },
-  { id: 'combat-edge', name: 'Monomolecular Edge', description: 'Sharper slice vectors.', effect: '-5% Slice Penalty Removed', sliceDamagePenalty: -0.05 },
-];
 
 /** Pick sectors with unique display names — never two cards for the same location name. */
 export function pickRandomSectors(count: number): SectorDefinition[] {
@@ -379,13 +361,4 @@ export function getThemedSkillChecks(theme: RegionTheme): SkillCheckEvent[] {
     ],
   };
   return base[theme] ?? base.CITY;
-}
-
-export function pickRandomTrinkets(pool: Trinket[], count: number): Trinket[] {
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-export function pickRandomPostCombatBoons(count: number): Trinket[] {
-  return pickRandomTrinkets(POST_COMBAT_BOON_POOL, count);
 }

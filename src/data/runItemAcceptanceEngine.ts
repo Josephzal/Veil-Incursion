@@ -15,10 +15,9 @@ import {
 } from './runItemRunUiEngine';
 import {
   createDefaultRunItemRuntime,
-  createDefaultRunItemsSlotState,
   RUN_ITEM_COMBAT_IDS,
 } from '../types/runItem';
-import type { RunItemId, RunItemsSlotState } from '../types/runItem';
+import type { RunItemId } from '../types/runItem';
 import { ALL_RUN_ITEM_IDS, FORBIDDEN_RUN_ITEM_IDS } from '../types/runItem';
 import { RUN_ITEM_REGISTRY } from './runItemRegistry';
 import { rollBlackMarketStock } from './blackMarket';
@@ -35,9 +34,9 @@ import {
   resetRunItemTurnCounters,
 } from './runItemRunState';
 import {
-  setRunItemInSlot,
-  tryAutoPlaceRunItem,
-} from './runItemInventoryEngine';
+  placeSupplyAtCell,
+  placeSupplyAtFirstOpenCell,
+} from './cargoSupplyEngine';
 import {
   useContainmentFoamFieldTool,
   useDeadDropTokenFieldTool,
@@ -66,25 +65,29 @@ function createCombatCtx(
 }
 
 function createAcceptanceIncursion(
-  slots?: RunItemsSlotState,
+  supplies: RunItemId[] = [],
   cargo?: CargoRunState,
 ): ActiveIncursionState {
+  let packedCargo = cargo ?? createDefaultCargoRunState();
+  supplies.forEach((itemId) => {
+    packedCargo = placeSupplyAtFirstOpenCell(packedCargo, itemId, 'DEBUG') ?? packedCargo;
+  });
   return {
     ...createDefaultActiveIncursionState(),
     isRunActive: true,
-    runItems: slots ?? createDefaultRunItemsSlotState(),
-    itemRuntime: createDefaultRunItemRuntime(),
-    cargo: cargo ?? createDefaultCargoRunState(),
+    supplyRuntime: createDefaultRunItemRuntime(),
+    cargo: packedCargo,
   };
 }
 
-function fillAllRunItemSlots(): RunItemsSlotState {
-  let slots = createDefaultRunItemsSlotState();
-  slots = setRunItemInSlot(slots, 'COMBAT', 0, 'standard-coagulant');
-  slots = setRunItemInSlot(slots, 'COMBAT', 1, 'trauma-patch');
-  slots = setRunItemInSlot(slots, 'FIELD', 0, 'sonar-ping');
-  slots = setRunItemInSlot(slots, 'FIELD', 1, 'dead-drop-token');
-  return slots;
+function fillAllCargoCells(): CargoRunState {
+  let cargo = createDefaultCargoRunState();
+  for (let row = 0; row < 4; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      cargo = placeSupplyAtCell(cargo, 'standard-coagulant', row, col, 'DEBUG') ?? cargo;
+    }
+  }
+  return cargo;
 }
 
 /** Only one combat consumable may resolve per player turn. */
@@ -200,8 +203,7 @@ export function validateDeadDropApexGuard(): RunItemValidationIssue[] {
       currentValue: 500,
     }],
   };
-  const slots = setRunItemInSlot(createDefaultRunItemsSlotState(), 'FIELD', 0, 'dead-drop-token');
-  const inc = createAcceptanceIncursion(slots, cargo);
+  const inc = createAcceptanceIncursion(['dead-drop-token'], cargo);
   const outcome = useDeadDropTokenFieldTool(inc);
   if (outcome.success) {
     issues.push(issue('error', 'Dead-Drop Token banked Apex cargo.', 'dead-drop-token'));
@@ -223,8 +225,7 @@ export function validateContainmentFoamApexGuard(): RunItemValidationIssue[] {
       currentValue: 400,
     }],
   };
-  const slots = setRunItemInSlot(createDefaultRunItemsSlotState(), 'FIELD', 0, 'containment-foam');
-  const inc = createAcceptanceIncursion(slots, cargo);
+  const inc = createAcceptanceIncursion(['containment-foam'], cargo);
   const outcome = useContainmentFoamFieldTool(inc, 'apex-foam');
   if (outcome.success) {
     issues.push(issue('error', 'Containment Foam protected Apex cargo.', 'containment-foam'));
@@ -235,8 +236,7 @@ export function validateContainmentFoamApexGuard(): RunItemValidationIssue[] {
 /** Relay Spike cannot modify boss nodes. */
 export function validateRelaySpikeBossGuard(): RunItemValidationIssue[] {
   const issues: RunItemValidationIssue[] = [];
-  const slots = setRunItemInSlot(createDefaultRunItemsSlotState(), 'FIELD', 0, 'relay-spike');
-  const inc = createAcceptanceIncursion(slots);
+  const inc = createAcceptanceIncursion(['relay-spike']);
   const outcome = useRelaySpikeFieldTool(inc, 'boss-node', true);
   if (outcome.success) {
     issues.push(issue('error', 'Relay Spike planted on boss node.', 'relay-spike'));
@@ -244,16 +244,13 @@ export function validateRelaySpikeBossGuard(): RunItemValidationIssue[] {
   return issues;
 }
 
-/** Full slot buckets reject silent auto-overwrite. */
+/** Full cargo rejects silent auto-overwrite. */
 export function validateRunItemSlotFullGuard(): RunItemValidationIssue[] {
   const issues: RunItemValidationIssue[] = [];
-  const full = fillAllRunItemSlots();
-  const placement = tryAutoPlaceRunItem(full, 'broker-flashcard');
-  if (placement.placed) {
-    issues.push(issue('error', 'Auto-place overwrote a full run item loadout.'));
-  }
-  if (placement.placed !== false || placement.slotType !== 'FIELD') {
-    issues.push(issue('error', 'Full slot auto-place did not report FIELD bucket saturation.'));
+  const full = fillAllCargoCells();
+  const placement = placeSupplyAtFirstOpenCell(full, 'broker-flashcard', 'FIND');
+  if (placement) {
+    issues.push(issue('error', 'Auto-place overwrote full cargo.'));
   }
   return issues;
 }
@@ -287,30 +284,30 @@ export function validateRunItemCounterResetGuard(): RunItemValidationIssue[] {
 /** Empty loadout/runtime remains a no-op across debrief + HUD helpers. */
 export function validateRunItemNoLoadoutRegression(): RunItemValidationIssue[] {
   const issues: RunItemValidationIssue[] = [];
-  const slots = createDefaultRunItemsSlotState();
+  const cargo = createDefaultCargoRunState();
   const runtime = createDefaultRunItemRuntime();
 
-  if (buildRunItemDebriefSummary(runtime, slots) !== null) {
-    issues.push(issue('error', 'Empty debrief summary should return null when nothing slotted or triggered.'));
+  if (buildRunItemDebriefSummary(runtime, cargo) !== null) {
+    issues.push(issue('error', 'Empty debrief summary should return null when no Supply was carried or used.'));
   }
-  if (buildRunItemLiveCounters(runtime, slots).length > 0) {
-    issues.push(issue('error', 'Live counters should be empty with no slotted items and neutral runtime.'));
+  if (buildRunItemLiveCounters(runtime, cargo).length > 0) {
+    issues.push(issue('error', 'Live counters should be empty with no Supplies and neutral runtime.'));
   }
   if (buildRunItemRiskLines(runtime).length > 0) {
     issues.push(issue('error', 'Risk lines should be empty for default runtime.'));
   }
-  if (buildRunItemRunStatusEntries(runtime, slots).length > 0) {
-    issues.push(issue('error', 'Run status entries should be empty without slotted items.'));
+  if (buildRunItemRunStatusEntries(runtime, cargo).length > 0) {
+    issues.push(issue('error', 'Run status entries should be empty without active Supply state.'));
   }
 
-  const toast = formatRunItemTriggerToast(runtime, 'Test trigger.', slots);
-  if (!toast.includes('RUN ITEM')) {
-    issues.push(issue('error', 'Trigger toast should fall back to RUN ITEM label when no items slotted.'));
+  const toast = formatRunItemTriggerToast(runtime, 'Test trigger.', cargo);
+  if (!toast.includes('SUPPLY')) {
+    issues.push(issue('error', 'Trigger toast should fall back to SUPPLY label.'));
   }
 
-  const debriefSim = simulateRunItemDebriefReport(null, slots);
-  if (!debriefSim.includes('none slotted')) {
-    issues.push(issue('error', 'Debrief simulation should report none slotted for empty loadout.'));
+  const debriefSim = simulateRunItemDebriefReport(null, cargo);
+  if (!debriefSim.includes('none carried')) {
+    issues.push(issue('error', 'Debrief simulation should report no carried Supplies.'));
   }
 
   return issues;
@@ -321,12 +318,12 @@ export function validateRunItemStaticAcceptance(): RunItemValidationIssue[] {
   const issues: RunItemValidationIssue[] = [];
 
   if (ALL_RUN_ITEM_IDS.length !== 24) {
-    issues.push(issue('error', `Expected 24 run items, found ${ALL_RUN_ITEM_IDS.length}.`));
+    issues.push(issue('error', `Expected 24 supplys, found ${ALL_RUN_ITEM_IDS.length}.`));
   }
 
   FORBIDDEN_RUN_ITEM_IDS.forEach((forbiddenId) => {
     if (ALL_RUN_ITEM_IDS.includes(forbiddenId as RunItemId)) {
-      issues.push(issue('error', `${forbiddenId} must not appear in the run item roster.`, forbiddenId));
+      issues.push(issue('error', `${forbiddenId} must not appear in the supply roster.`, forbiddenId));
     }
   });
 
@@ -342,7 +339,7 @@ export function validateRunItemStaticAcceptance(): RunItemValidationIssue[] {
 
   const craftRecipes = buildRunItemCraftingRecipes();
   if (craftRecipes.length < 20) {
-    issues.push(issue('warn', `Expected most run items craftable; only ${craftRecipes.length} craft recipes generated.`));
+    issues.push(issue('warn', `Expected most supplys craftable; only ${craftRecipes.length} craft recipes generated.`));
   }
 
   const marketStock = rollBlackMarketStock();
@@ -380,12 +377,12 @@ export function validateRunItemAcceptance(): RunItemValidationIssue[] {
 
 export function formatRunItemAcceptanceReport(issues: RunItemValidationIssue[]): string {
   if (issues.length === 0) {
-    return 'RUN ITEM ACCEPTANCE — OK (0 issues).';
+    return 'SUPPLY ACCEPTANCE — OK (0 issues).';
   }
   const errors = issues.filter((entry) => entry.severity === 'error').length;
   const warnings = issues.filter((entry) => entry.severity === 'warn').length;
   const lines = [
-    `RUN ITEM ACCEPTANCE — ${errors} error(s), ${warnings} warning(s).`,
+    `SUPPLY ACCEPTANCE — ${errors} error(s), ${warnings} warning(s).`,
     ...issues.map((entry) => `- [${entry.severity.toUpperCase()}] ${entry.message}`),
   ];
   return lines.join('\n');

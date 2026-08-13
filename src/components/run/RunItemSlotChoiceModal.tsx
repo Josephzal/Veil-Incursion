@@ -2,37 +2,40 @@ import React, { useMemo } from 'react';
 import { Image, Modal, ScrollView, StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
 import HapticPressable from '../HapticPressable';
-import type { RunItemOfferResolution, RunItemPendingOffer, RunItemsSlotState } from '../../types/runItem';
+import type { RunItemOfferResolution, RunItemPendingOffer } from '../../types/runItem';
+import type { CargoRunState } from '../../types/cargoGrid';
+import { CARGO_ITEM_CATALOG } from '../../types/cargoGrid';
 import { getRunItemDefinition } from '../../data/runItemRegistry';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
-import { canUseRunItemOfferNow, formatRunItemSlotLabel, type RunItemActiveContext } from '../../data/runItemUseEngine';
-import { listOccupiedRunItemSlots } from '../../data/runItemInventoryEngine';
+import { canUseRunItemOfferNow, type RunItemActiveContext } from '../../data/runItemUseEngine';
 
 interface RunItemSlotChoiceModalProps {
   visible: boolean;
   offer: RunItemPendingOffer | null;
-  slots: RunItemsSlotState;
+  cargo: CargoRunState;
   accentColor: string;
   mutedColor: string;
   activeContext: RunItemActiveContext;
-  onResolve: (resolution: RunItemOfferResolution, slotIndex?: number) => void;
+  onResolve: (resolution: RunItemOfferResolution, cargoInstanceId?: string) => void;
 }
 
 export default function RunItemSlotChoiceModal({
   visible,
   offer,
-  slots,
+  cargo,
   accentColor,
   mutedColor,
   activeContext,
   onResolve,
 }: RunItemSlotChoiceModalProps): React.JSX.Element | null {
   const def = offer ? getRunItemDefinition(offer.itemId) : null;
-  const occupiedSlots = useMemo(
-    () => (offer ? listOccupiedRunItemSlots(slots, offer.slotType) : []),
-    [offer, slots],
+  const occupiedCargo = useMemo(
+    () => cargo.grid.placed.filter((instance) => !instance.blackMarketStaged),
+    [cargo.grid.placed],
   );
-  const canUseNow = def && offer ? canUseRunItemOfferNow(def, activeContext) : false;
+  const canUseNow = def && offer && activeContext === 'COMBAT'
+    ? canUseRunItemOfferNow(def, activeContext)
+    : false;
 
   if (!visible || !offer || !def) return null;
 
@@ -41,7 +44,7 @@ export default function RunItemSlotChoiceModal({
       <View style={styles.backdrop}>
         <View style={[styles.panel, { borderColor: accentColor }]}>
           <TerminalText variant="section" style={{ color: accentColor, textAlign: 'center' }}>
-            [ RUN ITEM SLOTS FULL ]
+            [ CARGO FULL ]
           </TerminalText>
           <View style={styles.incomingRow}>
             <Image source={resolveCargoItemIcon(offer.itemId)} style={styles.icon} resizeMode="contain" />
@@ -55,16 +58,16 @@ export default function RunItemSlotChoiceModal({
             </View>
           </View>
           <TerminalText variant="caption" style={{ color: mutedColor, textAlign: 'center', marginTop: 8 }}>
-            Choose how to handle the incoming item. Items are never silently deleted.
+            Rearrange cargo before purchase, jettison an eligible instance, decline, or use immediately.
           </TerminalText>
 
           <ScrollView style={styles.optionList} contentContainerStyle={{ gap: 8, paddingVertical: 12 }}>
-            {occupiedSlots.map(({ slotIndex, itemId }) => {
-              const existing = getRunItemDefinition(itemId);
+            {occupiedCargo.map((instance) => {
+              const existing = CARGO_ITEM_CATALOG[instance.itemId];
               return (
                 <HapticPressable
-                  key={`replace-${slotIndex}`}
-                  onPress={() => onResolve('replace', slotIndex)}
+                  key={`replace-${instance.instanceId}`}
+                  onPress={() => onResolve('replace', instance.instanceId)}
                   style={({ pressed }) => [
                     styles.optionRow,
                     {
@@ -75,10 +78,10 @@ export default function RunItemSlotChoiceModal({
                   ]}
                 >
                   <TerminalText variant="body" style={{ color: accentColor, fontWeight: '700' }}>
-                    {`REPLACE ${formatRunItemSlotLabel(offer.slotType, slotIndex)}`.toUpperCase()}
+                    {`JETTISON ${existing.name}`.toUpperCase()}
                   </TerminalText>
                   <TerminalText variant="caption" style={{ color: mutedColor, marginTop: 4 }}>
-                    {`Discard ${existing.shortName} and equip incoming item.`}
+                    Place the incoming Supply into the freed cargo cell.
                   </TerminalText>
                 </HapticPressable>
               );
@@ -100,7 +103,7 @@ export default function RunItemSlotChoiceModal({
                   USE NOW
                 </TerminalText>
                 <TerminalText variant="caption" style={{ color: mutedColor, marginTop: 4 }}>
-                  Consume immediately without occupying a slot.
+                  Create and consume the incoming Supply transactionally.
                 </TerminalText>
               </HapticPressable>
             ) : null}
@@ -117,10 +120,10 @@ export default function RunItemSlotChoiceModal({
               ]}
             >
               <TerminalText variant="body" style={{ color: mutedColor, fontWeight: '700' }}>
-                DISCARD INCOMING
+                DECLINE INCOMING
               </TerminalText>
               <TerminalText variant="caption" style={{ color: mutedColor, marginTop: 4 }}>
-                Drop the new item. Keep current loadout.
+                Leave the new Supply behind. Existing cargo is unchanged.
               </TerminalText>
             </HapticPressable>
 
@@ -140,7 +143,7 @@ export default function RunItemSlotChoiceModal({
                   CANCEL PURCHASE
                 </TerminalText>
                 <TerminalText variant="caption" style={{ color: mutedColor, marginTop: 4 }}>
-                  {`Refund ${offer.purchaseCost} run credits and keep current slots.`}
+                  No credits are charged. Cargo and market stock remain unchanged.
                 </TerminalText>
               </HapticPressable>
             ) : null}

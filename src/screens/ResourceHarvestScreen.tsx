@@ -103,8 +103,8 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   const canisterFull = activeIncursion.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE;
   const canVacuum = lootPool.length > 0 && !canisterFull;
 
-  const showSplitterPrompt = hasFieldRunItem(activeIncursion.runItems, 'ley-slag-splitter')
-    && !activeIncursion.itemRuntime.leySlagSplitterArmed
+  const showSplitterPrompt = hasFieldRunItem(activeIncursion.cargo, 'ley-slag-splitter')
+    && !activeIncursion.supplyRuntime.leySlagSplitterArmed
     && activeIncursion.pendingHarvestReturn !== 'RESOURCE_CACHE';
 
   const continueLabel = useMemo(
@@ -162,8 +162,8 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       return;
     }
     if (
-      hasFieldRunItem(activeIncursion.runItems, 'ley-slag-splitter')
-      && !activeIncursion.itemRuntime.leySlagSplitterArmed
+      hasFieldRunItem(activeIncursion.cargo, 'ley-slag-splitter')
+      && !activeIncursion.supplyRuntime.leySlagSplitterArmed
     ) {
       return;
     }
@@ -173,9 +173,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     setResidueSpawnGeneration((gen) => gen + 1);
   }, [
     activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId,
-    activeIncursion.itemRuntime.leySlagSplitterArmed,
+    activeIncursion.supplyRuntime.leySlagSplitterArmed,
     activeIncursion.pendingHarvestReturn,
-    activeIncursion.runItems,
+    activeIncursion.cargo,
     appendRunLog,
     applyHarvestChoice,
   ]);

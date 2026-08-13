@@ -12,18 +12,14 @@ import type {
 } from '../types/runItem';
 import { getAvailableProceduralNodeIds } from './proceduralScannerBridge';
 import { patchKeepsakeNodeModifiers } from './expeditionKeepsakeRouteEngine';
-import {
-  consumeRunItemFromFieldSlot,
-  getRunItemInFieldSlot,
-} from './runItemInventoryEngine';
-import { mergeRunItemRuntime, recordRunItemTrigger } from './runItemRunState';
+import { consumeSupplyInstance, findSupplyInstance } from './cargoSupplyEngine';
+import { mergeRunItemRuntime, recordRunItemTrigger, recordSupplyUse } from './runItemRunState';
 import { getRunItemDefinition } from './runItemRegistry';
 
 export interface RunItemFieldChoiceCommitOutcome {
   success: boolean;
   logLines: string[];
   runtime?: RunItemRuntime;
-  runItems?: ActiveIncursionState['runItems'];
   cargo?: CargoRunState;
   runCredits?: number;
   proceduralRunTree?: ProceduralRunTree;
@@ -124,12 +120,12 @@ function commitRelaySpikeAction(
   action: RelaySpikeAction,
   nodeId: string,
 ): RunItemFieldChoiceCommitOutcome {
-  const relay = inc.itemRuntime.pendingRelayModifier;
+  const relay = inc.supplyRuntime.pendingRelayModifier;
   if (!relay || relay.plantedNodeId !== nodeId) {
     return { success: false, logLines: ['[REJECTED] >> No relay spike pending for this node.'] };
   }
 
-  let runtime = mergeRunItemRuntime(inc.itemRuntime, {
+  let runtime = mergeRunItemRuntime(inc.supplyRuntime, {
     pendingRelayModifier: {
       plantedNodeId: nodeId,
       relayAction: action,
@@ -204,17 +200,18 @@ function commitRelaySpikeAction(
 }
 
 function consumeFieldTool(
-  slots: ActiveIncursionState['runItems'],
+  cargo: CargoRunState,
   itemId: RunItemId,
   runtime: RunItemRuntime,
-): { slots: ActiveIncursionState['runItems']; runtime: RunItemRuntime } | null {
-  if (getRunItemInFieldSlot(slots, itemId) == null) return null;
-  const nextSlots = consumeRunItemFromFieldSlot(slots, itemId);
-  if (!nextSlots) return null;
+): { cargo: CargoRunState; runtime: RunItemRuntime } | null {
+  const instance = findSupplyInstance(cargo, itemId);
+  if (!instance) return null;
+  const consumed = consumeSupplyInstance(cargo, instance.instanceId);
+  if (!consumed) return null;
   const def = getRunItemDefinition(itemId);
   return {
-    slots: nextSlots,
-    runtime: recordRunItemTrigger(runtime, def.triggerText),
+    cargo: consumed.cargo,
+    runtime: recordSupplyUse(recordRunItemTrigger(runtime, def.triggerText), itemId),
   };
 }
 
@@ -222,7 +219,7 @@ function commitEchoTuningFork(
   inc: ActiveIncursionState,
   mode: EchoTuningForkMode,
 ): RunItemFieldChoiceCommitOutcome {
-  const consumed = consumeFieldTool(inc.runItems, 'echo-tuning-fork', inc.itemRuntime);
+  const consumed = consumeFieldTool(inc.cargo, 'echo-tuning-fork', inc.supplyRuntime);
   if (!consumed) {
     return { success: false, logLines: ['[REJECTED] >> No Echo Tuning Fork in Field Tool slots.'] };
   }
@@ -234,7 +231,7 @@ function commitEchoTuningFork(
     success: true,
     logLines: [`>> ECHO TUNING FORK // ${mode} frequency locked.`],
     runtime,
-    runItems: consumed.slots,
+    cargo: consumed.cargo,
     resumeEngage: true,
   };
 }
@@ -243,7 +240,7 @@ function commitAnchorNeedle(
   inc: ActiveIncursionState,
   mode: AnchorNeedleMode,
 ): RunItemFieldChoiceCommitOutcome {
-  const consumed = consumeFieldTool(inc.runItems, 'anchor-needle', inc.itemRuntime);
+  const consumed = consumeFieldTool(inc.cargo, 'anchor-needle', inc.supplyRuntime);
   if (!consumed) {
     return { success: false, logLines: ['[REJECTED] >> No Anchor Needle in Field Tool slots.'] };
   }
@@ -255,7 +252,7 @@ function commitAnchorNeedle(
     success: true,
     logLines: [`>> ANCHOR NEEDLE // ${mode} mode selected.`],
     runtime,
-    runItems: consumed.slots,
+    cargo: consumed.cargo,
     resumeEngage: true,
   };
 }
@@ -273,7 +270,7 @@ export function commitRunItemFieldChoice(
   inc: ActiveIncursionState,
   selectedValue: string,
 ): RunItemFieldChoiceCommitOutcome {
-  const choice = inc.itemRuntime.pendingFieldChoice;
+  const choice = inc.supplyRuntime.pendingFieldChoice;
   if (!choice) {
     return { success: false, logLines: ['[REJECTED] >> No field-tool choice pending.'] };
   }

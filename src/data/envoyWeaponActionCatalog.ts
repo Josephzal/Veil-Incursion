@@ -74,7 +74,7 @@ function def(
 const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   GRAVEWEAVE: def({
     id: 'GRAVEWEAVE',
-    familyId: 'envoy-echo-lantern',
+    familyId: 'envoy-vambrace',
     order: 1,
     displayName: 'Graveweave',
     description: 'Low occult brand. Applies 2 Veil Rot. Strips 1 Occult Ward. Primes NULL.',
@@ -104,7 +104,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   GRAVE_TRANSFER: def({
     id: 'GRAVE_TRANSFER',
-    familyId: 'envoy-echo-lantern',
+    familyId: 'envoy-vambrace',
     order: 2,
     displayName: 'Grave Transfer',
     description: 'Move up to 2 Veil Rot from one enemy to another. Light occult on the destination. Primes ECHO.',
@@ -134,7 +134,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   VEIL_BRAND: def({
     id: 'VEIL_BRAND',
-    familyId: 'envoy-echo-lantern',
+    familyId: 'envoy-vambrace',
     order: 3,
     displayName: 'Veil Brand',
     description: 'Brand the target: 5 occult, 1 Veil Rot, −1 AP next turn. Primes ECHO.',
@@ -164,7 +164,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   ROT_KNELL: def({
     id: 'ROT_KNELL',
-    familyId: 'envoy-echo-lantern',
+    familyId: 'envoy-vambrace',
     order: 4,
     displayName: 'Rot Knell',
     description: 'Consume up to 2 Veil Rot on the target for 8 occult per stack consumed. Primes ASH.',
@@ -194,7 +194,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   NULL_ARC: def({
     id: 'NULL_ARC',
-    familyId: 'envoy-null-conduit',
+    familyId: 'envoy-scythe',
     order: 1,
     displayName: 'Null Arc',
     description: 'Efficient occult arc. 1 Veil Rot, 1 Ward strip. Primes NULL. CLEAN CYCLE after NULL or BLOOD.',
@@ -224,7 +224,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   SILENT_EDGE: def({
     id: 'SILENT_EDGE',
-    familyId: 'envoy-null-conduit',
+    familyId: 'envoy-scythe',
     order: 2,
     displayName: 'Silent Edge',
     description: '14 occult, 1 Rot, 1 Ward strip. Primes ECHO. Completes Silencing Echo after NULL.',
@@ -254,7 +254,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   VEIN_CUT: def({
     id: 'VEIN_CUT',
-    familyId: 'envoy-null-conduit',
+    familyId: 'envoy-scythe',
     order: 3,
     displayName: 'Vein Cut',
     description: '10 occult, 1 Rot. Primes BLOOD. Sets Clean Cycle for a later Null Arc.',
@@ -284,7 +284,7 @@ const CATALOG: Record<EnvoyWeaponActionId, EnvoyWeaponActionDefinition> = {
   }),
   SMOKE_ARC: def({
     id: 'SMOKE_ARC',
-    familyId: 'envoy-null-conduit',
+    familyId: 'envoy-scythe',
     order: 4,
     displayName: 'Smoke Arc',
     description: '8 occult, +5 Flux on hit, −10% enemy accuracy. Primes ASH. No Veil Rot.',

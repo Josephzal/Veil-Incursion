@@ -13,7 +13,6 @@ import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import OverworldHubScreen from './src/screens/OverworldHubScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
-import BoundRequisitionScreen from './src/screens/BoundRequisitionScreen';
 import ScanningScreen from './src/screens/ScanningScreen';
 import NarrativeScreen from './src/screens/NarrativeScreen';
 import PostCombatBoonScreen from './src/screens/PostCombatBoonScreen';
@@ -46,7 +45,6 @@ function GameRoot(): React.JSX.Element {
       <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
         {currentScreen === 'HUB' && <OverworldHubScreen />}
         {currentScreen === 'WELCOME' && <WelcomeScreen />}
-        {currentScreen === 'BOUND_REQUISITION' && <BoundRequisitionScreen />}
         {currentScreen === 'SCANNING' && <ScanningScreen />}
         {currentScreen === 'NARRATIVE' && <NarrativeScreen />}
         {currentScreen === 'POST_COMBAT_BOON' && <PostCombatBoonScreen />}

@@ -19,8 +19,8 @@ export interface WeaponDrawbackRecord {
 }
 
 export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecord> = {
-  'aegis-runed-longsword': {
-    familyId: 'aegis-runed-longsword',
+  'aegis-longsword': {
+    familyId: 'aegis-longsword',
     primaryStructuralWeakness: 'Single-target melee only — no innate AoE or backline reach.',
     secondaryMatchupWeakness: 'Never best burst or hard control vs specialists.',
     mechanicalEnforcement: 'STRIKE basic always one target; no spread/column hits; mid Fracture/Reserve.',
@@ -30,8 +30,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Must remain worse at burst and crowd clear than Claymore/Pulse specialists.',
     testId: 'drawback-longsword-single-target',
   },
-  'aegis-rift-edge': {
-    familyId: 'aegis-rift-edge',
+  'aegis-paired-blades': {
+    familyId: 'aegis-paired-blades',
     primaryStructuralWeakness: 'Weak baseline Fracture/armor pressure without earned tempo.',
     secondaryMatchupWeakness: 'Below-par damage until evade/parry arms Occult rider; tempo consumed once.',
     mechanicalEnforcement: 'occultRiderDamage=0 without riftEdgeTempoArmed; consumeTempo clears armed state; tempo does not persist across encounters.',
@@ -41,8 +41,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Must still require a tempo event for Occult rider; no free perma-rider.',
     testId: 'drawback-rift-edge-tempo-gated',
   },
-  'aegis-claymore-blade': {
-    familyId: 'aegis-claymore-blade',
+  'aegis-claymore': {
+    familyId: 'aegis-claymore',
     primaryStructuralWeakness: 'High action commitment; little Reserve from ordinary chip hits.',
     secondaryMatchupWeakness: 'Poor vs evasive swarms and interrupt pressure on Doomfall.',
     mechanicalEnforcement: 'chip reserveGain low; large Reserve only on Fracture-break cashout; T3 +1 Reserve once per break action.',
@@ -52,8 +52,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Chip hits must stay Reserve-poor vs break cashout.',
     testId: 'drawback-claymore-break-chip',
   },
-  'hex-silver-core-sidearm': {
-    familyId: 'hex-silver-core-sidearm',
+  'hex-revolver': {
+    familyId: 'hex-revolver',
     primaryStructuralWeakness: 'Poor AoE; limited innate armor pressure.',
     secondaryMatchupWeakness: 'Flexible but not the strongest specialist.',
     mechanicalEnforcement: 'PRECISION delivery — single hit; no innateArmorPressureLayers.',
@@ -63,8 +63,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Must remain weaker at crowds than Pulse and weaker at armor than Nullbreach.',
     testId: 'drawback-sidearm-no-aoe',
   },
-  'hex-void-cannon': {
-    familyId: 'hex-void-cannon',
+  'hex-shotgun': {
+    familyId: 'hex-shotgun',
     primaryStructuralWeakness: 'Small magazine, high commitment, weak crowd handling.',
     secondaryMatchupWeakness: 'Inefficient vs low-value unarmored targets.',
     mechanicalEnforcement: 'BREACH single-target only; staminaCost; magazineSizeBonus negative; overcommit log when unarmored.',
@@ -74,8 +74,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Must stay single-target; cannot become Pulse-like spread.',
     testId: 'drawback-nullbreach-crowd-and-mag',
   },
-  'hex-pulse-rifle': {
-    familyId: 'hex-pulse-rifle',
+  'hex-carbine': {
+    familyId: 'hex-carbine',
     primaryStructuralWeakness: 'Ammunition-hungry spread; poor isolated-target efficiency.',
     secondaryMatchupWeakness: 'Naturally weak when enemies are not clustered.',
     mechanicalEnforcement: 'SPREAD primary+≤2 adjacent; missing splash never redirects to primary; isolated → 1 hit.',
@@ -85,8 +85,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Isolated fights must remain inefficient vs Sidearm/Nullbreach.',
     testId: 'drawback-pulse-isolated',
   },
-  'envoy-null-conduit': {
-    familyId: 'envoy-null-conduit',
+  'envoy-scythe': {
+    familyId: 'envoy-scythe',
     primaryStructuralWeakness: 'Safe/consistent but lower burst without Catalyst sequencing.',
     secondaryMatchupWeakness: 'Best output requires Clean Catalyst cycle (NULL/BLOOD → Splinter).',
     mechanicalEnforcement: 'cleanCatalystCycle false without previousCatalyst NULL/BLOOD; no sacrifice/Rot specialist payoffs.',
@@ -96,8 +96,8 @@ export const WEAPON_DRAWBACK_RECORDS: Record<WeaponFamilyId, WeaponDrawbackRecor
     compensationMustNotErase: 'Must still reward sequencing — no automatic always-on Clean Cycle.',
     testId: 'drawback-conduit-needs-sequence',
   },
-  'envoy-echo-lantern': {
-    familyId: 'envoy-echo-lantern',
+  'envoy-vambrace': {
+    familyId: 'envoy-vambrace',
     primaryStructuralWeakness: 'Low immediate damage; setup time before Rot pays off.',
     secondaryMatchupWeakness: 'Lost value when targets die or cleanse before detonation.',
     mechanicalEnforcement: 'Basic applies Rot only (no same-cast detonate); payoff via FLUX_PURGE/Catalytic; reduced occultDamage.',

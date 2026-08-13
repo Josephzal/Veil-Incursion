@@ -16,7 +16,7 @@ function sample(partial: WeaponSampleLoadout): WeaponSampleLoadout {
 }
 
 export const ENVOY_CONDUIT: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'envoy-null-conduit',
+  weaponFamilyId: 'envoy-scythe',
   classId: 'ENVOY',
   validationState: 'VALIDATED',
   identitySummary: 'Clean Catalyst sequencing (NULL/BLOOD → Splinter); forgiving Flux cycling — not raw Occult burst.',
@@ -164,7 +164,7 @@ export const ENVOY_CONDUIT: WeaponLoadoutRecommendationProfile = {
 };
 
 export const ENVOY_LANTERN: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'envoy-echo-lantern',
+  weaponFamilyId: 'envoy-vambrace',
   classId: 'ENVOY',
   validationState: 'VALIDATED',
   identitySummary: 'Rot setup then delayed detonation via FLUX_PURGE/Catalytic — never auto-detonate on basic.',

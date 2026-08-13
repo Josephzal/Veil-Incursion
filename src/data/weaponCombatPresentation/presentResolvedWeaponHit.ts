@@ -64,7 +64,7 @@ export function presentResolvedWeaponHit(input: {
   // Multi-hit burst: keep one release envelope; only contact accents afterward.
   if (inBurst && !input.evaded) {
     // Scythe stays release-only for contact accents — still play crit sting.
-    if (input.weaponFamilyId !== 'envoy-null-conduit') {
+    if (input.weaponFamilyId !== 'envoy-scythe') {
       if (input.defenseMaterial === 'KINETIC_ARMOR') {
         playCombatPresentationCue(profile.cues.kineticArmor);
       } else if (input.defenseMaterial === 'OCCULT_WARD') {

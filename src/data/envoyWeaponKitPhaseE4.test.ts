@@ -70,7 +70,7 @@ function unit(id: string, hp = 40): EnemyCombatProfile {
 }
 
 function makeExec(
-  familyId: 'envoy-echo-lantern' | 'envoy-null-conduit' | 'envoy-sanguine-prism',
+  familyId: 'envoy-vambrace' | 'envoy-scythe' | 'envoy-sanguine-prism',
   actionId: string,
   opts: {
     targetId?: string | null;
@@ -85,7 +85,7 @@ function makeExec(
 ) {
   const classState = opts.classState ?? createDefaultClassCombatEncounterState();
   const squad = opts.squad ?? [unit('a'), unit('b')];
-  const weapon = resolveWeaponState(familyId, 1);
+  const weapon = resolveWeaponState(familyId);
   const runtime = createDefaultWeaponRuntime();
   let staminaOk = true;
   let lastDamage = 0;
@@ -149,7 +149,7 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
       veilFlux: 50,
       operativeHp: 80,
       maxHp: 100,
-      resolvedWeapon: resolveWeaponState(familyId, 1),
+      resolvedWeapon: resolveWeaponState(familyId),
     });
     // ROT_KNELL / TRANSFER need stacks for ok preview
     if (actionId === 'ROT_KNELL' || actionId === 'GRAVE_TRANSFER') {
@@ -165,7 +165,7 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
         veilFlux: 50,
         operativeHp: 80,
         maxHp: 100,
-        resolvedWeapon: resolveWeaponState(familyId, 1),
+        resolvedWeapon: resolveWeaponState(familyId),
       });
       assert.equal(p2.ok, true, `${actionId} preview`);
     } else {
@@ -177,7 +177,7 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
 // ---------- Action1 parity vs resolveEnvoySplinterBasic ----------
 for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
   const action1 = requireEnvoyWeaponActions(familyId)[0]!;
-  const weapon = resolveWeaponState(familyId, 1);
+  const weapon = resolveWeaponState(familyId);
   const a1 = resolveEnvoySplinterBasic({
     weapon,
     catalogDamage: requireEnvoyWeaponActionDefinition(action1).baseDamage,
@@ -213,7 +213,7 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
 {
   const classState = createDefaultClassCombatEncounterState();
   const squad = [unit('t')];
-  const weapon = resolveWeaponState('envoy-echo-lantern', 1);
+  const weapon = resolveWeaponState('envoy-vambrace');
   const runtime = createDefaultWeaponRuntime();
   let dmg = 0;
   const r = executeEnvoyAbility({
@@ -242,13 +242,13 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
 
 // Compatibility
 {
-  const { result } = makeExec('envoy-echo-lantern', 'BLACK_WICK', { resolveCatalyst: true });
+  const { result } = makeExec('envoy-vambrace', 'BLACK_WICK', { resolveCatalyst: true });
   assert.equal(result.ok, true);
   if (result.ok) assert.equal(result.provenanceActionId, 'GRAVEWEAVE');
 }
-assert.equal(makeExec('envoy-null-conduit', 'CATACLYSM_SIGIL').result.ok, false);
-assert.equal(makeExec('envoy-echo-lantern', 'ASTRAL_LANCE').result.ok, false);
-assert.equal(makeExec('envoy-echo-lantern', 'NULL_ARC').result.ok, false);
+assert.equal(makeExec('envoy-scythe', 'CATACLYSM_SIGIL').result.ok, false);
+assert.equal(makeExec('envoy-vambrace', 'ASTRAL_LANCE').result.ok, false);
+assert.equal(makeExec('envoy-vambrace', 'NULL_ARC').result.ok, false);
 
 // ---------- Catalyst centralization + Silencing Echo ----------
 {
@@ -281,14 +281,14 @@ assert.equal(makeExec('envoy-echo-lantern', 'NULL_ARC').result.ok, false);
 {
   const planned = planEnvoyWeaponAction({
     actionId: 'NULL_ARC',
-    familyId: 'envoy-null-conduit',
+    familyId: 'envoy-scythe',
     classState: createDefaultClassCombatEncounterState(),
     squad: [unit('a')],
     targetId: 'a',
     veilFlux: 50,
     operativeHp: 80,
     maxHp: 100,
-    resolvedWeapon: resolveWeaponState('envoy-null-conduit', 1),
+    resolvedWeapon: resolveWeaponState('envoy-scythe'),
     previousCatalystForCleanCycle: 'NULL',
   });
   assert.equal(planned.ok, true);
@@ -299,7 +299,7 @@ assert.equal(makeExec('envoy-echo-lantern', 'NULL_ARC').result.ok, false);
 {
   const st = createDefaultClassCombatEncounterState();
   infectVeilRot(st, unit('a'), 3, () => {});
-  const { result, classState } = makeExec('envoy-echo-lantern', 'GRAVE_TRANSFER', {
+  const { result, classState } = makeExec('envoy-vambrace', 'GRAVE_TRANSFER', {
     classState: st,
     secondaryTargetId: 'b',
     resolveCatalyst: true,
@@ -311,7 +311,7 @@ assert.equal(makeExec('envoy-echo-lantern', 'NULL_ARC').result.ok, false);
 {
   const st = createDefaultClassCombatEncounterState();
   infectVeilRot(st, unit('a'), 3, () => {});
-  const { result, classState, lastDamage } = makeExec('envoy-echo-lantern', 'ROT_KNELL', {
+  const { result, classState, lastDamage } = makeExec('envoy-vambrace', 'ROT_KNELL', {
     classState: st,
     resolveCatalyst: true,
   });
@@ -386,23 +386,23 @@ assert.deepEqual(
   ['VEIL_SPLINTER', 'ASTRAL_LANCE', 'ENTROPY_HEX', 'NECROTIC_BLOOM'],
 );
 const surface = buildEnvoyCombatSurface({
-  weaponFamilyId: 'envoy-echo-lantern',
+  weaponFamilyId: 'envoy-vambrace',
   flex: sanitizeEnvoyFlexLoadout(DEFAULT_ENVOY_FLEX_LOADOUT),
 });
 assert.ok(isEnvoyCombatSurfaceComplete(surface));
 assert.equal(surface.hudCards.length, 7);
 
 // Ownership unchanged
-assert.equal(STARTER_WEAPON_BY_CLASS.ENVOY, 'envoy-echo-lantern');
+assert.equal(STARTER_WEAPON_BY_CLASS.ENVOY, 'envoy-vambrace');
 assert.deepEqual(validateWeaponUnlockPaths(), []);
-assert.ok(getWeaponFamily('envoy-null-conduit').unlockRequirement.length > 0);
+assert.ok(getWeaponFamily('envoy-scythe').unlockRequirement.length > 0);
 const migrated = normalizeWeaponProgression({
-  weaponUnlocks: ['envoy-null-conduit'],
-  weaponTiers: { 'envoy-null-conduit': 2 },
-  equippedWeaponByClass: { ENVOY: 'envoy-null-conduit' },
+  weaponUnlocks: ['envoy-scythe'],
+  weaponTiers: { 'envoy-scythe': 2 },
+  equippedWeaponByClass: { ENVOY: 'envoy-scythe' },
 } as Parameters<typeof normalizeWeaponProgression>[0]);
-assert.equal(migrated.equippedWeaponByClass.ENVOY, 'envoy-null-conduit');
-assert.ok(migrated.weaponUnlocks.includes('envoy-echo-lantern'));
+assert.equal(migrated.equippedWeaponByClass.ENVOY, 'envoy-scythe');
+assert.ok(migrated.weaponUnlocks.includes('envoy-vambrace'));
 
 // Aegis/Hex containment
 for (const id of ALL_AEGIS_WEAPON_FAMILY_IDS) assert.ok(deriveAegisWeaponActions(id));

@@ -37,18 +37,18 @@ for (const id of WU4_ULTIMATE_IDS) {
   assert.equal(getWu4StagedScript(id)?.stages.length, 3);
 }
 
-assert.equal(canFireWeaponUltimate('aegis-rift-edge'), true);
-assert.equal(canFireWeaponUltimate('aegis-claymore-blade'), true);
-assert.equal(canFireWeaponUltimate('hex-silver-core-sidearm'), true);
-assert.equal(canFireWeaponUltimate('hex-void-cannon'), true);
-assert.equal(canFireWeaponUltimate('envoy-echo-lantern'), true);
+assert.equal(canFireWeaponUltimate('aegis-paired-blades'), true);
+assert.equal(canFireWeaponUltimate('aegis-claymore'), true);
+assert.equal(canFireWeaponUltimate('hex-revolver'), true);
+assert.equal(canFireWeaponUltimate('hex-shotgun'), true);
+assert.equal(canFireWeaponUltimate('envoy-vambrace'), true);
 assert.equal(canFireWeaponUltimate('envoy-sanguine-prism'), true);
 assert.equal(canFireWeaponUltimate(null), false);
 
 // Sibling rebound gates unchanged
-assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-rift-edge'), false);
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-void-cannon'), false);
-assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-echo-lantern'), false);
+assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-paired-blades'), false);
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-shotgun'), false);
+assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-vambrace'), false);
 
 assert.equal(gradePerformanceMult('STANDARD'), 1);
 assert.equal(gradePerformanceMult('CLEAN'), 1.1);
@@ -81,8 +81,8 @@ assert.ok(!('blocked' in knock));
 if (!('blocked' in knock)) {
   assert.equal(knock.committedRounds, 3);
   assert.ok(knock.breachDamage > 0);
-  assert.ok(!formatWeaponUltimateLogTag('hex-void-cannon').includes('The Black Door'));
-  assert.equal(formatWeaponUltimateLogTag('hex-void-cannon'), '[LAST KNOCK]');
+  assert.ok(!formatWeaponUltimateLogTag('hex-shotgun').includes('The Black Door'));
+  assert.equal(formatWeaponUltimateLogTag('hex-shotgun'), '[LAST KNOCK]');
 }
 
 const knot = planFuneralKnot({ grade: 'CLEAN', baseOccult: 20 });
@@ -116,7 +116,7 @@ const partial = planCrimsonRefraction({
 assert.equal(partial.fullPay, false);
 assert.equal(partial.brinkAmp, false);
 
-assert.equal(getWeaponUltimate('aegis-rift-edge').id, 'REND_THE_VEIL');
+assert.equal(getWeaponUltimate('aegis-paired-blades').id, 'REND_THE_VEIL');
 assert.equal(getWeaponUltimate('envoy-sanguine-prism').displayName, 'CRIMSON REFRACTION');
 
 console.log('Phase WU-4 OK — six ultimates WIRED, plans, staged scripts, fire gates');

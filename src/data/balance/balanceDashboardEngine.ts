@@ -11,7 +11,7 @@ export interface CareerBalanceRunEntry {
   recordedAt: number;
   classId: string | null;
   weaponFamilyId: string | null;
-  keepsakeId: string | null;
+  requisitionId: string | null;
   sectorId: string | null;
   extractionType: 'EXTRACT' | 'DEATH';
   districtLayer: 1 | 2 | 3;
@@ -47,7 +47,7 @@ export function careerEntryFromTelemetry(telemetry: RunBalanceTelemetry): Career
     recordedAt: Date.now(),
     classId: telemetry.classId,
     weaponFamilyId: telemetry.weaponFamilyId,
-    keepsakeId: telemetry.keepsakeId,
+    requisitionId: telemetry.requisitionId,
     sectorId: telemetry.sectorId,
     extractionType: telemetry.extractionType,
     districtLayer: telemetry.districtLayer,
@@ -86,11 +86,16 @@ export function formatBalanceDashboard(history: CareerBalanceHistory | null | un
 
   const weaponHits = new Map<string, number>();
   const classHits = new Map<string, number>();
-  const relicHits = new Map<string, number>();
+  const requisitionHits = new Map<string, number>();
   runs.forEach((r) => {
     if (r.weaponFamilyId) weaponHits.set(r.weaponFamilyId, (weaponHits.get(r.weaponFamilyId) ?? 0) + 1);
     if (r.classId) classHits.set(r.classId, (classHits.get(r.classId) ?? 0) + 1);
-    if (r.keepsakeId) relicHits.set(r.keepsakeId, (relicHits.get(r.keepsakeId) ?? 0) + 1);
+    if (r.requisitionId) {
+      requisitionHits.set(
+        r.requisitionId,
+        (requisitionHits.get(r.requisitionId) ?? 0) + 1,
+      );
+    }
   });
   const top = (map: Map<string, number>) =>
     [...map.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
@@ -114,7 +119,7 @@ export function formatBalanceDashboard(history: CareerBalanceHistory | null | un
     `  op progress / run: ${avg(runs.map((r) => r.operationProgressGained)) ?? '—'}`,
     '',
     'MOST USED',
-    `  class: ${top(classHits)} // weapon: ${top(weaponHits)} // relic: ${top(relicHits)}`,
+    `  class: ${top(classHits)} // weapon: ${top(weaponHits)} // Requisition: ${top(requisitionHits)}`,
     '',
     'LAST RUN',
     `  ${last.extractionType} // district ${last.districtLayer} // nodes ${last.nodesCleared} // bosses ${last.bossesDefeated}`,

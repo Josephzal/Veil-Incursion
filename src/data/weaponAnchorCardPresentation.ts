@@ -125,10 +125,10 @@ export function resolveWeaponAnchorCardPresentation(
         : `${plan.kineticDamage} KINETIC`;
     }
     if (plan.staminaCost > 0) secondaryCost = `${plan.staminaCost} STAM`;
-    if (familyId === 'aegis-rift-edge') {
+    if (familyId === 'aegis-paired-blades') {
       conditionalState = ctx.runtime.riftEdgeTempoArmed ? 'TEMPO ARMED' : conditionalState;
     }
-    if (familyId === 'aegis-claymore-blade' && ctx.claymoreStaminaCommitted) {
+    if (familyId === 'aegis-claymore' && ctx.claymoreStaminaCommitted) {
       conditionalState = 'BREAK READY';
     }
     if (plan.fractureGain > 0) effects[0] = `+${plan.fractureGain} FRACTURE`;
@@ -146,11 +146,11 @@ export function resolveWeaponAnchorCardPresentation(
     if (plan.staminaCost > 0) {
       secondaryCost = `${plan.ammoCost} AMMO // ${plan.staminaCost} STAM`;
     }
-    if (familyId === 'hex-pulse-rifle') {
+    if (familyId === 'hex-carbine') {
       const spread = Math.max(0, plan.hits.length - 1);
       conditionalState = spread > 0 ? `${spread} SPREAD TARGETS` : 'PRIMARY ONLY';
     }
-    if (familyId === 'hex-silver-core-sidearm' && ctx.hexPerfectReload) {
+    if (familyId === 'hex-revolver' && ctx.hexPerfectReload) {
       conditionalState = 'PERFECT RELOAD';
     }
   } else {
@@ -168,10 +168,10 @@ export function resolveWeaponAnchorCardPresentation(
     if (plan.hpSacrifice > 0) {
       secondaryCost = `${plan.fluxCost} FLUX // ${plan.hpSacrifice} HP`;
     }
-    if (familyId === 'envoy-null-conduit') {
+    if (familyId === 'envoy-scythe') {
       conditionalState = plan.cleanCatalystCycle ? 'CLEAN CYCLE' : null;
     }
-    if (familyId === 'envoy-echo-lantern' && ctx.lanternDetonationReady) {
+    if (familyId === 'envoy-vambrace' && ctx.lanternDetonationReady) {
       conditionalState = 'DETONATION READY';
     }
     if (familyId === 'envoy-sanguine-prism') {

@@ -61,7 +61,7 @@ function classifyWeaponEnemy(
   const hardDenial = def.mechanicTags.includes('HARD_DENIAL');
 
   switch (weaponFamilyId) {
-    case 'aegis-runed-longsword':
+    case 'aegis-longsword':
       if (!isSwarmish && !isBackline && armor.kinetic < 8 && def.role === 'FRONTLINE') {
         classification = 'FAVORABLE';
         mechanicalReason = 'Reliable Fracture + Parry/Reserve sequencing shines in mixed frontline fights.';
@@ -83,7 +83,7 @@ function classifyWeaponEnemy(
       }
       break;
 
-    case 'aegis-rift-edge':
+    case 'aegis-paired-blades':
       if (staminaDrain || hardDenial) {
         classification = 'STRAINED';
                 qualifiers.push('RESOURCE_PRESSURE');
@@ -106,7 +106,7 @@ function classifyWeaponEnemy(
       structuralDrawbackPressured = drawback.primaryStructuralWeakness;
       break;
 
-    case 'aegis-claymore-blade':
+    case 'aegis-claymore':
       if (isDurableArmor) {
         classification = 'FAVORABLE';
         mechanicalReason = 'Committed Fracture + break cashout shines vs armored durables.';
@@ -125,7 +125,7 @@ function classifyWeaponEnemy(
       }
       break;
 
-    case 'hex-silver-core-sidearm':
+    case 'hex-revolver':
       if (isBackline && armor.kinetic < 5 && !isSwarmish) {
         classification = 'FAVORABLE';
         mechanicalReason = 'Precision / Execution window answers priority backline without specialist mag tax.';
@@ -151,7 +151,7 @@ function classifyWeaponEnemy(
       }
       break;
 
-    case 'hex-void-cannon':
+    case 'hex-shotgun':
       if (isDurableArmor || isBackline) {
         classification = 'FAVORABLE';
         mechanicalReason = 'Breach ST + Kinetic armor pressure vs priority/armored targets.';
@@ -170,7 +170,7 @@ function classifyWeaponEnemy(
       }
       break;
 
-    case 'hex-pulse-rifle':
+    case 'hex-carbine':
       if (isSwarmish || def.role === 'FRONTLINE' && armor.kinetic < 5) {
         classification = 'FAVORABLE';
         mechanicalReason = 'Spread + Ash-Jacket Salvo pressure clustered formations.';
@@ -188,7 +188,7 @@ function classifyWeaponEnemy(
       }
       break;
 
-    case 'envoy-null-conduit':
+    case 'envoy-scythe':
       if (hardDenial) {
         classification = 'STRAINED';
                 qualifiers.push('EXECUTION_DEPENDENT');
@@ -208,7 +208,7 @@ function classifyWeaponEnemy(
       }
       break;
 
-    case 'envoy-echo-lantern':
+    case 'envoy-vambrace':
       if (isDurableArmor || def.threatCost >= 3 || isSupport) {
         classification = 'FAVORABLE';
         mechanicalReason = 'Rot setup + delayed detonation pressures durable groups/supports.';

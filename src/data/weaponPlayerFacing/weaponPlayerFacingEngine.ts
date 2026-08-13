@@ -170,21 +170,21 @@ export function resolveWeaponSectorPressureNote(
 
 function translateFavorable(weaponFamilyId: WeaponFamilyId, formation: string): string {
   switch (weaponFamilyId) {
-    case 'hex-pulse-rifle':
+    case 'hex-carbine':
       return 'Strong against clustered formations';
-    case 'hex-void-cannon':
+    case 'hex-shotgun':
       return 'Reliable priority-target / armor-pressure access';
-    case 'envoy-echo-lantern':
+    case 'envoy-vambrace':
       return 'Durable groups support Rot detonation setup';
-    case 'aegis-claymore-blade':
+    case 'aegis-claymore':
       return 'Frontline Fracture windows favor break cashouts';
-    case 'aegis-rift-edge':
+    case 'aegis-paired-blades':
       return 'Tempo windows appear often enough to arm Occult riders';
     case 'envoy-sanguine-prism':
       return 'Spike windows open without constant attrition denial';
-    case 'hex-silver-core-sidearm':
+    case 'hex-revolver':
       return 'Precision / Protocol tempo remains efficient';
-    case 'envoy-null-conduit':
+    case 'envoy-scythe':
       return 'Catalyst sequencing stays clean under typical pressure';
     default:
       return formation.includes('corruption')
@@ -195,23 +195,23 @@ function translateFavorable(weaponFamilyId: WeaponFamilyId, formation: string): 
 
 function translateStrained(weaponFamilyId: WeaponFamilyId, primaryWeakness: string): string {
   switch (weaponFamilyId) {
-    case 'hex-pulse-rifle':
+    case 'hex-carbine':
       return 'Few natural spread-target opportunities';
-    case 'hex-void-cannon':
+    case 'hex-shotgun':
       return 'Soft / swarm density punishes scarce ammo';
-    case 'envoy-echo-lantern':
+    case 'envoy-vambrace':
       return 'Fragile setups — enemies may collapse before Rot cashout';
-    case 'aegis-claymore-blade':
+    case 'aegis-claymore':
       return 'Stamina drain can disrupt break setup';
-    case 'aegis-runed-longsword':
+    case 'aegis-longsword':
       return 'Pressured by backline / swarm reach gaps';
-    case 'aegis-rift-edge':
+    case 'aegis-paired-blades':
       return 'Pressured when tempo cannot be earned safely';
-    case 'envoy-null-conduit':
+    case 'envoy-scythe':
       return 'Pressured by layered Occult denial / silence';
     case 'envoy-sanguine-prism':
       return 'Attrition and heal denial punish sacrifice exposure';
-    case 'hex-silver-core-sidearm':
+    case 'hex-revolver':
       return 'Pressured by armored packs without pierce flex';
     default:
       return primaryWeakness;
@@ -236,14 +236,14 @@ export function resolveWeaponCombatCallouts(
         tone: 'info',
       });
     }
-    if (id === 'aegis-rift-edge') {
+    if (id === 'aegis-paired-blades') {
       out.push({
         id: 'rift-tempo',
         label: input.riftEdgeTempoArmed ? 'OCCULT RIDER ARMED' : 'TEMPO COLD',
         tone: input.riftEdgeTempoArmed ? 'ready' : 'info',
       });
     }
-    if (id === 'aegis-claymore-blade') {
+    if (id === 'aegis-claymore') {
       // Aegis has no combat Stamina — surface Fracture-break cashout state instead.
       out.push({
         id: 'claymore-break',
@@ -284,14 +284,14 @@ export function resolveWeaponCombatCallouts(
         : formatWeaponUltimateReadyCallout(id) ?? 'ULTIMATE READY';
       out.push({ id: 'weapon-ultimate', label, tone: 'ready' });
     }
-    if (id === 'hex-void-cannon') {
+    if (id === 'hex-shotgun') {
       out.push({
         id: 'nullbreach-priority',
         label: 'BREACH — PRIORITY TARGET',
         tone: 'info',
       });
     }
-    if (id === 'hex-pulse-rifle') {
+    if (id === 'hex-carbine') {
       const sec = input.pulseSpreadSecondaryCount ?? 0;
       out.push({
         id: 'pulse-spread',
@@ -316,14 +316,14 @@ export function resolveWeaponCombatCallouts(
         tone: 'info',
       });
     }
-    if (id === 'envoy-null-conduit') {
+    if (id === 'envoy-scythe') {
       out.push({
         id: 'clean-cycle',
         label: input.cleanCatalystCycleReady ? 'CLEAN CYCLE READY' : 'CLEAN CYCLE COLD',
         tone: input.cleanCatalystCycleReady ? 'ready' : 'info',
       });
     }
-    if (id === 'envoy-echo-lantern') {
+    if (id === 'envoy-vambrace') {
       out.push({
         id: 'rot',
         label: `ROT ${input.veilRotStacksTotal ?? 0}`,

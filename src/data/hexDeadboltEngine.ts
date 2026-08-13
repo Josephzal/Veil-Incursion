@@ -34,7 +34,7 @@ export function armHexDeadboltReloadOpportunity(
     roundsRestored: number;
   },
 ): HexDeadboltOpportunityState {
-  if (args.familyId !== 'hex-void-cannon') return state;
+  if (args.familyId !== 'hex-shotgun') return state;
   if (args.roundsRestored <= 0) return state;
   return { deadboltReloadOpportunity: true };
 }

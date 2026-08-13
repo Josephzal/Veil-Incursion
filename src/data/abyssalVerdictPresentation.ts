@@ -13,7 +13,7 @@ import {
 } from './weaponCombatPresentation/presentationSettings';
 import { areAbyssalVerdictAssetsAvailable } from './abyssalVerdictArt';
 
-export const ABYSSAL_VERDICT_LONGSWORD_FAMILY: WeaponFamilyId = 'aegis-runed-longsword';
+export const ABYSSAL_VERDICT_LONGSWORD_FAMILY: WeaponFamilyId = 'aegis-longsword';
 export const ABYSSAL_VERDICT_LEGACY_ABILITY_ID = 'EVISCERATE';
 export const ABYSSAL_VERDICT_ULTIMATE_ID = 'THREEFOLD_BRAND';
 export const ABYSSAL_VERDICT_DISPLAY_NAME = 'ABYSSAL VERDICT';

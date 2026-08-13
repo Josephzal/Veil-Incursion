@@ -1,19 +1,18 @@
 import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import type { ActiveIncursionState } from '../types/game';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime as KeepsakeRuntime } from '../types/expeditionRequisition';
 import type { ProceduralRunTree } from '../types/proceduralRunTree';
 import type { ResourceItemId } from '../types/resourceItem';
 import {
-  addLootToContainment,
   containmentItemValue,
 } from './cargoGridEngine';
 import {
   formatKeepsakeLogLine,
   tryKeepsakeTrigger,
 } from './expeditionKeepsakeEngine';
-import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
-import { patchKeepsakeStats, incrementKeepsakeCounter } from './keepsakeRunState';
+import { EXPEDITION_REQUISITION_REGISTRY } from './expeditionRequisitionRegistry';
+import { patchKeepsakeStats } from './keepsakeRunState';
 import { resolveBlackMarketListingPrice } from './blackMarket';
 import { localProceduralDepth } from './proceduralScannerBridge';
 import { getResourceCategory } from './resourceRegistry';
@@ -28,13 +27,10 @@ import {
   queueKeepsakePendingChoice,
 } from './expeditionKeepsakeChoiceEngine';
 
-const MATCHBOOK_MAX_MATCHES = 4;
-const MATCHBOOK_SKIP_CREDITS = [0, 15, 30, 50, 75];
 /** Marked Shelf black-market discount — Phase D validates against trinket soft caps. */
-export const MARKED_SHELF_DISCOUNT_PCT = 40;
+export const MARKED_SHELF_DISCOUNT_PCT = 25;
 const NULL_LEDGER_DEBT_SURCHARGE_PCT = 25;
 const STAMPED_STABLE_CARGO_VALUE_BONUS_PCT = 10;
-const RUSTED_FLARE_SHIELD_HITS = 10;
 import { getGreedZoneActive } from './sectorGraphEngine';
 import { MASTER_EXTRACTION_PAYOUT_MULTIPLIER } from '../types/sectorPacing';
 
@@ -113,7 +109,7 @@ export function canUseKeepsakeNullLedgerCredit(
   runtime: KeepsakeRuntime | null | undefined,
   purchasePrice = 0,
 ): boolean {
-  if (!runtime || runtime.keepsakeId !== 'null_ledger') return false;
+  if (!runtime || runtime.requisitionId !== 'null_ledger') return false;
   if (runtime.triggersUsed.null_ledger_credit_purchase) return false;
   return canAccrueNullLedgerDebt(runtime, Math.ceil(purchasePrice * 1.25));
 }
@@ -122,14 +118,14 @@ export function applyKeepsakeOnBlackMarketOpen(
   runtime: KeepsakeRuntime | null,
   stock: readonly CargoItemId[],
 ): KeepsakeEconomyApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'black_market_mark') {
+  if (!runtime || runtime.requisitionId !== 'black_market_mark') {
     return { runtime, logLines: [] };
   }
   if (runtime.markedShelfItemId) {
     return { runtime, logLines: [] };
   }
 
-  const def = getKeepsakeDefinition('black_market_mark');
+  const def = EXPEDITION_REQUISITION_REGISTRY.black_market_mark;
   const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
   if (!trigger.triggered || !trigger.runtime) {
     return { runtime, logLines: [] };
@@ -214,7 +210,7 @@ export function applyKeepsakeNullLedgerCreditPurchase(
     return { runtime, logLines: [] };
   }
 
-  const def = getKeepsakeDefinition('null_ledger');
+  const def = EXPEDITION_REQUISITION_REGISTRY.null_ledger;
   const trigger = tryKeepsakeTrigger(runtime!, def.primaryTriggerKey, 'run');
   if (!trigger.triggered || !trigger.runtime) {
     return { runtime, logLines: [] };
@@ -295,14 +291,14 @@ export function applyKeepsakeOnExtractionNodeReveal(
   tree: ProceduralRunTree,
   layerIds: readonly string[],
 ): KeepsakeEconomyApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'extraction_token' || runtime.stampedExtractionNodeId) {
+  if (!runtime || runtime.requisitionId !== 'extraction_token' || runtime.stampedExtractionNodeId) {
     return { runtime, logLines: [] };
   }
 
   const extractionId = layerIds.find((id) => tree.nodes[id]?.type === 'EXTRACTION');
   if (!extractionId) return { runtime, logLines: [] };
 
-  const def = getKeepsakeDefinition('extraction_token');
+  const def = EXPEDITION_REQUISITION_REGISTRY.extraction_token;
   const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
   if (!trigger.triggered || !trigger.runtime) {
     return { runtime, logLines: [] };
@@ -313,7 +309,7 @@ export function applyKeepsakeOnExtractionNodeReveal(
       ...trigger.runtime,
       stampedExtractionNodeId: extractionId,
     },
-    incursionPatch: { keepsakeStampedExtractionNodeId: extractionId },
+    incursionPatch: { requisitionStampedExtractionNodeId: extractionId },
     logLines: [
       formatKeepsakeLogLine('Token', def.triggerMessage),
       '>> STAMPED EVAC — payout preview armed; +1 free bank on stamped extract.',
@@ -322,60 +318,10 @@ export function applyKeepsakeOnExtractionNodeReveal(
 }
 
 export function isKeepsakeStampedExtractionNode(
-  inc: Pick<ActiveIncursionState, 'keepsakeStampedExtractionNodeId' | 'pendingExtractionNodeId'>,
+  inc: Pick<ActiveIncursionState, 'requisitionStampedExtractionNodeId' | 'pendingExtractionNodeId'>,
 ): boolean {
-  if (!inc.keepsakeStampedExtractionNodeId || !inc.pendingExtractionNodeId) return false;
-  return inc.keepsakeStampedExtractionNodeId === inc.pendingExtractionNodeId;
-}
-
-export function applyKeepsakeOnSafeExtractionSkip(
-  runtime: KeepsakeRuntime | null,
-): KeepsakeEconomyApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'last_light_matchbook') {
-    return { runtime, logLines: [] };
-  }
-
-  const matchesLit = runtime.counters.matches ?? 0;
-  if (matchesLit >= MATCHBOOK_MAX_MATCHES) {
-    return { runtime, logLines: ['>> MATCHBOOK SPENT — all matches lit. Next exit is critical.'] };
-  }
-
-  const def = getKeepsakeDefinition('last_light_matchbook');
-  const trigger = tryKeepsakeTrigger(
-    runtime,
-    `${def.primaryTriggerKey}:${matchesLit + 1}`,
-    'none',
-  );
-  if (!trigger.triggered || !trigger.runtime) {
-    return { runtime, logLines: [] };
-  }
-
-  const nextMatch = matchesLit + 1;
-  let nextRuntime = incrementKeepsakeCounter(trigger.runtime, 'matches', 1);
-  nextRuntime = patchKeepsakeStats(nextRuntime, {
-    matchesLit: nextMatch,
-    safeExtractionsSkipped: nextRuntime.stats.safeExtractionsSkipped + 1,
-  });
-  nextRuntime = {
-    ...nextRuntime,
-    overextendedActive: true,
-    overextendedBonusConsumed: false,
-    overextendedDirtyThreatPending: true,
-  };
-
-  const bonusCredits = MATCHBOOK_SKIP_CREDITS[nextMatch] ?? 0;
-  const logLines = [
-    formatKeepsakeLogLine('Matchbook', def.triggerMessage),
-    `>> MATCH ${nextMatch}/${MATCHBOOK_MAX_MATCHES} LIT — greed bonus armed.`,
-  ];
-
-  return {
-    runtime: nextRuntime,
-    runCreditsDelta: bonusCredits > 0 ? bonusCredits : undefined,
-    logLines: bonusCredits > 0
-      ? [...logLines, `>> MATCHBOOK HEAT — +${bonusCredits} run credits for declining evac.`]
-      : logLines,
-  };
+  if (!inc.requisitionStampedExtractionNodeId || !inc.pendingExtractionNodeId) return false;
+  return inc.requisitionStampedExtractionNodeId === inc.pendingExtractionNodeId;
 }
 
 export function applyKeepsakeOnStampedSafeExtractionConfirm(
@@ -385,7 +331,7 @@ export function applyKeepsakeOnStampedSafeExtractionConfirm(
   if (!runtime || !isKeepsakeStampedExtractionNode(inc)) {
     return { runtime, logLines: [] };
   }
-  if (runtime.keepsakeId === 'extraction_token' && !runtime.stampedExtractionConfirmed) {
+  if (runtime.requisitionId === 'extraction_token' && !runtime.stampedExtractionConfirmed) {
     return {
       runtime,
       logLines: ['>> EXTRACTION TOKEN — resolve token choice before confirming evac.'],
@@ -452,97 +398,13 @@ function bankSmallestCargoItem(
   return result;
 }
 
-export function applyKeepsakeOverextendedOnNodeClear(
-  runtime: KeepsakeRuntime | null,
-  cargo: CargoRunState,
-  kind: 'RESOURCE' | 'ECHO' | 'ANCHOR',
-  operationRelevant: boolean,
-): KeepsakeEconomyApplyResult & { cargo?: CargoRunState; operationProgressDelta?: number } {
-  if (!runtime?.overextendedActive || runtime.overextendedBonusConsumed) {
-    return { runtime, logLines: [] };
-  }
-
-  const matchTier = runtime.counters.matches ?? 1;
-  const bonusRolls = Math.min(matchTier, 3);
-  const staged: string[] = [];
-  let nextCargo = cargo;
-  for (let i = 0; i < bonusRolls; i += 1) {
-    nextCargo = addLootToContainment(nextCargo, 'ley-slag', 1, staged);
-  }
-  let operationProgressDelta = 0;
-  if (operationRelevant) {
-    operationProgressDelta = Math.min(matchTier, 2);
-  }
-
-  const nextRuntime = patchKeepsakeStats(
-    {
-      ...runtime,
-      overextendedActive: matchTier < MATCHBOOK_MAX_MATCHES,
-      overextendedBonusConsumed: matchTier >= MATCHBOOK_MAX_MATCHES,
-    },
-    {
-      bonusResourcesGenerated: runtime.stats.bonusResourcesGenerated + bonusRolls,
-      operationProgressAdded: runtime.stats.operationProgressAdded + operationProgressDelta,
-    },
-  );
-
-  return {
-    runtime: nextRuntime,
-    cargo: nextCargo,
-    operationProgressDelta,
-    logLines: [
-      `>> OVEREXTENDED BONUS (MATCH ${matchTier}) — +${bonusRolls} stable salvage after ${kind} clear.`,
-      ...(operationProgressDelta > 0
-        ? [`>> OVEREXTENDED BONUS — +${operationProgressDelta} operation progress transmitted.`]
-        : []),
-    ],
-  };
-}
-
-export function shouldApplyKeepsakeDirtyExtractionThreat(
-  runtime: KeepsakeRuntime | null | undefined,
-): boolean {
-  return runtime?.overextendedDirtyThreatPending === true;
-}
-
-export function consumeKeepsakeDirtyExtractionThreat(
-  runtime: KeepsakeRuntime | null,
-): KeepsakeRuntime | null {
-  if (!runtime?.overextendedDirtyThreatPending) return runtime;
-  return { ...runtime, overextendedDirtyThreatPending: false };
-}
-
-/**
- * Dirty-extraction relic hook.
- * v2 placeholder: Rusted Flare (v1.5) was retired from the roster. Last Light Matchbook's
- * dirty-extraction threat is handled via shouldApplyKeepsakeDirtyExtractionThreat.
- */
-export function applyKeepsakeOnDirtyExtractionStart(
-  runtime: KeepsakeRuntime | null,
-): KeepsakeEconomyApplyResult {
-  return { runtime, logLines: [] };
-}
-
-/** Retired with Rusted Flare — kept as a neutral passthrough. */
-export function applyKeepsakeRustedFlareCargoProtection(
-  runtime: KeepsakeRuntime | null,
-  bleedPct: number,
-  _cargo: CargoRunState,
-): {
-  runtime: KeepsakeRuntime | null;
-  bleedPct: number;
-  logLines: string[];
-} {
-  return { runtime, bleedPct, logLines: [] };
-}
-
 export function previewKeepsakeStampedExtractionPayout(
   runtime: KeepsakeRuntime | null,
   inc: ActiveIncursionState,
   basePayout: number,
   nodeId?: string | null,
 ): number {
-  const stampedId = inc.keepsakeStampedExtractionNodeId;
+  const stampedId = inc.requisitionStampedExtractionNodeId;
   const applies = nodeId != null
     ? stampedId === nodeId
     : isKeepsakeStampedExtractionNode(inc);
@@ -575,7 +437,7 @@ export function stageKeepsakeExtractionTokenChoice(
   runtime: KeepsakeRuntime | null,
   inc: ActiveIncursionState,
 ): KeepsakeEconomyApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'extraction_token') {
+  if (!runtime || runtime.requisitionId !== 'extraction_token') {
     return { runtime, logLines: [] };
   }
   if (!isKeepsakeStampedExtractionNode(inc) || runtime.pendingChoice) {

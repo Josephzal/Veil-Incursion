@@ -80,6 +80,7 @@ export function depositAllCargoToHubAccount(
   const itemCounts = new Map<CargoItemId, number>();
 
   [...cargo.grid.placed, ...cargo.containment].forEach((item) => {
+    if (item.temporarySupply) return;
     itemCounts.set(item.itemId, (itemCounts.get(item.itemId) ?? 0) + 1);
   });
 

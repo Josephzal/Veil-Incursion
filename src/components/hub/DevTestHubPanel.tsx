@@ -141,17 +141,12 @@ import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../../styles/hubTerminalUi';
-import {
-  ALL_KEEPSAKE_IDS,
-  getKeepsakeDefinition,
-} from '../../data/expeditionKeepsakeRegistry';
+import { ENABLED_REQUISITION_IDS } from '../../types/expeditionRequisition';
+import { EXPEDITION_REQUISITION_REGISTRY } from '../../data/expeditionRequisitionRegistry';
 import {
   formatKeepsakeDebugValidation,
   formatKeepsakeAcceptanceDebugReport,
 } from '../../data/expeditionKeepsakeDebugEngine';
-import {
-  resolveKeepsakeDeploymentWarnings,
-} from '../../data/expeditionKeepsakeDeploymentEngine';
 import {
   formatRunItemAcceptanceDebugReport,
   formatRunItemDebugValidation,
@@ -292,11 +287,10 @@ export default function DevTestHubPanel(): React.JSX.Element {
   } = useRun();
   const {
     account,
-    setEquippedKeepsake,
-    unlockAllKeepsakes,
-    setKeepsakeAttunement,
-    setKeepsakeRouteDoctrine,
-    setKeepsakeMirrorCategory,
+    setEquippedRequisition,
+    unlockAllRequisitions,
+    setRequisitionAttunement,
+    setRequisitionRouteDoctrine,
     unlockAllWeaponFamilies,
     resetWeaponFamilies,
     grantWeaponUnlockResources,
@@ -305,7 +299,6 @@ export default function DevTestHubPanel(): React.JSX.Element {
     resetDevProgressionKeepItems,
     setSimplifiedUltimateInputs,
     equipWeaponFamily,
-    upgradeWeaponFamilyTier,
     appendHubLog,
     grantSealedCasketInHub,
     grantSpecimenJarInHub,
@@ -403,7 +396,6 @@ export default function DevTestHubPanel(): React.JSX.Element {
   const sandboxConfig = useMemo(() => {
     const weaponSnapshot = snapshotWeaponForRun(account.activeClass, {
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     });
     return {
@@ -413,7 +405,6 @@ export default function DevTestHubPanel(): React.JSX.Element {
       envoyLoadout: account.envoyLoadout,
       alignedFaction: account.alignedFaction,
       activeWeaponFamilyId: weaponSnapshot.activeWeaponFamilyId,
-      activeWeaponTier: weaponSnapshot.activeWeaponTier,
     };
   }, [
     account.activeClass,
@@ -422,7 +413,6 @@ export default function DevTestHubPanel(): React.JSX.Element {
     account.envoyLoadout,
     account.equippedWeaponByClass,
     account.hexShotLoadout,
-    account.weaponTiers,
     account.weaponUnlocks,
   ]);
 
@@ -442,19 +432,17 @@ export default function DevTestHubPanel(): React.JSX.Element {
     setDebugReport([
       devGetDebugSnapshot(),
       formatCareerCargoRoutingDebugSnapshot(account.careerCargoRouting),
-      `equipped relic: ${account.equippedKeepsakeId ?? 'none'}`,
-      `deployment attunement: ${account.keepsakeDeployment.attunement ?? 'none'}`,
-      `deployment doctrine: ${account.keepsakeDeployment.routeDoctrine ?? 'none'}`,
-      `deployment mirror: ${account.keepsakeDeployment.mirrorCategory ?? 'none'}`,
-      `unlocked relics: ${account.unlockedKeepsakeIds.length}`,
+      `equipped Requisition: ${account.equippedRequisitionId ?? 'none'}`,
+      `deployment attunement: ${account.requisitionDeployment.attunement ?? 'none'}`,
+      `deployment doctrine: ${account.requisitionDeployment.routeDoctrine ?? 'none'}`,
+      `unlocked Requisitions: ${account.unlockedRequisitionIds.length}`,
     ].join('\n\n'));
   }, [
     account.careerCargoRouting,
-    account.equippedKeepsakeId,
-    account.keepsakeDeployment.attunement,
-    account.keepsakeDeployment.routeDoctrine,
-    account.keepsakeDeployment.mirrorCategory,
-    account.unlockedKeepsakeIds.length,
+    account.equippedRequisitionId,
+    account.requisitionDeployment.attunement,
+    account.requisitionDeployment.routeDoctrine,
+    account.unlockedRequisitionIds.length,
     devGetDebugSnapshot,
   ]);
 
@@ -1208,169 +1196,129 @@ export default function DevTestHubPanel(): React.JSX.Element {
         />
       </View>
 
-      <HubSectionHeader title="RELIC // DEBUG" color={theme.mutedColor} />
+      <HubSectionHeader title="REQUISITION // DEBUG" color={theme.mutedColor} />
       <View style={styles.grid}>
         <SandboxLaunchButton
-          label="[ UNLOCK ALL RELICS ]"
+          label="[ UNLOCK ALL REQUISITIONS ]"
           accentColor={theme.primaryColor}
           onPress={() => {
-            unlockAllKeepsakes();
-            setDebugReport('RELIC DEBUG — all 20 expedition relics unlocked.');
+            unlockAllRequisitions();
+            setDebugReport('REQUISITION DEBUG — all proof Requisitions unlocked.');
           }}
         />
-        {ALL_KEEPSAKE_IDS.map((keepsakeId) => {
-          const def = getKeepsakeDefinition(keepsakeId);
+        {ENABLED_REQUISITION_IDS.map((requisitionId) => {
+          const def = EXPEDITION_REQUISITION_REGISTRY[requisitionId];
           return (
             <SandboxLaunchButton
-              key={keepsakeId}
+              key={requisitionId}
               label={`[ EQUIP ${def.name.toUpperCase()} ]`}
               accentColor={theme.primaryColor}
               onPress={() => {
-                setEquippedKeepsake(keepsakeId);
-                setDebugReport(`RELIC DEBUG — equipped ${keepsakeId}.`);
+                setEquippedRequisition(requisitionId);
+                setDebugReport(`REQUISITION DEBUG — equipped ${requisitionId}.`);
               }}
             />
           );
         })}
         <SandboxLaunchButton
-          label="[ CLEAR RELIC ]"
+          label="[ CLEAR REQUISITION ]"
           accentColor={theme.primaryColor}
           onPress={() => {
-            setEquippedKeepsake(null);
-            setDebugReport('RELIC DEBUG — expedition relic cleared.');
+            setEquippedRequisition(null);
+            setDebugReport('REQUISITION DEBUG — Requisition cleared.');
           }}
         />
         <SandboxLaunchButton
-          label="[ VALIDATE RELICS ]"
+          label="[ VALIDATE REQUISITIONS ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(formatKeepsakeDebugValidation(
-            account.equippedKeepsakeId,
-            account.unlockedKeepsakeIds,
-            account.keepsakeDeployment,
+            account.equippedRequisitionId,
+            account.unlockedRequisitionIds,
+            account.requisitionDeployment,
           ))}
         />
         <SandboxLaunchButton
-          label="[ VALIDATE RELIC ACCEPTANCE ]"
+          label="[ VALIDATE REQUISITION PROOF ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(formatKeepsakeAcceptanceDebugReport())}
-        />
-        <SandboxLaunchButton
-          label="[ LOG DEPLOYMENT WARNINGS ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            if (!account.equippedKeepsakeId) {
-              setDebugReport('RELIC DEBUG — no relic equipped.');
-              return;
-            }
-            const warnings = resolveKeepsakeDeploymentWarnings(
-              account.equippedKeepsakeId,
-              selectedSector,
-              persisted.contractBoard.selectedContract,
-            );
-            setDebugReport([
-              'RELIC DEPLOYMENT WARNINGS',
-              `relic: ${account.equippedKeepsakeId}`,
-              `sector: ${selectedSector.displayName}`,
-              ...(warnings.length > 0
-                ? warnings.map((warning) => `[${warning.severity}] ${warning.message}`)
-                : ['none']),
-            ].join('\n'));
-          }}
         />
         <SandboxLaunchButton
           label="[ SET ATTUNEMENT: ECHO ]"
           accentColor={theme.mutedColor}
           onPress={() => {
-            setKeepsakeAttunement('ECHO_RESIDUE');
-            setDebugReport('RELIC DEBUG — attunement set to ECHO_RESIDUE.');
+            setRequisitionAttunement('ECHO_RESIDUE');
+            setDebugReport('REQUISITION DEBUG — attunement set to ECHO_RESIDUE.');
           }}
         />
         <SandboxLaunchButton
           label="[ SET ATTUNEMENT: ANCHOR ]"
           accentColor={theme.mutedColor}
           onPress={() => {
-            setKeepsakeAttunement('ANCHOR_SIGNAL');
-            setDebugReport('RELIC DEBUG — attunement set to ANCHOR_SIGNAL.');
+            setRequisitionAttunement('ANCHOR_SIGNAL');
+            setDebugReport('REQUISITION DEBUG — attunement set to ANCHOR_SIGNAL.');
           }}
         />
         <SandboxLaunchButton
           label="[ SET DOCTRINE: GREED ]"
           accentColor={theme.mutedColor}
           onPress={() => {
-            setKeepsakeRouteDoctrine('GREED');
-            setDebugReport('RELIC DEBUG — route doctrine set to GREED.');
+            setRequisitionRouteDoctrine('GREED');
+            setDebugReport('REQUISITION DEBUG — route doctrine set to GREED.');
           }}
         />
         <SandboxLaunchButton
           label="[ SET DOCTRINE: HUNT ]"
           accentColor={theme.mutedColor}
           onPress={() => {
-            setKeepsakeRouteDoctrine('HUNT');
-            setDebugReport('RELIC DEBUG — route doctrine set to HUNT.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ SET MIRROR: CREDITS ]"
-          accentColor={theme.mutedColor}
-          onPress={() => {
-            setKeepsakeMirrorCategory('CREDITS');
-            setDebugReport('RELIC DEBUG — mirror category set to CREDITS.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ SET MIRROR: SPONSOR REP ]"
-          accentColor={theme.mutedColor}
-          onPress={() => {
-            setKeepsakeMirrorCategory('SPONSOR_REP');
-            setDebugReport('RELIC DEBUG — mirror category set to SPONSOR_REP.');
+            setRequisitionRouteDoctrine('HUNT');
+            setDebugReport('REQUISITION DEBUG — route doctrine set to HUNT.');
           }}
         />
         <SandboxLaunchButton
           label="[ CLEAR DEPLOYMENT ]"
           accentColor={theme.mutedColor}
           onPress={() => {
-            setKeepsakeAttunement(null);
-            setKeepsakeRouteDoctrine(null);
-            setKeepsakeMirrorCategory(null);
-            setDebugReport('RELIC DEBUG — deployment choices cleared.');
+            setRequisitionAttunement(null);
+            setRequisitionRouteDoctrine(null);
+            setDebugReport('REQUISITION DEBUG — deployment choices cleared.');
           }}
         />
         <SandboxLaunchButton
-          label="[ LOG RELIC STATE ]"
+          label="[ LOG REQUISITION STATE ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devLogKeepsakeRunState())}
         />
         <SandboxLaunchButton
-          label="[ SIMULATE RELIC DEBRIEF ]"
+          label="[ SIMULATE REQUISITION DEBRIEF ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devPreviewKeepsakeDebrief())}
         />
       </View>
 
-      <HubSectionHeader title="RUN ITEMS // DEBUG" color={theme.mutedColor} />
+      <HubSectionHeader title="CARGO SUPPLIES // DEBUG" color={theme.mutedColor} />
       <View style={styles.grid}>
         <SandboxLaunchButton
-          label="[ VALIDATE RUN ITEMS ]"
+          label="[ VALIDATE CARGO SUPPLIES ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(formatRunItemDebugValidation(activeIncursion))}
         />
         <SandboxLaunchButton
-          label="[ RUN ITEM ACCEPTANCE ]"
+          label="[ SUPPLY ACCEPTANCE ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devValidateRunItemAcceptance())}
         />
         <SandboxLaunchButton
-          label="[ FULL RUN ITEM AUDIT ]"
+          label="[ FULL SUPPLY AUDIT ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(formatRunItemAcceptanceDebugReport())}
         />
         <SandboxLaunchButton
-          label="[ LOG RUN ITEM STATE ]"
+          label="[ LOG SUPPLY STATE ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devLogRunItemRunState())}
         />
         <SandboxLaunchButton
-          label="[ SIMULATE RUN ITEM DEBRIEF ]"
+          label="[ SIMULATE SUPPLY DEBRIEF ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devPreviewRunItemDebrief())}
         />
@@ -1385,7 +1333,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
           onPress={() => setDebugReport(formatRunItemRecipeGapReport(account.resourceStash))}
         />
         <SandboxLaunchButton
-          label="[ GRANT ALL RUN ITEMS ]"
+          label="[ GRANT ALL CARGO SUPPLIES ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(devGrantAllRunItems())}
         />
@@ -2395,7 +2343,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
           accentColor={theme.primaryColor}
           onPress={() => {
             unlockAllWeaponFamilies();
-            appendHubLog('>> DEV — ALL WEAPON FAMILIES UNLOCKED AT TIER III.');
+            appendHubLog('>> DEV — ALL WEAPON FAMILIES UNLOCKED.');
             setDebugReport(debugPrintEquippedWeapons(account));
           }}
         />

@@ -101,12 +101,12 @@ import { CLASS_RANK_MAX } from './classRankEngine';
   );
   // Legacy alias input canonicalizes to ECHOING_BRUTE matchup
   assert.equal(
-    getWeaponEnemyMatchup('aegis-runed-longsword', 'RIOT_VANGUARD').enemyId,
+    getWeaponEnemyMatchup('aegis-longsword', 'RIOT_VANGUARD').enemyId,
     'ECHOING_BRUTE',
   );
   assert.equal(
-    getWeaponEnemyMatchup('aegis-runed-longsword', 'RIOT_VANGUARD').key,
-    getWeaponEnemyMatchup('aegis-runed-longsword', 'ECHOING_BRUTE').key,
+    getWeaponEnemyMatchup('aegis-longsword', 'RIOT_VANGUARD').key,
+    getWeaponEnemyMatchup('aegis-longsword', 'ECHOING_BRUTE').key,
   );
   assert.equal(assertNoNonviableOrdinaryMatchups().length, 0);
   assert.equal(assertAllSectorsViableForAllWeapons().length, 0);
@@ -141,7 +141,7 @@ import { CLASS_RANK_MAX } from './classRankEngine';
           classId,
           abilityId: a.abilityId,
           graftId: a.graftId,
-          classRank: cfg.requiredClassRank,
+          runDepthBand: cfg.assignments.length > 1 ? 3 : 1,
           equippedMap: map,
           graftAvailable: true,
         });
@@ -155,12 +155,12 @@ import { CLASS_RANK_MAX } from './classRankEngine';
 // Natural vs grafted matchup inspection distinct
 {
   const natural = inspectWeaponMatchup({
-    weaponFamilyId: 'hex-void-cannon',
+    weaponFamilyId: 'hex-shotgun',
     enemyId: 'WARDEN',
     buildState: 'NATURAL_UNGRAFTED_UNBOONED',
   });
   const grafted = inspectWeaponMatchup({
-    weaponFamilyId: 'hex-void-cannon',
+    weaponFamilyId: 'hex-shotgun',
     enemyId: 'WARDEN',
     abilityGrafts: { SINGULARITY_SLUG: 'GHOST_BEAM_GRAFT' },
     buildState: 'RANK3_SANCTUARY_GRAFT',
@@ -174,14 +174,14 @@ import { CLASS_RANK_MAX } from './classRankEngine';
 {
   const ctx = buildBoonOfferContext({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-pulse-rifle',
-    equippedAbilityIds: getWeaponLoadoutRecommendationProfile('hex-pulse-rifle').sampleLoadouts[0].slots as unknown as string[],
+    weaponFamilyId: 'hex-carbine',
+    equippedAbilityIds: getWeaponLoadoutRecommendationProfile('hex-carbine').sampleLoadouts[0].slots as unknown as string[],
     ownedBoonIds: [],
     seed: '3k-rec-alone',
   });
   assert.ok(buildEligibleWeightedPool(ctx).length >= 3);
   // Calling matchup inspect must not mutate pool
-  inspectWeaponMatchup({ weaponFamilyId: 'hex-pulse-rifle', enemyId: 'MIASMA_SWARM' });
+  inspectWeaponMatchup({ weaponFamilyId: 'hex-carbine', enemyId: 'MIASMA_SWARM' });
   assert.ok(buildEligibleWeightedPool(ctx).length >= 3);
 }
 
@@ -189,13 +189,13 @@ import { CLASS_RANK_MAX } from './classRankEngine';
 {
   const before = buildLoadoutTagLayers({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-void-cannon',
-    equippedAbilityIds: getWeaponLoadoutRecommendationProfile('hex-void-cannon').sampleLoadouts[0].slots as unknown as string[],
+    weaponFamilyId: 'hex-shotgun',
+    equippedAbilityIds: getWeaponLoadoutRecommendationProfile('hex-shotgun').sampleLoadouts[0].slots as unknown as string[],
   });
   const after = buildLoadoutTagLayers({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-void-cannon',
-    equippedAbilityIds: getWeaponLoadoutRecommendationProfile('hex-void-cannon').sampleLoadouts[0].slots as unknown as string[],
+    weaponFamilyId: 'hex-shotgun',
+    equippedAbilityIds: getWeaponLoadoutRecommendationProfile('hex-shotgun').sampleLoadouts[0].slots as unknown as string[],
     abilityGrafts: { SINGULARITY_SLUG: 'GHOST_BEAM_GRAFT' },
   });
   assert.ok(after.finalTransformedTags.includes('ARMOR_PIERCE'));
@@ -204,17 +204,17 @@ import { CLASS_RANK_MAX } from './classRankEngine';
 
 // Sibling starters not universally optimal / specialists not obsolete starters
 {
-  const longsword = summarizeWeaponMatchupSpread('aegis-runed-longsword');
-  const claymore = summarizeWeaponMatchupSpread('aegis-claymore-blade');
+  const longsword = summarizeWeaponMatchupSpread('aegis-longsword');
+  const claymore = summarizeWeaponMatchupSpread('aegis-claymore');
   assert.ok(longsword.STRAINED > 0);
   assert.ok(claymore.FAVORABLE > longsword.FAVORABLE || claymore.STRAINED > 0);
-  const sidearm = summarizeWeaponMatchupSpread('hex-silver-core-sidearm');
-  const pulse = summarizeWeaponMatchupSpread('hex-pulse-rifle');
-  const nullbreach = summarizeWeaponMatchupSpread('hex-void-cannon');
+  const sidearm = summarizeWeaponMatchupSpread('hex-revolver');
+  const pulse = summarizeWeaponMatchupSpread('hex-carbine');
+  const nullbreach = summarizeWeaponMatchupSpread('hex-shotgun');
   assert.ok(sidearm.STRAINED > 0);
   assert.ok(pulse.FAVORABLE > 0 && pulse.STRAINED > 0);
   assert.ok(nullbreach.STRAINED > 0);
-  const conduit = summarizeWeaponMatchupSpread('envoy-null-conduit');
+  const conduit = summarizeWeaponMatchupSpread('envoy-scythe');
   const prism = summarizeWeaponMatchupSpread('envoy-sanguine-prism');
   assert.ok(conduit.FAVORABLE > 0 && conduit.STRAINED > 0);
   assert.ok(prism.STRAINED > 0);
@@ -222,7 +222,7 @@ import { CLASS_RANK_MAX } from './classRankEngine';
 
 // Pulse missing-target redirect absent (carry 3J invariant)
 {
-  const m = getWeaponEnemyMatchup('hex-pulse-rifle', 'WARDEN');
+  const m = getWeaponEnemyMatchup('hex-carbine', 'WARDEN');
   assert.notEqual(m.classification, 'NONVIABLE_DEFECT');
 }
 

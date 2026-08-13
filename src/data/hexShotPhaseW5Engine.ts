@@ -68,9 +68,9 @@ export interface HexWeaponActionAuditRow {
 }
 
 const CANONICAL_ORDER: Record<HexWeaponFamilyId, readonly HexWeaponActionId[]> = {
-  'hex-silver-core-sidearm': HEX_REVOLVER_WEAPON_ACTIONS,
-  'hex-pulse-rifle': HEX_CARBINE_WEAPON_ACTIONS,
-  'hex-void-cannon': HEX_BLACK_DOOR_WEAPON_ACTIONS,
+  'hex-revolver': HEX_REVOLVER_WEAPON_ACTIONS,
+  'hex-carbine': HEX_CARBINE_WEAPON_ACTIONS,
+  'hex-shotgun': HEX_BLACK_DOOR_WEAPON_ACTIONS,
 };
 
 const AUTHORED_BASE: Partial<Record<HexWeaponActionId, number>> = {
@@ -162,9 +162,9 @@ const assert = {
 
 export function historicalBasicCanonicalMap(): Record<HexWeaponFamilyId, HexWeaponActionId> {
   return {
-    'hex-silver-core-sidearm': mapHexFixedBasicSignatureToWeaponAction('hex-silver-core-sidearm') as HexWeaponActionId,
-    'hex-pulse-rifle': mapHexFixedBasicSignatureToWeaponAction('hex-pulse-rifle') as HexWeaponActionId,
-    'hex-void-cannon': mapHexFixedBasicSignatureToWeaponAction('hex-void-cannon') as HexWeaponActionId,
+    'hex-revolver': mapHexFixedBasicSignatureToWeaponAction('hex-revolver') as HexWeaponActionId,
+    'hex-carbine': mapHexFixedBasicSignatureToWeaponAction('hex-carbine') as HexWeaponActionId,
+    'hex-shotgun': mapHexFixedBasicSignatureToWeaponAction('hex-shotgun') as HexWeaponActionId,
   };
 }
 

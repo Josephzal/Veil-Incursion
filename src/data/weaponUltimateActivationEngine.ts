@@ -88,14 +88,14 @@ export function listWeaponUltimateControllerMappings(): Array<{
   controller: WeaponUltimateInteractionControllerKind;
 }> {
   const families: WeaponFamilyId[] = [
-    'aegis-runed-longsword',
-    'aegis-rift-edge',
-    'aegis-claymore-blade',
-    'hex-silver-core-sidearm',
-    'hex-pulse-rifle',
-    'hex-void-cannon',
-    'envoy-echo-lantern',
-    'envoy-null-conduit',
+    'aegis-longsword',
+    'aegis-paired-blades',
+    'aegis-claymore',
+    'hex-revolver',
+    'hex-carbine',
+    'hex-shotgun',
+    'envoy-vambrace',
+    'envoy-scythe',
     'envoy-sanguine-prism',
   ];
   return families.map((weaponFamilyId) => {

@@ -90,8 +90,8 @@ export default function SafehouseHubPanel(): React.JSX.Element {
               muted={theme.mutedColor}
             />
             <StatusRow
-              label="FORGE PASSIVES"
-              value={`${account.craftedAugments.length}`}
+              label="REQUISITIONS"
+              value={`${account.unlockedRequisitionIds.length}`}
               accent={accent}
               muted={theme.mutedColor}
             />

@@ -48,11 +48,6 @@ export default function RunCompleteScreen(): React.JSX.Element {
                 CLIMATE CLUSTER: {getClusterDefinition(runState.climateCluster).name}
               </Text>
             ) : null}
-            {runState.activeTrinkets.length > 0 ? (
-              <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                TRINKETS: {runState.activeTrinkets.length}
-              </Text>
-            ) : null}
           </View>
         )}
         footer={(

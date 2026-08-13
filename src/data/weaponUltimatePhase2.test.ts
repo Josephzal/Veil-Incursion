@@ -1,5 +1,5 @@
 /**
- * WU-2 — rebind class ultimates to Longsword / Ash Shotgun / Scythe only.
+ * WU-2 — rebind class ultimates to Longsword / Carbine / Scythe only.
  * Run: npx tsx src/data/weaponUltimatePhase2.test.ts
  */
 import assert from 'node:assert/strict';
@@ -21,39 +21,39 @@ import {
 console.log('Phase WU-2 — weapon ultimate rebind suite');
 
 // Ownership gates
-assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-runed-longsword'), true);
-assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-rift-edge'), false);
-assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-claymore-blade'), false);
+assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-longsword'), true);
+assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-paired-blades'), false);
+assert.equal(canFireLegacyClassUltimate('EVISCERATE', 'aegis-claymore'), false);
 assert.equal(canFireLegacyClassUltimate('EVISCERATE', null), false);
 
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-pulse-rifle'), true);
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-silver-core-sidearm'), false);
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-void-cannon'), false);
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-carbine'), true);
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-revolver'), false);
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-shotgun'), false);
 
-assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-null-conduit'), true);
-assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-echo-lantern'), false);
+assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-scythe'), true);
+assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-vambrace'), false);
 assert.equal(canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-sanguine-prism'), false);
 
-assert.equal(getWeaponUltimate('aegis-runed-longsword').status, 'WIRED');
-assert.equal(getWeaponUltimate('hex-pulse-rifle').status, 'WIRED');
-assert.equal(getWeaponUltimate('envoy-null-conduit').status, 'WIRED');
-assert.equal(getWeaponUltimate('aegis-rift-edge').status, 'WIRED');
-assert.equal(getWeaponUltimate('hex-silver-core-sidearm').status, 'WIRED');
-assert.equal(getWeaponUltimate('envoy-echo-lantern').status, 'WIRED');
-assert.equal(getWeaponUltimate('aegis-claymore-blade').status, 'WIRED');
-assert.equal(getWeaponUltimate('hex-void-cannon').status, 'WIRED');
+assert.equal(getWeaponUltimate('aegis-longsword').status, 'WIRED');
+assert.equal(getWeaponUltimate('hex-carbine').status, 'WIRED');
+assert.equal(getWeaponUltimate('envoy-scythe').status, 'WIRED');
+assert.equal(getWeaponUltimate('aegis-paired-blades').status, 'WIRED');
+assert.equal(getWeaponUltimate('hex-revolver').status, 'WIRED');
+assert.equal(getWeaponUltimate('envoy-vambrace').status, 'WIRED');
+assert.equal(getWeaponUltimate('aegis-claymore').status, 'WIRED');
+assert.equal(getWeaponUltimate('hex-shotgun').status, 'WIRED');
 assert.equal(getWeaponUltimate('envoy-sanguine-prism').status, 'WIRED');
 
 assert.equal(
-  resolveUltimateFromLegacyClassId('EVISCERATE', 'aegis-runed-longsword')?.displayName,
+  resolveUltimateFromLegacyClassId('EVISCERATE', 'aegis-longsword')?.displayName,
   'ABYSSAL VERDICT',
 );
 assert.equal(
-  getCanonicalWeaponUltimateDisplayName('hex-pulse-rifle'),
+  getCanonicalWeaponUltimateDisplayName('hex-carbine'),
   'ZERO PROTOCOL',
 );
 assert.equal(
-  formatWeaponUltimateLabel('envoy-null-conduit'),
+  formatWeaponUltimateLabel('envoy-scythe'),
   '[ NULL CIRCUIT ]',
 );
 
@@ -86,4 +86,4 @@ assert.ok(
   ])?.includes('NULL CIRCUIT'),
 );
 
-console.log('Phase WU-2 rebind OK — Longsword / Ash Shotgun / Scythe own rebound ultimates');
+console.log('Phase WU-2 rebind OK — Longsword / Carbine / Scythe own rebound ultimates');

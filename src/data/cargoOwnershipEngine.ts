@@ -74,10 +74,18 @@ export function partitionCargoForSafehouseBank(cargo: CargoRunState): {
   blocked: CargoRunState;
   blockedResourceIds: ResourceItemId[];
 } {
-  const bankablePlaced = cargo.grid.placed.filter((item) => canBankCargoItemId(item.itemId));
-  const blockedPlaced = cargo.grid.placed.filter((item) => !canBankCargoItemId(item.itemId));
-  const bankableContainment = cargo.containment.filter((item) => canBankCargoItemId(item.itemId));
-  const blockedContainment = cargo.containment.filter((item) => !canBankCargoItemId(item.itemId));
+  const bankablePlaced = cargo.grid.placed.filter(
+    (item) => !item.temporarySupply && canBankCargoItemId(item.itemId),
+  );
+  const blockedPlaced = cargo.grid.placed.filter(
+    (item) => item.temporarySupply || !canBankCargoItemId(item.itemId),
+  );
+  const bankableContainment = cargo.containment.filter(
+    (item) => !item.temporarySupply && canBankCargoItemId(item.itemId),
+  );
+  const blockedContainment = cargo.containment.filter(
+    (item) => item.temporarySupply || !canBankCargoItemId(item.itemId),
+  );
   const blockedResourceIds = listNonBankableResourcesInCargo(cargo);
 
   return {
@@ -142,6 +150,9 @@ export function bankSingleEligibleCargoInstance(
   const contained = cargo.containment.find((item) => item.instanceId === instanceId);
   const item = placed ?? contained;
   if (!item) return { ok: false, reason: 'Cargo instance not found.' };
+  if (item.temporarySupply) {
+    return { ok: false, reason: 'Temporary recovery supplies cannot be banked.' };
+  }
   if (!canBankCargoItemId(item.itemId)) {
     const name = isResourceItemId(item.itemId)
       ? getResourceDisplayName(item.itemId, true)

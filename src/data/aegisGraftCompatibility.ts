@@ -107,7 +107,7 @@ export function evaluateAegisGraftCompatibility(args: {
       return {
         ok: false,
         reason: 'FIXED_BASIC_LOCKED',
-        message: 'Family Strike grafting requires class rank 7.',
+        message: 'Family Strike grafting is locked for this surface.',
       };
     }
     if (ECHO_SPLINTER_GRAFTS.has(graftId)) {

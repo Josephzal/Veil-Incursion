@@ -82,7 +82,6 @@ export function buildCraftingOpportunitySummary(
   const isOwned = (recipe: CraftingRecipe) => isRecipeOutputOwned(
     recipe.outputId,
     [],
-    account.craftedAugments,
   );
 
   const runItemRecipes = buildRunItemCraftingRecipes();
@@ -136,7 +135,7 @@ export function buildCraftingOpportunitySummary(
   weaponSummary.lines
     .filter((line) => line.kind !== 'EQUIPPED')
     .forEach((line) => {
-      if (line.kind === 'NEWLY_UNLOCKABLE' || line.kind === 'UPGRADE_AVAILABLE') {
+      if (line.kind === 'NEWLY_UNLOCKABLE') {
         craftableNow.push({
           recipeId: `weapon-${line.label}`,
           label: line.label,
@@ -183,7 +182,7 @@ export function formatCraftingOpportunityLines(summary: CraftingOpportunitySumma
     lines.push(`Extracted materials: ${summary.highlightResources.map((id) => getResourceDisplayName(id, true)).join(', ')}`);
   }
   if (summary.weaponSummary?.equippedDisplayName) {
-    lines.push(`Equipped weapon: ${summary.weaponSummary.equippedDisplayName} (Tier ${summary.weaponSummary.equippedTier ?? 1})`);
+    lines.push(`Equipped weapon: ${summary.weaponSummary.equippedDisplayName}`);
   }
   if (summary.note) lines.push(summary.note);
   return lines;

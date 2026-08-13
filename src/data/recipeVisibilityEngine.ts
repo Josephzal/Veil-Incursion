@@ -244,10 +244,13 @@ export function resolveRecipeVisibility(
   if (meta.band === 'STARTER') return 'KNOWN';
   if (hasRecipeKnownUnlock(profile, meta.unlockKey)) return 'KNOWN';
 
-  // Crafted / staged outputs imply known schematic.
-  if (recipe.kind === 'AUGMENT') {
-    if (account.craftedAugments.includes(recipe.outputId as never)) return 'KNOWN';
-  } else if ((account.hubCraftedConsumables[recipe.outputId as import('../types/cargoGrid').CargoItemId] ?? 0) > 0) {
+  // Staged Supply outputs imply a known schematic.
+  if (
+    recipe.kind === 'CONSUMABLE' &&
+    (account.hubCraftedConsumables[
+      recipe.outputId as import('../types/cargoGrid').CargoItemId
+    ] ?? 0) > 0
+  ) {
     return 'KNOWN';
   }
 

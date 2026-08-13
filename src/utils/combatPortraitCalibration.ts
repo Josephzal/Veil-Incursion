@@ -2,7 +2,7 @@
  * Per-weapon / per-pose combat portrait calibration.
  *
  * SIZE (edit visualScale):
- *   1. Base lock: opaque content height → envoy-echo-lantern idle (Vambrace)
+ *   1. Base lock: opaque content height → envoy-vambrace idle (Vambrace)
  *      in combatPlayerPortrait.ts
  *   2. Then multiply by this pose's visualScale (1 = match Vambrace content height)
  *
@@ -15,9 +15,9 @@
  * PLACEMENT: bodyAnchorX, translateX, translateY, releasePoint, tipPoint
  *
  * IDs:
- *   Aegis  — aegis-runed-longsword | aegis-rift-edge | aegis-claymore-blade
- *   Hex    — hex-silver-core-sidearm | hex-pulse-rifle | hex-void-cannon
- *   Envoy  — envoy-echo-lantern | envoy-null-conduit | envoy-sanguine-prism
+ *   Aegis  — aegis-longsword | aegis-paired-blades | aegis-claymore
+ *   Hex    — hex-revolver | hex-carbine | hex-shotgun
+ *   Envoy  — envoy-vambrace | envoy-scythe | envoy-sanguine-prism
  */
 
 import type { WeaponFamilyId } from '../types/weapon';
@@ -25,7 +25,7 @@ import type { WeaponFamilyId } from '../types/weapon';
 export type PoseCalibration = {
   /**
    * Size multiplier after Vambrace content-height lock.
-   * 1 = same opaque height as envoy-echo-lantern idle.
+   * 1 = same opaque height as envoy-vambrace idle.
    * 0.8 = 20% smaller. Edit per idle / attack image.
    */
   visualScale: number;
@@ -58,42 +58,42 @@ function pose(
 
 /**
  * visualScale seeds from image dimensions vs Vambrace idle aspect.
- * REFERENCE: envoy-echo-lantern idle = 1.
+ * REFERENCE: envoy-vambrace idle = 1.
  */
 export const POSE_CALIBRATION: Record<WeaponFamilyId, { idle: PoseCalibration; attack: PoseCalibration }> = {
-  'aegis-runed-longsword': {
+  'aegis-longsword': {
     // Combat layout for Longsword is driven by combatPoseRegistration.ts
     // (body height + planted foot). visualScale here is unused for arena layout
     // but retained for tooling / legacy helpers.
     idle: pose(0.79, 0.5, { releasePoint: { x: 0.58, y: 0.38 }, tipPoint: { x: 0.72, y: 0.12 } }),
     attack: pose(0.6, 0.30, { releasePoint: { x: 0.55, y: 0.40 }, tipPoint: { x: 0.82, y: 0.28 } }),
   },
-  'aegis-rift-edge': {
+  'aegis-paired-blades': {
     idle: pose(0.66, 0.5, { releasePoint: { x: 0.48, y: 0.45 }, tipPoint: { x: 0.35, y: 0.78 } }),
     attack: pose(0.60, 0.32, { releasePoint: { x: 0.46, y: 0.44 }, tipPoint: { x: 0.78, y: 0.36 } }),
   },
-  'aegis-claymore-blade': {
+  'aegis-claymore': {
     idle: pose(0.68, 0.5, { releasePoint: { x: 0.55, y: 0.36 }, tipPoint: { x: 0.62, y: 0.08 } }),
     attack: pose(0.65, 0.34, { releasePoint: { x: 0.52, y: 0.34 }, tipPoint: { x: 0.58, y: 0.10 } }),
   },
-  'hex-silver-core-sidearm': {
+  'hex-revolver': {
     idle: pose(0.94, 0.5, { releasePoint: { x: 0.68, y: 0.48 } }),
     attack: pose(0.90, 0.50, { releasePoint: { x: 0.72, y: 0.46 } }),
   },
-  'hex-pulse-rifle': {
+  'hex-carbine': {
     idle: pose(0.94, 0.5, { releasePoint: { x: 0.74, y: 0.46 } }),
     attack: pose(0.9, 0.48, { releasePoint: { x: 0.78, y: 0.44 } }),
   },
-  'hex-void-cannon': {
+  'hex-shotgun': {
     idle: pose(0.95, 0.5, { releasePoint: { x: 0.70, y: 0.48 } }),
     attack: pose(0.82, 0.42, { releasePoint: { x: 0.76, y: 0.46 } }),
   },
   // REFERENCE — leave at 1 unless you want to change the global target size.
-  'envoy-echo-lantern': {
+  'envoy-vambrace': {
     idle: pose(.96, 0.5, { releasePoint: { x: 0.58, y: 0.50 } }),
     attack: pose(0.92, 0.48, { releasePoint: { x: 0.60, y: 0.48 } }),
   },
-  'envoy-null-conduit': {
+  'envoy-scythe': {
     idle: pose(0.95, 0.5, { releasePoint: { x: 0.62, y: 0.40 }, tipPoint: { x: 0.82, y: 0.22 } }),
     attack: pose(0.7, 0.28, {
       translateX: 8,

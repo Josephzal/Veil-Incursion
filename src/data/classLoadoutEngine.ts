@@ -111,7 +111,7 @@ export function getActiveClassLoadoutForRun(
     // Phase B: 4 derived weapon actions + 3 snapshotted techniques (not persisted).
     // Account has no equipped family — callers should pass the run snapshot family.
     return buildAegisCombatSurface({
-      weaponFamilyId: weaponFamilyId ?? 'aegis-runed-longsword',
+      weaponFamilyId: weaponFamilyId ?? 'aegis-longsword',
       techniques: snapshot.loadout,
     }).hudCards;
   }

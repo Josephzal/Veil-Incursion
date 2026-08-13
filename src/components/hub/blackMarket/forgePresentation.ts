@@ -70,7 +70,7 @@ export function buildForgeSchematicPresentation(
   recipe: CraftingRecipe,
 ): ForgeSchematicPresentation {
   const status: RecipeVisibilityStatus = buildRecipeVisibilityStatus(profile, account, recipe);
-  const alreadyOwned = isRecipeOutputOwned(recipe.outputId, [], account.craftedAugments);
+  const alreadyOwned = isRecipeOutputOwned(recipe.outputId, []);
   const rumored = status.visibility === 'RUMORED';
   const affordable = !rumored && canAffordRecipe(account.resourceStash, recipe);
   const requirements = buildRequirementRows(

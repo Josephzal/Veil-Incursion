@@ -11,6 +11,7 @@ import ContractBoardPanel from '../components/hub/ContractBoardPanel';
 import BlackMarketHubPanel from '../components/hub/BlackMarketHubPanel';
 import LoadoutHubPanel from '../components/hub/LoadoutHubPanel';
 import { snapshotWeaponForRun } from '../data/weaponRunState';
+import { canDeployWithRequisition } from '../data/requisitionAccountNormalize';
 import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
@@ -27,7 +28,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
     commitDescentLoadout,
   } = usePlayerAccount();
   const { buildRunContextForDescent, isHydrated: worldStateHydrated } = useWorldState();
-  const { startBoundRequisition } = useGameFlow();
+  const { startScanning } = useGameFlow();
   const { startNewRun } = useRun();
   const [launchingIncursion, setLaunchingIncursion] = useState(false);
 
@@ -51,24 +52,25 @@ export default function OverworldHubScreen(): React.JSX.Element {
 
   const handleInitiateDeepDive = useCallback(() => {
     if (launchingIncursion) return;
+    if (!canDeployWithRequisition(account)) {
+      appendHubLog(
+        '>> DESCENT BLOCKED — SELECT ONE EXPEDITION REQUISITION IN LOADOUT.',
+      );
+      setTerminalView('LOADOUT');
+      return;
+    }
     setLaunchingIncursion(true);
     unlockBgm();
 
-    // Prepare destination before the 1s Veil transit begins — swap stays instantaneous under cover.
-    const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
+    // Prepare destination before transit; persistent supply stock commits only
+    // after the transition accepts the deployment.
     const { runGenerationContext, runModifiers, runWorldBrief } = buildRunContextForDescent();
     const weaponProgression = {
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     };
     const weaponSnapshot = snapshotWeaponForRun(account.activeClass, weaponProgression);
-    appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
-    appendHubLog('>> RUN ITEM SLOTS LOCKED — TACTICAL MANIFEST COMMITTED.');
-    appendHubLog(`>> WEAPON LINK LOCKED — ${weaponSnapshot.activeWeaponFamilyId.replace(/-/g, ' ').toUpperCase()} TIER ${weaponSnapshot.activeWeaponTier}.`);
-    appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()} // GRADE ${runGenerationContext.breachGrade}`);
-
-    const runPayload = {
+    const runPayloadBase = {
       factionPerks: account.factionPerks,
       unlockedBiomes: account.unlockedBiomes,
       aegisTechniqueLoadout: account.aegisTechniqueLoadout,
@@ -76,21 +78,28 @@ export default function OverworldHubScreen(): React.JSX.Element {
       envoyLoadout: account.envoyLoadout,
       activeClass: account.activeClass,
       alignedFaction: breachFaction,
-      initialCargo,
-      initialRunItems,
       runGenerationContext,
       runWorldBrief,
       runModifiers,
       startingVeilResidueBalance: account.veilResidueBalance,
-      equippedKeepsakeId: account.equippedKeepsakeId,
-      keepsakeDeployment: account.keepsakeDeployment,
+      equippedRequisitionId: account.equippedRequisitionId,
+      requisitionDeployment: account.requisitionDeployment,
       activeWeaponFamilyId: weaponSnapshot.activeWeaponFamilyId,
-      activeWeaponTier: weaponSnapshot.activeWeaponTier,
     };
 
     const started = transitionActions.startBreaching({ x: 0.5, y: 0.5 }, () => {
-      startNewRun(runPayload);
-      startBoundRequisition();
+      const committed = commitDescentLoadout();
+      if (!committed) {
+        appendHubLog('>> DESCENT BLOCKED — PACKED SUPPLY STOCK CHANGED. REVIEW CARGO.');
+        setLaunchingIncursion(false);
+        return;
+      }
+      appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO AND SUPPLIES COMMITTED.');
+      appendHubLog(`>> WEAPON LINK LOCKED — ${weaponSnapshot.activeWeaponFamilyId.replace(/-/g, ' ').toUpperCase()}.`);
+      appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()} // GRADE ${runGenerationContext.breachGrade}`);
+      if (startNewRun({ ...runPayloadBase, initialCargo: committed.cargo })) {
+        startScanning();
+      }
       setLaunchingIncursion(false);
     });
     if (!started) {
@@ -103,8 +112,9 @@ export default function OverworldHubScreen(): React.JSX.Element {
     buildRunContextForDescent,
     commitDescentLoadout,
     launchingIncursion,
-    startBoundRequisition,
+    startScanning,
     startNewRun,
+    setTerminalView,
   ]);
 
   if (!hubReady) {

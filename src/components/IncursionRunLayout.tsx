@@ -8,11 +8,9 @@ import KeepsakeTriggerToast from './KeepsakeTriggerToast';
 import DepthIdentityToast from './DepthIdentityToast';
 import RunItemTriggerToast from './RunItemTriggerToast';
 import RunStatusOverlay from './RunStatusOverlay';
-import RunItemsOverlay from './RunItemsOverlay';
 import RunItemSlotChoiceModal from './run/RunItemSlotChoiceModal';
 import { CargoOverlayProvider } from '../context/CargoOverlayContext';
 import { RunStatusOverlayProvider } from '../context/RunStatusOverlayContext';
-import { RunItemOverlayProvider } from '../context/RunItemOverlayContext';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -180,9 +178,9 @@ export default function IncursionRunLayout({
 
   const handleResolveRunItemOffer = useCallback((
     resolution: RunItemOfferResolution,
-    slotIndex?: number,
+    cargoInstanceId?: string,
   ) => {
-    const resolved = resolvePendingRunItemOffer(resolution, slotIndex);
+    const resolved = resolvePendingRunItemOffer(resolution, cargoInstanceId);
     appendRunLog(resolved.logLine);
     if (resolved.usedNow && resolved.itemId && runItemActiveContext === 'COMBAT') {
       handleUseRunItemFromSlot(resolved.itemId);
@@ -194,14 +192,13 @@ export default function IncursionRunLayout({
     runItemActiveContext,
   ]);
 
-  const fieldDeadDropAvailable = hasFieldRunItem(activeIncursion.runItems, 'dead-drop-token');
-  const fieldAshSealAvailable = hasFieldRunItem(activeIncursion.runItems, 'ash-seal-canister')
-    && activeIncursion.itemRuntime.ashSeal == null;
-  const fieldFoamAvailable = hasFieldRunItem(activeIncursion.runItems, 'containment-foam')
-    && activeIncursion.itemRuntime.foamedCargoInstanceId == null;
+  const fieldDeadDropAvailable = hasFieldRunItem(activeIncursion.cargo, 'dead-drop-token');
+  const fieldAshSealAvailable = hasFieldRunItem(activeIncursion.cargo, 'ash-seal-canister')
+    && activeIncursion.supplyRuntime.ashSeal == null;
+  const fieldFoamAvailable = hasFieldRunItem(activeIncursion.cargo, 'containment-foam')
+    && activeIncursion.supplyRuntime.foamedCargoInstanceId == null;
 
   return (
-    <RunItemOverlayProvider itemsEnabled={showRunOverlays}>
     <CargoOverlayProvider value={cargoOverlayValue}>
       <RunStatusOverlayProvider value={statusOverlayValue}>
         <View style={[styles.root, style]}>
@@ -251,17 +248,10 @@ export default function IncursionRunLayout({
           ) : null}
 
           {showRunOverlays ? (
-            <RunItemsOverlay
-              combatMode={combatMode}
-              onUseCombatItem={combatMode ? handleUseRunItemFromSlot : undefined}
-            />
-          ) : null}
-
-          {showRunOverlays ? (
             <RunItemSlotChoiceModal
-              visible={activeIncursion.itemRuntime.pendingOffer != null}
-              offer={activeIncursion.itemRuntime.pendingOffer}
-              slots={activeIncursion.runItems}
+              visible={activeIncursion.supplyRuntime.pendingOffer != null}
+              offer={activeIncursion.supplyRuntime.pendingOffer}
+              cargo={activeIncursion.cargo}
               accentColor={theme.statusColor}
               mutedColor={theme.mutedColor}
               activeContext={runItemActiveContext}
@@ -271,7 +261,6 @@ export default function IncursionRunLayout({
         </View>
       </RunStatusOverlayProvider>
     </CargoOverlayProvider>
-    </RunItemOverlayProvider>
   );
 }
 

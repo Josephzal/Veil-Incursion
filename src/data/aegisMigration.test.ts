@@ -96,18 +96,18 @@ for (const familyId of ALL_AEGIS_WEAPON_FAMILY_IDS) {
   assert.equal(actions!.length, 4);
   assert.equal(new Set(actions).size, 4);
 }
-assert.deepEqual(deriveAegisWeaponActions('aegis-runed-longsword'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-longsword'), [
   'WARDENS_STRIKE', 'RUPTURE', 'DREADBIND', 'NO_RESPITE',
 ]);
-assert.deepEqual(deriveAegisWeaponActions('aegis-rift-edge'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-paired-blades'), [
   'PAIRED_BLADES_STRIKE', 'DIVERGENCE', 'ECLIPSE', 'SEVERANCE',
 ]);
-assert.deepEqual(deriveAegisWeaponActions('aegis-claymore-blade'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-claymore'), [
   'UNMAKER_STRIKE', 'DREAD_HORIZON', 'UNBOWED', 'DOOMFALL',
 ]);
-assert.equal(deriveAegisWeaponUltimateId('aegis-runed-longsword'), 'ABYSSAL_VERDICT');
-assert.equal(deriveAegisWeaponUltimateId('aegis-rift-edge'), 'REND_THE_VEIL');
-assert.equal(deriveAegisWeaponUltimateId('aegis-claymore-blade'), 'GRAVEFALL');
+assert.equal(deriveAegisWeaponUltimateId('aegis-longsword'), 'ABYSSAL_VERDICT');
+assert.equal(deriveAegisWeaponUltimateId('aegis-paired-blades'), 'REND_THE_VEIL');
+assert.equal(deriveAegisWeaponUltimateId('aegis-claymore'), 'GRAVEFALL');
 
 const accountShape = {
   aegisTechniqueLoadout: DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
@@ -136,7 +136,7 @@ assert.ok(validateAegisTechniqueLoadoutCommit(['STRIKE', 'RUIN', 'GRAVE_BIND']))
 
 // 12: Phase B surface — 4 weapon actions + 3 techniques, no STRIKE card
 const surface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
 });
 assert.equal(surface.hudCards.length, 7);
@@ -146,7 +146,7 @@ assert.equal(surface.techniques[2], 'RUNEBOUND_CARAPACE');
 assert.deepEqual([...surface.techniques], [...surface.hudCards.slice(4)]);
 assert.ok(surface.techniques.includes('FINAL_MERCY') || true);
 const mercySurface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: ['FINAL_MERCY', 'RUIN', 'GRAVE_BIND'],
 });
 assert.equal(mercySurface.techniques[0], 'FINAL_MERCY');

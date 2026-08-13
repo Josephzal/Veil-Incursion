@@ -51,13 +51,21 @@ export function occultWardReductionPercent(enemy: EnemyCombatProfile): number {
 export function applyKineticArmorMitigation(
   enemy: EnemyCombatProfile,
   raw: number,
-  options?: { pierce?: boolean; partialPierce?: boolean },
+  options?: { pierce?: boolean; partialPierce?: boolean; armorPierceLayers?: 0 | 1 },
 ): DefenseMitigationResult {
   const stacks = enemy.kineticArmor ?? 0;
-  if (stacks <= 0 || options?.pierce || raw <= 0) {
+  const piercedLayers = options?.armorPierceLayers ?? 0;
+  if (stacks <= piercedLayers || options?.pierce || raw <= 0) {
     return { damageAfter: raw, damageReduced: 0, enemy, logLines: [] };
   }
-  let reduction = kineticArmorReductionPercent(enemy);
+  const virtualEnemy = piercedLayers > 0
+    ? {
+      ...enemy,
+      kineticArmor: Math.max(0, stacks - piercedLayers),
+      baseKineticArmor: Math.max(0, (enemy.baseKineticArmor ?? stacks) - piercedLayers),
+    }
+    : enemy;
+  let reduction = kineticArmorReductionPercent(virtualEnemy);
   if (options?.partialPierce) reduction *= 0.5;
   if (hasCombatTag(enemy, 'EXPOSED')) reduction *= 0.5;
   const damageAfter = Math.max(0, Math.floor(raw * (1 - reduction)));
@@ -75,13 +83,21 @@ export function applyKineticArmorMitigation(
 export function applyOccultWardMitigation(
   enemy: EnemyCombatProfile,
   raw: number,
-  options?: { pierce?: boolean; partialPierce?: boolean },
+  options?: { pierce?: boolean; partialPierce?: boolean; wardPierceLayers?: 0 | 1 },
 ): DefenseMitigationResult {
   const stacks = enemy.occultWards ?? 0;
-  if (stacks <= 0 || options?.pierce || raw <= 0) {
+  const piercedLayers = options?.wardPierceLayers ?? 0;
+  if (stacks <= piercedLayers || options?.pierce || raw <= 0) {
     return { damageAfter: raw, damageReduced: 0, enemy, logLines: [] };
   }
-  let reduction = occultWardReductionPercent(enemy);
+  const virtualEnemy = piercedLayers > 0
+    ? {
+      ...enemy,
+      occultWards: Math.max(0, stacks - piercedLayers),
+      baseOccultWards: Math.max(0, (enemy.baseOccultWards ?? stacks) - piercedLayers),
+    }
+    : enemy;
+  let reduction = occultWardReductionPercent(virtualEnemy);
   if (options?.partialPierce) reduction *= 0.5;
   if (hasCombatTag(enemy, 'EXPOSED')) reduction *= 0.5;
   const damageAfter = Math.max(0, Math.floor(raw * (1 - reduction)));
@@ -100,7 +116,13 @@ export function mitigateByChannel(
   enemy: EnemyCombatProfile,
   raw: number,
   channel: DamageChannel,
-  options?: { pierce?: boolean; partialPierce?: boolean; ignoreDefenses?: boolean },
+  options?: {
+    pierce?: boolean;
+    partialPierce?: boolean;
+    ignoreDefenses?: boolean;
+    armorPierceLayers?: 0 | 1;
+    wardPierceLayers?: 0 | 1;
+  },
 ): DefenseMitigationResult {
   if (options?.ignoreDefenses || channel === 'TRUE') {
     return { damageAfter: raw, damageReduced: 0, enemy, logLines: [] };

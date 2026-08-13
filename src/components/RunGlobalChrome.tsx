@@ -1,15 +1,12 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RunFeedChromeButtons from './run/RunFeedChromeButtons';
-import TerminalText from './TerminalText';
 import { useTerminal } from '../context/TerminalContext';
 import { useCargoOverlay } from '../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../context/RunStatusOverlayContext';
 import { useRun } from '../context/RunContext';
 import { getEquippedKeepsakeShortLabel } from '../data/expeditionKeepsakeEngine';
 import { buildKeepsakeLiveCounters } from '../data/expeditionKeepsakeRunUiEngine';
-import { buildRunItemLiveCounters, shouldShowRunItemChromeChip } from '../data/runItemRunUiEngine';
-import { countOccupiedRunItemSlots } from '../data/runItemRunState';
 
 interface RunGlobalChromeProps {
   /** Thin Occult Tactical Terminal tabs (combat). */
@@ -26,22 +23,12 @@ export default function RunGlobalChrome({
   const status = useRunStatusOverlay();
   const showStatus = status?.statusEnabled ?? false;
   const showCargo = cargo?.cargoEnabled ?? false;
-  const keepsakeLabel = getEquippedKeepsakeShortLabel(activeIncursion.keepsakeRuntime);
+  const keepsakeLabel = getEquippedKeepsakeShortLabel(activeIncursion.requisitionRuntime);
   const keepsakeCounters = useMemo(
-    () => buildKeepsakeLiveCounters(activeIncursion.keepsakeRuntime),
-    [activeIncursion.keepsakeRuntime],
+    () => buildKeepsakeLiveCounters(activeIncursion.requisitionRuntime),
+    [activeIncursion.requisitionRuntime],
   );
-  const runItemCount = countOccupiedRunItemSlots(activeIncursion.runItems);
-  const showRunItemsChip = shouldShowRunItemChromeChip(
-    activeIncursion.itemRuntime,
-    activeIncursion.runItems,
-  );
-  const runItemCounters = useMemo(
-    () => buildRunItemLiveCounters(activeIncursion.itemRuntime, activeIncursion.runItems),
-    [activeIncursion.itemRuntime, activeIncursion.runItems],
-  );
-
-  if (!showStatus && !showCargo && !keepsakeLabel && !showRunItemsChip) return null;
+  if (!showStatus && !showCargo && !keepsakeLabel) return null;
 
   return (
     <View style={[styles.host, terminal && styles.hostTerminal]} pointerEvents="box-none">
@@ -53,37 +40,11 @@ export default function RunGlobalChrome({
       {keepsakeLabel ? (
         <View style={[styles.keepsakeChip, { borderColor: `${theme.statusColor}66` }]}>
           <Text style={[styles.keepsakeText, { color: theme.statusColor }]}>
-            {`RELIC // ${keepsakeLabel}`}
+            {`REQUISITION // ${keepsakeLabel}`}
           </Text>
           {keepsakeCounters.length > 0 ? (
             <View style={styles.counterRow}>
               {keepsakeCounters.map((counter) => {
-                const color = counter.tone === 'warning'
-                  ? '#f59e0b'
-                  : counter.tone === 'accent'
-                    ? theme.statusColor
-                    : theme.mutedColor;
-                return (
-                  <Text
-                    key={counter.key}
-                    style={[styles.counterText, { color }]}
-                  >
-                    {`${counter.label} ${counter.value}`}
-                  </Text>
-                );
-              })}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-      {showRunItemsChip ? (
-        <View style={[styles.keepsakeChip, { borderColor: `${theme.statusColor}66` }]}>
-          <TerminalText variant="caption" style={{ color: theme.statusColor, fontSize: 9, fontWeight: '700' }}>
-            {runItemCount > 0 ? `RUN ITEMS // ${runItemCount}/4` : 'RUN ITEMS // ACTIVE'}
-          </TerminalText>
-          {runItemCounters.length > 0 ? (
-            <View style={styles.counterRow}>
-              {runItemCounters.map((counter) => {
                 const color = counter.tone === 'warning'
                   ? '#f59e0b'
                   : counter.tone === 'accent'

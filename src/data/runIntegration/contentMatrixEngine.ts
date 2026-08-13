@@ -3,7 +3,7 @@ import { ANCHOR_REGISTRY } from '../anchorRegistry';
 import { CONTRACT_TEMPLATE_SPECS } from '../contractTemplates';
 import { CRAFTING_REGISTRY } from '../craftingRegistry';
 import { buildRunItemCraftingRecipes } from '../runItemCraftingBridge';
-import { ALL_KEEPSAKE_IDS } from '../expeditionKeepsakeRegistry';
+import { ENABLED_REQUISITION_IDS } from '../../types/expeditionRequisition';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCES_BY_CATEGORY } from '../resourceRegistry';
 import { ALL_RUN_ITEM_IDS } from '../../types/runItem';
 import type { SectorState, WorldStatePersistedState } from '../../types/worldState';
@@ -20,7 +20,7 @@ export interface ContentMatrixSummary {
   resourcesByCategory: Record<string, number>;
   recipes: number;
   runItemRecipes: number;
-  keepsakes: number;
+  requisitions: number;
   runItems: number;
   contractTemplates: number;
   nodesPerDistrict: number;
@@ -45,7 +45,7 @@ export function buildContentMatrixSummary(
     resourcesByCategory,
     recipes: CRAFTING_REGISTRY.length,
     runItemRecipes: buildRunItemCraftingRecipes().length,
-    keepsakes: ALL_KEEPSAKE_IDS.length,
+    requisitions: ENABLED_REQUISITION_IDS.length,
     runItems: ALL_RUN_ITEM_IDS.length,
     contractTemplates: CONTRACT_TEMPLATE_SPECS.length,
     nodesPerDistrict: getNodesPerDistrict(),
@@ -69,9 +69,9 @@ export function formatContentMatrixReport(
     `Anchors: ${m.anchors}`,
     `Resources: ${m.resourcesTotal} total`,
     categoryLines,
-    `Recipes: ${m.recipes} (+ ${m.runItemRecipes} run item schematics)`,
-    `Expedition Relics: ${m.keepsakes}`,
-    `Run Items: ${m.runItems}`,
+    `Recipes: ${m.recipes} (+ ${m.runItemRecipes} supply schematics)`,
+    `Expedition Requisitions: ${m.requisitions}`,
+    `Cargo Supplies: ${m.runItems}`,
     `Contract Templates: ${m.contractTemplates}`,
     `Run pacing: ${m.nodesPerDistrict} nodes/district × 3 = ${m.maxRunDepth} max depth`,
     `Board contracts queued: ${persisted.contractBoard?.contracts?.length ?? 0}`,

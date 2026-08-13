@@ -4,7 +4,6 @@ import HapticPressable from '../HapticPressable';
 import TacticalButton from '../TacticalButton';
 import { useCargoOverlay } from '../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
-import { useRunItemOverlay } from '../../context/RunItemOverlayContext';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import { combatConsoleChromeStyle } from '../../theme/combatConsoleChrome';
@@ -16,13 +15,13 @@ interface RunFeedChromeButtonsProps {
   mutedColor: string;
   /** Thin concept tabs for Occult Tactical Terminal combat chrome. */
   terminal?: boolean;
-  /** Stack STATUS / ITEMS / CARGO vertically (bottom-right under End Turn). */
+  /** Stack STATUS / CARGO vertically (bottom-right under End Turn). */
   stack?: boolean;
   /** Larger combat-console chrome targets under End Turn. */
   consoleScale?: boolean;
   /** Compact horizontal utility row above End Turn (combat system module). */
   systemModule?: boolean;
-  /** Combat arena hosts STATUS/CARGO top-right — keep ITEMS only here. */
+  /** Combat arena hosts STATUS/CARGO top-right. */
   hideStatusCargo?: boolean;
 }
 
@@ -85,12 +84,10 @@ export default function RunFeedChromeButtons({
 }: RunFeedChromeButtonsProps): React.JSX.Element | null {
   const cargo = useCargoOverlay();
   const status = useRunStatusOverlay();
-  const runItems = useRunItemOverlay();
   const showStatus = !hideStatusCargo && (status?.statusEnabled ?? false);
   const showCargo = !hideStatusCargo && (cargo?.cargoEnabled ?? false);
-  const showItems = runItems?.itemsEnabled ?? false;
 
-  if (!showStatus && !showCargo && !showItems) return null;
+  if (!showStatus && !showCargo) return null;
 
   if (terminal) {
     return (
@@ -110,16 +107,6 @@ export default function RunFeedChromeButtons({
             consoleScale={consoleScale}
             systemModule={systemModule}
             accessibilityLabel="Open operative status"
-          />
-        ) : null}
-        {showItems ? (
-          <TerminalChromeButton
-            label="ITEMS"
-            onPress={runItems!.openItems}
-            stacked={stack}
-            consoleScale={consoleScale}
-            systemModule={systemModule}
-            accessibilityLabel="Open run items"
           />
         ) : null}
         {showCargo ? (
@@ -143,16 +130,6 @@ export default function RunFeedChromeButtons({
           label="STATUS"
           active={false}
           onPress={status!.openStatus}
-          accentColor={accent}
-          mutedColor={mutedColor}
-          variant="inline"
-        />
-      ) : null}
-      {showItems ? (
-        <TacticalButton
-          label="ITEMS"
-          active={false}
-          onPress={runItems!.openItems}
           accentColor={accent}
           mutedColor={mutedColor}
           variant="inline"

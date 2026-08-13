@@ -65,11 +65,11 @@ assert.deepEqual(e5Issues, [], e5Issues.map((i) => `${i.code}: ${i.message}`).jo
 
 // Seven-card surface + order for all families
 const expected: Record<string, readonly string[]> = {
-  'envoy-echo-lantern': [
+  'envoy-vambrace': [
     'GRAVEWEAVE', 'GRAVE_TRANSFER', 'VEIL_BRAND', 'ROT_KNELL',
     'ASTRAL_LANCE', 'ENTROPY_HEX', 'NECROTIC_BLOOM',
   ],
-  'envoy-null-conduit': [
+  'envoy-scythe': [
     'NULL_ARC', 'SILENT_EDGE', 'VEIN_CUT', 'SMOKE_ARC',
     'ASTRAL_LANCE', 'ENTROPY_HEX', 'NECROTIC_BLOOM',
   ],
@@ -121,8 +121,8 @@ for (const raw of migrations) {
 
 // Family change preserves flex
 const flex = sanitizeEnvoyFlexLoadout(['DIMENSIONAL_SHEAR', 'PHASE_STEP', 'FLESH_WARP']);
-const v = buildEnvoyCombatSurface({ weaponFamilyId: 'envoy-echo-lantern', flex });
-const s = buildEnvoyCombatSurface({ weaponFamilyId: 'envoy-null-conduit', flex });
+const v = buildEnvoyCombatSurface({ weaponFamilyId: 'envoy-vambrace', flex });
+const s = buildEnvoyCombatSurface({ weaponFamilyId: 'envoy-scythe', flex });
 assert.deepEqual([...v.flex], [...flex]);
 assert.deepEqual([...s.flex], [...flex]);
 assert.notDeepEqual([...v.weaponActions], [...s.weaponActions]);
@@ -133,14 +133,14 @@ assert.equal(classAbilityTargetMode('ENVOY', 'CRIMSON_VENT'), 'NONE');
 assert.equal(classAbilityTargetMode('ENVOY', 'SILENT_EDGE'), 'SINGLE');
 
 // Canonical labels (no VEIL_SPLINTER / retired codenames)
-assert.equal(formatAbilityLabel('ENVOY', 'GRAVEWEAVE', 'envoy-echo-lantern').includes('VEIL'), false);
-assert.ok(formatAbilityLabel('ENVOY', 'GRAVEWEAVE', 'envoy-echo-lantern').toUpperCase().includes('GRAVE'));
+assert.equal(formatAbilityLabel('ENVOY', 'GRAVEWEAVE', 'envoy-vambrace').includes('VEIL'), false);
+assert.ok(formatAbilityLabel('ENVOY', 'GRAVEWEAVE', 'envoy-vambrace').toUpperCase().includes('GRAVE'));
 assert.equal(
-  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-echo-lantern').historicalSourceId,
+  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-vambrace').historicalSourceId,
   'VEIL_SPLINTER',
 );
 assert.equal(
-  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-echo-lantern').canonicalId,
+  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-vambrace').canonicalId,
   'GRAVEWEAVE',
 );
 
@@ -170,7 +170,7 @@ for (const actionId of ENVOY_EXECUTABLE_WEAPON_ACTION_IDS) {
 // Executor / preview still E.4 authority for all twelve
 for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
   for (const actionId of requireEnvoyWeaponActions(familyId)) {
-    const weapon = resolveWeaponState(familyId, 1);
+    const weapon = resolveWeaponState(familyId);
     const classState = createDefaultClassCombatEncounterState();
     const squad = [unit('a'), unit('b')];
     if (actionId === 'GRAVE_TRANSFER') {
@@ -224,7 +224,7 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
 
 // Action1 log naming uses live weapon names
 const a1 = resolveEnvoySplinterBasic({
-  weapon: resolveWeaponState('envoy-echo-lantern', 1),
+  weapon: resolveWeaponState('envoy-vambrace'),
   catalogDamage: 10,
   catalogFluxCost: 5,
   veilFlux: 20,
@@ -236,14 +236,14 @@ assert.ok(a1.logLines.some((l) => l.includes('VAMBRACE')));
 assert.ok(!a1.logLines.some((l) => l.includes('ECHO LANTERN')));
 
 // Ownership / starter
-assert.equal(STARTER_WEAPON_BY_CLASS.ENVOY, 'envoy-echo-lantern');
+assert.equal(STARTER_WEAPON_BY_CLASS.ENVOY, 'envoy-vambrace');
 assert.deepEqual(validateWeaponUnlockPaths(), []);
 const migrated = normalizeWeaponProgression({
-  weaponUnlocks: ['envoy-null-conduit'],
-  weaponTiers: { 'envoy-null-conduit': 2 },
-  equippedWeaponByClass: { ENVOY: 'envoy-null-conduit' },
+  weaponUnlocks: ['envoy-scythe'],
+  weaponTiers: { 'envoy-scythe': 2 },
+  equippedWeaponByClass: { ENVOY: 'envoy-scythe' },
 } as Parameters<typeof normalizeWeaponProgression>[0]);
-assert.equal(migrated.equippedWeaponByClass.ENVOY, 'envoy-null-conduit');
-assert.ok(migrated.weaponUnlocks.includes('envoy-echo-lantern'));
+assert.equal(migrated.equippedWeaponByClass.ENVOY, 'envoy-scythe');
+assert.ok(migrated.weaponUnlocks.includes('envoy-vambrace'));
 
 console.log('Envoy Weapon-Kit Phase E.5 OK');

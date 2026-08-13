@@ -267,8 +267,8 @@ export function buildRunStatusSnapshot(inc: ActiveIncursionState): RunStatusEntr
   if (sector) entries.push(sector);
 
   entries.push(...classBoonEntries(inc.activeClass ?? 'AEGIS', inc));
-  entries.push(...buildKeepsakeRunStatusEntries(inc.keepsakeRuntime));
-  entries.push(...buildRunItemRunStatusEntries(inc.itemRuntime, inc.runItems));
+  entries.push(...buildKeepsakeRunStatusEntries(inc.requisitionRuntime));
+  entries.push(...buildRunItemRunStatusEntries(inc.supplyRuntime, inc.cargo));
   entries.push(...statusEffectEntries(inc.runStatusEffects));
   entries.push(...flagEntries(inc.progress.collectedFlags));
   entries.push(...envModifierEntries(inc.environmentalModifiers));

@@ -1,7 +1,7 @@
 import type { CargoItemId } from '../types/cargoGrid';
 import { ALL_RUN_ITEM_IDS, type RunItemId } from '../types/runItem';
 
-/** Snake_case design-doc ids → canonical kebab-case Run Item ids. */
+/** Snake_case design-doc ids → canonical kebab-case Supply ids. */
 export const RUN_ITEM_ID_ALIASES: Record<string, RunItemId> = {
   standard_coagulant: 'standard-coagulant',
   trauma_patch: 'trauma-patch',
@@ -29,11 +29,11 @@ export const RUN_ITEM_ID_ALIASES: Record<string, RunItemId> = {
   anchor_needle: 'anchor-needle',
 };
 
-/** Legacy cargo catalog ids that map to v2 canonical Run Item ids. */
-export const RUN_ITEM_LEGACY_CATALOG_ALIASES: Record<string, RunItemId> = {
-  'coagulation-stitch': 'standard-coagulant',
-  'sanguine-coagulant': 'trauma-patch',
-};
+/**
+ * Stage IV-A: mechanically distinct cargo supplies are not aliases merely
+ * because their names overlap former Supply donors.
+ */
+export const RUN_ITEM_LEGACY_CATALOG_ALIASES: Record<string, RunItemId> = {};
 
 const RUN_ITEM_ID_SET = new Set<string>(ALL_RUN_ITEM_IDS);
 
@@ -46,7 +46,7 @@ export function isRunItemCargoId(id: CargoItemId): boolean {
 }
 
 /**
- * Resolve a Run Item id to its canonical kebab-case form.
+ * Resolve a Supply id to its canonical kebab-case form.
  * Accepts exact kebab-case ids, snake_case aliases, and legacy catalog ids.
  */
 export function normalizeRunItemId(id: string): RunItemId {
@@ -61,7 +61,7 @@ export function normalizeRunItemId(id: string): RunItemId {
   if (catalogAlias) {
     return catalogAlias;
   }
-  throw new Error(`normalizeRunItemId: unknown Run Item id '${id}'.`);
+  throw new Error(`normalizeRunItemId: unknown Supply id '${id}'.`);
 }
 
 /** Non-throwing lookup — returns null when id cannot be normalized. */

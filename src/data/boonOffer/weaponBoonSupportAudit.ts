@@ -55,10 +55,10 @@ export function auditWeaponBoonSupport(weaponFamilyId: WeaponFamilyId): WeaponBo
     supportGaps.push('No direct live-boon interaction for equipped basic/loadout');
   }
   // Identity-specific thin routes flagged for design — no new boon IDs invented here.
-  if (weaponFamilyId === 'aegis-rift-edge' && !ctx.reachableHooks.includes('RIFT_EDGE_TEMPO')) {
+  if (weaponFamilyId === 'aegis-paired-blades' && !ctx.reachableHooks.includes('RIFT_EDGE_TEMPO')) {
     supportGaps.push('Veil Edge tempo hook unreachable');
   }
-  if (weaponFamilyId === 'envoy-echo-lantern' && !ctx.reachableHooks.includes('ROT_SETUP')) {
+  if (weaponFamilyId === 'envoy-vambrace' && !ctx.reachableHooks.includes('ROT_SETUP')) {
     supportGaps.push('Lantern Rot setup unreachable');
   }
 

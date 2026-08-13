@@ -20,21 +20,22 @@ import { getWeaponAnchorAttack, RETIRED_WEAPON_DISPLAY_NAMES } from './weaponAnc
 import { getWeaponUltimate } from './weaponUltimateRegistry';
 import type { WeaponFamilyId } from '../types/weapon';
 
-/** Canonical player-facing Hex weapon display names (H.1a). */
+/** Canonical player-facing Hex weapon display names (Stage II-C). */
 export const HEX_H1A_CANONICAL_DISPLAY_NAMES = {
-  'hex-silver-core-sidearm': 'Silver-Core Sidearm',
-  'hex-void-cannon': 'Nullbreach',
-  'hex-pulse-rifle': 'Ash Shotgun',
+  'hex-revolver': 'Revolver',
+  'hex-shotgun': 'Shotgun',
+  'hex-carbine': 'Carbine',
 } as const satisfies Record<
-  'hex-silver-core-sidearm' | 'hex-void-cannon' | 'hex-pulse-rifle',
+  'hex-revolver' | 'hex-shotgun' | 'hex-carbine',
   string
 >;
 
 /** Legacy presentation aliases — may be accepted as input, never emitted live. */
 export const HEX_H1A_LEGACY_PRESENTATION_ALIASES = [
-  'Revolver',
+  'Silver-Core Sidearm',
+  'Nullbreach',
+  'Ash Shotgun',
   'Black Door',
-  'Carbine',
 ] as const;
 
 /** Retired class-wide Chamber damage layer (was ×1.15). H.1a authority = 1.0 (no-op). */

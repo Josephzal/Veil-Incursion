@@ -1,18 +1,15 @@
 import type { ClassType } from './game';
 import type { ResourceItemId } from './resourceItem';
 import type { ResolvedWeaponCombatStats } from '../data/inventory';
+import type { CanonicalWeaponFamilyId } from '../data/weaponFamilyIdNormalize';
 
-export type WeaponFamilyId =
-  | 'aegis-runed-longsword'
-  | 'aegis-claymore-blade'
-  | 'aegis-rift-edge'
-  | 'hex-silver-core-sidearm'
-  | 'hex-pulse-rifle'
-  | 'hex-void-cannon'
-  | 'envoy-null-conduit'
-  | 'envoy-sanguine-prism'
-  | 'envoy-echo-lantern';
+/** Live permanent weapon-family identity (Stage II-C — tierless). */
+export type WeaponFamilyId = CanonicalWeaponFamilyId;
 
+/**
+ * @deprecated Stage II-C — weapon tiers removed. Retained only for stored-input
+ * migration typing; never used as live progression.
+ */
 export type WeaponTierNumber = 1 | 2 | 3;
 
 export type WeaponTag =
@@ -41,14 +38,13 @@ export type WeaponTag =
   | 'HIGH_RISK'
   | 'DEBUFF';
 
+/**
+ * @deprecated Stage II-C — Tier III once-per-combat passives retired.
+ * Kept for migration/retirement tests only.
+ */
 export type WeaponOncePerCombatPassiveId =
   | 'FIRST_MELEE_RESERVE_BONUS'
-  /**
-   * Unmaker Tier III — +Abyssal Reserve when an authored WA causes a Fracture break.
-   * Once per committed action (not once-per-combat). Graft-added hits excluded.
-   */
   | 'FRACTURE_BREAK_RESERVE'
-  /** @deprecated E.1b — alias of FRACTURE_BREAK_RESERVE; no Stamina grant. */
   | 'FIRST_FRACTURE_STAMINA_REFUND'
   | 'MELEE_CRIT_RESERVE_BONUS'
   | 'FIRST_RELOAD_STAMINA'
@@ -101,6 +97,9 @@ export interface WeaponStatModifiers {
   maxHpPct?: number;
 }
 
+/**
+ * @deprecated Stage II-C — tier rows removed. Stored-input / historical only.
+ */
 export interface WeaponTierDefinition {
   tierNumber: WeaponTierNumber;
   displayName: string;
@@ -122,38 +121,36 @@ export interface WeaponFamilyDefinition {
   tags: readonly WeaponTag[];
   startingUnlocked: boolean;
   unlockRequirement: readonly WeaponResourceCost[];
-  tiers: readonly [WeaponTierDefinition, WeaponTierDefinition, WeaponTierDefinition];
+  /** Exact former effective Tier I combat profile (tierless baseline). */
+  baselineStatModifiers: WeaponStatModifiers;
+  baselineEffectSummary: string;
   uiSummary: string;
+  /**
+   * Deferred Masterwork content — inert; grants no live power (Stage II-C).
+   */
   masterworkUnlocked: boolean;
   masterworkRecipeId: string | null;
   requiresAnomalousCore: boolean;
   masterworkEffectSummary: string;
 }
 
+/**
+ * Encounter-scoped weapon kit flags that are NOT tier passives.
+ * Tier III once-per-combat counters were removed in Stage II-C.
+ */
 export interface WeaponRuntimeState {
-  firstMeleeHitUsed: boolean;
-  firstFractureUsed: boolean;
-  firstReloadUsed: boolean;
-  firstOccultAbilityUsed: boolean;
-  firstDebuffApplied: boolean;
-  sacrificeHpBonusUsed: boolean;
-  firstArmoredHitUsed: boolean;
-  postReloadBallisticBonus: boolean;
-  /** Veil Edge — armed by evade/parry success; consumed by Occult rider basic. */
+  /** Paired Blades — armed by evade/parry success; consumed by Occult rider basic. */
   riftEdgeTempoArmed: boolean;
-  /** Claymore — first Fracture-break cashout per encounter. */
+  /** Claymore — first Fracture-break cashout per encounter (family kit). */
   claymoreBreakCashoutUsed: boolean;
-  /** Hex shotgun / mag loop — emptied at least once this combat. */
+  /** Hex mag loop — emptied at least once this combat. */
   magazineEmptiedThisCombat: boolean;
 }
 
 export interface ResolvedWeaponState {
   familyId: WeaponFamilyId;
-  tier: WeaponTierNumber;
   displayName: string;
   statModifiers: WeaponStatModifiers;
-  oncePerCombatPassive?: WeaponOncePerCombatPassiveId;
-  passiveBonusPct?: number;
   effectSummary: string;
   tags: readonly WeaponTag[];
   classId: ClassType;
@@ -161,12 +158,18 @@ export interface ResolvedWeaponState {
 
 export interface WeaponProgressionState {
   weaponUnlocks: WeaponFamilyId[];
-  weaponTiers: Partial<Record<WeaponFamilyId, WeaponTierNumber>>;
   equippedWeaponByClass: Partial<Record<ClassType, WeaponFamilyId>>;
 }
 
+/** Stored-input shape that may still carry retired tier maps / legacy IDs. */
+export type StoredWeaponProgressionInput = {
+  weaponUnlocks?: readonly unknown[];
+  weaponTiers?: Partial<Record<string, unknown>>;
+  equippedWeaponByClass?: Partial<Record<string, unknown>>;
+};
+
 export interface WeaponDebriefLine {
-  kind: 'NEWLY_UNLOCKABLE' | 'UPGRADE_AVAILABLE' | 'NEARLY_READY' | 'EQUIPPED';
+  kind: 'NEWLY_UNLOCKABLE' | 'NEARLY_READY' | 'EQUIPPED';
   label: string;
   detail: string;
 }
@@ -174,7 +177,6 @@ export interface WeaponDebriefLine {
 export interface WeaponDebriefSummary {
   equippedFamilyId: WeaponFamilyId | null;
   equippedDisplayName: string | null;
-  equippedTier: WeaponTierNumber | null;
   effectSummary: string | null;
   lines: WeaponDebriefLine[];
 }

@@ -211,10 +211,9 @@ export default function DeckWorkspace({
   const equippedWeaponId = useMemo(
     () => getEquippedWeaponForClass({
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     }, account.activeClass),
-    [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks],
+    [account.activeClass, account.equippedWeaponByClass, account.weaponUnlocks],
   );
 
   const aegisReadOnlyWeaponActions = useMemo((): ReadOnlyWeaponActionCard[] | null => {

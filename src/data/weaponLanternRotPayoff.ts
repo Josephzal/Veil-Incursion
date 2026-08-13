@@ -26,7 +26,7 @@ export function resolveLanternFluxPurgePayoff(args: {
     return { rotConsume: 0, damage: args.baseDamage, logLines: [], lanternDetonation: false };
   }
 
-  if (args.familyId !== 'envoy-echo-lantern') {
+  if (args.familyId !== 'envoy-vambrace') {
     return {
       rotConsume: 1,
       damage: args.baseDamage,

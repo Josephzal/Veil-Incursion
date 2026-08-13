@@ -26,7 +26,7 @@ const REVOLVER: Record<
 > = {
   QUICKDRAW: {
     id: 'QUICKDRAW',
-    familyId: 'hex-silver-core-sidearm',
+    familyId: 'hex-revolver',
     label: '[ QUICKDRAW ]',
     description: 'Accurate Sidearm basic — Tier ladder 10/11/12 Kinetic. Inherits ammo. Execute window ≤30% HP.',
     apCost: 1,
@@ -39,7 +39,7 @@ const REVOLVER: Record<
   },
   SLIPSHOT: {
     id: 'SLIPSHOT',
-    familyId: 'hex-silver-core-sidearm',
+    familyId: 'hex-revolver',
     label: '[ SLIPSHOT ]',
     description: '8 Kinetic poke — grants Elusive (next eligible direct attack forcibly evaded). Elusive even on miss.',
     apCost: 1,
@@ -51,7 +51,7 @@ const REVOLVER: Record<
   },
   SIX_BELLS: {
     id: 'SIX_BELLS',
-    familyId: 'hex-silver-core-sidearm',
+    familyId: 'hex-revolver',
     label: '[ SIX BELLS ]',
     description: 'Dump remaining rounds (min 2) into one target — 5 Kinetic per round, independent checks.',
     apCost: 2,
@@ -63,7 +63,7 @@ const REVOLVER: Record<
   },
   LAST_WORD: {
     id: 'LAST_WORD',
-    familyId: 'hex-silver-core-sidearm',
+    familyId: 'hex-revolver',
     label: '[ LAST WORD ]',
     description: '14 Kinetic execute vs ≤30% HP — refund 1 AP on synchronous lethal (once per player turn).',
     apCost: 1,
@@ -81,7 +81,7 @@ const CARBINE: Record<
 > = {
   CENTER_MASS: {
     id: 'CENTER_MASS',
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     label: '[ CENTER MASS ]',
     description: '9 Kinetic Carbine basic — establishes Firing Solution on hit (+15 accuracy). Inherits ammo. No splash.',
     apCost: 1,
@@ -94,7 +94,7 @@ const CARBINE: Record<
   },
   CONTROLLED_BURST: {
     id: 'CONTROLLED_BURST',
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     label: '[ CONTROLLED BURST ]',
     description: 'Three 6 Kinetic packets — commits 3 rounds. Independent checks. FS accuracy only.',
     apCost: 2,
@@ -106,7 +106,7 @@ const CARBINE: Record<
   },
   SUPPRESSIVE_BARRAGE: {
     id: 'SUPPRESSIVE_BARRAGE',
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     label: '[ SUPPRESSIVE FIRE ]',
     description: 'Two 4 Kinetic packets — commits 2 rounds. Applies Suppressed (×0.70 next direct) on hit threshold.',
     apCost: 1,
@@ -118,7 +118,7 @@ const CARBINE: Record<
   },
   CONTACT_FRONT: {
     id: 'CONTACT_FRONT',
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     label: '[ CONTACT FRONT ]',
     description: 'Four 5 Kinetic packets — 4+0 or 2+2 allocation. Commits 4 rounds. No retarget on death.',
     apCost: 2,
@@ -136,7 +136,7 @@ const BLACK_DOOR: Record<
 > = {
   DOOR_KNOCKER: {
     id: 'DOOR_KNOCKER',
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     label: '[ DOOR KNOCKER ]',
     description: 'Nullbreach basic — Tier-I 19 Kinetic via family scaling. Armor pressure + backline ×0.75. Live stamina.',
     apCost: 1,
@@ -149,7 +149,7 @@ const BLACK_DOOR: Record<
   },
   FATAL_FUNNEL: {
     id: 'FATAL_FUNNEL',
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     label: '[ FATAL FUNNEL ]',
     description: 'Column blast — primary 16 / rear 11 Kinetic. One shell. No lateral spill.',
     apCost: 2,
@@ -161,7 +161,7 @@ const BLACK_DOOR: Record<
   },
   THRESHOLD: {
     id: 'THRESHOLD',
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     label: '[ THRESHOLD ]',
     description: 'Arm a pre-attack reaction — reserves 1 shell now. 14 Kinetic vs the attacker. Expires next player turn.',
     apCost: 1,
@@ -173,7 +173,7 @@ const BLACK_DOOR: Record<
   },
   DEADBOLT: {
     id: 'DEADBOLT',
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     label: '[ DEADBOLT ]',
     description: 'Heavy 22 Kinetic (28 after qualifying reload opportunity). Consumes opportunity on valid cast.',
     apCost: 2,
@@ -222,9 +222,9 @@ export function isHexWeaponActionCatalogId(id: string): id is HexWeaponActionId 
 export function mapHexFixedBasicSignatureToWeaponAction(
   familyId: HexWeaponFamilyId | null | undefined,
 ): HexWeaponActionId | 'SILVER_CORE_SIDEARM' {
-  if (familyId === 'hex-silver-core-sidearm') return 'QUICKDRAW';
-  if (familyId === 'hex-pulse-rifle') return 'CENTER_MASS';
-  if (familyId === 'hex-void-cannon') return 'DOOR_KNOCKER';
+  if (familyId === 'hex-revolver') return 'QUICKDRAW';
+  if (familyId === 'hex-carbine') return 'CENTER_MASS';
+  if (familyId === 'hex-shotgun') return 'DOOR_KNOCKER';
   return 'SILVER_CORE_SIDEARM';
 }
 

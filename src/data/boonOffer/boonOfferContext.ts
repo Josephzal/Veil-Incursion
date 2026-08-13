@@ -19,8 +19,8 @@ import { aegisWeaponActionTags, isAegisWeaponActionCatalogId } from '../aegisWea
 import type { BoonOfferContext, TagLayerSnapshot } from './boonOfferTypes';
 
 function aegisFamilyStrikeId(weaponFamilyId: WeaponFamilyId): string {
-  if (weaponFamilyId === 'aegis-rift-edge') return 'PAIRED_BLADES_STRIKE';
-  if (weaponFamilyId === 'aegis-claymore-blade') return 'UNMAKER_STRIKE';
+  if (weaponFamilyId === 'aegis-paired-blades') return 'PAIRED_BLADES_STRIKE';
+  if (weaponFamilyId === 'aegis-claymore') return 'UNMAKER_STRIKE';
   return 'WARDENS_STRIKE';
 }
 
@@ -179,19 +179,19 @@ function alwaysReachableHooks(
   const hooks: WeaponAbilityInteractionHook[] = ['WEAPON_BASIC'];
   if (classId === 'AEGIS') {
     hooks.push('FRACTURE_SETUP', 'FRACTURE_BREAK', 'RESERVE_FLOW', 'RUNIC_BRAND');
-    if (weaponFamilyId === 'aegis-rift-edge') hooks.push('RIFT_EDGE_TEMPO', 'PARRY_EVADE_TEMPO');
-    if (weaponFamilyId === 'aegis-claymore-blade') hooks.push('STAMINA_PRESSURE', 'FRACTURE_BREAK');
+    if (weaponFamilyId === 'aegis-paired-blades') hooks.push('RIFT_EDGE_TEMPO', 'PARRY_EVADE_TEMPO');
+    if (weaponFamilyId === 'aegis-claymore') hooks.push('STAMINA_PRESSURE', 'FRACTURE_BREAK');
   }
   if (classId === 'HEX_SHOT') {
     hooks.push('RELOAD_PROTOCOL', 'PROTOCOL_CHARGE');
-    if (weaponFamilyId === 'hex-void-cannon') hooks.push('ARMOR_PRESSURE', 'STAMINA_PRESSURE');
-    if (weaponFamilyId === 'hex-pulse-rifle') hooks.push('SPREAD_CLUSTER');
-    if (weaponFamilyId === 'hex-silver-core-sidearm') hooks.push('EXECUTE_WINDOW');
+    if (weaponFamilyId === 'hex-shotgun') hooks.push('ARMOR_PRESSURE', 'STAMINA_PRESSURE');
+    if (weaponFamilyId === 'hex-carbine') hooks.push('SPREAD_CLUSTER');
+    if (weaponFamilyId === 'hex-revolver') hooks.push('EXECUTE_WINDOW');
   }
   if (classId === 'ENVOY') {
     hooks.push('FLUX_CYCLE');
-    if (weaponFamilyId === 'envoy-null-conduit') hooks.push('CLEAN_CATALYST_CYCLE');
-    if (weaponFamilyId === 'envoy-echo-lantern') hooks.push('ROT_SETUP');
+    if (weaponFamilyId === 'envoy-scythe') hooks.push('CLEAN_CATALYST_CYCLE');
+    if (weaponFamilyId === 'envoy-vambrace') hooks.push('ROT_SETUP');
     if (weaponFamilyId === 'envoy-sanguine-prism') hooks.push('BRINK_FLUX', 'HP_SACRIFICE');
   }
   return hooks.filter(isFrozenInteractionHook);
@@ -238,7 +238,7 @@ export function resolveReachableInteractionHooks(args: {
     hooks = hooks.filter((h) => h !== 'FRACTURE_SETUP' && h !== 'FRACTURE_BREAK');
   }
   if (
-    args.weaponFamilyId === 'hex-pulse-rifle'
+    args.weaponFamilyId === 'hex-carbine'
     && args.abilityGrafts
     && Object.values(args.abilityGrafts).includes('WIDOW_CHOKE_GRAFT')
   ) {

@@ -420,7 +420,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     const category = entry.recipe.kind === 'AUGMENT'
       ? 'PERMANENT AUGMENT'
       : isRunItemCraftOutput(entry.recipe.outputId)
-        ? 'RUN ITEM PROTOCOL'
+        ? 'SUPPLY PROTOCOL'
         : 'FABRICATION RECORD';
     const outcome = entry.recipe.kind === 'AUGMENT'
       ? 'AUGMENT REGISTERED'
@@ -428,7 +428,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     const classification = entry.recipe.kind === 'AUGMENT'
       ? undefined
       : isRunItemCraftOutput(entry.recipe.outputId)
-        ? 'RUN ITEM'
+        ? 'SUPPLY'
         : 'TACTICAL CONSUMABLE';
     const artwork = resolveBlackMarketArtwork({
       recordType: entry.recipe.kind === 'AUGMENT' ? 'AUGMENT' : 'CARGO',
@@ -552,7 +552,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       entry.recipe.kind === 'AUGMENT'
         ? 'PERMANENT AUGMENT'
         : isRunItemCraftOutput(entry.recipe.outputId)
-          ? 'RUN ITEM PROTOCOL'
+          ? 'SUPPLY PROTOCOL'
           : 'FABRICATION RECORD'
     );
     const protocol = sealed

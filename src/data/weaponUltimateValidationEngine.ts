@@ -29,14 +29,14 @@ import { getWu4StagedScript } from './weaponUltimateStagedScripts';
 import { isWu4NewUltimateId, WU4_ULTIMATE_IDS } from './weaponUltimateNewResolveEngine';
 
 const EXPECTED_ULTIMATE_BY_FAMILY: Record<string, WeaponUltimateId> = {
-  'aegis-runed-longsword': 'THREEFOLD_BRAND',
-  'aegis-rift-edge': 'REND_THE_VEIL',
-  'aegis-claymore-blade': 'GRAVEFALL',
-  'hex-silver-core-sidearm': 'SIXTH_SEAL',
-  'hex-pulse-rifle': 'ZERO_PROTOCOL',
-  'hex-void-cannon': 'LAST_KNOCK',
-  'envoy-echo-lantern': 'FUNERAL_KNOT',
-  'envoy-null-conduit': 'NULL_CIRCUIT',
+  'aegis-longsword': 'THREEFOLD_BRAND',
+  'aegis-paired-blades': 'REND_THE_VEIL',
+  'aegis-claymore': 'GRAVEFALL',
+  'hex-revolver': 'SIXTH_SEAL',
+  'hex-carbine': 'ZERO_PROTOCOL',
+  'hex-shotgun': 'LAST_KNOCK',
+  'envoy-vambrace': 'FUNERAL_KNOT',
+  'envoy-scythe': 'NULL_CIRCUIT',
   'envoy-sanguine-prism': 'CRIMSON_REFRACTION',
 };
 
@@ -171,22 +171,22 @@ export function validateWeaponUltimates(): WeaponValidationIssue[] {
   }
 
   // Ownership gates — rebound legacy ultimates stay weapon-bound.
-  if (canFireLegacyClassUltimate('EVISCERATE', 'aegis-rift-edge')) {
+  if (canFireLegacyClassUltimate('EVISCERATE', 'aegis-paired-blades')) {
     pushIssues(issues, ['Paired Blades must not fire legacy EVISCERATE']);
   }
-  if (canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-void-cannon')) {
+  if (canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-shotgun')) {
     pushIssues(issues, ['Nullbreach must not fire legacy ZERO_PROTOCOL']);
   }
-  if (canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-echo-lantern')) {
+  if (canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-vambrace')) {
     pushIssues(issues, ['Vambrace must not fire legacy CATACLYSM_SIGIL']);
   }
-  if (!canFireLegacyClassUltimate('EVISCERATE', 'aegis-runed-longsword')) {
+  if (!canFireLegacyClassUltimate('EVISCERATE', 'aegis-longsword')) {
     pushIssues(issues, ['Longsword must own ABYSSAL VERDICT (THREEFOLD_BRAND / EVISCERATE) hook']);
   }
-  if (!canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-pulse-rifle')) {
+  if (!canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-carbine')) {
     pushIssues(issues, ['Ash Shotgun must own ZERO PROTOCOL']);
   }
-  if (!canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-null-conduit')) {
+  if (!canFireLegacyClassUltimate('CATACLYSM_SIGIL', 'envoy-scythe')) {
     pushIssues(issues, ['Scythe must own NULL CIRCUIT']);
   }
 
@@ -200,8 +200,8 @@ export function validateWeaponUltimates(): WeaponValidationIssue[] {
   }
 
   // Envoy starter owns Funeral Knot, not Null Circuit.
-  if (STARTER_WEAPON_BY_CLASS.ENVOY !== 'envoy-echo-lantern') {
-    pushIssues(issues, ['Envoy starter must be Vambrace (envoy-echo-lantern)']);
+  if (STARTER_WEAPON_BY_CLASS.ENVOY !== 'envoy-vambrace') {
+    pushIssues(issues, ['Envoy starter must be Vambrace (envoy-vambrace)']);
   }
   if (getWeaponUltimate(STARTER_WEAPON_BY_CLASS.ENVOY).id !== 'FUNERAL_KNOT') {
     pushIssues(issues, ['Envoy starter ultimate must be FUNERAL_KNOT']);
@@ -210,8 +210,8 @@ export function validateWeaponUltimates(): WeaponValidationIssue[] {
   pushIssues(issues, auditWeaponUltimatePlayerFacingCatalogs());
 
   // Last Knock must never be titled The Black Door.
-  if (formatWeaponUltimateLabel('hex-void-cannon').includes('The Black Door')) {
-    pushIssues(issues, ['Last Knock label must not include "The Black Door"'], 'error', 'hex-void-cannon');
+  if (formatWeaponUltimateLabel('hex-shotgun').includes('The Black Door')) {
+    pushIssues(issues, ['Last Knock label must not include "The Black Door"'], 'error', 'hex-shotgun');
   }
 
   return issues;

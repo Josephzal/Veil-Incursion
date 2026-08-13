@@ -1,6 +1,6 @@
 /**
- * Phase E.1b — Unmaker Tier III Fracture-break → Abyssal Reserve.
- * Once per authored weapon-action commitment; graft-added hits cannot grant.
+ * Phase E.1b — Unmaker / Claymore Tier III Fracture-break → Abyssal Reserve.
+ * Stage II-C — T3 once-per-combat passives removed; grant path fails closed.
  */
 import type { AegisWeaponActionId } from '../types/aegisCombat';
 import type {
@@ -9,7 +9,7 @@ import type {
 } from '../types/weapon';
 import { deriveAegisWeaponActions } from './aegisWeaponActionRegistry';
 
-/** Canonical Tier III passive id (replaces dead FIRST_FRACTURE_STAMINA_REFUND). */
+/** @deprecated Stage II-C — T3 passives removed; retained for type/compat only. */
 export const UNMAKER_T3_FRACTURE_BREAK_RESERVE_PASSIVE:
   WeaponOncePerCombatPassiveId = 'FRACTURE_BREAK_RESERVE';
 
@@ -20,32 +20,30 @@ export const UNMAKER_T3_LEGACY_STAMINA_PASSIVE:
 export const UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT = 1;
 
 export const UNMAKER_T3_FRACTURE_BREAK_PLAYER_COPY =
-  'Fracture Break: Gain 1 Abyssal Reserve when an Unmaker action breaks Fracture. Once per action.';
+  'Fracture Break: Gain 1 Abyssal Reserve when a Claymore action breaks Fracture. Once per action.';
 
-const UNMAKER_ACTIONS = new Set<string>(deriveAegisWeaponActions('aegis-claymore-blade'));
+const UNMAKER_ACTIONS = new Set<string>(deriveAegisWeaponActions('aegis-claymore'));
 
 export function isUnmakerWeaponActionId(id: string | null | undefined): id is AegisWeaponActionId {
   return id != null && UNMAKER_ACTIONS.has(id);
 }
 
+/** Stage II-C — always inactive (oncePerCombatPassive retired). */
 export function weaponHasUnmakerTier3FractureBreakReserve(
-  weapon: Pick<ResolvedWeaponState, 'familyId' | 'oncePerCombatPassive'> | null | undefined,
+  _weapon: Pick<ResolvedWeaponState, 'familyId'> | null | undefined,
 ): boolean {
-  if (!weapon || weapon.familyId !== 'aegis-claymore-blade') return false;
-  const p = weapon.oncePerCombatPassive;
-  return p === 'FRACTURE_BREAK_RESERVE' || p === 'FIRST_FRACTURE_STAMINA_REFUND';
+  return false;
 }
 
+/** Stage II-C — always 0. */
 export function resolveUnmakerTier3FractureBreakReserveAmount(
-  weapon: Pick<ResolvedWeaponState, 'familyId' | 'oncePerCombatPassive' | 'passiveBonusPct'> | null | undefined,
+  _weapon: Pick<ResolvedWeaponState, 'familyId'> | null | undefined,
 ): number {
-  if (!weaponHasUnmakerTier3FractureBreakReserve(weapon)) return 0;
-  const bonus = weapon?.passiveBonusPct;
-  return bonus != null && bonus > 0 ? bonus : UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT;
+  return 0;
 }
 
 export interface UnmakerT3FractureBreakGrantInput {
-  weapon: Pick<ResolvedWeaponState, 'familyId' | 'oncePerCombatPassive' | 'passiveBonusPct'> | null | undefined;
+  weapon: Pick<ResolvedWeaponState, 'familyId'> | null | undefined;
   /** True only when hurtEnemy is about to cause a Fracture break (gauge threshold). */
   causesFractureBreak: boolean;
   abilityId?: string | null;
@@ -64,30 +62,14 @@ export interface UnmakerT3FractureBreakGrantResult {
 
 /**
  * Pure grant decision at the Fracture-break event boundary.
- * Call only when the live path has determined a break will occur from this hit.
+ * Stage II-C — always inactive / never awards.
  */
 export function resolveUnmakerTier3FractureBreakReserveGrant(
   input: UnmakerT3FractureBreakGrantInput,
 ): UnmakerT3FractureBreakGrantResult {
-  const noGrant = {
+  return {
     reserveGain: 0,
     nextGrantedForPlayerActionId: input.grantedForPlayerActionId,
     logLine: null,
-  };
-  if (!input.causesFractureBreak) return noGrant;
-  if (input.echoHit) return noGrant;
-  if (!weaponHasUnmakerTier3FractureBreakReserve(input.weapon)) return noGrant;
-  if (!isUnmakerWeaponActionId(input.abilityId ?? null)) return noGrant;
-  // Doomfall Charge never delivers fracture hits; Release shares playerActionId.
-  const actionKey = input.playerActionId ?? input.abilityId ?? null;
-  if (actionKey != null && input.grantedForPlayerActionId === actionKey) {
-    return noGrant;
-  }
-  const reserveGain = resolveUnmakerTier3FractureBreakReserveAmount(input.weapon);
-  if (reserveGain <= 0) return noGrant;
-  return {
-    reserveGain,
-    nextGrantedForPlayerActionId: actionKey,
-    logLine: `[UNMAKER] >> Fracture break — +${reserveGain} Abyssal Reserve.`,
   };
 }

@@ -1,6 +1,6 @@
 import type { CargoRunState } from '../types/cargoGrid';
 import type { ActiveIncursionState } from '../types/game';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime as KeepsakeRuntime } from '../types/expeditionRequisition';
 import type { ProceduralNodeType, ProceduralRunNode, ProceduralRunTree } from '../types/proceduralRunTree';
 import type { NodeContextModifiers, RunGenerationContext } from '../types/worldState';
 import { isOperationProgressLocked } from '../utils/veilFrontSectorUi';
@@ -18,31 +18,19 @@ import {
   formatKeepsakeLogLine,
   tryKeepsakeTrigger,
 } from './expeditionKeepsakeEngine';
-import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
+import { EXPEDITION_REQUISITION_REGISTRY } from './expeditionRequisitionRegistry';
 import { patchKeepsakeStats } from './keepsakeRunState';
 import { localProceduralDepth } from './proceduralScannerBridge';
-import {
-  applyKeepsakePhaseDOnNodeRevealed,
-  applyKeepsakePhaseDOnNodeSelected,
-  applyKeepsakePhaseDScannerLayerEffects,
-} from './expeditionKeepsakePhaseDEngine';
 import { applyKeepsakeOnExtractionNodeReveal } from './expeditionKeepsakeEconomyEngine';
 import {
   buildCartographLockChoice,
-  buildPolaroidDevelopChoice,
   queueKeepsakePendingChoice,
 } from './expeditionKeepsakeChoiceEngine';
 import {
-  patchKeepsakeNodeModifiers,
   rankNodeIdsByScore,
   scoreNodeForAttunement,
   scoreNodeTypeForDoctrine,
 } from './expeditionKeepsakeRouteEngine';
-
-const RUNNER_IMPRINT_LABELS = [
-  'RESIDUAL RUNNER SIGNATURE',
-  'FALLEN RUNNER TRACE',
-] as const;
 
 export interface KeepsakeScannerApplyResult {
   incursion: ActiveIncursionState;
@@ -70,7 +58,7 @@ function pickDeterministicNodeId(
 }
 
 function equippedKeepsakeId(runtime: KeepsakeRuntime | null | undefined): string | null {
-  return runtime?.keepsakeId ?? null;
+  return runtime?.requisitionId ?? null;
 }
 
 function rollScannerLayerContext(
@@ -144,7 +132,7 @@ function applySignalCompass(
 ): KeepsakeScannerApplyResult {
   const trigger = tryKeepsakeTrigger(
     runtime,
-    getKeepsakeDefinition('signal_compass').primaryTriggerKey,
+    EXPEDITION_REQUISITION_REGISTRY.signal_compass.primaryTriggerKey,
     'depth',
     depth,
   );
@@ -175,17 +163,22 @@ function applySignalCompass(
     false,
   );
 
-  const interpretedIds = inc.keepsakeFullyInterpretedNodeIds.includes(targetId)
-    ? inc.keepsakeFullyInterpretedNodeIds
-    : [...inc.keepsakeFullyInterpretedNodeIds, targetId];
+  const interpretedIds = inc.requisitionFullyInterpretedNodeIds.includes(targetId)
+    ? inc.requisitionFullyInterpretedNodeIds
+    : [...inc.requisitionFullyInterpretedNodeIds, targetId];
 
-  logLines.push(formatKeepsakeLogLine('Compass', getKeepsakeDefinition('signal_compass').triggerMessage));
+  logLines.push(
+    formatKeepsakeLogLine(
+      'Compass',
+      EXPEDITION_REQUISITION_REGISTRY.signal_compass.triggerMessage,
+    ),
+  );
 
   return {
     incursion: {
       ...inc,
       proceduralRunTree: rolled.tree,
-      keepsakeFullyInterpretedNodeIds: interpretedIds,
+      requisitionFullyInterpretedNodeIds: interpretedIds,
     },
     runtime: patchKeepsakeStats(trigger.runtime, {
       nodeDetailsRevealed: trigger.runtime.stats.nodeDetailsRevealed + 1,
@@ -202,7 +195,7 @@ function applyDeadDropReceiver(
   runtime: KeepsakeRuntime,
   logLines: string[],
 ): KeepsakeScannerApplyResult {
-  const def = getKeepsakeDefinition('dead_drop_receiver');
+  const def = EXPEDITION_REQUISITION_REGISTRY.dead_drop_receiver;
   const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
   if (!trigger.triggered || !trigger.runtime) {
     return { incursion: inc, runtime, logLines };
@@ -302,7 +295,7 @@ export function applyKeepsakeScannerLayerEffects(
   inc: ActiveIncursionState,
 ): KeepsakeScannerApplyResult {
   const tree = inc.proceduralRunTree;
-  let runtime = inc.keepsakeRuntime;
+  let runtime = inc.requisitionRuntime;
   const logLines: string[] = [];
   if (!tree?.rollSeed || !runtime) {
     return { incursion: inc, runtime, logLines };
@@ -331,13 +324,6 @@ export function applyKeepsakeScannerLayerEffects(
     runtime = result.runtime;
   }
 
-  if (equippedKeepsakeId(runtime) === 'anchor_charm' && runtime) {
-    const trail = applyAnchorCharmScannerTrail(nextInc, nextTree, depth, layerIds, runtime, logLines);
-    nextInc = trail.incursion;
-    nextTree = trail.incursion.proceduralRunTree ?? nextTree;
-    runtime = trail.runtime;
-  }
-
   if (runtime) {
     const extractionReveal = applyKeepsakeOnExtractionNodeReveal(runtime, nextTree, layerIds);
     runtime = extractionReveal.runtime;
@@ -347,20 +333,6 @@ export function applyKeepsakeScannerLayerEffects(
     }
   }
 
-  if (runtime) {
-    const phaseD = applyKeepsakePhaseDScannerLayerEffects(
-      nextInc,
-      nextTree,
-      depth,
-      layerIds,
-      runtime,
-      logLines,
-    );
-    nextInc = phaseD.incursion;
-    nextTree = phaseD.incursion.proceduralRunTree ?? nextTree;
-    runtime = phaseD.runtime;
-  }
-
   return {
     incursion: { ...nextInc, proceduralRunTree: nextTree },
     runtime,
@@ -368,56 +340,24 @@ export function applyKeepsakeScannerLayerEffects(
   };
 }
 
-function isRunnerImprintLabel(label: string | undefined): boolean {
-  if (!label) return false;
-  const upper = label.toUpperCase();
-  return RUNNER_IMPRINT_LABELS.some((token) => upper.includes(token.split(' ')[0]!))
-    || upper.includes('FALLEN RUNNER')
-    || upper.includes('RESIDUAL RUNNER');
-}
-
-function buildGravePolaroidLines(
-  modifiers: NodeContextModifiers,
-  nodeType: ProceduralNodeType,
-): string[] {
-  const lines = ['> POLAROID IMPRINT // DEVELOPED'];
-  const kind = modifiers.echoEncounterKind;
-
-  if (kind === 'FALLEN_RUNNER_ECHO' || isRunnerImprintLabel(modifiers.echoSignalLabel)) {
-    lines.push('> ORIGIN: FALLEN RUNNER DEATH IMPRINT');
-    lines.push('> RISK: HOSTILE REACTIVATION ON BREACH');
-    lines.push('> REWARD: ECHO-GLASS + IMPRINT DATA');
-  } else if (kind === 'HOSTILE_ECHO') {
-    lines.push('> ORIGIN: CORRUPTED HOSTILE ECHO');
-    lines.push('> RISK: ELITE-GRADE HOSTILE SIGNATURE');
-    lines.push('> REWARD: ECHO RESIDUE + OPERATION CREDIT');
-  } else {
-    lines.push(`> VECTOR CLASS: ${nodeType.replace(/_/g, ' ')}`);
-    lines.push('> RISK: UNSTABLE ECHO BLEED');
-    lines.push('> REWARD: ECHO-GLASS ROLL ON CLEAR');
-  }
-
-  return lines;
-}
-
-/** Ashen Cartograph + False Evac Beacon — node selection hooks. */
+/** Ashen Cartograph node-selection hook. */
 export function applyKeepsakeOnNodeSelected(
   inc: ActiveIncursionState,
   selectedNodeId: string,
 ): KeepsakeScannerApplyResult {
-  let runtime = inc.keepsakeRuntime;
+  let runtime = inc.requisitionRuntime;
   const logLines: string[] = [];
   if (!runtime) {
     return { incursion: inc, runtime, logLines };
   }
 
-  if (runtime.keepsakeId === 'ashen_cartograph') {
+  if (runtime.requisitionId === 'ashen_cartograph') {
     const tree = inc.proceduralRunTree;
     if (tree) {
       const depth = localProceduralDepth(inc.nodesCleared);
       const trigger = tryKeepsakeTrigger(
         runtime,
-        getKeepsakeDefinition('ashen_cartograph').primaryTriggerKey,
+        EXPEDITION_REQUISITION_REGISTRY.ashen_cartograph.primaryTriggerKey,
         'depth',
         depth,
       );
@@ -444,7 +384,12 @@ export function applyKeepsakeOnNodeSelected(
         );
 
         if (ghostId) {
-          logLines.push(formatKeepsakeLogLine('Cartograph', getKeepsakeDefinition('ashen_cartograph').triggerMessage));
+          logLines.push(
+            formatKeepsakeLogLine(
+              'Cartograph',
+              EXPEDITION_REQUISITION_REGISTRY.ashen_cartograph.triggerMessage,
+            ),
+          );
           let nextRuntime = patchKeepsakeStats(trigger.runtime, {
             futureNodesPreviewed: trigger.runtime.stats.futureNodesPreviewed + ghostIds.length,
           });
@@ -458,9 +403,9 @@ export function applyKeepsakeOnNodeSelected(
           return {
             incursion: {
               ...inc,
-              keepsakeRuntime: runtime,
-              keepsakeCartographGhostNodeId: ghostId,
-              keepsakeCartographGhostNodeIds: ghostIds,
+              requisitionRuntime: runtime,
+              requisitionCartographGhostNodeId: ghostId,
+              requisitionCartographGhostNodeIds: ghostIds,
             },
             runtime,
             logLines,
@@ -471,23 +416,19 @@ export function applyKeepsakeOnNodeSelected(
     }
   }
 
-  const phaseD = applyKeepsakePhaseDOnNodeSelected(inc, selectedNodeId, runtime);
-  runtime = phaseD.runtime ?? runtime;
-  logLines.push(...phaseD.logLines);
-
   return {
-    incursion: { ...inc, keepsakeRuntime: runtime },
+    incursion: { ...inc, requisitionRuntime: runtime },
     runtime,
     logLines,
   };
 }
 
-/** Grave Polaroid + Signal Compass reveal hooks when a scanner node is manifested. */
+/** Signal Compass reveal hook when a scanner node is manifested. */
 export function applyKeepsakeOnNodeRevealed(
   inc: ActiveIncursionState,
   nodeId: string,
 ): KeepsakeScannerApplyResult {
-  let runtime = inc.keepsakeRuntime;
+  let runtime = inc.requisitionRuntime;
   const logLines: string[] = [];
   const tree = inc.proceduralRunTree;
   if (!runtime || !tree) {
@@ -497,8 +438,8 @@ export function applyKeepsakeOnNodeRevealed(
   let nextInc = inc;
   let nextTree = tree;
 
-  const isCompassNode = inc.keepsakeFullyInterpretedNodeIds.includes(nodeId);
-  if (isCompassNode && runtime.keepsakeId === 'signal_compass') {
+  const isCompassNode = inc.requisitionFullyInterpretedNodeIds.includes(nodeId);
+  if (isCompassNode && runtime.requisitionId === 'signal_compass') {
     const rolled = rollScannerLayerContext(
       nextTree,
       nodeId,
@@ -510,134 +451,24 @@ export function applyKeepsakeOnNodeRevealed(
     nextInc = { ...nextInc, proceduralRunTree: nextTree };
   }
 
-  if (runtime.keepsakeId !== 'grave_polaroid') {
-    const phaseDReveal = applyKeepsakePhaseDOnNodeRevealed(nextInc, nodeId, runtime);
-    if (phaseDReveal.runtime) runtime = phaseDReveal.runtime;
-    logLines.push(...phaseDReveal.logLines);
-    return { incursion: nextInc, runtime, logLines };
-  }
-
-  const node = nextTree.nodes[nodeId];
-  if (!node?.echoOverlay && !node?.contextModifiers?.echoSignal) {
-    return { incursion: nextInc, runtime, logLines };
-  }
-
-  const trigger = tryKeepsakeTrigger(
-    runtime,
-    getKeepsakeDefinition('grave_polaroid').primaryTriggerKey,
-    'run',
-  );
-  if (!trigger.triggered || !trigger.runtime) {
-    return { incursion: nextInc, runtime, logLines };
-  }
-
-  const rolled = rollScannerLayerContext(
-    nextTree,
-    nodeId,
-    inc.runGenerationContext,
-    inc.cargo,
-    true,
-  );
-  nextTree = rolled.tree;
-  const modifiers = rolled.modifiers;
-  if (!modifiers) {
-    return { incursion: nextInc, runtime: trigger.runtime, logLines };
-  }
-
-  const previewLines = buildGravePolaroidLines(modifiers, node.type);
-  logLines.push(formatKeepsakeLogLine('Polaroid', getKeepsakeDefinition('grave_polaroid').triggerMessage));
-
-  let nextRuntime = patchKeepsakeStats(trigger.runtime, {
-    echoGlassBonus: trigger.runtime.stats.echoGlassBonus + 1,
-  });
-  if (!nextRuntime.pendingChoice) {
-    nextRuntime = queueKeepsakePendingChoice(
-      nextRuntime,
-      buildPolaroidDevelopChoice(nodeId),
-    );
-  }
-
-  const phaseDReveal = applyKeepsakePhaseDOnNodeRevealed(nextInc, nodeId, nextRuntime);
-  nextRuntime = phaseDReveal.runtime ?? nextRuntime;
-  logLines.push(...phaseDReveal.logLines);
-
-  return {
-    incursion: {
-      ...nextInc,
-      proceduralRunTree: nextTree,
-      keepsakeGravePolaroidPreview: { nodeId, lines: previewLines },
-    },
-    runtime: nextRuntime,
-    logLines,
-  };
-}
-
-function applyAnchorCharmScannerTrail(
-  inc: ActiveIncursionState,
-  tree: ProceduralRunTree,
-  depth: number,
-  layerIds: readonly string[],
-  runtime: KeepsakeRuntime,
-  logLines: string[],
-): KeepsakeScannerApplyResult {
-  if (runtime.triggersUsed.anchor_charm_trail_started) {
-    return { incursion: inc, runtime, logLines };
-  }
-
-  const trigger = tryKeepsakeTrigger(runtime, 'anchor_charm_trail_started', 'run');
-  if (!trigger.triggered || !trigger.runtime) {
-    return { incursion: inc, runtime, logLines };
-  }
-
-  const candidates = layerIds.filter((id) => {
-    const node = tree.nodes[id];
-    return node
-      && node.type !== 'GATEKEEPER'
-      && node.type !== 'EXTRACTION'
-      && !node.contextModifiers?.anchorSignal;
-  });
-  const targetId = pickDeterministicNodeId(
-    candidates,
-    tree.rollSeed ?? 0,
-    depth,
-    'anchor_charm_trail',
-  );
-  if (!targetId) {
-    return { incursion: inc, runtime: trigger.runtime, logLines };
-  }
-
-  const nextTree = patchKeepsakeNodeModifiers(tree, targetId, {
-    anchorSignal: true,
-    keepsakeHarmonic: true,
-    highRisk: true,
-  });
-
-  logLines.push(formatKeepsakeLogLine('Charm', 'Anchor trail harmonic staged on scanner layer.'));
-
-  return {
-    incursion: { ...inc, proceduralRunTree: nextTree },
-    runtime: patchKeepsakeStats(trigger.runtime, {
-      anchorSignalsGenerated: trigger.runtime.stats.anchorSignalsGenerated + 1,
-    }),
-    logLines,
-  };
+  return { incursion: nextInc, runtime, logLines };
 }
 
 export function isKeepsakeFullyInterpretedNode(
-  inc: Pick<ActiveIncursionState, 'keepsakeFullyInterpretedNodeIds'>,
+  inc: Pick<ActiveIncursionState, 'requisitionFullyInterpretedNodeIds'>,
   nodeId: string,
 ): boolean {
-  return inc.keepsakeFullyInterpretedNodeIds.includes(nodeId);
+  return inc.requisitionFullyInterpretedNodeIds.includes(nodeId);
 }
 
 export function getKeepsakeCartographGhostType(
   inc: ActiveIncursionState,
   nodeId: string,
 ): ProceduralNodeType | null {
-  const ghostIds = inc.keepsakeCartographGhostNodeIds?.length
-    ? inc.keepsakeCartographGhostNodeIds
-    : inc.keepsakeCartographGhostNodeId
-      ? [inc.keepsakeCartographGhostNodeId]
+  const ghostIds = inc.requisitionCartographGhostNodeIds?.length
+    ? inc.requisitionCartographGhostNodeIds
+    : inc.requisitionCartographGhostNodeId
+      ? [inc.requisitionCartographGhostNodeId]
       : [];
   if (!ghostIds.includes(nodeId)) return null;
   return inc.proceduralRunTree?.nodes[nodeId]?.type ?? null;

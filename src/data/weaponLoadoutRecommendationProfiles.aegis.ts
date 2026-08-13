@@ -20,7 +20,7 @@ function sample(partial: WeaponSampleLoadout): WeaponSampleLoadout {
 }
 
 export const AEGIS_LONGSWORD: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   classId: 'AEGIS',
   validationState: 'VALIDATED',
   identitySummary: 'Reliable Fracture setup, Reserve/Parry rhythm, flexible mixed offense — not Claymore burst.',
@@ -164,7 +164,7 @@ export const AEGIS_LONGSWORD: WeaponLoadoutRecommendationProfile = {
 };
 
 export const AEGIS_RIFT: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'aegis-rift-edge',
+  weaponFamilyId: 'aegis-paired-blades',
   classId: 'AEGIS',
   validationState: 'VALIDATED',
   identitySummary: 'Evade/Parry tempo → consume Occult rider once; Kinetic baseline without tempo stays weak.',
@@ -310,7 +310,7 @@ export const AEGIS_RIFT: WeaponLoadoutRecommendationProfile = {
 };
 
 export const AEGIS_CLAYMORE: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'aegis-claymore-blade',
+  weaponFamilyId: 'aegis-claymore',
   classId: 'AEGIS',
   validationState: 'VALIDATED',
   identitySummary: 'High stamina Fracture commitment; cash out on breaks — chip Reserve stays poor.',

@@ -1,6 +1,6 @@
 /**
  * Phase 3J — run-scoped Sanctuary graft helpers.
- * Class rank permanently unlocks capacity/sockets/tiers; applications are deployment-only.
+ * Stage II-B — capacity from run depth; no Residue charge; no Class Rank gates.
  * Safehouse is not a graft equipment surface.
  * Phase D — Aegis assignments store encoded WA:/TECH: keys.
  */
@@ -8,7 +8,6 @@ import type { ClassType } from '../../types/game';
 import type { AegisTechniqueLoadout } from '../../types/aegisCombat';
 import type { WeaponFamilyId } from '../../types/weapon';
 import { getClassGraftDefinition } from '../classGraftEngine';
-import { getGraftSocketAccessForClassRank, inferGraftCostTier } from './graftCapacityEngine';
 import { evaluateGraftCompatibility, isLiveGraftId } from './graftCompatibilityEngine';
 import { normalizeAegisGraftAssignmentKey } from '../aegisGraftTarget';
 
@@ -40,17 +39,26 @@ export function recomputeMaxSoulAnchorFromGraftBaseline(
 /**
  * Validate a Sanctuary apply/replace without mutating state.
  * `proposedMap` is the full post-commit ability→graft map for the class.
+ * Does not check or consume Veil Residue (Stage II-B).
  */
 export function validateSanctuaryGraftApplication(args: {
   classId: ClassType;
   abilityId: string;
   graftId: string;
-  classRank: number;
+  /** Core Loop Depth 1–3 (= currentDistrict). */
+  runDepthBand: number;
+  /**
+   * @deprecated Stage II-B — ignored.
+   */
+  classRank?: number;
   /** Current map before this application. */
   currentMap: RunScopedGraftMap;
   /** True only while Sanctuary graft terminal session is active. */
   sanctuarySessionActive: boolean;
-  residueBalance: number;
+  /**
+   * @deprecated Stage II-B — ignored; grafts no longer cost Residue.
+   */
+  residueBalance?: number;
   /** Offered graft IDs for this Sanctuary visit (null = no session). */
   sanctuaryOffers: readonly string[] | null;
   /** Aegis snapshotted surface — required to encode/validate targets. */
@@ -62,6 +70,7 @@ export function validateSanctuaryGraftApplication(args: {
   ok: boolean;
   message: string;
   proposedMap: Record<string, string>;
+  /** Catalog cost retained for display/debug only — not charged. */
   cost: number;
   rejections: readonly string[];
 } {
@@ -112,25 +121,13 @@ export function validateSanctuaryGraftApplication(args: {
   }
 
   const def = getClassGraftDefinition(args.classId, args.graftId);
-  const cost = def.cost;
-
-  const access = getGraftSocketAccessForClassRank(args.classRank);
-  const tier = inferGraftCostTier(cost);
-  if ((tier === 'APEX' || tier === 'MASTERWORK') && !access.allowApexMasterwork) {
-    return {
-      ok: false,
-      message: 'Apex/Masterwork grafts require class rank 20.',
-      proposedMap: { ...args.currentMap },
-      cost: 0,
-      rejections: ['APEX_LOCKED'],
-    };
-  }
+  const catalogCost = def.cost;
 
   const compat = evaluateGraftCompatibility({
     classId: args.classId,
     abilityId: assignmentKey,
     graftId: args.graftId,
-    classRank: args.classRank,
+    runDepthBand: args.runDepthBand,
     equippedMap: args.currentMap,
     graftAvailable: true,
   });
@@ -141,16 +138,6 @@ export function validateSanctuaryGraftApplication(args: {
       proposedMap: { ...args.currentMap },
       cost: 0,
       rejections: compat.rejections,
-    };
-  }
-
-  if (args.residueBalance < cost) {
-    return {
-      ok: false,
-      message: 'Insufficient Veil Residue.',
-      proposedMap: { ...args.currentMap },
-      cost: 0,
-      rejections: ['INSUFFICIENT_RESIDUE'],
     };
   }
 
@@ -170,23 +157,27 @@ export function validateSanctuaryGraftApplication(args: {
     ok: true,
     message: `${def.name} ready.`,
     proposedMap,
-    cost,
+    cost: catalogCost,
     rejections: [],
   };
 }
 
-/** Filter rolled offers by class-rank socket/tier access (unlocked catalog options). */
+/** Filter rolled offers to live catalog IDs (no Class Rank / Apex lock). */
+export function filterGraftOffersForRunDepth(
+  classId: ClassType,
+  offers: readonly string[],
+  _runDepthBand?: number,
+): string[] {
+  return offers.filter((graftId) => isLiveGraftId(classId, graftId));
+}
+
+/**
+ * @deprecated Stage II-B — alias of filterGraftOffersForRunDepth (rank ignored).
+ */
 export function filterGraftOffersForClassRank(
   classId: ClassType,
   offers: readonly string[],
-  classRank: number,
+  _classRank?: number,
 ): string[] {
-  const access = getGraftSocketAccessForClassRank(classRank);
-  return offers.filter((graftId) => {
-    if (!isLiveGraftId(classId, graftId)) return false;
-    const def = getClassGraftDefinition(classId, graftId);
-    const tier = inferGraftCostTier(def.cost);
-    if ((tier === 'APEX' || tier === 'MASTERWORK') && !access.allowApexMasterwork) return false;
-    return true;
-  });
+  return filterGraftOffersForRunDepth(classId, offers);
 }

@@ -1,15 +1,15 @@
 import type { ActiveRunContract, KeepsakeSealedClause, KeepsakeSealedClauseKind } from '../types/contract';
 import type { ActiveIncursionState } from '../types/game';
 import type {
-  KeepsakePendingChoice,
-  KeepsakeRuntime,
-} from '../types/expeditionKeepsake';
+  RequisitionPendingChoice,
+  RequisitionRuntime,
+} from '../types/expeditionRequisition';
 import type { ProceduralRunTree } from '../types/proceduralRunTree';
 import { addLootToContainment } from './cargoGridEngine';
 import {
   formatKeepsakeLogLine,
 } from './expeditionKeepsakeEngine';
-import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
+import { EXPEDITION_REQUISITION_REGISTRY } from './expeditionRequisitionRegistry';
 import {
   appendKeepsakeDecision,
   incrementKeepsakeCounter,
@@ -68,7 +68,7 @@ function pickThreeSealedClauses(contractId: string): KeepsakeSealedClause[] {
 }
 
 export interface KeepsakeChoiceCommitResult {
-  runtime: KeepsakeRuntime | null;
+  runtime: RequisitionRuntime | null;
   incursionPatch?: Partial<ActiveIncursionState>;
   contract?: ActiveRunContract | null;
   logLines: string[];
@@ -77,14 +77,14 @@ export interface KeepsakeChoiceCommitResult {
 }
 
 export function queueKeepsakePendingChoice(
-  runtime: KeepsakeRuntime,
-  choice: KeepsakePendingChoice,
-): KeepsakeRuntime {
+  runtime: RequisitionRuntime,
+  choice: RequisitionPendingChoice,
+): RequisitionRuntime {
   if (runtime.pendingChoice) return runtime;
   return { ...runtime, pendingChoice: choice };
 }
 
-export function buildContractSealChoice(contractId: string): KeepsakePendingChoice {
+export function buildContractSealChoice(contractId: string): RequisitionPendingChoice {
   const clauses = pickThreeSealedClauses(contractId);
   return {
     kind: 'contract_seal_clause',
@@ -97,7 +97,7 @@ export function buildContractSealChoice(contractId: string): KeepsakePendingChoi
   };
 }
 
-export function buildDeadDropChoice(nodeId: string): KeepsakePendingChoice {
+export function buildDeadDropChoice(nodeId: string): RequisitionPendingChoice {
   return {
     kind: 'dead_drop_action',
     prompt: 'Dead-Drop cache intercepted — choose your next move.',
@@ -110,19 +110,7 @@ export function buildDeadDropChoice(nodeId: string): KeepsakePendingChoice {
   };
 }
 
-export function buildLeySiphonOverdrawChoice(nodeId: string): KeepsakePendingChoice {
-  return {
-    kind: 'ley_siphon_overdraw',
-    prompt: 'Ley vein overdraw available on this resource node.',
-    nodeId,
-    options: [
-      { value: 'OVERDRAW', label: 'Overdraw Vein', detail: 'Bonus salvage + unstable byproduct. Adds Contamination.' },
-      { value: 'DECLINE', label: 'Standard Harvest', detail: 'Skip overdraw — no contamination this node.' },
-    ],
-  };
-}
-
-export function buildSmugglersDoubleWrapChoice(): KeepsakePendingChoice {
+export function buildSmugglersDoubleWrapChoice(): RequisitionPendingChoice {
   return {
     kind: 'smugglers_double_wrap',
     prompt: "Contraband wrapped — double down or hold the line?",
@@ -133,7 +121,7 @@ export function buildSmugglersDoubleWrapChoice(): KeepsakePendingChoice {
   };
 }
 
-export function buildCartographLockChoice(ghostNodeId: string): KeepsakePendingChoice {
+export function buildCartographLockChoice(ghostNodeId: string): RequisitionPendingChoice {
   return {
     kind: 'cartograph_lock',
     prompt: 'Ghost route revealed — lock the previewed vector?',
@@ -145,19 +133,7 @@ export function buildCartographLockChoice(ghostNodeId: string): KeepsakePendingC
   };
 }
 
-export function buildPolaroidDevelopChoice(nodeId: string): KeepsakePendingChoice {
-  return {
-    kind: 'polaroid_develop',
-    prompt: 'Echo imprint captured — develop the polaroid?',
-    nodeId,
-    options: [
-      { value: 'DEVELOP', label: 'Develop Photo', detail: 'Reveal a death clue and corrupt a future node.' },
-      { value: 'SKIP', label: 'Hold Negative', detail: 'Keep the preview only — no extra fallout.' },
-    ],
-  };
-}
-
-export function buildExtractionTokenChoice(): KeepsakePendingChoice {
+export function buildExtractionTokenChoice(): RequisitionPendingChoice {
   return {
     kind: 'extraction_token_action',
     prompt: 'Stamped evac vector — choose how to spend the token.',
@@ -169,69 +145,18 @@ export function buildExtractionTokenChoice(): KeepsakePendingChoice {
   };
 }
 
-export function buildMournersBellChoice(nodeId: string): KeepsakePendingChoice {
-  return {
-    kind: 'mourners_bell_answer',
-    prompt: "Echo signal detected — answer the Mourner's Bell.",
-    nodeId,
-    options: [
-      { value: 'LISTEN', label: 'Listen', detail: '+15% echo credit yield; gain Echo Thread.' },
-      { value: 'LOOT', label: 'Loot', detail: '+1 echo-glass; raises hostile echo pressure.' },
-      { value: 'BURY', label: 'Bury', detail: 'Reduce echo heat; still gain Echo Thread.' },
-    ],
-  };
-}
-
-export function buildHollowKeyUnlockChoice(nodeId: string): KeepsakePendingChoice {
-  return {
-    kind: 'hollow_key_unlock',
-    prompt: 'Occult lock detected — spend a Hollow Key?',
-    nodeId,
-    options: [
-      { value: 'UNLOCK', label: 'Spend Key', detail: 'Unlock hidden options (+1 Noise on the route).' },
-      { value: 'PASS', label: 'Leave Sealed', detail: 'Keep the key — occult options remain locked.' },
-    ],
-  };
-}
-
-export function buildFalseEvacBeaconChoice(nodeId: string): KeepsakePendingChoice {
-  return {
-    kind: 'false_evac_beacon_plant',
-    prompt: 'Plant a false evac beacon on this vector.',
-    nodeId,
-    options: [
-      { value: 'DECOY', label: 'Decoy Extraction', detail: 'Fake evac signal — biases next depth toward extraction.' },
-      { value: 'LURE', label: 'Lure Signal', detail: 'Draw rival attention — +HIGH RISK on adjacent node.' },
-      { value: 'SCRAMBLE', label: 'Scramble Route', detail: 'Corrupt a future node with unstable readings.' },
-    ],
-  };
-}
-
-export function buildGutterServiceChoice(): KeepsakePendingChoice {
-  return {
-    kind: 'gutter_service',
-    prompt: 'Gutter Crown shrine awake — choose one black-market favor.',
-    options: [
-      { value: 'LAUNDER', label: 'Launder Cargo', detail: '+10% banked cargo value this run.' },
-      { value: 'HIDE_SCENT', label: 'Hide Scent', detail: 'Clear outside-hook scent / rival pressure.' },
-      { value: 'CROWN_RESOURCE', label: 'Crown Resource', detail: '+1 stable salvage routed to containment.' },
-      { value: 'BUY_RUMOR', label: 'Buy Rumor', detail: '+40 run credits; next depth gains HIGH RISK.' },
-    ],
-  };
-}
-
 export function prepareKeepsakeContractSealChoice(
-  runtime: KeepsakeRuntime | null,
+  runtime: RequisitionRuntime | null,
   contract: ActiveRunContract | null,
-): { runtime: KeepsakeRuntime | null; contract: ActiveRunContract | null; logLines: string[] } {
-  if (!runtime || runtime.keepsakeId !== 'contract_seal' || !contract?.contractId) {
+): { runtime: RequisitionRuntime | null; contract: ActiveRunContract | null; logLines: string[] } {
+  if (!runtime || runtime.requisitionId !== 'contract_seal' || !contract?.contractId) {
     return { runtime, contract, logLines: [] };
   }
   if (runtime.triggersUsed.contract_seal_clause_prepared) {
     return { runtime, contract, logLines: [] };
   }
 
-  const def = getKeepsakeDefinition('contract_seal');
+  const def = EXPEDITION_REQUISITION_REGISTRY.contract_seal;
   const choice = buildContractSealChoice(contract.contractId);
   const nextRuntime = queueKeepsakePendingChoice(
     {
@@ -249,9 +174,9 @@ export function prepareKeepsakeContractSealChoice(
 }
 
 export function applyKeepsakeNullLedgerRunStart(
-  runtime: KeepsakeRuntime | null,
-): { runtime: KeepsakeRuntime | null; logLines: string[] } {
-  if (!runtime || runtime.keepsakeId !== 'null_ledger') {
+  runtime: RequisitionRuntime | null,
+): { runtime: RequisitionRuntime | null; logLines: string[] } {
+  if (!runtime || runtime.requisitionId !== 'null_ledger') {
     return { runtime, logLines: [] };
   }
   const next = incrementKeepsakeCounter(runtime, 'nullLedgerCreditCap', NULL_LEDGER_CREDIT_CAP);
@@ -264,10 +189,10 @@ export function applyKeepsakeNullLedgerRunStart(
 }
 
 export function applyKeepsakeNullLedgerDepthInterest(
-  runtime: KeepsakeRuntime | null,
+  runtime: RequisitionRuntime | null,
   depth: number,
-): { runtime: KeepsakeRuntime | null; logLines: string[] } {
-  if (!runtime || runtime.keepsakeId !== 'null_ledger' || runtime.nullLedgerDebtCredits <= 0) {
+): { runtime: RequisitionRuntime | null; logLines: string[] } {
+  if (!runtime || runtime.requisitionId !== 'null_ledger' || runtime.nullLedgerDebtCredits <= 0) {
     return { runtime, logLines: [] };
   }
 
@@ -277,7 +202,6 @@ export function applyKeepsakeNullLedgerDepthInterest(
     ...runtime,
     nullLedgerDebtCredits: nextDebt,
   };
-  nextRuntime = incrementKeepsakeCounter(nextRuntime, 'contamination', 0);
   nextRuntime = patchKeepsakeStats(nextRuntime, {
     creditsDeferred: nextRuntime.stats.creditsDeferred + interest,
   });
@@ -297,15 +221,15 @@ export function applyKeepsakeNullLedgerDepthInterest(
   return { runtime: nextRuntime, logLines };
 }
 
-export function resolveNullLedgerCreditCap(runtime: KeepsakeRuntime | null): number {
+export function resolveNullLedgerCreditCap(runtime: RequisitionRuntime | null): number {
   return runtime?.counters.nullLedgerCreditCap ?? NULL_LEDGER_CREDIT_CAP;
 }
 
 export function canAccrueNullLedgerDebt(
-  runtime: KeepsakeRuntime | null,
+  runtime: RequisitionRuntime | null,
   additionalDebt: number,
 ): boolean {
-  if (!runtime || runtime.keepsakeId !== 'null_ledger') return false;
+  if (!runtime || runtime.requisitionId !== 'null_ledger') return false;
   const cap = resolveNullLedgerCreditCap(runtime);
   return runtime.nullLedgerDebtCredits + additionalDebt <= cap;
 }
@@ -314,13 +238,13 @@ export function commitKeepsakePendingChoice(
   inc: ActiveIncursionState,
   selectedValue: string,
 ): KeepsakeChoiceCommitResult {
-  const runtime = inc.keepsakeRuntime;
+  const runtime = inc.requisitionRuntime;
   const choice = runtime?.pendingChoice;
   if (!runtime || !choice) {
     return { runtime, logLines: [] };
   }
 
-  const clearChoice = (next: KeepsakeRuntime): KeepsakeRuntime => ({
+  const clearChoice = (next: RequisitionRuntime): RequisitionRuntime => ({
     ...next,
     pendingChoice: null,
   });
@@ -390,19 +314,6 @@ export function commitKeepsakePendingChoice(
       return { runtime: nextRuntime, incursionPatch, logLines };
     }
 
-    case 'ley_siphon_overdraw': {
-      if (selectedValue === 'OVERDRAW') {
-        return {
-          runtime: clearChoice(setKeepsakeFlag(runtime, 'leyOverdrawConfirmed', true)),
-          logLines: ['>> LEY-SIPHON — overdraw confirmed.'],
-        };
-      }
-      return {
-        runtime: clearChoice({ ...runtime, leySiphonOverdrawPending: false }),
-        logLines: ['>> LEY-SIPHON — standard harvest. No contamination added.'],
-      };
-    }
-
     case 'smugglers_double_wrap': {
       let nextRuntime = clearChoice(
         appendKeepsakeDecision(runtime, {
@@ -455,42 +366,6 @@ export function commitKeepsakePendingChoice(
       return { runtime: nextRuntime, incursionPatch, logLines };
     }
 
-    case 'polaroid_develop': {
-      let nextRuntime = clearChoice(
-        appendKeepsakeDecision(runtime, {
-          key: 'polaroid_develop',
-          label: 'Polaroid',
-          value: selectedValue,
-        }),
-      );
-      const logLines = [`>> POLAROID — ${selectedValue}.`];
-      let incursionPatch: Partial<ActiveIncursionState> | undefined;
-
-      if (selectedValue === 'DEVELOP') {
-        nextRuntime = setKeepsakeFlag(nextRuntime, 'deathClueAvailable', true);
-        nextRuntime = patchKeepsakeStats(nextRuntime, {
-          echoIntelRevealed: nextRuntime.stats.echoIntelRevealed + 1,
-        });
-        const tree = inc.proceduralRunTree;
-        if (tree) {
-          const targetId = pickFutureKeepsakeNode(tree, inc.nodesCleared, ['GATEKEEPER', 'EXTRACTION'], 'highRisk');
-          if (targetId) {
-            incursionPatch = {
-              proceduralRunTree: patchKeepsakeNodeModifiers(tree, targetId, {
-                highRisk: true,
-                highValueResource: true,
-              }),
-            };
-            logLines.push('>> POLAROID DEVELOPED — death clue archived; future vector corrupted.');
-          } else {
-            logLines.push('>> POLAROID DEVELOPED — death clue archived.');
-          }
-        }
-      }
-
-      return { runtime: nextRuntime, incursionPatch, logLines };
-    }
-
     case 'extraction_token_action': {
       let nextRuntime = clearChoice(
         appendKeepsakeDecision(runtime, {
@@ -511,7 +386,7 @@ export function commitKeepsakePendingChoice(
         };
         incursionPatch = {
           ...incursionPatch,
-          keepsakeStampedExtractionNodeId: null,
+          requisitionStampedExtractionNodeId: null,
         };
         logLines.push('>> TOKEN CASH OUT — +75 run credits. Stamped bonus forfeited.');
       } else if (selectedValue === 'BURN_TOKEN') {
@@ -523,7 +398,7 @@ export function commitKeepsakePendingChoice(
           stampedExtractionConfirmed: false,
         };
         incursionPatch = {
-          keepsakeStampedExtractionNodeId: null,
+          requisitionStampedExtractionNodeId: null,
           pendingExtractionNodeId: null,
           extractionReviewKind: null,
           pendingSafeAnchorIndex: null,
@@ -549,201 +424,10 @@ export function commitKeepsakePendingChoice(
       return { runtime: nextRuntime, incursionPatch, logLines };
     }
 
-    case 'mourners_bell_answer': {
-      const nextRuntime = clearChoice(
-        appendKeepsakeDecision(runtime, {
-          key: 'mourners_bell',
-          label: "Mourner's Bell",
-          value: selectedValue,
-          depth: localProceduralDepth(inc.nodesCleared),
-        }),
-      );
-      const logLines = [`>> MOURNER'S BELL — ${selectedValue}.`];
-      if (selectedValue === 'LOOT') {
-        return {
-          runtime: setKeepsakeFlag(nextRuntime, 'mournersBellHostileBias', true),
-          logLines: [...logLines, '>> LOOT CHOSEN — hostile echo pressure rising.'],
-        };
-      }
-      return { runtime: nextRuntime, logLines };
-    }
-
-    case 'hollow_key_unlock': {
-      if (selectedValue === 'PASS') {
-        return {
-          runtime: clearChoice(runtime),
-          logLines: ['>> OCCULT LOCK — left sealed.'],
-        };
-      }
-      const keys = runtime.counters.hollowKeys ?? 0;
-      if (keys <= 0) {
-        return { runtime: clearChoice(runtime), logLines: ['>> HOLLOW KEY — no keys remaining.'] };
-      }
-      let nextRuntime = clearChoice(
-        appendKeepsakeDecision(runtime, {
-          key: 'hollow_key',
-          label: 'Occult Lock',
-          value: 'UNLOCK',
-          depth: localProceduralDepth(inc.nodesCleared),
-        }),
-      );
-      nextRuntime = incrementKeepsakeCounter(nextRuntime, 'hollowKeys', -1);
-      nextRuntime = incrementKeepsakeCounter(nextRuntime, 'noise', 1);
-      nextRuntime = patchKeepsakeStats(nextRuntime, { keysUsed: nextRuntime.stats.keysUsed + 1 });
-      return {
-        runtime: nextRuntime,
-        logLines: ['>> OCCULT LOCK OPENED — hidden options unlocked (+1 Noise).'],
-      };
-    }
-
-    case 'false_evac_beacon_plant': {
-      let nextRuntime = clearChoice(
-        appendKeepsakeDecision(runtime, {
-          key: 'false_beacon',
-          label: 'False Beacon',
-          value: selectedValue,
-          depth: localProceduralDepth(inc.nodesCleared),
-        }),
-      );
-      nextRuntime = patchKeepsakeStats(nextRuntime, {
-        falseBeaconsPlanted: nextRuntime.stats.falseBeaconsPlanted + 1,
-      });
-      const logLines = [`>> FALSE BEACON — ${selectedValue} planted.`];
-      let incursionPatch: Partial<ActiveIncursionState> | undefined;
-      const tree = inc.proceduralRunTree;
-      const anchorId = choice.nodeId;
-
-      if (tree && anchorId) {
-        if (selectedValue === 'DECOY') {
-          incursionPatch = {
-            proceduralRunTree: patchKeepsakeNodeModifiers(tree, anchorId, {
-              keepsakeFalseBeacon: true,
-              highValueResource: true,
-            }),
-          };
-        } else if (selectedValue === 'LURE') {
-          const corruptId = pickFutureKeepsakeNode(tree, inc.nodesCleared);
-          if (corruptId) {
-            incursionPatch = {
-              proceduralRunTree: patchKeepsakeNodeModifiers(tree, corruptId, {
-                keepsakeFalseBeacon: true,
-                highRisk: true,
-              }),
-            };
-          }
-        } else {
-          const scrambleId = pickFutureKeepsakeNode(tree, inc.nodesCleared, ['GATEKEEPER'], 'highRisk');
-          if (scrambleId) {
-            incursionPatch = {
-              proceduralRunTree: patchKeepsakeNodeModifiers(tree, scrambleId, {
-                keepsakeFalseBeacon: true,
-                highRisk: true,
-                highValueResource: true,
-              }),
-            };
-          }
-        }
-      }
-
-      return { runtime: nextRuntime, incursionPatch, logLines };
-    }
-
-    case 'gutter_service': {
-      let nextRuntime = clearChoice(
-        appendKeepsakeDecision(runtime, {
-          key: 'gutter_service',
-          label: 'Gutter Service',
-          value: selectedValue,
-        }),
-      );
-      nextRuntime = patchKeepsakeStats(nextRuntime, {
-        safehouseServiceUsed: selectedValue,
-      });
-      const logLines = [`>> GUTTER SERVICE — ${selectedValue}.`];
-      let incursionPatch: Partial<ActiveIncursionState> | undefined;
-
-      if (selectedValue === 'LAUNDER') {
-        nextRuntime = setKeepsakeFlag(nextRuntime, 'gutterLaunderActive', true);
-        logLines.push('>> LAUNDER — banked cargo value +10% this run.');
-      } else if (selectedValue === 'HIDE_SCENT') {
-        nextRuntime = incrementKeepsakeCounter(nextRuntime, 'scent', -(nextRuntime.counters.scent ?? 0));
-        logLines.push('>> HIDE SCENT — outside hook scent cleared.');
-      } else if (selectedValue === 'CROWN_RESOURCE') {
-        logLines.push('>> CROWN RESOURCE — stable salvage queued for next harvest.');
-        nextRuntime = setKeepsakeFlag(nextRuntime, 'gutterCrownResourcePending', true);
-      } else if (selectedValue === 'BUY_RUMOR') {
-        incursionPatch = { runCredits: inc.runCredits + 40 };
-        const tree = inc.proceduralRunTree;
-        if (tree) {
-          const targetId = pickFutureKeepsakeNode(tree, inc.nodesCleared);
-          if (targetId) {
-            incursionPatch = {
-              ...incursionPatch,
-              proceduralRunTree: patchKeepsakeNodeModifiers(tree, targetId, { highRisk: true }),
-            };
-          }
-        }
-        logLines.push('>> BUY RUMOR — +40 run credits; next vector destabilized.');
-      }
-
-      return { runtime: nextRuntime, incursionPatch, logLines };
-    }
-
     default:
       return {
         runtime: clearChoice(runtime),
         logLines: [],
       };
   }
-}
-
-export function shouldDeferHarvestForKeepsakeChoice(
-  runtime: KeepsakeRuntime | null | undefined,
-): boolean {
-  return runtime?.pendingChoice?.kind === 'ley_siphon_overdraw';
-}
-
-export function isLeyOverdrawConfirmed(runtime: KeepsakeRuntime | null | undefined): boolean {
-  return runtime?.flags.leyOverdrawConfirmed === true;
-}
-
-export function clearLeyOverdrawConfirmedFlag(runtime: KeepsakeRuntime | null): KeepsakeRuntime | null {
-  if (!runtime) return runtime;
-  const { leyOverdrawConfirmed: _, ...restFlags } = runtime.flags;
-  return {
-    ...runtime,
-    flags: restFlags,
-    leySiphonOverdrawPending: false,
-  };
-}
-
-export function applyKeepsakeLeyContamination(
-  runtime: KeepsakeRuntime | null,
-): KeepsakeRuntime | null {
-  if (!runtime) return runtime;
-  let next = incrementKeepsakeCounter(runtime, 'contamination', 1);
-  next = patchKeepsakeStats(next, {
-    contaminationAdded: next.stats.contaminationAdded + 1,
-  });
-  return next;
-}
-
-export function purgeKeepsakeLeyContamination(
-  runtime: KeepsakeRuntime | null,
-): { runtime: KeepsakeRuntime | null; logLines: string[] } {
-  if (!runtime || runtime.keepsakeId !== 'ley_siphon_needle') {
-    return { runtime, logLines: [] };
-  }
-  const amount = runtime.counters.contamination ?? 0;
-  if (amount <= 0) {
-    return { runtime, logLines: [] };
-  }
-  const next = patchKeepsakeStats(
-    { ...runtime, counters: { ...runtime.counters, contamination: 0 } },
-    { contaminationPurged: runtime.stats.contaminationPurged + amount },
-  );
-  return {
-    runtime: next,
-    logLines: [`>> LEY-SIPHON PURGE — ${amount} contamination cleared at safehouse.`],
-  };
 }

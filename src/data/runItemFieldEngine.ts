@@ -7,7 +7,6 @@ import type {
   RunItemFieldChoice,
   RunItemId,
   RunItemRuntime,
-  RunItemsSlotState,
 } from '../types/runItem';
 import type { UnstableCargoEffectId } from '../types/unstableCargoEffects';
 import { UNSTABLE_CARRIED_EFFECT_IDS } from '../types/unstableCargoEffects';
@@ -18,10 +17,11 @@ import { patchKeepsakeNodeModifiers } from './expeditionKeepsakeRouteEngine';
 import { countPhysicalCargoResource } from './unstableCargoEffectsEngine';
 import { getRunItemDefinition } from './runItemRegistry';
 import {
-  consumeRunItemFromFieldSlot,
-  getRunItemInFieldSlot,
-} from './runItemInventoryEngine';
-import { mergeRunItemRuntime, recordRunItemTrigger } from './runItemRunState';
+  consumeSupplyInstance,
+  findSupplyInstance,
+  hasSupplyInstance,
+} from './cargoSupplyEngine';
+import { mergeRunItemRuntime, recordRunItemTrigger, recordSupplyUse } from './runItemRunState';
 import { rollBlackMarketStock } from './blackMarket';
 import {
   buildAnchorNeedleFieldChoice,
@@ -31,50 +31,51 @@ import {
 export interface RunItemFieldUseOutcome {
   success: boolean;
   logLine: string;
-  runItems?: RunItemsSlotState;
-  itemRuntime?: RunItemRuntime;
+  supplyRuntime?: RunItemRuntime;
   cargo?: CargoRunState;
   blackMarketStock?: CargoItemId[];
   revealedSonarNodeIds?: readonly string[];
   runCredits?: number;
   bankedValue?: number;
   proceduralRunTree?: ProceduralRunTree;
-  keepsakeFullyInterpretedNodeIds?: readonly string[];
+  requisitionFullyInterpretedNodeIds?: readonly string[];
   pendingFieldChoice?: RunItemFieldChoice | null;
 }
 
 function consumeField(
-  slots: RunItemsSlotState,
+  cargo: CargoRunState,
   itemId: RunItemId,
   runtime: RunItemRuntime,
   triggerText: string,
-): { slots: RunItemsSlotState; runtime: RunItemRuntime } | null {
-  const nextSlots = consumeRunItemFromFieldSlot(slots, itemId);
-  if (!nextSlots) return null;
+): { cargo: CargoRunState; runtime: RunItemRuntime } | null {
+  const instance = findSupplyInstance(cargo, itemId);
+  if (!instance) return null;
+  const consumed = consumeSupplyInstance(cargo, instance.instanceId);
+  if (!consumed) return null;
   return {
-    slots: nextSlots,
-    runtime: recordRunItemTrigger(runtime, triggerText),
+    cargo: consumed.cargo,
+    runtime: recordSupplyUse(recordRunItemTrigger(runtime, triggerText), itemId),
   };
 }
 
-export function hasFieldRunItem(slots: RunItemsSlotState, itemId: RunItemId): boolean {
-  return getRunItemInFieldSlot(slots, itemId) != null;
+export function hasFieldRunItem(cargo: CargoRunState, itemId: RunItemId): boolean {
+  return hasSupplyInstance(cargo, itemId);
 }
 
 /** Sonar-Ping — reveal one scanner node; consume from field slot. */
 export function useSonarPingFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'revealedSonarNodeIds'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime' | 'revealedSonarNodeIds'>,
   nodeId: string,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'sonar-ping';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Sonar-Ping in Field Tool slots.' };
   }
   if (incursion.revealedSonarNodeIds.includes(nodeId)) {
     return { success: false, logLine: '[REJECTED] >> Sonar trace already mapped for this vector.' };
   }
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Sonar-Ping consume failed.' };
   }
@@ -93,19 +94,19 @@ export function useSonarPingFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText}`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
     revealedSonarNodeIds: [...incursion.revealedSonarNodeIds, nodeId],
   };
 }
 
 /** Dead-Drop Token — bank first containment item (non-apex). */
 export function useDeadDropTokenFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'cargo'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime' | 'cargo'>,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'dead-drop-token';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Dead-Drop Token in Field Tool slots.' };
   }
   const containment = incursion.cargo.containment[0];
@@ -117,14 +118,14 @@ export function useDeadDropTokenFieldTool(
   if (apexBlocked) {
     return { success: false, logLine: '[REJECTED] >> Dead-Drop Token cannot bank Apex cargo.' };
   }
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Dead-Drop Token consume failed.' };
   }
   const value = containment.currentValue ?? CARGO_ITEM_CATALOG[containment.itemId]?.baseValue ?? 0;
   const nextCargo: CargoRunState = {
-    ...incursion.cargo,
-    containment: incursion.cargo.containment.filter((c) => c.instanceId !== containment.instanceId),
+    ...consumed.cargo,
+    containment: consumed.cargo.containment.filter((c) => c.instanceId !== containment.instanceId),
   };
   const runtime = mergeRunItemRuntime(consumed.runtime, {
     deadDropRiskPending: true,
@@ -137,26 +138,25 @@ export function useDeadDropTokenFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText} ${CARGO_ITEM_CATALOG[containment.itemId]?.name ?? containment.itemId} secured (+${value} CR value).`,
-    runItems: consumed.slots,
-    itemRuntime: recordRunItemTrigger(runtime, 'DEAD-DROP TOKEN // Routing signature exposed.'),
     cargo: nextCargo,
+    supplyRuntime: recordRunItemTrigger(runtime, 'DEAD-DROP TOKEN // Routing signature exposed.'),
     bankedValue: value,
   };
 }
 
 /** Broker Flashcard — reroll black market stock; mark one listing cheaper. */
 export function useBrokerFlashcardFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'blackMarketStock'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime' | 'blackMarketStock'>,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'broker-flashcard';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Broker Flashcard in Field Tool slots.' };
   }
   if (incursion.blackMarketStock.length === 0) {
     return { success: false, logLine: '[REJECTED] >> No Black Market inventory to spoof.' };
   }
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Broker Flashcard consume failed.' };
   }
@@ -172,27 +172,27 @@ export function useBrokerFlashcardFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText}${marked ? ` Broker-Marked: ${CARGO_ITEM_CATALOG[marked]?.name ?? marked}.` : ''}`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
     blackMarketStock: nextStock,
   };
 }
 
 /** Relay Spike — plant on a non-boss node id (pending modifier). */
 export function useRelaySpikeFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime'>,
   nodeId: string,
   isBossNode: boolean,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'relay-spike';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Relay Spike in Field Tool slots.' };
   }
   if (isBossNode) {
     return { success: false, logLine: '[REJECTED] >> Relay Spike cannot modify boss nodes.' };
   }
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Relay Spike consume failed.' };
   }
@@ -212,21 +212,21 @@ export function useRelaySpikeFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText}`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
   };
 }
 
 /** Generic field-tool consume for tools that need UI choice before effect (echo/anchor/etc). */
 export function beginFieldToolChoice(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime'>,
   itemId: RunItemId,
 ): RunItemFieldUseOutcome {
   const def = getRunItemDefinition(itemId);
   if (def.family !== 'FIELD_TOOL') {
     return { success: false, logLine: '[REJECTED] >> Not a field tool.' };
   }
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: `[REJECTED] >> ${def.name} not in Field Tool slots.` };
   }
   return {
@@ -258,20 +258,20 @@ function firstUnstableEffectInCargo(
 export function useNullLensFieldTool(
   incursion: Pick<
     ActiveIncursionState,
-    'runItems' | 'itemRuntime' | 'proceduralRunTree' | 'runGenerationContext'
-    | 'cargo' | 'keepsakeFullyInterpretedNodeIds' | 'depthIdentity' | 'currentDistrict'
+    'cargo' | 'supplyRuntime' | 'proceduralRunTree' | 'runGenerationContext'
+    | 'cargo' | 'requisitionFullyInterpretedNodeIds' | 'depthIdentity' | 'currentDistrict'
   >,
   nodeId: string,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'null-lens-filter';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Null-Lens Filter in Field Tool slots.' };
   }
   if (!incursion.proceduralRunTree?.nodes[nodeId]) {
     return { success: false, logLine: '[REJECTED] >> Invalid Null-Lens target.' };
   }
-  if (incursion.keepsakeFullyInterpretedNodeIds.includes(nodeId)) {
+  if (incursion.requisitionFullyInterpretedNodeIds.includes(nodeId)) {
     return { success: false, logLine: '[REJECTED] >> Node signature already fully interpreted.' };
   }
   const availableIds = getAvailableProceduralNodeIds(incursion as ActiveIncursionState);
@@ -279,7 +279,7 @@ export function useNullLensFieldTool(
     return { success: false, logLine: '[REJECTED] >> Null-Lens target not on current depth layer.' };
   }
 
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Null-Lens Filter consume failed.' };
   }
@@ -294,9 +294,9 @@ export function useNullLensFieldTool(
     incursion.depthIdentity,
   );
 
-  const interpretedIds = incursion.keepsakeFullyInterpretedNodeIds.includes(nodeId)
-    ? incursion.keepsakeFullyInterpretedNodeIds
-    : [...incursion.keepsakeFullyInterpretedNodeIds, nodeId];
+  const interpretedIds = incursion.requisitionFullyInterpretedNodeIds.includes(nodeId)
+    ? incursion.requisitionFullyInterpretedNodeIds
+    : [...incursion.requisitionFullyInterpretedNodeIds, nodeId];
 
   const runtime = mergeRunItemRuntime(consumed.runtime, {
     stats: {
@@ -308,24 +308,24 @@ export function useNullLensFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText}`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
     proceduralRunTree: rolled.tree,
-    keepsakeFullyInterpretedNodeIds: interpretedIds,
+    requisitionFullyInterpretedNodeIds: interpretedIds,
   };
 }
 
 /** Ash-Seal Canister — dampen one unstable cargo downside until depth transition. */
 export function useAshSealFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'cargo' | 'currentDepth'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime' | 'cargo' | 'currentDepth'>,
   targetEffectId?: UnstableCargoEffectId,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'ash-seal-canister';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Ash-Seal Canister in Field Tool slots.' };
   }
-  if (incursion.itemRuntime.ashSeal) {
+  if (incursion.supplyRuntime.ashSeal) {
     return { success: false, logLine: '[REJECTED] >> Ash-Seal already active on unstable payload.' };
   }
   const effectId = targetEffectId ?? firstUnstableEffectInCargo(incursion.cargo);
@@ -333,7 +333,7 @@ export function useAshSealFieldTool(
     return { success: false, logLine: '[REJECTED] >> Ash-Seal requires unstable cargo in inventory.' };
   }
 
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Ash-Seal Canister consume failed.' };
   }
@@ -355,22 +355,22 @@ export function useAshSealFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText} Target: ${label}.`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
   };
 }
 
 /** Containment Foam — protect one non-apex cargo item from the next loss event. */
 export function useContainmentFoamFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'cargo'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime' | 'cargo'>,
   instanceId: string,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'containment-foam';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Containment Foam in Field Tool slots.' };
   }
-  if (incursion.itemRuntime.foamedCargoInstanceId) {
+  if (incursion.supplyRuntime.foamedCargoInstanceId) {
     return { success: false, logLine: '[REJECTED] >> Containment Foam already applied.' };
   }
 
@@ -383,7 +383,7 @@ export function useContainmentFoamFieldTool(
     return { success: false, logLine: '[REJECTED] >> Containment Foam cannot protect Apex cargo.' };
   }
 
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Containment Foam consume failed.' };
   }
@@ -400,25 +400,25 @@ export function useContainmentFoamFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText} ${label} foamed.`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
   };
 }
 
 /** Ley-Slag Splitter — arm +2 stable resource rolls for current harvest. */
 export function useLeySlagSplitterFieldTool(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  incursion: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime'>,
 ): RunItemFieldUseOutcome {
   const itemId: RunItemId = 'ley-slag-splitter';
   const def = getRunItemDefinition(itemId);
-  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+  if (!hasFieldRunItem(incursion.cargo, itemId)) {
     return { success: false, logLine: '[REJECTED] >> No Ley-Slag Splitter in Field Tool slots.' };
   }
-  if (incursion.itemRuntime.leySlagSplitterArmed) {
+  if (incursion.supplyRuntime.leySlagSplitterArmed) {
     return { success: false, logLine: '[REJECTED] >> Ley-Slag Splitter already armed.' };
   }
 
-  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  const consumed = consumeField(incursion.cargo, itemId, incursion.supplyRuntime, def.triggerText);
   if (!consumed) {
     return { success: false, logLine: '[REJECTED] >> Ley-Slag Splitter consume failed.' };
   }
@@ -435,17 +435,17 @@ export function useLeySlagSplitterFieldTool(
   return {
     success: true,
     logLine: `>> ${def.triggerText}`,
-    runItems: consumed.slots,
-    itemRuntime: runtime,
+    cargo: consumed.cargo,
+    supplyRuntime: runtime,
   };
 }
 
 /** Apply dead-drop route risk on next combat engage. */
 export function applyDeadDropRouteRisk(
-  inc: Pick<ActiveIncursionState, 'itemRuntime' | 'proceduralRunTree'>,
+  inc: Pick<ActiveIncursionState, 'supplyRuntime' | 'proceduralRunTree'>,
 ): { runtime: RunItemRuntime; tree: ProceduralRunTree | null; logLine: string | null } {
-  if (!inc.itemRuntime.deadDropRiskPending || !inc.proceduralRunTree) {
-    return { runtime: inc.itemRuntime, tree: inc.proceduralRunTree ?? null, logLine: null };
+  if (!inc.supplyRuntime.deadDropRiskPending || !inc.proceduralRunTree) {
+    return { runtime: inc.supplyRuntime, tree: inc.proceduralRunTree ?? null, logLine: null };
   }
 
   const candidates = getAvailableProceduralNodeIds(inc as ActiveIncursionState).filter((id) => {
@@ -458,11 +458,11 @@ export function applyDeadDropRouteRisk(
     tree = patchKeepsakeNodeModifiers(tree, riskNode, { highRisk: true });
   }
 
-  const runtime = mergeRunItemRuntime(inc.itemRuntime, {
+  const runtime = mergeRunItemRuntime(inc.supplyRuntime, {
     deadDropRiskPending: false,
     stats: {
-      ...inc.itemRuntime.stats,
-      riskAddedByItems: inc.itemRuntime.stats.riskAddedByItems + 1,
+      ...inc.supplyRuntime.stats,
+      riskAddedByItems: inc.supplyRuntime.stats.riskAddedByItems + 1,
     },
   });
 
@@ -500,19 +500,19 @@ export function isRunItemFoamProtected(runtime: RunItemRuntime, instanceId: stri
 
 /** Defer scanner engage until echo/anchor field-tool mode is chosen. */
 export function tryDeferEngageForFieldToolChoice(
-  inc: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  inc: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime'>,
   nodeId: string,
   nodeType: string | null | undefined,
   contextModifiers: ActiveIncursionState['encounterPath'][number]['contextModifiers'] | null | undefined,
 ): RunItemFieldUseOutcome {
-  if (inc.itemRuntime.pendingFieldChoice) {
+  if (inc.supplyRuntime.pendingFieldChoice) {
     return { success: false, logLine: '[REJECTED] >> Resolve pending field-tool choice first.' };
   }
 
   const isEcho = Boolean(contextModifiers?.echoSignal || contextModifiers?.echoEncounterKind);
   const isAnchor = Boolean(contextModifiers?.anchorSignal);
 
-  if (isEcho && getRunItemInFieldSlot(inc.runItems, 'echo-tuning-fork') != null && !inc.itemRuntime.echoTuningMode) {
+  if (isEcho && hasSupplyInstance(inc.cargo, 'echo-tuning-fork') && !inc.supplyRuntime.echoTuningMode) {
     return {
       success: true,
       logLine: '>> ECHO TUNING FORK — select frequency.',
@@ -520,7 +520,7 @@ export function tryDeferEngageForFieldToolChoice(
     };
   }
 
-  if (isAnchor && getRunItemInFieldSlot(inc.runItems, 'anchor-needle') != null && !inc.itemRuntime.anchorNeedleMode) {
+  if (isAnchor && hasSupplyInstance(inc.cargo, 'anchor-needle') && !inc.supplyRuntime.anchorNeedleMode) {
     return {
       success: true,
       logLine: '>> ANCHOR NEEDLE — select mode.',

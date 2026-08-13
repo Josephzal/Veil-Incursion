@@ -54,8 +54,8 @@ function run(): void {
   });
 
   // Deterministic query
-  const a = queryWeaponLoadoutRecommendations('hex-pulse-rifle');
-  const b = queryWeaponLoadoutRecommendations('hex-pulse-rifle');
+  const a = queryWeaponLoadoutRecommendations('hex-carbine');
+  const b = queryWeaponLoadoutRecommendations('hex-carbine');
   assert.deepEqual(a.sampleLoadouts[0]!.slots, b.sampleLoadouts[0]!.slots);
   assert.equal(a.identitySummary, b.identitySummary);
 
@@ -130,10 +130,10 @@ function run(): void {
     assert.equal(new Set(keys).size, keys.length, `${classId} identical identity-forward`);
   });
 
-  // Pulse ID remains permanent; H.1a live display is Ash Shotgun
-  assert.ok(queryWeaponLoadoutRecommendations('hex-pulse-rifle'));
-  assert.equal(getWeaponIdentityProfile('hex-pulse-rifle').liveDisplayName, 'Ash Shotgun');
-  assert.equal(getWeaponIdentityProfile('hex-pulse-rifle').plannedDisplayName, null);
+  // Carbine ID remains permanent; Stage II-C live display is Carbine
+  assert.ok(queryWeaponLoadoutRecommendations('hex-carbine'));
+  assert.equal(getWeaponIdentityProfile('hex-carbine').liveDisplayName, 'Carbine');
+  assert.equal(getWeaponIdentityProfile('hex-carbine').plannedDisplayName, null);
 
   const weaponReg = validateWeaponRegistry();
   assert.equal(

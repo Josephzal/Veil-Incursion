@@ -26,7 +26,6 @@ import type { ExtractCargoRoutingDebriefSummary } from './runDebriefCargoRouting
 import { buildExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
 import { buildKeepsakeDebriefSummary } from './runDebriefKeepsakeEngine';
 import { buildRunItemDebriefSummary } from './runDebriefRunItemEngine';
-import { resolveKeepsakeBankedResourceMultiplier } from './expeditionKeepsakeSafehouseEngine';
 import { buildAnchorDebriefSummary } from './runIntegration/runAnchorDebriefEngine';
 import type { AnchorDebriefSummary } from './runIntegration/runAnchorDebriefEngine';
 import {
@@ -56,7 +55,6 @@ import {
 } from './economyRunTelemetryEngine';
 import { sumLedgerCategoryTotals } from './runIntegration/runIntegrationHelpers';
 import type { PlayerAccount } from '../types/game';
-import type { KeepsakeDebriefSummary } from '../types/expeditionKeepsake';
 import type { RunItemDebriefSummary } from '../types/runItem';
 import type { PostRunRoutingDebriefState, CargoRoutingResult } from '../types/postRunCargoRouting';
 import { createDefaultEchoRunState, ECHO_OPERATION_PROGRESS } from './echoRunState';
@@ -143,9 +141,9 @@ export interface OperationDebriefPayload {
   deferredWorldTick?: boolean;
   runResourceLedger?: RunResourceLedger;
   cargoRoutingRunState?: import('./postRunCargoRoutingRunState').CargoRoutingRunState | null;
-  keepsakeSummary: KeepsakeDebriefSummary | null;
-  keepsakeRuntime: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
-  runItemSummary: RunItemDebriefSummary | null;
+  requisitionSummary: import('../types/expeditionRequisition').RequisitionDebriefSummary | null;
+  requisitionRuntime: import('../types/expeditionRequisition').RequisitionRuntime | null;
+  supplySummary: RunItemDebriefSummary | null;
   runOutcomeDetail: RunOutcomeDetail;
   anchorSummary: AnchorDebriefSummary | null;
   depthIdentitySummary: DepthIdentityDebriefSummary | null;
@@ -375,7 +373,7 @@ export function buildOperationDebriefPayload(
     extractedSuccessfully,
     extractionKind,
     cargo: incursion.cargo,
-    bankedMultiplier: resolveKeepsakeBankedResourceMultiplier(incursion.keepsakeRuntime),
+    bankedMultiplier: 1,
   });
   const resourceSections = opts.resourceSections
     ?? buildExtractedResourceSections(incursion.runResourceLedger);
@@ -388,11 +386,10 @@ export function buildOperationDebriefPayload(
     opts.routingState ?? null,
     incursion.cargoRoutingRunState,
   );
-  const keepsakeSummary = buildKeepsakeDebriefSummary(incursion.keepsakeRuntime);
-  const runItemSummary = buildRunItemDebriefSummary(
-    incursion.itemRuntime,
-    incursion.runItems,
-    incursion.runItemsAtRunStart,
+  const requisitionSummary = buildKeepsakeDebriefSummary(incursion.requisitionRuntime);
+  const supplySummary = buildRunItemDebriefSummary(
+    incursion.supplyRuntime,
+    incursion.cargo,
   );
   const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
   const totalContributionThisRun = computeTotalContributionThisRun(
@@ -486,9 +483,9 @@ export function buildOperationDebriefPayload(
     deferredWorldTick: opts.deferredWorldTick ?? false,
     runResourceLedger: opts.runResourceLedger ?? incursion.runResourceLedger,
     cargoRoutingRunState: incursion.cargoRoutingRunState,
-    keepsakeSummary,
-    keepsakeRuntime: incursion.keepsakeRuntime,
-    runItemSummary,
+    requisitionSummary,
+    requisitionRuntime: incursion.requisitionRuntime,
+    supplySummary,
     runOutcomeDetail,
     anchorSummary,
     depthIdentitySummary,

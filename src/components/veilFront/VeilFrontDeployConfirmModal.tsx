@@ -15,7 +15,7 @@ import HubPrimaryCta from '../hub/HubPrimaryCta';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { CLASS_DEFINITIONS } from '../../data/classes';
-import { getEquippedWeaponForClass, resolveWeaponState, getWeaponTier } from '../../data/weaponProgressionEngine';
+import { getEquippedWeaponForClass, resolveWeaponState } from '../../data/weaponProgressionEngine';
 import { getWeaponPlayerFacingSummary } from '../../data/weaponPlayerFacing/weaponPlayerFacingEngine';
 import { formatAbilityLabel, getActiveClassSnapshot } from '../../data/classLoadoutEngine';
 import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
@@ -85,14 +85,12 @@ function formatWeaponLine(weaponLine: string): string {
 function resolveEquippedChassisLine(account: PlayerAccount): string {
   const progression = {
     weaponUnlocks: account.weaponUnlocks,
-    weaponTiers: account.weaponTiers,
     equippedWeaponByClass: account.equippedWeaponByClass,
   };
   const familyId = getEquippedWeaponForClass(progression, account.activeClass);
   if (!familyId) return formatWeaponLine(CLASS_DEFINITIONS[account.activeClass].weaponLine);
   const facing = getWeaponPlayerFacingSummary(familyId);
-  const tier = getWeaponTier(progression, familyId);
-  const display = resolveWeaponState(familyId, tier).displayName;
+  const display = resolveWeaponState(familyId).displayName;
   return `${display.toUpperCase()} · ${facing.roleLabel.toUpperCase()}`;
 }
 

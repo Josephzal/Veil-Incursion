@@ -3,9 +3,7 @@ import type { ResourceQuantity } from '../types/resourceItem';
 import type { WeaponDebriefLine, WeaponDebriefSummary } from '../types/weapon';
 import {
   canUnlockWeaponFamily,
-  canUpgradeWeaponTier,
   getEquippedWeaponForClass,
-  getWeaponTier,
   resolveWeaponState,
 } from './weaponProgressionEngine';
 import { countMissingCost, formatWeaponCostLine } from './weaponResourceEngine';
@@ -19,14 +17,11 @@ export function buildWeaponDebriefSummary(
   const classId = incursion?.activeClass ?? account.activeClass;
   const progression = {
     weaponUnlocks: account.weaponUnlocks,
-    weaponTiers: account.weaponTiers,
     equippedWeaponByClass: account.equippedWeaponByClass,
   };
   const equippedFamilyId = incursion?.activeWeaponFamilyId
     ?? getEquippedWeaponForClass(progression, classId);
-  const equippedTier = incursion?.activeWeaponTier
-    ?? getWeaponTier(progression, equippedFamilyId);
-  const equippedState = resolveWeaponState(equippedFamilyId, equippedTier);
+  const equippedState = resolveWeaponState(equippedFamilyId);
   const lines: WeaponDebriefLine[] = [];
 
   lines.push({
@@ -38,57 +33,30 @@ export function buildWeaponDebriefSummary(
   const stash: ResourceQuantity = account.resourceStash;
 
   listWeaponFamiliesForClass(classId).forEach((def) => {
-    if (!progression.weaponUnlocks.includes(def.id)) {
-      if (canUnlockWeaponFamily(stash, progression, def.id)) {
-        lines.push({
-          kind: 'NEWLY_UNLOCKABLE',
-          label: def.name,
-          detail: `Resources available — ${formatWeaponCostLine(def.unlockRequirement)}`,
-        });
-      } else {
-        const { missingTotal, parts } = countMissingCost(stash, def.unlockRequirement);
-        if (missingTotal > 0 && missingTotal <= 5) {
-          lines.push({
-            kind: 'NEARLY_READY',
-            label: def.name,
-            detail: `Need ${parts.join(', ')} for unlock.`,
-          });
-        }
-      }
+    if (progression.weaponUnlocks.includes(def.id)) return;
+
+    if (canUnlockWeaponFamily(stash, progression, def.id)) {
+      lines.push({
+        kind: 'NEWLY_UNLOCKABLE',
+        label: def.name,
+        detail: `Resources available — ${formatWeaponCostLine(def.unlockRequirement)}`,
+      });
       return;
     }
 
-    const tier = getWeaponTier(progression, def.id);
-    if (tier >= 3) return;
-    const nextTierDef = tier === 1
-      ? def.tiers[1]
-      : tier === 2
-        ? def.tiers[2]
-        : null;
-    if (!nextTierDef) return;
-    if (canUpgradeWeaponTier(stash, progression, def.id)) {
+    const { missingTotal, parts } = countMissingCost(stash, def.unlockRequirement);
+    if (missingTotal > 0 && missingTotal <= 5) {
       lines.push({
-        kind: 'UPGRADE_AVAILABLE',
-        label: nextTierDef.displayName,
-        detail: nextTierDef.effectSummary,
+        kind: 'NEARLY_READY',
+        label: def.name,
+        detail: `Need ${parts.join(', ')} for unlock.`,
       });
-    } else {
-      const upgradeCost = def.tiers[tier - 1]?.upgradeCost ?? [];
-      const { missingTotal, parts } = countMissingCost(stash, upgradeCost);
-      if (missingTotal > 0 && missingTotal <= 4) {
-        lines.push({
-          kind: 'NEARLY_READY',
-          label: nextTierDef.displayName,
-          detail: `Need ${parts.join(', ')} for upgrade.`,
-        });
-      }
     }
   });
 
   return {
     equippedFamilyId,
     equippedDisplayName: equippedState.displayName,
-    equippedTier,
     effectSummary: equippedState.effectSummary,
     lines,
   };
@@ -107,7 +75,7 @@ export function buildAllClassWeaponOpportunities(account: PlayerAccount): Weapon
       .forEach((line) => {
         lines.push({
           ...line,
-          label: `${getWeaponFamily(summary.equippedFamilyId ?? 'aegis-runed-longsword').classId}: ${line.label}`,
+          label: `${getWeaponFamily(summary.equippedFamilyId ?? 'aegis-longsword').classId}: ${line.label}`,
         });
       });
   });

@@ -40,14 +40,14 @@ assert.equal(ENVOY_ABILITY_CATALOG.CATACLYSM_SIGIL.label, '[ NULL CIRCUIT ]');
 assert.ok(!ENVOY_ABILITY_CATALOG.CATACLYSM_SIGIL.label.includes('CATACLYSM'));
 
 for (const retired of RETIRED_CLASS_ULTIMATE_DISPLAY_NAMES) {
-  assert.ok(!formatWeaponUltimateLabel('aegis-runed-longsword').includes(retired));
-  assert.ok(!formatWeaponUltimateLabel('hex-pulse-rifle').includes(retired));
-  assert.ok(!formatWeaponUltimateLabel('envoy-null-conduit').includes(retired));
-  assert.ok(!formatWeaponUltimateLabel('hex-void-cannon').includes(retired));
+  assert.ok(!formatWeaponUltimateLabel('aegis-longsword').includes(retired));
+  assert.ok(!formatWeaponUltimateLabel('hex-carbine').includes(retired));
+  assert.ok(!formatWeaponUltimateLabel('envoy-scythe').includes(retired));
+  assert.ok(!formatWeaponUltimateLabel('hex-shotgun').includes(retired));
 }
 
-assert.equal(formatWeaponUltimateLabel('hex-void-cannon'), '[ LAST KNOCK ]');
-assert.ok(!formatWeaponUltimateLabel('hex-void-cannon').includes('The Black Door'));
+assert.equal(formatWeaponUltimateLabel('hex-shotgun'), '[ LAST KNOCK ]');
+assert.ok(!formatWeaponUltimateLabel('hex-shotgun').includes('The Black Door'));
 
 // Wired into global weapon validation pipeline.
 const registryIssues = validateWeaponRegistry().filter((i) =>

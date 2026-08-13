@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
+import HapticPressable from '../HapticPressable';
 import CargoPackingPanel from '../CargoPackingPanel';
 import DossierCardShell from '../hub/DossierCardShell';
 import { LoadoutTabHeader, LoadoutSectionHeader } from '../hub/loadoutTabUi';
@@ -18,7 +19,11 @@ import {
 } from '../../data/cargoRoutingIntelEngine';
 import { isResourceContractObjective } from '../../data/contractResolver';
 import { useTerminal } from '../../context/TerminalContext';
-import type { CargoItemId } from '../../types/cargoGrid';
+import {
+  CARGO_GRID_COLS,
+  CARGO_GRID_ROWS,
+  type CargoItemId,
+} from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import {
@@ -29,6 +34,8 @@ import {
   scaleHubCargoCellSize,
   type CargoGridWindowMetrics,
 } from '../../utils/cargoGridLayout';
+import { canOfferTemporaryCoagulant } from '../../data/cargoSupplyEngine';
+import { canPlaceCargoItem } from '../../data/cargoGridEngine';
 
 type WindowRect = { pageX: number; pageY: number; width: number; height: number };
 
@@ -50,10 +57,15 @@ export default function SafehouseLoadoutTab({
     stageStashItemToPreRunCargo,
     returnPreRunCargoToStash,
     returnAllPreRunContainmentToStash,
+    packTemporaryRecoveryAtCell,
     appendHubLog,
   } = usePlayerAccount();
   const { persisted, runGenerationContext } = useWorldState();
   const selectedContract = persisted.contractBoard.selectedContract;
+  const temporaryRecoveryAvailable = canOfferTemporaryCoagulant(
+    account.hubCraftedConsumables,
+    account.preRunCargo,
+  );
 
   const specialPreRunStacks = useMemo(
     () => countSpecialCargoInPreRunCargo(
@@ -206,6 +218,18 @@ export default function SafehouseLoadoutTab({
     setCargoAreaSize({ width, height });
   }, []);
 
+  const packTemporaryRecovery = useCallback(() => {
+    for (let row = 0; row < CARGO_GRID_ROWS; row += 1) {
+      for (let col = 0; col < CARGO_GRID_COLS; col += 1) {
+        if (!canPlaceCargoItem(account.preRunCargo, 'standard-coagulant', row, col)) continue;
+        const result = packTemporaryRecoveryAtCell(row, col);
+        appendHubLog(result.logLine);
+        return;
+      }
+    }
+    appendHubLog('>> TEMPORARY SUPPLY DECLINED — NO EMPTY CARGO CELL.');
+  }, [account.preRunCargo, appendHubLog, packTemporaryRecoveryAtCell]);
+
   const shellPadding = terminalPresentation ? scaleSpacing(8) : scaleSpacing(10);
 
   return (
@@ -295,6 +319,25 @@ export default function SafehouseLoadoutTab({
               {line}
             </TerminalText>
           ))}
+          {temporaryRecoveryAvailable ? (
+            <HapticPressable
+              onPress={packTemporaryRecovery}
+              accessibilityRole="button"
+              accessibilityLabel="Pack temporary Standard Coagulant into cargo"
+              style={({ pressed }) => ({
+                borderWidth: 1,
+                borderColor: accent,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                marginBottom: scaleSpacing(6),
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <TerminalText variant="caption" style={{ color: accent }}>
+                [ PACK FREE STANDARD COAGULANT ] — TEMPORARY · 1×1 CARGO
+              </TerminalText>
+            </HapticPressable>
+          ) : null}
 
           <View
             style={[

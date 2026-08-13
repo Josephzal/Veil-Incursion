@@ -38,7 +38,7 @@ const LONGSWORD: Record<
 > = {
   WARDENS_STRIKE: {
     id: 'WARDENS_STRIKE',
-    familyId: 'aegis-runed-longsword',
+    familyId: 'aegis-longsword',
     label: "[ WARDEN'S STRIKE ]",
     description: '1 AP kinetic strike — 14 Kinetic, 20 Fracture, strip 1 Armor, +8 Reserve on hit.',
     apCost: 1,
@@ -48,7 +48,7 @@ const LONGSWORD: Record<
   },
   RUPTURE: {
     id: 'RUPTURE',
-    familyId: 'aegis-runed-longsword',
+    familyId: 'aegis-longsword',
     label: '[ RUPTURE ]',
     description: 'Precise rupture — +15 accuracy, 8 Kinetic, 40 Fracture, strip up to 2 Armor. Brand on armor break or Fracture entry.',
     apCost: 1,
@@ -58,7 +58,7 @@ const LONGSWORD: Record<
   },
   DREADBIND: {
     id: 'DREADBIND',
-    familyId: 'aegis-runed-longsword',
+    familyId: 'aegis-longsword',
     label: '[ DREADBIND ]',
     description: '10 Kinetic, 18 Fracture. On hit, bind the target — Perfect Parry of their next attack awards Brand +22 Fracture.',
     apCost: 1,
@@ -68,7 +68,7 @@ const LONGSWORD: Record<
   },
   NO_RESPITE: {
     id: 'NO_RESPITE',
-    familyId: 'aegis-runed-longsword',
+    familyId: 'aegis-longsword',
     label: '[ NO RESPITE ]',
     description: '2 AP finisher — 24 Kinetic. Against already-Fractured: refund 1 AP +10 Reserve (once per turn).',
     apCost: 2,
@@ -84,7 +84,7 @@ const PAIRED: Record<
 > = {
   PAIRED_BLADES_STRIKE: {
     id: 'PAIRED_BLADES_STRIKE',
-    familyId: 'aegis-rift-edge',
+    familyId: 'aegis-paired-blades',
     label: '[ PAIRED STRIKE ]',
     description: '11 Kinetic, 12 Fracture, +6 Reserve. If Tempo armed: +4 Occult rider and consume Tempo.',
     apCost: 1,
@@ -94,7 +94,7 @@ const PAIRED: Record<
   },
   DIVERGENCE: {
     id: 'DIVERGENCE',
-    familyId: 'aegis-rift-edge',
+    familyId: 'aegis-paired-blades',
     label: '[ DIVERGENCE ]',
     description: 'Two blades — 5 Kinetic / 8 Fracture / +2 Reserve each. Brand if both hit. TARGET ×2.',
     apCost: 1,
@@ -104,7 +104,7 @@ const PAIRED: Record<
   },
   ECLIPSE: {
     id: 'ECLIPSE',
-    familyId: 'aegis-rift-edge',
+    familyId: 'aegis-paired-blades',
     label: '[ ECLIPSE ]',
     description: '10 Kinetic, 12 Fracture. Enter Eclipse posture — Evade/Perfect Parry arms Tempo + Brand.',
     apCost: 1,
@@ -114,7 +114,7 @@ const PAIRED: Record<
   },
   SEVERANCE: {
     id: 'SEVERANCE',
-    familyId: 'aegis-rift-edge',
+    familyId: 'aegis-paired-blades',
     label: '[ SEVERANCE ]',
     description: 'Two blades — 12 Kinetic each. With Tempo: Blade Two becomes 20 Occult + bonus Reserve.',
     apCost: 2,
@@ -130,7 +130,7 @@ const UNMAKER: Record<
 > = {
   UNMAKER_STRIKE: {
     id: 'UNMAKER_STRIKE',
-    familyId: 'aegis-claymore-blade',
+    familyId: 'aegis-claymore',
     label: '[ UNMAKER STRIKE ]',
     description: '15 Kinetic, 26 Fracture, +4 Reserve. Does not consume Fractured.',
     apCost: 1,
@@ -140,7 +140,7 @@ const UNMAKER: Record<
   },
   DREAD_HORIZON: {
     id: 'DREAD_HORIZON',
-    familyId: 'aegis-claymore-blade',
+    familyId: 'aegis-claymore',
     label: '[ DREAD HORIZON ]',
     description: 'Row sweep — 12 Kinetic / 30 Fracture / +3 Reserve per hit. Brand if both targets hit.',
     apCost: 2,
@@ -150,7 +150,7 @@ const UNMAKER: Record<
   },
   UNBOWED: {
     id: 'UNBOWED',
-    familyId: 'aegis-claymore-blade',
+    familyId: 'aegis-claymore',
     label: '[ UNBOWED ]',
     description: '10 Kinetic, 20 Fracture. Establish Poise — reduce next eligible attack 35%. Brand if Poise triggers while Committed.',
     apCost: 1,
@@ -160,7 +160,7 @@ const UNMAKER: Record<
   },
   DOOMFALL: {
     id: 'DOOMFALL',
-    familyId: 'aegis-claymore-blade',
+    familyId: 'aegis-claymore',
     label: '[ DOOMFALL — CHARGE ]',
     releaseLabel: '[ DOOMFALL — RELEASE ]',
     description: 'Charge: enter Committed. Next turn Release for heavy Fracture cashout.',

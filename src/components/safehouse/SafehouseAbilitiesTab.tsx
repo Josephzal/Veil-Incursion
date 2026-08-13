@@ -144,7 +144,6 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     if (account.activeClass !== 'HEX_SHOT') return undefined;
     const familyId = getEquippedWeaponForClass({
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     }, 'HEX_SHOT');
     if (!isHexWeaponFamilyId(familyId)) return undefined;
@@ -162,7 +161,6 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   }, [
     account.activeClass,
     account.equippedWeaponByClass,
-    account.weaponTiers,
     account.weaponUnlocks,
   ]);
 
@@ -186,7 +184,6 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     if (account.activeClass !== 'ENVOY') return undefined;
     const familyId = getEquippedWeaponForClass({
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     }, 'ENVOY');
     if (!isEnvoyWeaponFamilyId(familyId)) return undefined;
@@ -204,7 +201,6 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   }, [
     account.activeClass,
     account.equippedWeaponByClass,
-    account.weaponTiers,
     account.weaponUnlocks,
   ]);
 

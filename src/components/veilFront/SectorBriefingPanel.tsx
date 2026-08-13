@@ -398,7 +398,6 @@ export default function SectorBriefingPanel({
   const chassisPressure = useMemo(() => {
     const familyId = getEquippedWeaponForClass({
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     }, account.activeClass);
     if (!familyId) return null;
@@ -408,7 +407,6 @@ export default function SectorBriefingPanel({
   }, [
     account.activeClass,
     account.equippedWeaponByClass,
-    account.weaponTiers,
     account.weaponUnlocks,
     sector.id,
   ]);

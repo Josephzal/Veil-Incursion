@@ -217,14 +217,10 @@ export default function ScanningScreen(): React.JSX.Element {
       activeIncursion.runGenerationContext,
       activeIncursion.runVeilBiome,
     );
-    const polaroid = activeIncursion.keepsakeGravePolaroidPreview;
-    if (polaroid && polaroid.nodeId === selectedNode.id) {
-      return [...lines, ...polaroid.lines];
-    }
-    if (activeIncursion.keepsakeStampedExtractionNodeId === selectedNode.id) {
+    if (activeIncursion.requisitionStampedExtractionNodeId === selectedNode.id) {
       const base = computeBaseSectorExtractionPayout(activeIncursion);
       const preview = previewKeepsakeStampedExtractionPayout(
-        activeIncursion.keepsakeRuntime,
+        activeIncursion.requisitionRuntime,
         activeIncursion,
         base,
         selectedNode.id,
@@ -241,9 +237,8 @@ export default function ScanningScreen(): React.JSX.Element {
     activeIncursion.currentMacroBiomeFamily,
     activeIncursion.runVeilBiome,
     activeIncursion.runGenerationContext,
-    activeIncursion.keepsakeGravePolaroidPreview,
-    activeIncursion.keepsakeStampedExtractionNodeId,
-    activeIncursion.keepsakeRuntime,
+    activeIncursion.requisitionStampedExtractionNodeId,
+    activeIncursion.requisitionRuntime,
     activeIncursion,
   ]);
 
@@ -270,7 +265,7 @@ export default function ScanningScreen(): React.JSX.Element {
 
     setSelectedNodeId(null);
     setSiphonedNodeIds([]);
-    setTypeColoredNodeIds(new Set(activeIncursion.keepsakeFullyInterpretedNodeIds));
+    setTypeColoredNodeIds(new Set(activeIncursion.requisitionFullyInterpretedNodeIds));
     setScannerDotsReady(false);
     setVectorDots([]);
     lastManifestedSiphonsRef.current = new Set();
@@ -280,7 +275,7 @@ export default function ScanningScreen(): React.JSX.Element {
     spawnedScannerSizeRef.current = 0;
     setNodesInField(vectorCluster.length);
     closeScanPreview();
-  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, closeScanPreview, activeIncursion.keepsakeFullyInterpretedNodeIds]);
+  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, closeScanPreview, activeIncursion.requisitionFullyInterpretedNodeIds]);
 
   useEffect(() => {
     if (!isScanningHub || vectorCluster.length === 0 || scannerSize <= 0) {
@@ -366,10 +361,10 @@ export default function ScanningScreen(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    activeIncursion.keepsakeFullyInterpretedNodeIds.forEach((nodeId) => {
+    activeIncursion.requisitionFullyInterpretedNodeIds.forEach((nodeId) => {
       markNodeTypeColored(nodeId);
     });
-  }, [activeIncursion.keepsakeFullyInterpretedNodeIds, markNodeTypeColored]);
+  }, [activeIncursion.requisitionFullyInterpretedNodeIds, markNodeTypeColored]);
 
   useEffect(() => {
     if (selectedNodeId) markNodeTypeColored(selectedNodeId);
@@ -493,13 +488,13 @@ export default function ScanningScreen(): React.JSX.Element {
   );
   const showRelaySpikePrompt = Boolean(
     selectedNodeId
-    && hasFieldRunItem(activeIncursion.runItems, 'relay-spike')
-    && activeIncursion.itemRuntime.pendingRelayModifier == null,
+    && hasFieldRunItem(activeIncursion.cargo, 'relay-spike')
+    && activeIncursion.supplyRuntime.pendingRelayModifier == null,
   );
   const showNullLensPrompt = Boolean(
     selectedNodeId
-    && hasFieldRunItem(activeIncursion.runItems, 'null-lens-filter')
-    && !activeIncursion.keepsakeFullyInterpretedNodeIds.includes(selectedNodeId),
+    && hasFieldRunItem(activeIncursion.cargo, 'null-lens-filter')
+    && !activeIncursion.requisitionFullyInterpretedNodeIds.includes(selectedNodeId),
   );
 
   const scannerPane = (
@@ -541,12 +536,12 @@ export default function ScanningScreen(): React.JSX.Element {
               radarDots={vectorDots}
               siphonedNodeIds={siphonedNodeIds}
               selectedNodeId={selectedNodeId}
-              fullyInterpretedNodeIds={activeIncursion.keepsakeFullyInterpretedNodeIds}
+              fullyInterpretedNodeIds={activeIncursion.requisitionFullyInterpretedNodeIds}
             />
-            {(activeIncursion.keepsakeCartographGhostNodeIds.length > 0
-              ? activeIncursion.keepsakeCartographGhostNodeIds
-              : activeIncursion.keepsakeCartographGhostNodeId
-                ? [activeIncursion.keepsakeCartographGhostNodeId]
+            {(activeIncursion.requisitionCartographGhostNodeIds.length > 0
+              ? activeIncursion.requisitionCartographGhostNodeIds
+              : activeIncursion.requisitionCartographGhostNodeId
+                ? [activeIncursion.requisitionCartographGhostNodeId]
                 : []
             ).map((ghostNodeId) => {
               const ghostType = getKeepsakeCartographGhostType(activeIncursion, ghostNodeId);
@@ -560,9 +555,9 @@ export default function ScanningScreen(): React.JSX.Element {
                 />
               );
             })}
-            {activeIncursion.keepsakeStampedExtractionNodeId ? (
+            {activeIncursion.requisitionStampedExtractionNodeId ? (
               <KeepsakeStampedExtractionHint
-                nodeId={activeIncursion.keepsakeStampedExtractionNodeId}
+                nodeId={activeIncursion.requisitionStampedExtractionNodeId}
                 radarDots={vectorDots}
               />
             ) : null}

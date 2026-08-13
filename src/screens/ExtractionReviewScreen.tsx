@@ -165,7 +165,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     if (!isKeepsakeStampedExtractionNode(activeIncursion)) return null;
     const base = computeBaseSectorExtractionPayout(activeIncursion);
     return previewKeepsakeStampedExtractionPayout(
-      activeIncursion.keepsakeRuntime,
+      activeIncursion.requisitionRuntime,
       activeIncursion,
       base,
     );

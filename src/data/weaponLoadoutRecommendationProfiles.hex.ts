@@ -16,10 +16,10 @@ function sample(partial: WeaponSampleLoadout): WeaponSampleLoadout {
 }
 
 export const HEX_SIDEARM: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'hex-silver-core-sidearm',
+  weaponFamilyId: 'hex-revolver',
   classId: 'HEX_SHOT',
   validationState: 'VALIDATED',
-  identitySummary: 'Reload tempo, precision finishes, ammo efficiency, steady Protocol Charge — not Nullbreach/Ash.',
+  identitySummary: 'Reload tempo, precision finishes, ammo efficiency, steady Protocol Charge — not Shotgun/Carbine.',
   recommendations: [
     rec({
       abilityId: 'SILVER_CORE_SIDEARM',
@@ -160,7 +160,7 @@ export const HEX_SIDEARM: WeaponLoadoutRecommendationProfile = {
 };
 
 export const HEX_NULLBREACH: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'hex-void-cannon',
+  weaponFamilyId: 'hex-shotgun',
   classId: 'HEX_SHOT',
   validationState: 'VALIDATED',
   identitySummary: 'Door Knocker armor pressure; Fatal Funnel lane blast; Threshold reaction; Deadbolt primed after reload.',
@@ -306,7 +306,7 @@ export const HEX_NULLBREACH: WeaponLoadoutRecommendationProfile = {
 };
 
 export const HEX_PULSE: WeaponLoadoutRecommendationProfile = {
-  weaponFamilyId: 'hex-pulse-rifle',
+  weaponFamilyId: 'hex-carbine',
   classId: 'HEX_SHOT',
   validationState: 'VALIDATED',
   identitySummary: 'Center Mass + Firing Solution mark; cluster pressure via Contact Front / flex; Ash-Jacket Salvo stays distinct burst.',

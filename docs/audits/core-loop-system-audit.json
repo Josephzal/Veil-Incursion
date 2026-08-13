@@ -1,0 +1,2275 @@
+{
+  "schemaVersion": "1.0.0",
+  "auditScope": "Stage I-A Core-Loop System Audit \u2014 inventory and classification only; no gameplay changes",
+  "sourcePrecedence": {
+    "order": [
+      "The Veil - Core Loop Integration Master Specification (PDF 2026-08-10, 29 pages)",
+      "The Veil - Universal Boon System Master Specification (PDF 2026-08-10, 32 pages) except where amended by Core Loop",
+      "Veil GDD (PDF Veil GDD (1).pdf 2026-08-07, 90 pages) + docs/current-game-systems-design.md as in-repo GDD mirror",
+      "Repository code and tests = current runtime behavior, not design authority"
+    ],
+    "coreLoopAmendmentsApplied": [
+      "Four routine Imprints: Armament, Discipline, Instinct, Current",
+      "Verdict is separate deep-run boss reward (not routine Core Imprint)",
+      "Three standard Authorities per run; fourth requires exceptional override",
+      "Boon acquisition scales with depth",
+      "Elites remain optional boon sources, not the only reliable source",
+      "Grafts use Sanctuary Attunement without persistent Residue or Class Rank power gates"
+    ],
+    "supersededAssumptionsRejected": [
+      "Five-Imprint routine catalog",
+      "Four-Authority soft cap as normal",
+      "Six-to-eight boon selections for every successful run regardless of depth",
+      "Elite post-combat as sole reliable boon source",
+      "Residue/Class Rank as graft power gates"
+    ],
+    "sourceDiscrepancies": [
+      {
+        "item": "Master specs live as PDFs in Downloads; repo GDD mirror is docs/current-game-systems-design.md",
+        "resolution": "Used Core Loop PDF (newer 2026-08-10) as top authority; GDD PDF (1) newer than Veil GDD.pdf; Phase_4_Boon_Refactor.md treated as superseded where Core Loop amends cadence/Authorities"
+      },
+      {
+        "item": "Phase 4 Boon Refactor still states elite as primary random surface and 6-8 selections",
+        "resolution": "Superseded by Core Loop \u00a711; recorded as historical, not target"
+      }
+    ]
+  },
+  "repositoryBaseline": {
+    "commit": "ed75f8f62a49e73d0998824b91d424c1d8fe25c5",
+    "branch": "veil-cabal-refactor",
+    "gitStatusAtStart": "clean (no short-status entries)",
+    "auditedAtUtc": "2026-08-10T21:16:34Z",
+    "notes": "Pre-existing dirty combat polish files from earlier session were not present at audit start; only audit deliverables may be written."
+  },
+  "summary": {
+    "countsByClassification": {
+      "REMOVE": 7,
+      "DISABLE": 4,
+      "KEEP": 7,
+      "MIGRATE": 7,
+      "DEFER": 1,
+      "MERGE": 1
+    },
+    "countsBySystem": {
+      "legacyCombatTrinkets": 4,
+      "weaponTier": 3,
+      "classRank": 3,
+      "sanctuary": 4,
+      "boundRequisitions": 2,
+      "expeditionRelics": 1,
+      "boonRewards": 4,
+      "operationsAftermath": 4,
+      "crossCuttingPersistence": 2
+    },
+    "systemRecordCount": 27,
+    "donorDispositionCount": 39,
+    "highRiskShutdowns": [
+      "weapon.tier.definitionsAndRuntime \u2014 large combat/test blast radius",
+      "boon.eliteOnlyGrantPath \u00d7 aftermath.eliteSuppression \u2014 build-growth starvation risk",
+      "requisition.boundCatalogRuntime merge \u2014 dual loadout + combat-engine donors",
+      "sanctuary.attuneAndGraft + graft.residueEconomy \u2014 heal/graft/Residue rewiring"
+    ],
+    "unresolvedFindings": [
+      "SkillCheckScreen reachability for trinket CRITICAL_SUCCESS path",
+      "Weapon tier baseline choice (T1 vs folded T3 fantasy)",
+      "Whether Veil Residue retains non-graft sinks after Sanctuary decoupling",
+      "Authority Contact node type presence in live procedural generation",
+      "Compensation policy for spent weapon tier upgrades",
+      "Whether eliteWeight<1 non-application is intentional"
+    ],
+    "eliteIsOnlyLiveRandomBoonSource": true,
+    "eliteOnlyEvidence": [
+      "src/context/RunContext.tsx isPostCombatBoonBlocked / preparePostCombatMutations",
+      "src/screens/CombatScreen.tsx victory routing",
+      "docs/current-game-systems-design.md \u00a7 Boon offers"
+    ]
+  },
+  "systems": [
+    {
+      "id": "aftermath.deadArtifacts",
+      "system": "operationsAftermath",
+      "component": "SECTOR_FATIGUE type without rule; dead scanner unlock",
+      "classification": "REMOVE",
+      "currentBehavior": "SECTOR_FATIGUE appears in normalizeLegacyModifier fallback without catalog rule. scanner-resource-visibility unlock never applied.",
+      "targetResponsibility": "Delete or implement; no silent no-ops.",
+      "rationale": "Obfuscates Aftermath simplification.",
+      "evidence": [
+        {
+          "path": "src/data/proceduralAftermathEngine.ts",
+          "symbol": "normalizeLegacyModifier / SECTOR_FATIGUE",
+          "note": "Orphan type"
+        },
+        {
+          "path": "src/data/operationRulesEngine.ts",
+          "symbol": "scanner-resource-visibility",
+          "note": "Never applied"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/types/proceduralAftermath.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/proceduralAftermathEngine.ts"
+        ],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [],
+      "shutdownOrMergePlan": "Remove orphan type and dead unlock strings.",
+      "migrationRequirement": "Strip unknown aftermath types fail-closed with warning (future).",
+      "risk": "low",
+      "recommendedStage": "VI",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "aftermath.eliteSuppression",
+      "system": "operationsAftermath",
+      "component": "ELITE_SUPPRESSION / eliteWeight reductions after successful clears",
+      "classification": "MIGRATE",
+      "currentBehavior": "ELITE_SUPPRESSION and ANCHOR_PRESSURE_REDUCED lower eliteWeight. worldStateEngine only boosts eliteWeightDelta when eliteWeight>1 \u2014 reductions <1 do not lower spawn weights. Combined with elite-only boons, success can reduce build growth.",
+      "targetResponsibility": "Must not silently reduce principal source of run-build power (Core Loop \u00a79); after boon sources diversify, suppression may remain pressure-only.",
+      "rationale": "Cross-system conflict: elite-only boons + elite suppression.",
+      "evidence": [
+        {
+          "path": "src/data/proceduralAftermathCatalog.ts",
+          "symbol": "ELITE_SUPPRESSION",
+          "note": "Rule definition"
+        },
+        {
+          "path": "src/data/worldStateEngine.ts",
+          "symbol": "eliteWeight \u2192 eliteWeightDelta",
+          "note": "Asymmetric apply"
+        },
+        {
+          "path": "src/data/nodeGenerationContextEngine.ts",
+          "symbol": "elite weight consumers",
+          "note": "Node weights"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/proceduralAftermathCatalog.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/worldStateEngine.ts",
+          "src/data/nodeGenerationContextEngine.ts"
+        ],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "boon.eliteOnlyGrantPath",
+        "aftermath.stackingSectorModifiers"
+      ],
+      "shutdownOrMergePlan": "Either wire reductions correctly as pressure-only, or remove suppression until Contacts exist; flag ELITE_SUPPRESSION_AFFECTS_SPAWNS.",
+      "migrationRequirement": "Review active ELITE_SUPPRESSION saves.",
+      "risk": "high",
+      "recommendedStage": "V-VI",
+      "unresolvedQuestions": [
+        "Is current non-application of eliteWeight<1 intentional soft-fail?"
+      ]
+    },
+    {
+      "id": "aftermath.operationLifecycle",
+      "system": "operationsAftermath",
+      "component": "Operation lifecycle AFTERMATH lock + completion effects",
+      "classification": "MIGRATE",
+      "currentBehavior": "Dual 'aftermath' naming: sector modifiers vs lifecycle AFTERMATH locking community progress. Completion may grant rewardLevelBoost; unlockTemporarySectorModifier scanner-resource-visibility never applied; contractBiasDelta copied but not applied.",
+      "targetResponsibility": "One global featured Operation; one readable Aftermath; dead unlocks removed.",
+      "rationale": "Core Loop \u00a74.2\u20134.3 simplify Operations and remove community progress complexity.",
+      "evidence": [
+        {
+          "path": "src/data/operationLifecycleEngine.ts",
+          "symbol": "tickSectorOperationLifecycleAfterRun",
+          "note": "Lifecycle AFTERMATH"
+        },
+        {
+          "path": "src/data/operationRulesEngine.ts",
+          "symbol": "unlockTemporarySectorModifier",
+          "note": "Dead unlock string"
+        },
+        {
+          "path": "src/data/proceduralAftermathEngine.ts",
+          "symbol": "contractBiasDelta",
+          "note": "Copied, not applied"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/operationLifecycleEngine.ts",
+          "src/data/operationRulesEngine.ts"
+        ],
+        "saveFields": [
+          "src/context/WorldStateContext.tsx"
+        ],
+        "uiHud": [],
+        "debrief": [
+          "src/screens/OperationDebriefScreen.tsx"
+        ],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "aftermath.stackingSectorModifiers"
+      ],
+      "shutdownOrMergePlan": "Simplify to one featured op; remove dead unlocks; clarify naming.",
+      "migrationRequirement": "temporarySectorModifiers / sectorOperationLifecycle reshape.",
+      "risk": "medium",
+      "recommendedStage": "VI",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "aftermath.stackingSectorModifiers",
+      "system": "operationsAftermath",
+      "component": "Stacking sector aftermath modifiers with intensity",
+      "classification": "MIGRATE",
+      "currentBehavior": "10 AFTERMATH_RULES; max 3 modifiers/sector; stackKey refresh/intensify; persists on WorldStatePersistedState.sectorAftermathModifiersBySector; applied via applyPostRunAftermath \u2192 next brief.",
+      "targetResponsibility": "One named Aftermath condition per sector, no stacking/intensity (Core Loop \u00a74.2 / \u00a79.2).",
+      "rationale": "Launch scope simplifies Aftermath.",
+      "evidence": [
+        {
+          "path": "src/data/proceduralAftermathCatalog.ts",
+          "symbol": "AFTERMATH_RULES",
+          "note": "10-rule catalog"
+        },
+        {
+          "path": "src/data/proceduralAftermathEngine.ts",
+          "symbol": "applyAftermathFromRun",
+          "note": "Persistence apply"
+        },
+        {
+          "path": "src/data/proceduralAftermathDebriefAdapter.ts",
+          "symbol": "debrief preview",
+          "note": "UI"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/proceduralAftermathCatalog.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/proceduralAftermathEngine.ts"
+        ],
+        "saveFields": [
+          "src/context/WorldStateContext.tsx"
+        ],
+        "uiHud": [],
+        "debrief": [
+          "src/screens/OperationDebriefScreen.tsx"
+        ],
+        "telemetryDebug": [],
+        "testsFixtures": [
+          "src/data/proceduralAftermathValidationEngine.ts"
+        ]
+      },
+      "dependencies": [
+        "aftermath.eliteSuppression"
+      ],
+      "shutdownOrMergePlan": "Replace multi-modifier merge with single named condition; migrate save map.",
+      "migrationRequirement": "Collapse sectorAftermathModifiersBySector to one active condition.",
+      "risk": "high",
+      "recommendedStage": "VI",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "boon.boundCuratedScars",
+      "system": "boonRewards",
+      "component": "Bound Requisition curated Ley-Scar grants (non-random)",
+      "classification": "MIGRATE",
+      "currentBehavior": "BLOOD_PRICE / SUNKEN_RITE push curated leyLineMutations at run start. isLeyScarAcquisitionBlocked (IRONCLAD) can skip elite offers.",
+      "targetResponsibility": "Corrupted Bargain / Contract clause / Authority \u2014 not ordinary Requisition combat power.",
+      "rationale": "Core Loop moves sponsor mandates and combat engines off standard Requisitions.",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitionEngine.ts",
+          "symbol": "BLOOD_PRICE / SUNKEN_RITE apply",
+          "note": "Curated scar grant"
+        },
+        {
+          "path": "src/data/boundRequisitionEngine.ts",
+          "symbol": "isLeyScarAcquisitionBlocked",
+          "note": "Blocks post-combat offers"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [
+          "src/data/boundRequisitionEngine.ts"
+        ],
+        "runtimeEffects": [
+          "src/context/RunContext.tsx"
+        ],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "requisition.boundCatalogRuntime",
+        "boon.eliteOnlyGrantPath"
+      ],
+      "shutdownOrMergePlan": "Rehome curated grants during Requisition merge.",
+      "migrationRequirement": "Map BR scar grants to new sources.",
+      "risk": "medium",
+      "recommendedStage": "IV-V",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "boon.eliteOnlyGrantPath",
+      "system": "boonRewards",
+      "component": "Live random class-boon grant path (elite post-combat only)",
+      "classification": "MIGRATE",
+      "currentBehavior": "isPostCombatBoonBlocked returns true unless node type ELITE_COMBAT (or ley-scar blocked). preparePostCombatMutations clears offers for non-elites. Boss victory skips boon; standard combat goes harvest. Elite post-combat is the ONLY live random class-boon source.",
+      "targetResponsibility": "Depth-scaled sources: First Omen, one Contact/depth, optional elites, bosses/Verdicts, Corrupted/Sponsor events \u2014 elites optional not sole reliable source.",
+      "rationale": "Core Loop \u00a711.4\u201311.5 amends boon master; elite cannot remain only reliable source.",
+      "evidence": [
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "isPostCombatBoonBlocked",
+          "note": "Gates non-ELITE_COMBAT"
+        },
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "preparePostCombatMutations",
+          "note": "Returns [] unless elite"
+        },
+        {
+          "path": "src/screens/CombatScreen.tsx",
+          "symbol": "startPostCombatBoon / isPostCombatBoonBlocked",
+          "note": "Victory routing"
+        },
+        {
+          "path": "docs/current-game-systems-design.md",
+          "symbol": "Boon offers (elite post-combat)",
+          "note": "Documents elite-only surface"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [
+          "src/context/RunContext.tsx",
+          "src/screens/CombatScreen.tsx",
+          "src/screens/PostCombatBoonScreen.tsx"
+        ],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/types/game.ts"
+        ],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "boon.offerSelectionStack",
+        "aftermath.eliteSuppression"
+      ],
+      "shutdownOrMergePlan": "Add Contact/Omen/boss sources behind flags; keep elite as optional premium.",
+      "migrationRequirement": "postCombatMutationChoices remains session; new pending-offer fields likely.",
+      "risk": "high",
+      "recommendedStage": "V",
+      "unresolvedQuestions": [
+        "Authority Contact node type exists in procedural gen yet?"
+      ]
+    },
+    {
+      "id": "boon.offerSelectionStack",
+      "system": "boonRewards",
+      "component": "Hard eligibility \u2192 composition \u2192 soft weighting \u2192 seeded selection",
+      "classification": "KEEP",
+      "currentBehavior": "boonOffer/ pipeline prepares weighted offers from class catalogs; affinity soft-only; grafts update tags after apply.",
+      "targetResponsibility": "Remain authority for offer selection under new Authority-specific sources.",
+      "rationale": "Core Loop keeps universal compatibility/selection philosophy from boon master; amends cadence only.",
+      "evidence": [
+        {
+          "path": "src/data/boonOffer/boonOfferEngine.ts",
+          "symbol": "prepareWeightedBoonOffers",
+          "note": "Selection entry"
+        },
+        {
+          "path": "src/data/boonOffer/boonHardEligibility.ts",
+          "symbol": "hard gates",
+          "note": "Eligibility"
+        },
+        {
+          "path": "src/data/boonOffer/boonSoftWeighting.ts",
+          "symbol": "soft weights",
+          "note": "Weighting"
+        },
+        {
+          "path": "src/data/boonOfferPhase3I.test.ts",
+          "symbol": "phase 3I tests",
+          "note": "Coverage"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/boonOffer/"
+        ],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": [
+          "src/data/boonOfferPhase3I.test.ts"
+        ]
+      },
+      "dependencies": [
+        "boon.eliteOnlyGrantPath"
+      ],
+      "shutdownOrMergePlan": "N/A \u2014 extend sources later.",
+      "migrationRequirement": "None for stack itself.",
+      "risk": "low",
+      "recommendedStage": "V",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "boon.veilBleedDeadNode",
+      "system": "boonRewards",
+      "component": "VEIL_BLEED_BOON node kind unused in level pools",
+      "classification": "DISABLE",
+      "currentBehavior": "VEIL_BLEED_BOON type exists in descent matrix language and engage routing, but LEVEL_MATRIX pools never spawn it. Engage would open PostCombatBoonScreen which then auto-empties via elite gate.",
+      "targetResponsibility": "Revive as scheduled Contact/Bleed source or remove dead kind.",
+      "rationale": "Dead path; Core Loop wants scheduled Contacts \u2014 do not treat as live.",
+      "evidence": [
+        {
+          "path": "src/data/descentLevelMatrix.ts",
+          "symbol": "VEIL_BLEED_BOON",
+          "note": "Type present"
+        },
+        {
+          "path": "src/screens/ScanningScreen.tsx",
+          "symbol": "VEIL_BLEED_BOON route",
+          "note": "Engage handler exists"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/descentLevelMatrix.ts"
+        ],
+        "grants": [
+          "src/screens/ScanningScreen.tsx"
+        ],
+        "runtimeEffects": [],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "boon.eliteOnlyGrantPath"
+      ],
+      "shutdownOrMergePlan": "Disable engage until spawned, or wire as Contact.",
+      "migrationRequirement": "None.",
+      "risk": "low",
+      "recommendedStage": "V",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "classRank.graftCapacityGates",
+      "system": "classRank",
+      "component": "Graft capacity and socket-quality gates by Class Rank",
+      "classification": "REMOVE",
+      "currentBehavior": "getGraftSocketAccessForClassRank returns capacity and allowFixedBasic/Ultimate/ApexMasterwork. Used by Sanctuary apply, offer filter, sanitization, ClassGraftUI, RestScreen, compatibility, recommendation requiredClassRank.",
+      "targetResponsibility": "Capacity independent of Class Rank (Core Loop: 1 socket intro, 2 by Depth 2 extraction).",
+      "rationale": "Core Loop \u00a74.3 and \u00a710.3 forbid Class Rank graft-capacity and socket-quality gates.",
+      "evidence": [
+        {
+          "path": "src/data/graftSynergy/graftCapacityEngine.ts",
+          "symbol": "getGraftSocketAccessForClassRank",
+          "note": "Rank\u2192capacity ladder"
+        },
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "getGraftSocketAccessForClassRank(classRank)",
+          "note": "Sanctuary apply gate"
+        },
+        {
+          "path": "src/data/graftSynergy/permanentGraftLoadoutEngine.ts",
+          "symbol": "filterGraftOffersForClassRank",
+          "note": "Offer filter"
+        },
+        {
+          "path": "src/data/graftSynergyPhase3J.test.ts",
+          "symbol": "capacity ladder asserts",
+          "note": "Tests pin rank gates"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/graftSynergy/graftCapacityEngine.ts",
+          "src/context/RunContext.tsx"
+        ],
+        "saveFields": [],
+        "uiHud": [
+          "src/components/ClassGraftUI.tsx",
+          "src/screens/RestScreen.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": [
+          "src/data/graftSynergyPhase3J.test.ts"
+        ]
+      },
+      "dependencies": [
+        "classRank.xpHistory",
+        "sanctuary.graftFlow"
+      ],
+      "shutdownOrMergePlan": "Replace access fn with constant/full or depth-based capacity; update 3J tests; stop rank filtering offers.",
+      "migrationRequirement": "Existing mid-run grafts: sanitize under more permissive rules.",
+      "risk": "medium",
+      "recommendedStage": "II-B",
+      "unresolvedQuestions": [
+        "Exact capacity curve vs Core Loop depth targets?"
+      ]
+    },
+    {
+      "id": "classRank.hooksFlags",
+      "system": "classRank",
+      "component": "Stored reward hooks (abilities/grafts/boon pools) largely inert",
+      "classification": "DEFER",
+      "currentBehavior": "Reward table writes unlockedAbilities/unlockedGraftLicenses/unlockedBoonPools/flags. Live graft access uses rank table, not license membership. unlockedBoonPools unused by classBoonEngine. CLASS_RANK_MIN unlock kind unused.",
+      "targetResponsibility": "Flavor/history flags only; never re-gate power.",
+      "rationale": "Dead wiring; clean later without blocking proof-of-fun.",
+      "evidence": [
+        {
+          "path": "src/data/classRankEngine.ts",
+          "symbol": "CLASS_RANK_REWARD_TABLE",
+          "note": "Writes hooks"
+        },
+        {
+          "path": "src/data/classBoonEngine.ts",
+          "symbol": "preparePostCombatBoonOffers",
+          "note": "Does not read unlockedBoonPools"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/data/progressionProfileEngine.ts"
+        ],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [
+          "src/components/hub/DevTestHubPanel.tsx"
+        ],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "classRank.xpHistory"
+      ],
+      "shutdownOrMergePlan": "Stop applying hooks or leave as flavor-only.",
+      "migrationRequirement": "Optional prune of hook arrays.",
+      "risk": "low",
+      "recommendedStage": "DEFER",
+      "unresolvedQuestions": [
+        "External tooling reading these flags?"
+      ]
+    },
+    {
+      "id": "classRank.xpHistory",
+      "system": "classRank",
+      "component": "Class Rank XP, history, debrief presentation",
+      "classification": "KEEP",
+      "currentBehavior": "Ranks 1\u201320; XP from debrief applyClassRankFromDebrief; event log; pinned goals; theater cards. Reward table comment says hooks-only for many rows, but capacity still uses live rank.",
+      "targetResponsibility": "Informational mastery record / non-power history (or deferred content). No run-entry combat power.",
+      "rationale": "Core Loop \u00a74.2 converts Class Rank from power/socket track to non-power mastery or deferred.",
+      "evidence": [
+        {
+          "path": "src/data/classRankEngine.ts",
+          "symbol": "CLASS_RANK_MAX / applyClassRankXp",
+          "note": "XP ladder"
+        },
+        {
+          "path": "src/context/PlayerAccountContext.tsx",
+          "symbol": "applyClassRankFromRun",
+          "note": "Debrief settlement"
+        },
+        {
+          "path": "src/data/debriefProgressionTheaterEngine.ts",
+          "symbol": "class rank cards",
+          "note": "Presentation"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/classRankEngine.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/data/progressionProfileEngine.ts"
+        ],
+        "uiHud": [
+          "src/data/pinnedGoalEngine.ts"
+        ],
+        "debrief": [
+          "src/screens/OperationDebriefScreen.tsx"
+        ],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "classRank.graftCapacityGates"
+      ],
+      "shutdownOrMergePlan": "Keep XP/rank display; stop capacity from rank; optionally stop writing unused hooks.",
+      "migrationRequirement": "Preserve rank/xp fields.",
+      "risk": "low",
+      "recommendedStage": "II-B",
+      "unresolvedQuestions": [
+        "Keep showing next-graft-license copy after gates removed?"
+      ]
+    },
+    {
+      "id": "graft.residueEconomy",
+      "system": "sanctuary",
+      "component": "Persistent Veil Residue as graft power gate",
+      "classification": "DISABLE",
+      "currentBehavior": "sessionVeilResidueCollected / veilResidueBalance pays Sanctuary graft costs; vaulted across runs. Orthogonal to Class Rank XP but currently throttles graft application.",
+      "targetResponsibility": "No Residue cost for run-scoped Sanctuary Attune grafts.",
+      "rationale": "Core Loop \u00a74.3 / \u00a710.2: Attune consumes Sanctuary service, not persistent Residue.",
+      "evidence": [
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "sessionVeilResidueCollected graft charge",
+          "note": "Spend on successful graft"
+        },
+        {
+          "path": "src/components/ClassGraftUI.tsx",
+          "symbol": "residueBalance",
+          "note": "UI afford gate"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [
+          "src/context/RunContext.tsx"
+        ],
+        "saveFields": [
+          "src/context/PlayerAccountContext.tsx"
+        ],
+        "uiHud": [
+          "src/components/ClassGraftUI.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "sanctuary.attuneAndGraft"
+      ],
+      "shutdownOrMergePlan": "Feature-flag Residue graft costs off; retain Residue economy for other systems until audited.",
+      "migrationRequirement": "None for account balances; stop debiting on graft.",
+      "risk": "medium",
+      "recommendedStage": "II-B",
+      "unresolvedQuestions": [
+        "Other live Residue sinks that must remain?"
+      ]
+    },
+    {
+      "id": "persistence.accountAndWorld",
+      "system": "crossCuttingPersistence",
+      "component": "PlayerAccount + WorldState AsyncStorage persistence",
+      "classification": "KEEP",
+      "currentBehavior": "player_account_v2 and world_state_v1 persist progression, weapons, keepsakes, residue, aftermath maps. ActiveIncursion and pendingDebrief are in-memory only.",
+      "targetResponsibility": "Retain account/world persistence; mid-run resume remains absent unless flagged later.",
+      "rationale": "Core infrastructure; Core Loop does not require mid-run save for proof-of-fun.",
+      "evidence": [
+        {
+          "path": "src/context/PlayerAccountContext.tsx",
+          "symbol": "@veil_incursion/player_account_v2",
+          "note": "Account persist"
+        },
+        {
+          "path": "src/context/WorldStateContext.tsx",
+          "symbol": "@veil_incursion/world_state_v1",
+          "note": "World persist"
+        },
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "useState ActiveIncursion",
+          "note": "In-memory run"
+        },
+        {
+          "path": "src/data/runIntegration/runLoopAuditEngine.ts",
+          "symbol": "auditPersistenceSeparation",
+          "note": "Validator"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/context/PlayerAccountContext.tsx",
+          "src/context/WorldStateContext.tsx"
+        ],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [
+          "src/data/runIntegration/runLoopAuditEngine.ts"
+        ],
+        "testsFixtures": []
+      },
+      "dependencies": [],
+      "shutdownOrMergePlan": "N/A.",
+      "migrationRequirement": "See saveMigrationInventory for field-level work.",
+      "risk": "low",
+      "recommendedStage": "continuous",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "persistence.featureFlagHost",
+      "system": "crossCuttingPersistence",
+      "component": "Existing featureFlags module as host for future shutdown flags",
+      "classification": "KEEP",
+      "currentBehavior": "src/data/featureFlags.ts currently exposes AMBUSH_ENCOUNTERS_ENABLED and RESONANCE_SYSTEM_ACTIVE only.",
+      "targetResponsibility": "Host Core Loop shutdown/migration flags without implementing them in Stage I.",
+      "rationale": "Core Loop \u00a74.3: disabled systems should be feature-flagged before deletion when migration needed.",
+      "evidence": [
+        {
+          "path": "src/data/featureFlags.ts",
+          "symbol": "AMBUSH_ENCOUNTERS_ENABLED / RESONANCE_SYSTEM_ACTIVE",
+          "note": "Existing flags"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/featureFlags.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [],
+      "shutdownOrMergePlan": "Add candidate flags listed in featureFlagCandidates (audit only).",
+      "migrationRequirement": "None now.",
+      "risk": "low",
+      "recommendedStage": "II+",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "relic.keepsakeRuntimeBase",
+      "system": "expeditionRelics",
+      "component": "Expedition Relic (keepsake) catalog and preferred retained runtime",
+      "classification": "KEEP",
+      "currentBehavior": "20 KeepsakeId relics; equippedKeepsakeId + keepsakeDeployment; initializeKeepsakeRuntime; scanner/cargo/market/contract/safehouse/echo/extract hooks; debrief via runDebriefKeepsakeEngine. No direct combat stat bonuses by design.",
+      "targetResponsibility": "Technical base for merged Expedition Requisitions; donor catalog not 1:1 preserved.",
+      "rationale": "Core Loop \u00a75 prefers adapting Expedition Relic runtime (deployment choices, hooks, counters, debrief).",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "ALL_KEEPSAKE_IDS",
+          "note": "20-relic roster"
+        },
+        {
+          "path": "src/data/expeditionKeepsakeEngine.ts",
+          "symbol": "initializeKeepsakeRuntime / applyKeepsakeOnRunStart",
+          "note": "Runtime init"
+        },
+        {
+          "path": "src/data/keepsakeRunState.ts",
+          "symbol": "keepsakeRuntime helpers",
+          "note": "Run state"
+        },
+        {
+          "path": "src/components/hub/KeepsakeLoadoutPanel.tsx",
+          "symbol": "equip UI",
+          "note": "Loadout"
+        },
+        {
+          "path": "src/data/runDebriefKeepsakeEngine.ts",
+          "symbol": "debrief summary",
+          "note": "Debrief"
+        },
+        {
+          "path": "src/types/expeditionKeepsake.ts",
+          "symbol": "Expedition Relic comment",
+          "note": "Explicitly not combat boons"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/expeditionKeepsakeRegistry.ts",
+          "src/types/expeditionKeepsake.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/expeditionKeepsakeEngine.ts"
+        ],
+        "saveFields": [
+          "src/context/PlayerAccountContext.tsx"
+        ],
+        "uiHud": [
+          "src/components/hub/KeepsakeLoadoutPanel.tsx"
+        ],
+        "debrief": [
+          "src/data/runDebriefKeepsakeEngine.ts"
+        ],
+        "telemetryDebug": [],
+        "testsFixtures": [
+          "src/data/expeditionKeepsakeValidation.ts"
+        ]
+      },
+      "dependencies": [
+        "requisition.boundCatalogRuntime"
+      ],
+      "shutdownOrMergePlan": "Retain runtime; absorb selected BR donors; retire dual-slot UI.",
+      "migrationRequirement": "Account equippedKeepsakeId + keepsakeDeployment remain; map BR crafteds into new IDs.",
+      "risk": "medium",
+      "recommendedStage": "IV",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "requisition.boundCatalogRuntime",
+      "system": "boundRequisitions",
+      "component": "Bound Requisition catalog, runtime, dual loadout slot",
+      "classification": "MERGE",
+      "currentBehavior": "19 Bound Requisition IDs; pre-run offers on BoundRequisitionScreen; runtime buildBoundRequisitionRuntime / applyBoundRequisitionAtRunStart; combat hooks (adrenaline, kinetic battery); market/ley-scar flags; account craftedAugments.",
+      "targetResponsibility": "Donor catalog into single Expedition Requisition (one equip). Recurring combat engines leave Requisition surface.",
+      "rationale": "Core Loop \u00a75.1 merges BR + Relics; BR effects that are combat engines/mandates migrate conceptually.",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "BOUND_REQUISITIONS catalog",
+          "note": "19 IDs"
+        },
+        {
+          "path": "src/data/boundRequisitionEngine.ts",
+          "symbol": "buildBoundRequisitionRuntime",
+          "note": "Runtime builder"
+        },
+        {
+          "path": "src/screens/BoundRequisitionScreen.tsx",
+          "symbol": "confirmBoundRequisition",
+          "note": "Pre-run UI"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/boundRequisitions.ts",
+          "src/types/boundRequisition.ts"
+        ],
+        "grants": [
+          "src/screens/BoundRequisitionScreen.tsx"
+        ],
+        "runtimeEffects": [
+          "src/data/boundRequisitionEngine.ts"
+        ],
+        "saveFields": [
+          "src/types/game.ts"
+        ],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": [
+          "src/data/runIntegration/runLoopAuditEngine.ts"
+        ]
+      },
+      "dependencies": [
+        "relic.keepsakeRuntimeBase"
+      ],
+      "shutdownOrMergePlan": "Migrate selected BR effects onto keepsake-style runtime; remove separate BR loadout slot; explicit ID migration table.",
+      "migrationRequirement": "Bound Requisition IDs require explicit save/run-state migration table (Core Loop \u00a75).",
+      "risk": "high",
+      "recommendedStage": "IV",
+      "unresolvedQuestions": [
+        "Final merged roster size and which BR combat engines move to Authorities?"
+      ]
+    },
+    {
+      "id": "requisition.dualLoadoutSlots",
+      "system": "boundRequisitions",
+      "component": "Separate Bound Requisition and Expedition Relic loadout slots",
+      "classification": "REMOVE",
+      "currentBehavior": "Player can equip both a Bound Requisition and an Expedition Relic for the same run (separate screens/state).",
+      "targetResponsibility": "Exactly one Expedition Requisition before deployment.",
+      "rationale": "Core Loop \u00a74.3 removes separate BR and Relic loadout slots.",
+      "evidence": [
+        {
+          "path": "src/screens/BoundRequisitionScreen.tsx",
+          "symbol": "confirmBoundRequisition",
+          "note": "BR slot"
+        },
+        {
+          "path": "src/components/hub/KeepsakeLoadoutPanel.tsx",
+          "symbol": "equippedKeepsakeId",
+          "note": "Relic slot"
+        },
+        {
+          "path": "src/types/game.ts",
+          "symbol": "boundRequisition / keepsakeRuntime",
+          "note": "Parallel run fields"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/types/game.ts"
+        ],
+        "uiHud": [
+          "src/screens/BoundRequisitionScreen.tsx",
+          "src/components/hub/KeepsakeLoadoutPanel.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "requisition.boundCatalogRuntime",
+        "relic.keepsakeRuntimeBase"
+      ],
+      "shutdownOrMergePlan": "Collapse to one equip UI after donor merge.",
+      "migrationRequirement": "Choose surviving equipped ID when both present.",
+      "risk": "medium",
+      "recommendedStage": "IV",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "sanctuary.attuneAndGraft",
+      "system": "sanctuary",
+      "component": "ATTUNE heal + GRAFT mutate flow, Residue costs",
+      "classification": "MIGRATE",
+      "currentBehavior": "RestScreen binary SanctuaryChoice ATTUNE|GRAFT. applySanctuaryAttune heals 30% max SA. Graft rolls 3 offers, rank-filters, charges sessionVeilResidueCollected. No MEND. Equipped-action filtering via canGraftClassAbility / Aegis surface.",
+      "targetResponsibility": "Mend=substantial heal; Attune=choose one of three grafts without Residue; grafts run-scoped.",
+      "rationale": "Core Loop \u00a710.1\u201310.2 locked Mend/Attune flow; \u00a74.3 removes persistent Residue costs for run-scoped grafts.",
+      "evidence": [
+        {
+          "path": "src/screens/RestScreen.tsx",
+          "symbol": "SanctuaryChoice / ATTUNE / GRAFT",
+          "note": "Current UI binary"
+        },
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "applySanctuaryAttune / applyClassGraftToAbility",
+          "note": "Heal and graft commits"
+        },
+        {
+          "path": "src/data/classGraftEngine.ts",
+          "symbol": "rollClassGraftOffers",
+          "note": "Offer roll"
+        },
+        {
+          "path": "src/data/graftSynergy/permanentGraftLoadoutEngine.ts",
+          "symbol": "validateSanctuaryGraftApplication",
+          "note": "Residue + capacity validation"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [
+          "src/context/RunContext.tsx",
+          "src/data/classGraftEngine.ts"
+        ],
+        "saveFields": [
+          "src/types/game.ts"
+        ],
+        "uiHud": [
+          "src/screens/RestScreen.tsx",
+          "src/components/ClassGraftUI.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "classRank.graftCapacityGates",
+        "graft.residueEconomy"
+      ],
+      "shutdownOrMergePlan": "Split ATTUNE heal\u2192Mend; redefine Attune as graft choice; remove Residue charge for Sanctuary grafts; retarget SURVIVALIST/cargo heal hooks to Mend.",
+      "migrationRequirement": "Clear abilityGrafts on extract/death/abandon (already run-scoped); stop charging Residue.",
+      "risk": "high",
+      "recommendedStage": "II-B",
+      "unresolvedQuestions": [
+        "Does Veil Residue remain for non-graft uses after Sanctuary decoupling?"
+      ]
+    },
+    {
+      "id": "sanctuary.forceNextSanctuary",
+      "system": "sanctuary",
+      "component": "Narrative forceNextSanctuary write without consumer",
+      "classification": "DISABLE",
+      "currentBehavior": "narrativeEncounterMatrix can set forceNextSanctuary on IncursionProgressState; never read by node generation.",
+      "targetResponsibility": "Either consume in procedural schedule or remove writer.",
+      "rationale": "Dead write misleads future Sanctuary guarantee work.",
+      "evidence": [
+        {
+          "path": "src/data/narrativeEncounterMatrix.ts",
+          "symbol": "forceNextSanctuary",
+          "note": "Writer"
+        },
+        {
+          "path": "src/types/game.ts",
+          "symbol": "IncursionProgressState.forceNextSanctuary",
+          "note": "Typed field; no readers found"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/narrativeEncounterMatrix.ts"
+        ],
+        "saveFields": [
+          "src/types/game.ts"
+        ],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "sanctuary.generationAndTwisted"
+      ],
+      "shutdownOrMergePlan": "Disable writer until consumer exists, or wire into schedule.",
+      "migrationRequirement": "None.",
+      "risk": "low",
+      "recommendedStage": "II-B",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "sanctuary.generationAndTwisted",
+      "system": "sanctuary",
+      "component": "Normal Sanctuary generation and twisted variants",
+      "classification": "KEEP",
+      "currentBehavior": "rollSanctuarySchedule always places local 14 + extras; sectorGraph injects SANCTUARY nodes. Twisted CORRUPTED_SANCTUARY (D2) and NO_EXIT_SANCTUARY (D3) lock ATTUNE+GRAFT until choice resolves. No ALTERED_SANCTUARY id.",
+      "targetResponsibility": "Guarantee \u22651 reachable normal Sanctuary per depth; keep twisted as exceptional content.",
+      "rationale": "Core Loop \u00a710.2 keeps Sanctuary presence; twisted variants remain valid fiction.",
+      "evidence": [
+        {
+          "path": "src/data/sanctuaryScheduleEngine.ts",
+          "symbol": "rollSanctuarySchedule",
+          "note": "Schedule authority"
+        },
+        {
+          "path": "src/data/sectorGraphEngine.ts",
+          "symbol": "createSanctuaryNode",
+          "note": "Node inject"
+        },
+        {
+          "path": "src/data/twistedTemplateCatalog.ts",
+          "symbol": "CORRUPTED_SANCTUARY / NO_EXIT_SANCTUARY",
+          "note": "Twisted variants"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/sanctuaryScheduleEngine.ts",
+          "src/data/twistedTemplateCatalog.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/sectorGraphEngine.ts",
+          "src/data/twistedTemplateResolutionEngine.ts"
+        ],
+        "saveFields": [],
+        "uiHud": [
+          "src/components/TwistedTemplateChoiceOverlay.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "sanctuary.attuneAndGraft"
+      ],
+      "shutdownOrMergePlan": "Add per-depth guarantee if missing; leave twisted UI.",
+      "migrationRequirement": "None.",
+      "risk": "low",
+      "recommendedStage": "II-B",
+      "unresolvedQuestions": [
+        "Does schedule already guarantee one per depth in all procedural paths?"
+      ]
+    },
+    {
+      "id": "trinket.definitions",
+      "system": "legacyCombatTrinkets",
+      "component": "Catalog definitions (TRINKET_POOL / POST_COMBAT_BOON_POOL)",
+      "classification": "REMOVE",
+      "currentBehavior": "Six mid-run combat Trinket defs in TRINKET_POOL and five POST_COMBAT_BOON_POOL variants grant parry/slice/abyssal/HP/stamina bonuses. Distinct from Expedition Relics (KeepsakeId) and Run Items.",
+      "targetResponsibility": "None \u2014 Core Loop \u00a74.3 removes legacy mid-run combat trinkets without converting them into boons.",
+      "rationale": "Superseded catalogs with no live product ownership; post-combat pool is unused.",
+      "evidence": [
+        {
+          "path": "src/data/regions.ts",
+          "symbol": "TRINKET_POOL",
+          "note": "Defines mid-run combat trinket catalog"
+        },
+        {
+          "path": "src/data/regions.ts",
+          "symbol": "POST_COMBAT_BOON_POOL",
+          "note": "Legacy post-combat trinket variants (not class boons)"
+        },
+        {
+          "path": "src/types/run.ts",
+          "symbol": "Trinket",
+          "note": "Session combat-trinket type"
+        },
+        {
+          "path": "docs/current-game-systems-design.md",
+          "symbol": "Expedition Relics vs combat trinkets",
+          "note": "GDD distinguishes systems"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/regions.ts",
+          "src/types/run.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "trinket.grants",
+        "trinket.runtime"
+      ],
+      "shutdownOrMergePlan": "Delete pools and Trinket interface after grant/runtime callers removed; do not touch keepsake/run-item registries.",
+      "migrationRequirement": "None for PlayerAccount; activeTrinkets is session RunState only.",
+      "risk": "low",
+      "recommendedStage": "II-A (trinket removal)",
+      "unresolvedQuestions": [
+        "Should CRITICAL_SUCCESS skill-check rewards migrate to Run Items/cargo instead of pure deletion?"
+      ]
+    },
+    {
+      "id": "trinket.grants",
+      "system": "legacyCombatTrinkets",
+      "component": "Grant and acquisition paths",
+      "classification": "DISABLE",
+      "currentBehavior": "applyTrinket exists but no screen calls it. Skill-check CRITICAL_SUCCESS appends one TRINKET_POOL entry via applySkillCheckTier. pickRandomPostCombatBoons has zero call sites. Live PostCombatBoonScreen awards class boons, not Trinket. startSkillCheck has no call sites found.",
+      "targetResponsibility": "All grant paths unreachable; no replacement mid-run combat-trinket grants.",
+      "rationale": "Core Loop requires every reward-pool route that can still grant combat trinkets disabled before deletion.",
+      "evidence": [
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "applyTrinket",
+          "note": "Exported grant API with no screen callers"
+        },
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "applySkillCheckTier",
+          "note": "CRITICAL_SUCCESS rolls pickRandomTrinkets"
+        },
+        {
+          "path": "src/data/regions.ts",
+          "symbol": "pickRandomPostCombatBoons",
+          "note": "Defined; zero call sites"
+        },
+        {
+          "path": "src/screens/PostCombatBoonScreen.tsx",
+          "symbol": "preparePostCombatMutations consumers",
+          "note": "Class/ley boons only"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [
+          "src/context/RunContext.tsx",
+          "src/data/regions.ts"
+        ],
+        "runtimeEffects": [],
+        "saveFields": [],
+        "uiHud": [
+          "src/screens/PostCombatBoonScreen.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "trinket.definitions",
+        "trinket.runtime"
+      ],
+      "shutdownOrMergePlan": "Feature-flag or delete skill-check trinket roll; delete applyTrinket export; leave class-boon post-combat intact.",
+      "migrationRequirement": "None.",
+      "risk": "medium",
+      "recommendedStage": "II-A",
+      "unresolvedQuestions": [
+        "Is SkillCheckScreen reachable via any navigator not found by symbol search?"
+      ]
+    },
+    {
+      "id": "trinket.runtime",
+      "system": "legacyCombatTrinkets",
+      "component": "Runtime modifiers and combat hooks",
+      "classification": "REMOVE",
+      "currentBehavior": "aggregateModifiers sums parry/slice/abyssal into RunState. CombatScreen passes startingAbyssalReservePercent/parryWindowBonus/sliceDamagePenalty into TacticalCombatHub. parryMultiplierBonus prop is unused in hub body.",
+      "targetResponsibility": "Zero combat influence from activeTrinkets.",
+      "rationale": "Runtime path only populated by near-dead grants; must have no live influence.",
+      "evidence": [
+        {
+          "path": "src/context/RunContext.tsx",
+          "symbol": "aggregateModifiers",
+          "note": "Sums trinket combat bonuses"
+        },
+        {
+          "path": "src/screens/CombatScreen.tsx",
+          "symbol": "parryWindowBonus / startingAbyssalReservePercent",
+          "note": "Passes aggregated mods into hub"
+        },
+        {
+          "path": "src/components/TacticalCombatHub.tsx",
+          "symbol": "parryWindowBonus",
+          "note": "Consumes window bonus; multiplier unused"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [
+          "src/context/RunContext.tsx",
+          "src/screens/CombatScreen.tsx",
+          "src/components/TacticalCombatHub.tsx"
+        ],
+        "saveFields": [],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "trinket.grants"
+      ],
+      "shutdownOrMergePlan": "Remove aggregation; keep hub props only if another non-trinket source needs them.",
+      "migrationRequirement": "None.",
+      "risk": "low",
+      "recommendedStage": "II-A",
+      "unresolvedQuestions": [
+        "Is parryMultiplierBonus awaiting a non-trinket source?"
+      ]
+    },
+    {
+      "id": "trinket.saveUiDebrief",
+      "system": "legacyCombatTrinkets",
+      "component": "Save fields, UI, debrief, telemetry",
+      "classification": "REMOVE",
+      "currentBehavior": "activeTrinkets on session RunState only. Hub equipment.trinketId always null. RunCompleteScreen shows TRINKETS count. No OperationDebrief keepsake-style reporting. Telemetry tracks keepsake/runItem triggers, not combat trinkets. trinketBalanceConfig validates expedition relic soft-caps (naming collision).",
+      "targetResponsibility": "No presentation or persistence of mid-run combat trinkets.",
+      "rationale": "Presentation of a retired system; rename relic balance config separately.",
+      "evidence": [
+        {
+          "path": "src/types/run.ts",
+          "symbol": "RunState.activeTrinkets",
+          "note": "Session field"
+        },
+        {
+          "path": "src/types/game.ts",
+          "symbol": "equipment.trinketId",
+          "note": "Unused hub placeholder"
+        },
+        {
+          "path": "src/screens/RunCompleteScreen.tsx",
+          "symbol": "activeTrinkets.length",
+          "note": "Only UI count"
+        },
+        {
+          "path": "src/data/balance/trinketBalanceConfig.ts",
+          "symbol": "formatTrinketBalanceConfigSummary",
+          "note": "Relic soft-caps, not combat trinkets"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/types/run.ts",
+          "src/types/game.ts"
+        ],
+        "uiHud": [
+          "src/screens/RunCompleteScreen.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [
+          "src/data/balance/trinketBalanceConfig.ts"
+        ],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "trinket.definitions"
+      ],
+      "shutdownOrMergePlan": "Drop activeTrinkets and trinketId; rename trinketBalanceConfig later; leave keepsake debrief alone.",
+      "migrationRequirement": "Ignore/strip trinketId on load if present.",
+      "risk": "low",
+      "recommendedStage": "II-A",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "weapon.familyOwnership",
+      "system": "weaponTier",
+      "component": "Horizontal weapon-family unlock and equip",
+      "classification": "KEEP",
+      "currentBehavior": "Nine families, three per class; weaponUnlocks, equippedWeaponByClass, WEAPON_REGISTRY identity/WA kits. Unlock spend is permanent horizontal access.",
+      "targetResponsibility": "Preserve family ownership and kit identity; no vertical combat power.",
+      "rationale": "Core Loop \u00a74.1 keeps nine families; \u00a74.2 converts progression to horizontal unlocks only.",
+      "evidence": [
+        {
+          "path": "src/data/weaponRegistry.ts",
+          "symbol": "WEAPON_REGISTRY",
+          "note": "Family definitions"
+        },
+        {
+          "path": "src/context/PlayerAccountContext.tsx",
+          "symbol": "weaponUnlocks / equippedWeaponByClass",
+          "note": "Account ownership"
+        },
+        {
+          "path": "src/types/weapon.ts",
+          "symbol": "WeaponFamilyId",
+          "note": "Horizontal identity key"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/data/weaponRegistry.ts",
+          "src/types/weapon.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [],
+        "saveFields": [
+          "src/context/PlayerAccountContext.tsx"
+        ],
+        "uiHud": [
+          "src/components/hub/LoadoutHubPanel.tsx"
+        ],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": []
+      },
+      "dependencies": [],
+      "shutdownOrMergePlan": "N/A \u2014 retain while stripping tiers.",
+      "migrationRequirement": "None.",
+      "risk": "low",
+      "recommendedStage": "III (after trinkets)",
+      "unresolvedQuestions": []
+    },
+    {
+      "id": "weapon.tier.definitionsAndRuntime",
+      "system": "weaponTier",
+      "component": "Vertical Tier I\u2013III combat-stat ladder and T3 once-per-combat passives",
+      "classification": "MIGRATE",
+      "currentBehavior": "Every family has tiers [1,2,3] with escalating statModifiers and often T3 oncePerCombatPassive. resolveWeaponState(family,tier) feeds combat damage/cost/resource/pierce. Descent snapshots activeWeaponTier.",
+      "targetResponsibility": "Single power row per family (baseline stats); retire vertical ladder and tier-only passives.",
+      "rationale": "Core Loop \u00a74.3 disables permanent Tier I\u2192III combat-stat growth and Tier III combat passives.",
+      "evidence": [
+        {
+          "path": "src/types/weapon.ts",
+          "symbol": "WeaponTierDefinition / WeaponOncePerCombatPassiveId",
+          "note": "Tier model"
+        },
+        {
+          "path": "src/data/weaponProgressionEngine.ts",
+          "symbol": "resolveWeaponState",
+          "note": "Selects tier row"
+        },
+        {
+          "path": "src/data/weaponCombatEngine.ts",
+          "symbol": "runWeaponOn*Hooks",
+          "note": "Consumes tier passives"
+        },
+        {
+          "path": "src/types/game.ts",
+          "symbol": "ActiveIncursionState.activeWeaponTier",
+          "note": "Run snapshot"
+        }
+      ],
+      "surfaces": {
+        "definitions": [
+          "src/types/weapon.ts",
+          "src/data/weaponRegistry.ts"
+        ],
+        "grants": [],
+        "runtimeEffects": [
+          "src/data/weaponCombatEngine.ts",
+          "src/screens/CombatScreen.tsx"
+        ],
+        "saveFields": [
+          "src/types/game.ts"
+        ],
+        "uiHud": [],
+        "debrief": [],
+        "telemetryDebug": [],
+        "testsFixtures": [
+          "src/data/hexShotPhaseH2c.test.ts",
+          "src/data/aegisUnmakerTierE1b.test.ts"
+        ]
+      },
+      "dependencies": [
+        "weapon.familyOwnership",
+        "weapon.tier.economy"
+      ],
+      "shutdownOrMergePlan": "Flatten registry to one combat row; always resolveWeaponState(id,1) or equivalent; decide which T3 fantasies become permanent family traits.",
+      "migrationRequirement": "Clamp saved weaponTiers[*]\u21921 or delete map; activeWeaponTier always 1.",
+      "risk": "high",
+      "recommendedStage": "III",
+      "unresolvedQuestions": [
+        "Baseline = T1 stats, or fold selected T3 fantasies into family identity?"
+      ]
+    },
+    {
+      "id": "weapon.tier.economy",
+      "system": "weaponTier",
+      "component": "Tier upgrade economy, UI, debrief, debug",
+      "classification": "REMOVE",
+      "currentBehavior": "canUpgradeWeaponTier/upgradeWeaponTier spend stash; ChassisWorkspace/WeaponLoadoutPanel upgrade UI; debrief UPGRADE_AVAILABLE; god mode unlockAllWeapons sets tiers to 3.",
+      "targetResponsibility": "No vertical upgrade spend; keep family unlock spend.",
+      "rationale": "Vertical economy is the treadmill Core Loop removes.",
+      "evidence": [
+        {
+          "path": "src/data/weaponProgressionEngine.ts",
+          "symbol": "upgradeWeaponTier",
+          "note": "Spend path"
+        },
+        {
+          "path": "src/components/hub/loadout/ChassisWorkspace.tsx",
+          "symbol": "upgrade UI",
+          "note": "Player-facing tier upgrade"
+        },
+        {
+          "path": "src/data/devGodModeEngine.ts",
+          "symbol": "unlockAllWeapons",
+          "note": "Forces tier 3"
+        }
+      ],
+      "surfaces": {
+        "definitions": [],
+        "grants": [
+          "src/data/weaponProgressionEngine.ts"
+        ],
+        "runtimeEffects": [],
+        "saveFields": [],
+        "uiHud": [
+          "src/components/hub/loadout/ChassisWorkspace.tsx"
+        ],
+        "debrief": [
+          "src/data/runDebriefWeaponEngine.ts"
+        ],
+        "telemetryDebug": [
+          "src/data/devGodModeEngine.ts"
+        ],
+        "testsFixtures": []
+      },
+      "dependencies": [
+        "weapon.tier.definitionsAndRuntime"
+      ],
+      "shutdownOrMergePlan": "Remove upgrade buttons/costs/debrief lines; keep unlock+equip.",
+      "migrationRequirement": "Normalize weaponTiers away; compensation policy for prior spends UNKNOWN.",
+      "risk": "medium",
+      "recommendedStage": "III",
+      "unresolvedQuestions": [
+        "Refund stash for prior tier upgrades?"
+      ]
+    }
+  ],
+  "donorDispositions": [
+    {
+      "kind": "boundRequisition",
+      "id": "ADRENALINE_PRIMER",
+      "name": "Adrenaline Primer",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Limited combat prep, once-per-run",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "ADRENALINE_PRIMER",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "APEX_BAIT",
+      "name": "Apex Bait",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Elite loot \u00d72 + resonance",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "APEX_BAIT",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "BLOOD_PRICE",
+      "name": "Blood Price",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Curated Ley-Scar + HP cost",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "BLOOD_PRICE",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "BRIBE_THE_FERRYMAN",
+      "name": "Bribe the Ferryman",
+      "disposition": "move_to_contract_clause",
+      "rationale": "Evac + elite pressure bargain",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "BRIBE_THE_FERRYMAN",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "CHALK_LINE_WARD",
+      "name": "Chalk-Line Ward",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Route safety / resonance",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "CHALK_LINE_WARD",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "DEAD_DROP_TRACKER",
+      "name": "Dead Drop Tracker",
+      "disposition": "remove_as_duplicate",
+      "rationale": "Overlaps dead_drop_receiver",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "DEAD_DROP_TRACKER",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "ENDLESS_MARCH",
+      "name": "Endless March",
+      "disposition": "move_to_contract_clause",
+      "rationale": "Legion mandate; blocked evac + combat ramp",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "ENDLESS_MARCH",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "HAZARD_PAY",
+      "name": "Hazard Pay",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Starting credits prep",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "HAZARD_PAY",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "HOLLOW_POINT_REQUISITION",
+      "name": "Hollow-Point Requisition",
+      "disposition": "move_to_authority",
+      "rationale": "Combat doctrine bonus",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "HOLLOW_POINT_REQUISITION",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "IRONCLAD_LOGISTICS",
+      "name": "Ironclad Logistics",
+      "disposition": "move_to_authority",
+      "rationale": "Cabal mandate; blocks Ley-Scars",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "IRONCLAD_LOGISTICS",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "KINETIC_BATTERY",
+      "name": "Kinetic Battery",
+      "disposition": "move_to_authority",
+      "rationale": "Recurring combat engine \u2014 forbidden on Requisitions",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "KINETIC_BATTERY",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "MARTYRS_BARGAIN",
+      "name": "Martyr's Bargain",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Death cargo keep + HP cost",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "MARTYRS_BARGAIN",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "REINFORCED_TRENCH_COAT",
+      "name": "Reinforced Trench Coat",
+      "disposition": "defer_pending_design",
+      "rationale": "Generic max-HP bonus conflicts with Requisition must-not list",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "REINFORCED_TRENCH_COAT",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "SCAVENGERS_MARK",
+      "name": "Scavenger's Mark",
+      "disposition": "remove_as_duplicate",
+      "rationale": "Overlaps black_market_mark",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "SCAVENGERS_MARK",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "SMUGGLERS_POCKETS",
+      "name": "Smuggler's Pockets",
+      "disposition": "remove_as_duplicate",
+      "rationale": "Overlaps smugglers_wrap / cargo relics",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "SMUGGLERS_POCKETS",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "STANDARD_ISSUE_COAGULANT",
+      "name": "Standard Issue Coagulant",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Run Item seed",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "STANDARD_ISSUE_COAGULANT",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "SUNKEN_RITE",
+      "name": "Sunken Rite",
+      "disposition": "move_to_contract_clause",
+      "rationale": "Sponsor mandate + scars",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "SUNKEN_RITE",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "VOID_TOUCHED_ARTIFACT",
+      "name": "Void-Touched Artifact",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Locked slots + blueprint risk",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "VOID_TOUCHED_ARTIFACT",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "boundRequisition",
+      "id": "WIRETAP_OVERRIDE",
+      "name": "Wiretap Override",
+      "disposition": "defer_pending_design",
+      "rationale": "Scanner intel; overlap with signal_compass",
+      "evidence": [
+        {
+          "path": "src/data/boundRequisitions.ts",
+          "symbol": "WIRETAP_OVERRIDE",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "anchor_charm",
+      "name": "Anchor Charm",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Anchor/ops trail",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "anchor_charm",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "ashen_cartograph",
+      "name": "Ashen Cartograph",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Route doctrine",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "ashen_cartograph",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "bent_nail",
+      "name": "Bent Nail",
+      "disposition": "defer_pending_design",
+      "rationale": "Outside cargo hook",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "bent_nail",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "black_market_mark",
+      "name": "Black Market Mark",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Market prep",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "black_market_mark",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "bloodhound_tag",
+      "name": "Bloodhound Tag",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Tagged quarry",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "bloodhound_tag",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "cargo_seal",
+      "name": "Cargo Seal",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Cargo risk control",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "cargo_seal",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "contract_seal",
+      "name": "Contract Seal",
+      "disposition": "move_to_contract_clause",
+      "rationale": "Contract-specific",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "contract_seal",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "dead_drop_receiver",
+      "name": "Dead-Drop Receiver",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Absorbs BR tracker fantasy",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "dead_drop_receiver",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "extraction_token",
+      "name": "Extraction Token",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Extraction prep",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "extraction_token",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "false_evac_beacon",
+      "name": "False Evac Beacon",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Decoy/lure extraction",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "false_evac_beacon",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "grave_polaroid",
+      "name": "Grave Polaroid",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Imprint on echo/anomaly",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "grave_polaroid",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "gutter_crown",
+      "name": "Gutter Crown",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Sanctuary/safehouse service",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "gutter_crown",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "hollow_keyring",
+      "name": "Hollow Keyring",
+      "disposition": "defer_pending_design",
+      "rationale": "Occult locks + noise",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "hollow_keyring",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "last_light_matchbook",
+      "name": "Last-Light Matchbook",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Skip safe extract",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "last_light_matchbook",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "ley_siphon_needle",
+      "name": "Ley Siphon Needle",
+      "disposition": "defer_pending_design",
+      "rationale": "Bargain-flavored cargo risk",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "ley_siphon_needle",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "mirror_writ",
+      "name": "Mirror Writ",
+      "disposition": "move_to_contract_clause",
+      "rationale": "Mirrored side objective",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "mirror_writ",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "mourners_bell",
+      "name": "Mourner's Bell",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Echo bias",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "mourners_bell",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "null_ledger",
+      "name": "Null Ledger",
+      "disposition": "move_to_corrupted_bargain",
+      "rationale": "Debt economy",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "null_ledger",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "signal_compass",
+      "name": "Signal Compass",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Scanner certainty",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "signal_compass",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    },
+    {
+      "kind": "expeditionRelic",
+      "id": "smugglers_wrap",
+      "name": "Smuggler's Wrap",
+      "disposition": "retain_as_expedition_requisition",
+      "rationale": "Contraband prep",
+      "evidence": [
+        {
+          "path": "src/data/expeditionKeepsakeRegistry.ts",
+          "symbol": "smugglers_wrap",
+          "note": "Catalog/runtime presence"
+        }
+      ]
+    }
+  ],
+  "crossSystemConflicts": [
+    {
+      "id": "conflict.eliteBoonVsSuppression",
+      "systems": [
+        "boon.eliteOnlyGrantPath",
+        "aftermath.eliteSuppression"
+      ],
+      "description": "Elite post-combat is the only live random class-boon source, while Aftermath ELITE_SUPPRESSION / reduced eliteWeight fire after successful elite/boss clears \u2014 a positive condition that can reduce build growth. eliteWeight<1 also fails to lower spawn weights today.",
+      "severity": "high",
+      "resolutionHint": "Diversify boon sources before or while simplifying Aftermath; ensure suppression cannot starve build power."
+    },
+    {
+      "id": "conflict.dualAftermathNaming",
+      "systems": [
+        "aftermath.stackingSectorModifiers",
+        "aftermath.operationLifecycle"
+      ],
+      "description": "Sector aftermath modifiers and operation-lifecycle AFTERMATH progress lock share the word Aftermath but different persistence and player meaning.",
+      "severity": "medium",
+      "resolutionHint": "Rename in product language when simplifying to one condition."
+    },
+    {
+      "id": "conflict.trinketNamingCollision",
+      "systems": [
+        "trinket.saveUiDebrief",
+        "relic.keepsakeRuntimeBase"
+      ],
+      "description": "trinketBalanceConfig and historical 'Trinkets v2' naming refer to Expedition Relics, not RunState.activeTrinkets combat trinkets.",
+      "severity": "medium",
+      "resolutionHint": "Rename balance config during Relic\u2192Requisition merge; never disable relic soft-caps when removing combat trinkets."
+    },
+    {
+      "id": "conflict.residueVsAttune",
+      "systems": [
+        "graft.residueEconomy",
+        "sanctuary.attuneAndGraft"
+      ],
+      "description": "Sanctuary grafts currently charge persistent Residue; Core Loop Attune must not.",
+      "severity": "high",
+      "resolutionHint": "Disable Residue debit on Sanctuary grafts when introducing Mend/Attune."
+    }
+  ],
+  "saveMigrationInventory": [
+    {
+      "field": "RunState.activeTrinkets",
+      "location": "session only",
+      "action": "drop",
+      "risk": "low"
+    },
+    {
+      "field": "PlayerAccount.equipment.trinketId",
+      "location": "account",
+      "action": "strip/ignore",
+      "risk": "low"
+    },
+    {
+      "field": "PlayerAccount.weaponTiers",
+      "location": "account",
+      "action": "clamp to 1 or delete after flatten",
+      "risk": "high"
+    },
+    {
+      "field": "ActiveIncursionState.activeWeaponTier",
+      "location": "run session",
+      "action": "force 1",
+      "risk": "medium"
+    },
+    {
+      "field": "progressionProfile.classes[*].rank/xp",
+      "location": "account",
+      "action": "KEEP informational",
+      "risk": "low"
+    },
+    {
+      "field": "graft capacity derived from rank",
+      "location": "runtime",
+      "action": "stop reading rank for capacity",
+      "risk": "medium"
+    },
+    {
+      "field": "sessionVeilResidueCollected graft debit",
+      "location": "run",
+      "action": "disable for Sanctuary Attune",
+      "risk": "medium"
+    },
+    {
+      "field": "boundRequisition + craftedAugments",
+      "location": "run+account",
+      "action": "migrate via explicit ID table into Requisition",
+      "risk": "high"
+    },
+    {
+      "field": "equippedKeepsakeId + keepsakeDeployment",
+      "location": "account",
+      "action": "KEEP as Requisition base",
+      "risk": "medium"
+    },
+    {
+      "field": "sectorAftermathModifiersBySector",
+      "location": "world",
+      "action": "collapse to one named condition",
+      "risk": "high"
+    },
+    {
+      "field": "temporarySectorModifiers / sectorOperationLifecycle",
+      "location": "world",
+      "action": "simplify featured Operation",
+      "risk": "medium"
+    },
+    {
+      "field": "forceNextSanctuary",
+      "location": "run progress",
+      "action": "DISABLE writer or wire consumer",
+      "risk": "low"
+    },
+    {
+      "field": "ActiveIncursion mid-run disk resume",
+      "location": "absent",
+      "action": "DEFER unless MID_RUN_PERSISTENCE",
+      "risk": "low"
+    }
+  ],
+  "featureFlagCandidates": [
+    {
+      "flag": "LEGACY_COMBAT_TRINKETS_ENABLED",
+      "defaultProposed": false,
+      "purpose": "Gate applyTrinket / skill-check trinket grants / aggregation",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "WEAPON_TIER_COMBAT_POWER_ENABLED",
+      "defaultProposed": false,
+      "purpose": "Force resolveWeaponState tier=1; hide upgrade UI",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "CLASS_RANK_GRAFT_GATES_ENABLED",
+      "defaultProposed": false,
+      "purpose": "Bypass getGraftSocketAccessForClassRank ladder",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "SANCTUARY_RESIDUE_GRAFT_COST_ENABLED",
+      "defaultProposed": false,
+      "purpose": "Disable Residue debit on Sanctuary grafts",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "DUAL_REQUISITION_SLOTS_ENABLED",
+      "defaultProposed": false,
+      "purpose": "Hide Bound Requisition slot once merge lands",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "ELITE_ONLY_BOON_OFFERS",
+      "defaultProposed": true,
+      "purpose": "Preserve current elite gate until Contacts/Omen exist",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "ELITE_SUPPRESSION_AFFECTS_SPAWNS",
+      "defaultProposed": false,
+      "purpose": "Control whether eliteWeight<1 lowers node weights",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "SECTOR_AFTERMATH_STACKING_ENABLED",
+      "defaultProposed": true,
+      "purpose": "Allow temporary disable of multi-modifier aftermath",
+      "host": "src/data/featureFlags.ts"
+    },
+    {
+      "flag": "MID_RUN_PERSISTENCE",
+      "defaultProposed": false,
+      "purpose": "Optional ActiveIncursion disk resume",
+      "host": "src/data/featureFlags.ts"
+    }
+  ],
+  "coverageChecklist": {
+    "1_legacyCombatTrinkets": true,
+    "2_weaponTierCombatPower": true,
+    "3_classRankGraftGates": true,
+    "4_sanctuaryGraftAcquisition": true,
+    "5_boundRequisitionsAndExpeditionRelics": true,
+    "6_boonRewardSources": true,
+    "7_operationsAndAftermath": true,
+    "8_crossCuttingPersistencePresentation": true
+  },
+  "stageIExitAssessment": {
+    "complete": true,
+    "criteria": {
+      "deprecatedSystemsHaveGrantRuntimePersistPresentationPlans": true,
+      "hiddenUiNotTreatedAsDisabledRuntime": true,
+      "horizontalWeaponOwnershipSeparatedFromVerticalTier": true,
+      "boundReqAndRelicOverlapsIndividuallyDocumented": true,
+      "operationAftermathCoreLoopInteractionsVisible": true,
+      "nextSliceExecutableWithoutRediscovery": true
+    },
+    "gaps": [
+      "PDF masters not vendored in repo \u2014 audit cites Downloads paths + extracted /tmp copies",
+      "Mid-run ActiveIncursion disk resume absent (documented DEFER)"
+    ],
+    "recommendedNextSlice": {
+      "name": "legacy combat-trinket removal",
+      "isolated": true,
+      "rationale": "Grant paths nearly orphaned; no account persistence; distinct from keepsakes/run items; lowest blast radius among Core Loop removals.",
+      "likelyFiles": [
+        "src/data/regions.ts",
+        "src/types/run.ts",
+        "src/context/RunContext.tsx",
+        "src/screens/RunCompleteScreen.tsx",
+        "src/screens/CombatScreen.tsx",
+        "src/components/TacticalCombatHub.tsx",
+        "src/types/game.ts",
+        "src/data/featureFlags.ts"
+      ],
+      "doNotTouch": [
+        "src/data/balance/trinketBalanceConfig.ts",
+        "src/data/expeditionKeepsakeRegistry.ts",
+        "src/data/expeditionKeepsakeEngine.ts",
+        "src/data/boundRequisitions.ts",
+        "src/screens/PostCombatBoonScreen.tsx"
+      ],
+      "acceptanceRisks": [
+        "Skill-check CRITICAL_SUCCESS becomes empty if screen is revived without replacement reward",
+        "Combat props (parryWindowBonus etc.) may still be set from non-trinket sources \u2014 verify defaults",
+        "Naming collision with Expedition Relic 'trinket' balance config must not cause accidental disable"
+      ]
+    }
+  }
+}

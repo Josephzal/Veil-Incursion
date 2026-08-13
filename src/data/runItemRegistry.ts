@@ -6,7 +6,7 @@ const K = (def: RunItemDefinition): RunItemDefinition => def;
 export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
   'standard-coagulant': K({
     id: 'standard-coagulant',
-    legacyIds: ['standard_coagulant', 'coagulation-stitch'],
+    legacyIds: ['standard_coagulant'],
     name: 'Standard Coagulant',
     shortName: 'Coagulant',
     family: 'COMBAT_CONSUMABLE',
@@ -28,7 +28,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
   }),
   'trauma-patch': K({
     id: 'trauma-patch',
-    legacyIds: ['trauma_patch', 'sanguine-coagulant'],
+    legacyIds: ['trauma_patch'],
     name: 'Trauma Patch',
     shortName: 'Trauma Patch',
     family: 'COMBAT_CONSUMABLE',

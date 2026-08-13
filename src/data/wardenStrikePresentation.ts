@@ -415,7 +415,7 @@ export function authoredSlashRotationDeg(
   return bladeFacingAngleDeg(facingX, facingY) - sourceAxisDeg + extraDeg;
 }
 
-const LONGSWORD: WeaponFamilyId = 'aegis-runed-longsword';
+const LONGSWORD: WeaponFamilyId = 'aegis-longsword';
 
 let generation = 0;
 let activePresentationId: string | null = null;

@@ -56,16 +56,16 @@ const CLASS_FALLBACK_PORTRAITS: Record<ClassType, PortraitPair> = {
  */
 const WEAPON_PORTRAITS: Record<WeaponFamilyId, PortraitPair> = {
   // Aegis
-  'aegis-runed-longsword': { idle: AegisCombatIdle, attack: AegisCombatAttack },
-  'aegis-rift-edge': { idle: AegisPairedIdle, attack: AegisPairedAttack },
-  'aegis-claymore-blade': { idle: AegisGreatswordIdle, attack: AegisGreatswordAttack },
+  'aegis-longsword': { idle: AegisCombatIdle, attack: AegisCombatAttack },
+  'aegis-paired-blades': { idle: AegisPairedIdle, attack: AegisPairedAttack },
+  'aegis-claymore': { idle: AegisGreatswordIdle, attack: AegisGreatswordAttack },
   // Hex Shot
-  'hex-silver-core-sidearm': { idle: HexShotIdle, attack: HexShotAttack },
-  'hex-pulse-rifle': { idle: HexCarbineIdle, attack: HexCarbineAttack },
-  'hex-void-cannon': { idle: HexShotgunIdle, attack: HexShotgunAttack },
+  'hex-revolver': { idle: HexShotIdle, attack: HexShotAttack },
+  'hex-carbine': { idle: HexCarbineIdle, attack: HexCarbineAttack },
+  'hex-shotgun': { idle: HexShotgunIdle, attack: HexShotgunAttack },
   // Envoy
-  'envoy-echo-lantern': { idle: EnvoyVambraceIdle, attack: EnvoyVambraceAttack },
-  'envoy-null-conduit': { idle: EnvoyScytheIdle, attack: EnvoyScytheAttack },
+  'envoy-vambrace': { idle: EnvoyVambraceIdle, attack: EnvoyVambraceAttack },
+  'envoy-scythe': { idle: EnvoyScytheIdle, attack: EnvoyScytheAttack },
   'envoy-sanguine-prism': { idle: EnvoyHeartIdle, attack: EnvoyHeartAttack },
 };
 
@@ -87,7 +87,7 @@ export type PortraitMeta = {
 type PortraitMetaPair = { idle: PortraitMeta; attack: PortraitMeta };
 
 /**
- * Reference idle — envoy_vambrace_idle.png (permanent ID: envoy-echo-lantern).
+ * Reference idle — envoy_vambrace_idle.png (permanent ID: envoy-vambrace).
  * Every idle and attack portrait scales so opaque content height matches this figure.
  *
  * scale = (REF.contentH * containFit(box, REF)) / pose.contentH
@@ -133,26 +133,26 @@ export const PORTRAIT_META: Record<ClassType, PortraitMetaPair> = {
 
 /** Measured from PNG alpha bounds — keep in sync when art is replaced. */
 const WEAPON_PORTRAIT_META: Record<WeaponFamilyId, PortraitMetaPair> = {
-  'aegis-runed-longsword': PORTRAIT_META.AEGIS,
-  'aegis-rift-edge': {
+  'aegis-longsword': PORTRAIT_META.AEGIS,
+  'aegis-paired-blades': {
     idle: { canvasW: 1384, canvasH: 1636, contentH: 1588, feetFromBottom: 22 },
     attack: { canvasW: 1666, canvasH: 1384, contentH: 1340, feetFromBottom: 27 },
   },
-  'aegis-claymore-blade': {
+  'aegis-claymore': {
     idle: { canvasW: 1200, canvasH: 1608, contentH: 1533, feetFromBottom: 23 },
     attack: { canvasW: 1130, canvasH: 1626, contentH: 1552, feetFromBottom: 35 },
   },
-  'hex-silver-core-sidearm': PORTRAIT_META.HEX_SHOT,
-  'hex-pulse-rifle': {
+  'hex-revolver': PORTRAIT_META.HEX_SHOT,
+  'hex-carbine': {
     idle: { canvasW: 988, canvasH: 1772, contentH: 1705, feetFromBottom: 47 },
     attack: { canvasW: 1174, canvasH: 1724, contentH: 1675, feetFromBottom: 15 },
   },
-  'hex-void-cannon': {
+  'hex-shotgun': {
     idle: { canvasW: 682, canvasH: 1632, contentH: 1593, feetFromBottom: 24 },
     attack: { canvasW: 1394, canvasH: 1542, contentH: 1476, feetFromBottom: 30 },
   },
-  'envoy-echo-lantern': PORTRAIT_META.ENVOY,
-  'envoy-null-conduit': {
+  'envoy-vambrace': PORTRAIT_META.ENVOY,
+  'envoy-scythe': {
     idle: { canvasW: 968, canvasH: 1698, contentH: 1596, feetFromBottom: 18 },
     attack: { canvasW: 1962, canvasH: 1396, contentH: 1349, feetFromBottom: 22 },
   },
@@ -205,13 +205,13 @@ function referenceContainScale(box: FootprintBox): number {
   );
 }
 
-/** Target on-screen opaque height — envoy-echo-lantern idle. */
+/** Target on-screen opaque height — envoy-vambrace idle. */
 function referenceContentDisplayH(box: FootprintBox): number {
   return ENVOY_VAMBRACE_IDLE_META.contentH * referenceContainScale(box);
 }
 
 /**
- * Scale so pose opaque height matches envoy-echo-lantern idle, then apply
+ * Scale so pose opaque height matches envoy-vambrace idle, then apply
  * per-pose visualScale from combatPortraitCalibration (manual art tune).
  */
 function contentLockedScale(meta: PortraitMeta, box: FootprintBox): number {

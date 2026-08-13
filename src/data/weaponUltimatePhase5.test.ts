@@ -44,12 +44,12 @@ for (const familyId of ALL_WEAPON_FAMILY_IDS) {
   assert.ok(resolveWeaponUltimateActionTags(getWeaponUltimate(familyId).id).includes('ULTIMATE'));
 }
 
-assert.equal(resolveWeaponUltimateLegacyHookAbilityId('aegis-rift-edge'), 'EVISCERATE');
-assert.equal(resolveWeaponUltimateLegacyHookAbilityId('hex-void-cannon'), 'ZERO_PROTOCOL');
-assert.equal(resolveWeaponUltimateLegacyHookAbilityId('envoy-echo-lantern'), 'CATACLYSM_SIGIL');
+assert.equal(resolveWeaponUltimateLegacyHookAbilityId('aegis-paired-blades'), 'EVISCERATE');
+assert.equal(resolveWeaponUltimateLegacyHookAbilityId('hex-shotgun'), 'ZERO_PROTOCOL');
+assert.equal(resolveWeaponUltimateLegacyHookAbilityId('envoy-vambrace'), 'CATACLYSM_SIGIL');
 
 const rendReady = resolveWeaponCombatCallouts({
-  weaponFamilyId: 'aegis-rift-edge',
+  weaponFamilyId: 'aegis-paired-blades',
   operativeClass: 'AEGIS',
   abyssalReserve: 100,
   weaponUltimateReady: true,
@@ -58,7 +58,7 @@ const rendReady = resolveWeaponCombatCallouts({
 assert.ok(rendReady.some((c) => c.label === 'REND THE VEIL READY'));
 
 const sixthReady = resolveWeaponCombatCallouts({
-  weaponFamilyId: 'hex-silver-core-sidearm',
+  weaponFamilyId: 'hex-revolver',
   operativeClass: 'HEX_SHOT',
   hexProtocolCharges: 3,
   hexMaxProtocolCharges: 3,
@@ -69,7 +69,7 @@ assert.ok(sixthReady.some((c) => c.label === 'SIXTH SEAL READY'));
 assert.ok(!sixthReady.some((c) => c.label === 'ZERO PROTOCOL READY'));
 
 const funeralReady = resolveWeaponCombatCallouts({
-  weaponFamilyId: 'envoy-echo-lantern',
+  weaponFamilyId: 'envoy-vambrace',
   operativeClass: 'ENVOY',
   veilRotStacksTotal: 6,
   weaponUltimateReady: true,

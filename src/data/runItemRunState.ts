@@ -1,31 +1,25 @@
 import type { ActiveIncursionState } from '../types/game';
 import type {
   RunItemPendingEffect,
+  RunItemOfferSource,
   RunItemRuntime,
-  RunItemsSlotState,
 } from '../types/runItem';
 import {
   createDefaultRunItemRuntime,
-  createDefaultRunItemsSlotState,
 } from '../types/runItem';
-import { cloneRunItemsSlots } from './runItemInventoryEngine';
 
 export {
   createDefaultRunItemRuntime,
   createDefaultRunItemRuntimeStats,
-  createDefaultRunItemsSlotState,
 } from '../types/runItem';
 
-/** Backfill run-item fields on incursions persisted before Run Items v2. */
+/** Backfill supply effect state; legacy slot-shaped active runs are invalidated elsewhere. */
 export function hydrateRunItemIncursionFields<
-  T extends Partial<Pick<ActiveIncursionState, 'runItems' | 'runItemsAtRunStart' | 'itemRuntime'>>,
->(incursion: T): T & Pick<ActiveIncursionState, 'runItems' | 'runItemsAtRunStart' | 'itemRuntime'> {
-  const runItems = incursion.runItems ?? createDefaultRunItemsSlotState();
+  T extends Partial<Pick<ActiveIncursionState, 'supplyRuntime'>>,
+>(incursion: T): T & Pick<ActiveIncursionState, 'supplyRuntime'> {
   return {
     ...incursion,
-    runItems,
-    runItemsAtRunStart: incursion.runItemsAtRunStart ?? cloneRunItemsSlots(runItems),
-    itemRuntime: incursion.itemRuntime ?? createDefaultRunItemRuntime(),
+    supplyRuntime: mergeRunItemRuntime(undefined, incursion.supplyRuntime ?? {}),
   };
 }
 
@@ -33,11 +27,19 @@ export function mergeRunItemRuntime(
   runtime: RunItemRuntime | null | undefined,
   patch: Partial<RunItemRuntime>,
 ): RunItemRuntime {
-  const base = runtime ?? createDefaultRunItemRuntime();
+  const defaults = createDefaultRunItemRuntime();
+  const base = runtime
+    ? {
+        ...defaults,
+        ...runtime,
+        stats: { ...defaults.stats, ...runtime.stats },
+      }
+    : defaults;
   return {
     ...base,
     ...patch,
     messages: patch.messages ?? base.messages,
+    usedSupplyIds: patch.usedSupplyIds ?? base.usedSupplyIds,
     pendingEffects: patch.pendingEffects ?? base.pendingEffects,
     stats: patch.stats ? { ...base.stats, ...patch.stats } : base.stats,
     pendingRelayModifier: patch.pendingRelayModifier !== undefined
@@ -84,6 +86,35 @@ export function recordRunItemTrigger(
   };
 }
 
+export function recordSupplyUse(
+  runtime: RunItemRuntime,
+  itemId: import('../types/cargoGrid').CargoItemId,
+): RunItemRuntime {
+  return {
+    ...runtime,
+    usedSupplyIds: [...runtime.usedSupplyIds, itemId],
+    stats: {
+      ...runtime.stats,
+      suppliesUsed: runtime.stats.suppliesUsed + 1,
+    },
+  };
+}
+
+export function recordSupplyAcquisition(
+  runtime: RunItemRuntime,
+  source: RunItemOfferSource,
+): RunItemRuntime {
+  if (source !== 'FIND' && source !== 'BUY') return runtime;
+  return {
+    ...runtime,
+    stats: {
+      ...runtime.stats,
+      suppliesFound: runtime.stats.suppliesFound + (source === 'FIND' ? 1 : 0),
+      suppliesPurchased: runtime.stats.suppliesPurchased + (source === 'BUY' ? 1 : 0),
+    },
+  };
+}
+
 export function appendRunItemPendingEffect(
   runtime: RunItemRuntime,
   effect: RunItemPendingEffect,
@@ -111,13 +142,8 @@ export function resetRunItemCombatCounters(runtime: RunItemRuntime): RunItemRunt
 
 export function formatRunItemRuntimeDebugSnapshot(
   runtime: RunItemRuntime | null | undefined,
-  slots?: RunItemsSlotState | null,
 ): string {
-  const lines = ['RUN ITEM RUNTIME'];
-  if (slots) {
-    lines.push(`combat: ${slots.combatSlots.filter(Boolean).join(', ') || '(empty)'}`);
-    lines.push(`field: ${slots.fieldSlots.filter(Boolean).join(', ') || '(empty)'}`);
-  }
+  const lines = ['SUPPLY RUNTIME'];
   if (!runtime) {
     lines.push('runtime: none');
     return lines.join('\n');
@@ -127,24 +153,4 @@ export function formatRunItemRuntimeDebugSnapshot(
   lines.push(`triggers: ${runtime.stats.triggerCount}`);
   runtime.messages.forEach((message) => lines.push(`- ${message}`));
   return lines.join('\n');
-}
-
-export function countOccupiedRunItemSlots(slots: RunItemsSlotState): number {
-  return slots.combatSlots.filter(Boolean).length + slots.fieldSlots.filter(Boolean).length;
-}
-
-export function findOpenRunItemSlotIndex(
-  slots: RunItemsSlotState,
-  slotType: 'COMBAT' | 'FIELD',
-): number | null {
-  const bucket = slotType === 'COMBAT' ? slots.combatSlots : slots.fieldSlots;
-  const index = bucket.findIndex((slot) => slot === null);
-  return index >= 0 ? index : null;
-}
-
-export function isRunItemSlotFull(
-  slots: RunItemsSlotState,
-  slotType: 'COMBAT' | 'FIELD',
-): boolean {
-  return findOpenRunItemSlotIndex(slots, slotType) === null;
 }

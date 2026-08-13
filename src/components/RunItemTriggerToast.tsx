@@ -6,12 +6,12 @@ import { formatRunItemTriggerToast } from '../data/runItemRunUiEngine';
 
 const TOAST_VISIBLE_MS = 3200;
 
-/** Brief terminal-style toast when a run item trigger message lands in runtime. */
+/** Brief terminal-style toast when a cargo Supply trigger lands. */
 export default function RunItemTriggerToast(): React.JSX.Element | null {
   const { activeIncursion } = useRun();
   const { theme } = useTerminal();
-  const runtime = activeIncursion.itemRuntime;
-  const slots = activeIncursion.runItems;
+  const runtime = activeIncursion.supplyRuntime;
+  const cargo = activeIncursion.cargo;
   const seenCountRef = useRef(0);
   const fade = useRef(new Animated.Value(0)).current;
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,7 +23,7 @@ export default function RunItemTriggerToast(): React.JSX.Element | null {
 
     const latestMessage = messages[messages.length - 1] ?? '';
     seenCountRef.current = messages.length;
-    setToastLine(formatRunItemTriggerToast(runtime, latestMessage, slots));
+    setToastLine(formatRunItemTriggerToast(runtime, latestMessage, cargo));
 
     fade.setValue(0);
     Animated.sequence([
@@ -34,7 +34,7 @@ export default function RunItemTriggerToast(): React.JSX.Element | null {
 
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => setToastLine(null), TOAST_VISIBLE_MS);
-  }, [fade, runtime.messages, runtime, slots]);
+  }, [cargo, fade, runtime.messages, runtime]);
 
   useEffect(() => () => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);

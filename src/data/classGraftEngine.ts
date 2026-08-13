@@ -55,11 +55,15 @@ export function getMinimumClassGraftCost(classId: ClassType): number {
   return Math.min(...Object.values(GRAFT_DATABASE).map((graft) => graft.cost));
 }
 
-export function canAffordAnySanctuaryGraft(classId: ClassType, residueBalance: number): boolean {
-  return residueBalance >= getMinimumClassGraftCost(classId);
+export function canAffordAnySanctuaryGraft(
+  _classId: ClassType,
+  _residueBalance?: number,
+): boolean {
+  // Stage II-B — run-scoped grafts no longer cost Veil Residue.
+  return true;
 }
 
-/** Sanctuary residue graft application is the live grant path. */
+/** Sanctuary graft application is the live grant path (no Residue charge). */
 export function isSanctuaryGraftGrantEnabled(): boolean {
   return true;
 }
@@ -278,11 +282,10 @@ export function effectiveGraftAmmoCost(
 export function formatClassGraftOfferLine(
   classId: ClassType,
   graftId: string,
-  residueBalance: number,
+  _residueBalance?: number,
 ): string {
   const graft = getClassGraftDefinition(classId, graftId) as ClassGraftDefinition;
-  const affordable = residueBalance >= graft.cost ? 'OK' : 'LOCKED';
-  return `[ ${graft.name.toUpperCase()} ] — ${graft.cost} RESIDUE // ${affordable}\n${graft.description}`;
+  return `[ ${graft.name.toUpperCase()} ] — SANCTUARY ATTUNE\n${graft.description}`;
 }
 
 export function isClassUltimateDisabledForEncounter(

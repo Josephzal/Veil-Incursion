@@ -78,7 +78,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
           decisions,
           routingState,
           autoStashAlreadyDeposited: true,
-          keepsakeRuntime: payload.keepsakeRuntime,
+          requisitionRuntime: payload.requisitionRuntime,
           routingAppraisalCount: 0,
         });
         const finalContract = resolveFinalContractResultAfterRouting(
@@ -88,7 +88,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
           routingState.pendingItems,
           true,
           payload.runResourceLedger,
-          payload.keepsakeRuntime,
+          payload.requisitionRuntime,
         );
         applyBetrayalConsequences({
           contractResult: finalContract,

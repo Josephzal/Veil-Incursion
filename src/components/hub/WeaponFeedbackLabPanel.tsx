@@ -55,7 +55,7 @@ interface Props {
 }
 
 export default function WeaponFeedbackLabPanel({ mutedColor, keyColor }: Props): React.JSX.Element {
-  const [weaponId, setWeaponId] = useState<WeaponFamilyId>('aegis-runed-longsword');
+  const [weaponId, setWeaponId] = useState<WeaponFamilyId>('aegis-longsword');
   const [report, setReport] = useState('Ready.');
   const [pose, setPose] = useState<'idle' | 'attack'>('idle');
   const settings = getCombatPresentationSettings();

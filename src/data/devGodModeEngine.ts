@@ -13,8 +13,8 @@ import {
   type EnvoyLoadout,
   type HexShotLoadout,
 } from '../types/operativeClass';
-import { ALL_KEEPSAKE_IDS } from './expeditionKeepsakeRegistry';
-import { createDefaultKeepsakeDeployment } from './keepsakeRunState';
+import { ENABLED_REQUISITION_IDS } from '../types/expeditionRequisition';
+import { EMPTY_REQUISITION_DEPLOYMENT } from './requisitionAccountNormalize';
 import {
   createDefaultWeaponProgression,
   unlockAllWeapons,
@@ -155,7 +155,7 @@ export function applyDevGodModeUnlocks(account: PlayerAccount): PlayerAccount {
     unlockedAegisAbilities: [...ALL_AEGIS_ABILITIES],
     unlockedHexShotAbilities: [HEX_SHOT_ANCHOR, ...getAssignableHexShotAbilities()],
     unlockedEnvoyAbilities: [ENVOY_ANCHOR, ...getAssignableEnvoyAbilities()],
-    unlockedKeepsakeIds: [...ALL_KEEPSAKE_IDS],
+    unlockedRequisitionIds: [...ENABLED_REQUISITION_IDS],
     resourceDiscovery: debugDiscoverAllEconomyResources(),
   };
 
@@ -240,9 +240,9 @@ export function resetDevProgressionKeepItems(account: PlayerAccount): {
     envoyLoadout: [...DEFAULT_ENVOY_LOADOUT] as EnvoyLoadout,
     unlockedEnvoyAbilities: [...DEFAULT_ENVOY_UNLOCKED],
     weaponBriefAcknowledged: [],
-    equippedKeepsakeId: null,
-    unlockedKeepsakeIds: [],
-    keepsakeDeployment: createDefaultKeepsakeDeployment(),
+    equippedRequisitionId: null,
+    unlockedRequisitionIds: [...ENABLED_REQUISITION_IDS],
+    requisitionDeployment: { ...EMPTY_REQUISITION_DEPLOYMENT },
     progressionProfile: profile,
     resourceDiscovery: seedDiscoveryFromStash(
       account.resourceStash,
@@ -250,7 +250,7 @@ export function resetDevProgressionKeepItems(account: PlayerAccount): {
     ),
     // Explicitly retained (spread already keeps them; listed for clarity):
     // resourceStash, inventory, bankedCargo, preRunCargo, hubCraftedConsumables,
-    // craftedAugments, tacticalLoadout, runItemLoadout, unidentifiedStash,
+    // tacticalLoadout, runItemLoadout, unidentifiedStash,
     // sealedCargoStacks, cabalCredits, veilResidueBalance
   };
 

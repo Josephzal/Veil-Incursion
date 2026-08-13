@@ -102,8 +102,8 @@ export function buildHubNextActionHints(
     const op = nearComplete.activeOperation;
     hints.push(`${nearComplete.displayName} operation is ${operationProgressPercent(op.progressCurrent, op.progressRequired)}% complete.`);
   }
-  if (account.equippedKeepsakeId == null) {
-    hints.push('Equip an Expedition Relic before descent for run-long bonuses.');
+  if (account.equippedRequisitionId == null) {
+    hints.push('Choose one Expedition Requisition before deployment.');
   }
   return hints.slice(0, 2);
 }

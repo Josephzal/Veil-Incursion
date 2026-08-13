@@ -8,9 +8,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { listWeaponFamiliesForClass } from '../../data/weaponRegistry';
 import {
   canUnlockWeaponFamily,
-  canUpgradeWeaponTier,
   getEquippedWeaponForClass,
-  getWeaponTier,
   resolveWeaponState,
 } from '../../data/weaponProgressionEngine';
 import { formatWeaponCostLine } from '../../data/weaponResourceEngine';
@@ -33,15 +31,13 @@ export default function WeaponLoadoutPanel({
     appendHubLog,
     equipWeaponFamily,
     unlockWeaponFamilyAccount,
-    upgradeWeaponFamilyTier,
   } = usePlayerAccount();
   const { theme } = useTerminal();
 
   const progression = useMemo(() => ({
     weaponUnlocks: account.weaponUnlocks,
-    weaponTiers: account.weaponTiers,
     equippedWeaponByClass: account.equippedWeaponByClass,
-  }), [account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks]);
+  }), [account.equippedWeaponByClass, account.weaponUnlocks]);
 
   const equippedId = getEquippedWeaponForClass(progression, account.activeClass);
   const families = useMemo(
@@ -59,20 +55,12 @@ export default function WeaponLoadoutPanel({
     appendHubLog(result.logLine);
   }, [appendHubLog, unlockWeaponFamilyAccount]);
 
-  const handleUpgrade = useCallback((familyId: WeaponFamilyId) => {
-    const result = upgradeWeaponFamilyTier(familyId);
-    appendHubLog(result.logLine);
-  }, [appendHubLog, upgradeWeaponFamilyTier]);
-
   const renderCard = (def: (typeof families)[number]): React.JSX.Element => {
     const unlocked = account.weaponUnlocks.includes(def.id);
-    const tier = getWeaponTier(progression, def.id);
-    const tierState = resolveWeaponState(def.id, tier);
+    const weaponState = resolveWeaponState(def.id);
     const isEquipped = equippedId === def.id;
     const canUnlock = !unlocked && canUnlockWeaponFamily(account.resourceStash, progression, def.id);
-    const canUpgrade = unlocked && tier < 3 && canUpgradeWeaponTier(account.resourceStash, progression, def.id);
-    const nextTier = tier === 1 ? def.tiers[1] : tier === 2 ? def.tiers[2] : null;
-    const statLines = formatWeaponStatLines(tierState);
+    const statLines = formatWeaponStatLines(weaponState);
 
     return (
       <DossierCardShell
@@ -87,7 +75,7 @@ export default function WeaponLoadoutPanel({
           </TerminalText>
           <View style={styles.cardTitleRow}>
             <TerminalText variant="body" style={{ color: isEquipped ? accent : theme.primaryColor, fontWeight: '700', flex: 1 }}>
-              {tierState.displayName.toUpperCase()}
+              {weaponState.displayName.toUpperCase()}
             </TerminalText>
             <TerminalText variant="caption" style={{ color: isEquipped ? accent : muted }}>
               {isEquipped ? 'EQUIPPED' : def.role.toUpperCase()}
@@ -137,33 +125,6 @@ export default function WeaponLoadoutPanel({
             ) : (
               <TerminalText variant="caption" style={{ color: accent, marginTop: 8 }}>
                 ACTIVE WEAPON LINK
-              </TerminalText>
-            )}
-            {nextTier ? (
-              <>
-                <TerminalText variant="caption" style={{ color: muted, marginTop: 6 }}>
-                  {`NEXT: ${nextTier.displayName} — ${nextTier.effectSummary}`}
-                </TerminalText>
-                <TerminalText variant="caption" style={{ color: muted }}>
-                  {`COST: ${formatWeaponCostLine(def.tiers[tier - 1]?.upgradeCost ?? [])}`}
-                </TerminalText>
-                <HapticPressable
-                  disabled={!canUpgrade}
-                  onPress={() => handleUpgrade(def.id)}
-                  style={(state) => [
-                    styles.actionBtn,
-                    terminalHoverStyle(readPressableHover(state), state.pressed),
-                    { borderColor: canUpgrade ? accent : muted, opacity: canUpgrade ? 1 : 0.45 },
-                  ]}
-                >
-                  <TerminalText variant="caption" style={{ color: canUpgrade ? accent : muted }}>
-                    UPGRADE TIER
-                  </TerminalText>
-                </HapticPressable>
-              </>
-            ) : (
-              <TerminalText variant="caption" style={{ color: muted, marginTop: 6 }}>
-                MAX TIER — Masterwork locked (future).
               </TerminalText>
             )}
           </View>

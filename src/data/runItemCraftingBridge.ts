@@ -20,7 +20,7 @@ export function buildRunItemCraftingRecipes(): CraftingRecipe[] {
         label: def.name,
         outputId: itemId,
         description: def.description,
-        effectSummary: `${def.effectSummary} // ${def.slotType} slot`,
+        effectSummary: `${def.effectSummary} // 1×1 ${def.slotType === 'COMBAT' ? 'Combat Supply' : 'Field Tool'} cargo`,
         requirements: def.recipe.map((entry) => ({
           resourceId: entry.resourceId,
           quantity: entry.quantity,

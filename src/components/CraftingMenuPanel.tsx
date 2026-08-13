@@ -398,7 +398,6 @@ export default function CraftingMenuPanel({
   const isOutputOwned = (recipe: CraftingRecipe) => isRecipeOutputOwned(
     recipe.outputId,
     [],
-    account.craftedAugments,
   );
 
   return (
@@ -482,7 +481,7 @@ export default function CraftingMenuPanel({
                             fontWeight: '700',
                           }}
                         >
-                          {filter === 'ALL' ? 'ALL RUN ITEMS' : filter}
+                          {filter === 'ALL' ? 'ALL SUPPLIES' : filter === 'COMBAT' ? 'COMBAT SUPPLIES' : 'FIELD TOOLS'}
                         </TerminalText>
                       </HapticPressable>
                     ))}
@@ -499,7 +498,7 @@ export default function CraftingMenuPanel({
                     mutedColor={theme.mutedColor}
                     profile={progressionProfile}
                     account={account}
-                    sectionLabel="Run Item Schematics"
+                    sectionLabel="Supply Schematics"
                     getFooterMeta={(recipe) => {
                       const itemId = recipe.outputId as RunItemId;
                       const def = getRunItemDefinition(itemId);

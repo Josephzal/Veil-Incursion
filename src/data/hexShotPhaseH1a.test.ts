@@ -45,9 +45,9 @@ import type { EnemyCombatProfile } from '../types/run';
 console.log('Phase H.1a — Hex Shot chassis authority normalization');
 
 const HEX_IDS = [
-  'hex-silver-core-sidearm',
-  'hex-void-cannon',
-  'hex-pulse-rifle',
+  'hex-revolver',
+  'hex-shotgun',
+  'hex-carbine',
 ] as const;
 
 const emptyEnc = createDefaultClassCombatEncounterState();
@@ -88,8 +88,8 @@ for (const alias of HEX_H1A_LEGACY_PRESENTATION_ALIASES) {
 }
 // Saves / unlocks remain ID-backed — no display-name migration required.
 const progression = createDefaultWeaponProgression();
-assert.ok(progression.weaponUnlocks.includes('hex-silver-core-sidearm'));
-assert.equal(progression.equippedWeaponByClass.HEX_SHOT, 'hex-silver-core-sidearm');
+assert.ok(progression.weaponUnlocks.includes('hex-revolver'));
+assert.equal(progression.equippedWeaponByClass.HEX_SHOT, 'hex-revolver');
 
 // Fixed-basic family routing unchanged after rename
 const primary: EnemyCombatProfile = {
@@ -109,7 +109,7 @@ const adj: EnemyCombatProfile = {
 const squad = [primary, adj];
 for (const id of HEX_IDS) {
   const plan = resolveHexBasicShot({
-    weapon: resolveWeaponState(id, 1),
+    weapon: resolveWeaponState(id),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
@@ -120,7 +120,7 @@ for (const id of HEX_IDS) {
 }
 assert.equal(
   resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    weapon: resolveWeaponState('hex-revolver'),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
@@ -129,7 +129,7 @@ assert.equal(
 );
 assert.equal(
   resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-void-cannon', 1),
+    weapon: resolveWeaponState('hex-shotgun'),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
@@ -138,7 +138,7 @@ assert.equal(
 );
 assert.equal(
   resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
@@ -286,16 +286,16 @@ assert.deepEqual(
 }
 
 // ── Cross-family ultimates ──────────────────────────────────────────────
-assert.equal(getWeaponUltimate('hex-silver-core-sidearm').id, 'SIXTH_SEAL');
-assert.equal(getWeaponUltimate('hex-void-cannon').id, 'LAST_KNOCK');
-assert.equal(getWeaponUltimate('hex-pulse-rifle').id, 'ZERO_PROTOCOL');
-assert.equal(resolveWeaponUltimateForEquipped('hex-pulse-rifle', 'HEX_SHOT')?.id, 'ZERO_PROTOCOL');
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-pulse-rifle'), true);
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-silver-core-sidearm'), false);
-assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-void-cannon'), false);
-assert.ok(canFireWeaponUltimate('hex-silver-core-sidearm'));
-assert.ok(canFireWeaponUltimate('hex-void-cannon'));
-assert.ok(canFireWeaponUltimate('hex-pulse-rifle'));
+assert.equal(getWeaponUltimate('hex-revolver').id, 'SIXTH_SEAL');
+assert.equal(getWeaponUltimate('hex-shotgun').id, 'LAST_KNOCK');
+assert.equal(getWeaponUltimate('hex-carbine').id, 'ZERO_PROTOCOL');
+assert.equal(resolveWeaponUltimateForEquipped('hex-carbine', 'HEX_SHOT')?.id, 'ZERO_PROTOCOL');
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-carbine'), true);
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-revolver'), false);
+assert.equal(canFireLegacyClassUltimate('ZERO_PROTOCOL', 'hex-shotgun'), false);
+assert.ok(canFireWeaponUltimate('hex-revolver'));
+assert.ok(canFireWeaponUltimate('hex-shotgun'));
+assert.ok(canFireWeaponUltimate('hex-carbine'));
 
 // Probe 10 — Last Knock plan + Protocol spend once
 {
@@ -317,10 +317,10 @@ assert.ok(canFireWeaponUltimate('hex-pulse-rifle'));
 }
 
 // Probe 13 — Aegis / Envoy untouched by Hex display rename
-assert.equal(getWeaponFamily('aegis-runed-longsword').name, 'Runed Longsword');
-assert.equal(getWeaponFamily('envoy-echo-lantern').name, 'Vambrace');
-assert.equal(getWeaponUltimate('aegis-runed-longsword').id, 'THREEFOLD_BRAND');
-assert.equal(getWeaponUltimate('envoy-null-conduit').id, 'NULL_CIRCUIT');
+assert.equal(getWeaponFamily('aegis-longsword').name, 'Longsword');
+assert.equal(getWeaponFamily('envoy-vambrace').name, 'Vambrace');
+assert.equal(getWeaponUltimate('aegis-longsword').id, 'THREEFOLD_BRAND');
+assert.equal(getWeaponUltimate('envoy-scythe').id, 'NULL_CIRCUIT');
 
 assert.equal(emptyEnc.chamberBonusReady, false);
 

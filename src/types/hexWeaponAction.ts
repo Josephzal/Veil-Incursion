@@ -4,17 +4,17 @@
  */
 
 export type HexWeaponActionId =
-  // Revolver — hex-silver-core-sidearm (W.2)
+  // Revolver — hex-revolver (W.2)
   | 'QUICKDRAW'
   | 'SLIPSHOT'
   | 'SIX_BELLS'
   | 'LAST_WORD'
-  // Carbine — hex-pulse-rifle (W.3 — not executable in W.2)
+  // Carbine — hex-carbine (W.3 — not executable in W.2)
   | 'CENTER_MASS'
   | 'CONTROLLED_BURST'
   | 'SUPPRESSIVE_BARRAGE'
   | 'CONTACT_FRONT'
-  // Black Door — hex-void-cannon (W.4 — not executable in W.2)
+  // Black Door — hex-shotgun (W.4 — not executable in W.2)
   | 'DOOR_KNOCKER'
   | 'FATAL_FUNNEL'
   | 'THRESHOLD'

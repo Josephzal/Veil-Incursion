@@ -90,29 +90,29 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
 // ── Structural: Revolver kit + family gate ──────────────────────────────
 {
-  assert.equal(isHexWeaponKitComplete('hex-silver-core-sidearm'), true);
-  assert.equal(isHexWeaponKitComplete('hex-pulse-rifle'), true);
-  assert.equal(isHexWeaponKitComplete('hex-void-cannon'), true);
-  assert.deepEqual(deriveHexWeaponActions('hex-silver-core-sidearm'), [
+  assert.equal(isHexWeaponKitComplete('hex-revolver'), true);
+  assert.equal(isHexWeaponKitComplete('hex-carbine'), true);
+  assert.equal(isHexWeaponKitComplete('hex-shotgun'), true);
+  assert.deepEqual(deriveHexWeaponActions('hex-revolver'), [
     'QUICKDRAW',
     'SLIPSHOT',
     'SIX_BELLS',
     'LAST_WORD',
   ]);
-  assert.equal(isHexWeaponActionExecutable('hex-silver-core-sidearm', 'QUICKDRAW'), true);
-  assert.equal(isHexWeaponActionExecutable('hex-pulse-rifle', 'CENTER_MASS'), true);
-  assert.equal(isHexWeaponActionExecutable('hex-void-cannon', 'DEADBOLT'), true);
+  assert.equal(isHexWeaponActionExecutable('hex-revolver', 'QUICKDRAW'), true);
+  assert.equal(isHexWeaponActionExecutable('hex-carbine', 'CENTER_MASS'), true);
+  assert.equal(isHexWeaponActionExecutable('hex-shotgun', 'DEADBOLT'), true);
   assert.equal(isHexWeaponActionId('QUICKDRAW'), true);
   assert.equal(isHexWeaponActionId('ASH_JACKET_SALVO'), false);
-  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-silver-core-sidearm'), 'QUICKDRAW');
-  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-pulse-rifle'), 'CENTER_MASS');
+  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-revolver'), 'QUICKDRAW');
+  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-carbine'), 'CENTER_MASS');
 }
 
 // ── Combat surface: complete vs legacy ──────────────────────────────────
 {
   const flex = DEFAULT_HEX_FLEX_LOADOUT;
   const revolver = buildHexCombatSurface({
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     flex,
   });
   assert.equal(revolver.mode, 'WEAPON_KIT');
@@ -128,7 +128,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.ok(!revolver.hudCards.includes('SILVER_CORE_SIDEARM'));
 
   const ash = buildHexCombatSurface({
-    weaponFamilyId: 'hex-pulse-rifle',
+    weaponFamilyId: 'hex-carbine',
     flex,
   });
   assert.equal(ash.mode, 'WEAPON_KIT');
@@ -144,7 +144,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.ok(!ash.hudCards.includes('SILVER_CORE_SIDEARM'));
 
   const nullbreach = buildHexCombatSurface({
-    weaponFamilyId: 'hex-void-cannon',
+    weaponFamilyId: 'hex-shotgun',
     flex: ['REVENANTS_ECHO', 'RIFT_SNARE', 'SINGULARITY_SLUG'],
   });
   assert.equal(nullbreach.mode, 'WEAPON_KIT');
@@ -204,11 +204,11 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   // Weapon switch preserves flex (surface rebuild only).
   const flexKept = ['PANOPTICON_PROTOCOL', 'GHOST_GRID_CAMO', 'BLACKSITE_TRIAGE'] as const;
   const sidearmSurface = buildHexCombatSurface({
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     flex: flexKept,
   });
   const ashSurface = buildHexCombatSurface({
-    weaponFamilyId: 'hex-pulse-rifle',
+    weaponFamilyId: 'hex-carbine',
     flex: flexKept,
   });
   assert.deepEqual(sidearmSurface.flex, [...flexKept]);
@@ -234,7 +234,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 // ── Aegis grouping unchanged ────────────────────────────────────────────
 {
   const surface = buildAegisCombatSurface({
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     techniques: DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
   });
   assert.equal(surface.weaponActions.length, 4);
@@ -262,22 +262,22 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     'BOTTOMLESS_DRUM_GRAFT',
   );
 
-  // Exact Sidearm ladder via shared basic authority (Quickdraw owns this card).
-  const ladder = ([1, 2, 3] as const).map((tier) => {
+  // Stage II-C — tierless baseline; former T1/T2/T3 ladder collapsed to Tier I output.
+  const ladder = [0, 1, 2].map(() => {
     const plan = resolveHexBasicShot({
-      weapon: resolveWeaponState('hex-silver-core-sidearm', tier),
+      weapon: resolveWeaponState('hex-revolver'),
       squad: [enemy({ unitId: 'e1', currentHp: 100, maxHp: 100 })],
       primaryTargetId: 'e1',
       catalogBaseDamage: HEX_SHOT_ABILITY_CATALOG.SILVER_CORE_SIDEARM.baseDamage,
     });
     return plan.hits[0]!.damage;
   });
-  assert.deepEqual(ladder, [10, 11, 12]);
+  assert.deepEqual(ladder, [10, 10, 10]);
 
   let ammo = 6;
   const squad = [enemy({ unitId: 'e1', currentHp: 20, maxHp: 100 })];
   const classState = createDefaultClassCombatEncounterState();
-  const weapon = resolveWeaponState('hex-silver-core-sidearm', 1);
+  const weapon = resolveWeaponState('hex-revolver');
   const hurt: number[] = [];
   const result = executeHexWeaponAction({
     actionId: 'QUICKDRAW',
@@ -321,7 +321,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 6,
     classState,
-    resolvedWeapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    resolvedWeapon: resolveWeaponState('hex-revolver'),
     log: () => {},
     spendAmmo: (n) => {
       if (ammo < n) return false;
@@ -421,7 +421,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 6,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    resolvedWeapon: resolveWeaponState('hex-revolver'),
     log: () => {},
     spendAmmo: (n) => {
       if (ammo < n) return false;
@@ -438,7 +438,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.equal(ammo, 0);
   assert.equal(packets.length, 4);
   packets.forEach((p) => {
-    assert.equal(p, scaleSidearmAuthoredDamage(SIX_BELLS_PACKET_DAMAGE, resolveWeaponState('hex-silver-core-sidearm', 1)));
+    assert.equal(p, scaleSidearmAuthoredDamage(SIX_BELLS_PACKET_DAMAGE, resolveWeaponState('hex-revolver')));
   });
   assert.ok(abilityIds.every((id) => id === 'SIX_BELLS'));
 
@@ -454,7 +454,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammoKill,
     maxAmmo: 6,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    resolvedWeapon: resolveWeaponState('hex-revolver'),
     log: () => {},
     spendAmmo: (n) => {
       ammoKill -= n;
@@ -487,7 +487,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 6,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    resolvedWeapon: resolveWeaponState('hex-revolver'),
     log: () => {},
     spendAmmo: (n) => {
       ammo -= n;
@@ -509,7 +509,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammoOk,
     maxAmmo: 6,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    resolvedWeapon: resolveWeaponState('hex-revolver'),
     log: () => {},
     spendAmmo: (n) => {
       ammoOk -= n;
@@ -538,7 +538,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: 6,
     maxAmmo: 6,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    resolvedWeapon: resolveWeaponState('hex-revolver'),
     log: () => {},
     spendAmmo: () => true,
     hurtEnemy: () => false,

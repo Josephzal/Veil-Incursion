@@ -15,7 +15,6 @@ import {
   applyKeepsakeSealedClauseBonuses,
   evaluateKeepsakeSealedClause,
 } from './expeditionKeepsakeContractEngine';
-import { evaluateKeepsakeMirroredObjective } from './expeditionKeepsakePhaseDEngine';
 
 const RESOURCE_CONTRACT_OBJECTIVES = new Set<ContractObjectiveKind>([
   'EXTRACT_STABLE_RESOURCE',
@@ -293,25 +292,6 @@ function buildContractResult({
   let mirroredObjectiveProgressText: string | undefined;
   let mirroredCreditsBonus = 0;
   let mirroredReputationBonus = 0;
-
-  if (contract.keepsakeMirroredObjective && succeeded && cargo) {
-    const mirrorEval = evaluateKeepsakeMirroredObjective(
-      contract.keepsakeMirroredObjective,
-      progress,
-      runCredits,
-      cargo,
-      false,
-    );
-    mirroredObjectiveText = contract.keepsakeMirroredObjective.text;
-    mirroredObjectiveProgressText = mirrorEval.progressText;
-    mirroredObjectiveMet = mirrorEval.met;
-    if (mirrorEval.met) {
-      mirroredCreditsBonus = mirrorEval.creditsBonus;
-      mirroredReputationBonus = mirrorEval.reputationBonus;
-      reputationAwarded += mirrorEval.reputationBonus;
-      bonusCreditsAwarded += mirrorEval.creditsBonus;
-    }
-  }
 
   return {
     status,

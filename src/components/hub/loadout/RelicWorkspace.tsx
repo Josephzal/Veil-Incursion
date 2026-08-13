@@ -4,17 +4,12 @@ import HapticPressable from '../../HapticPressable';
 import TerminalText from '../../TerminalText';
 import { usePlayerAccount } from '../../../context/PlayerAccountContext';
 import {
-  EXPEDITION_KEEPSAKE_REGISTRY,
-  listKeepsakeDefinitions,
-} from '../../../data/expeditionKeepsakeRegistry';
+  EXPEDITION_REQUISITION_REGISTRY,
+} from '../../../data/expeditionRequisitionRegistry';
 import {
-  formatKeepsakeDeploymentOptionLabel,
-  formatKeepsakeRoleLine,
-  getKeepsakeDeploymentChoiceValue,
-  isKeepsakeDeploymentConfigured,
-  resolveKeepsakeDeploymentWarnings,
-} from '../../../data/expeditionKeepsakeDeploymentEngine';
-import type { KeepsakeId } from '../../../types/expeditionKeepsake';
+  ENABLED_REQUISITION_IDS,
+  type RequisitionId,
+} from '../../../types/expeditionRequisition';
 import { useWorldState } from '../../../context/WorldStateContext';
 import { MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
 import { OccultNeonRail } from '../veilChrome';
@@ -28,8 +23,8 @@ import {
 } from '../../../theme/hubPanelSurfaces';
 
 interface RelicWorkspaceProps {
-  selectedId: KeepsakeId | null;
-  onSelect: (id: KeepsakeId | null) => void;
+  selectedId: RequisitionId | null;
+  onSelect: (id: RequisitionId | null) => void;
   compact?: boolean;
 }
 
@@ -39,25 +34,30 @@ export default function RelicWorkspace({
   compact,
 }: RelicWorkspaceProps): React.JSX.Element {
   const { account } = usePlayerAccount();
-  const relics = useMemo(
-    () => listKeepsakeDefinitions(account.unlockedKeepsakeIds),
-    [account.unlockedKeepsakeIds],
+  const requisitions = useMemo(
+    () =>
+      ENABLED_REQUISITION_IDS
+        .filter((id) => account.unlockedRequisitionIds.includes(id))
+        .map((id) => EXPEDITION_REQUISITION_REGISTRY[id]),
+    [account.unlockedRequisitionIds],
   );
 
   useEffect(() => {
-    if (selectedId && relics.some((relic) => relic.id === selectedId)) return;
-    const equipped = relics.find((relic) => relic.id === account.equippedKeepsakeId);
-    onSelect(equipped?.id ?? relics[0]?.id ?? null);
-  }, [account.equippedKeepsakeId, onSelect, relics, selectedId]);
+    if (selectedId && requisitions.some((requisition) => requisition.id === selectedId)) return;
+    const equipped = requisitions.find(
+      (requisition) => requisition.id === account.equippedRequisitionId,
+    );
+    onSelect(equipped?.id ?? requisitions[0]?.id ?? null);
+  }, [account.equippedRequisitionId, onSelect, requisitions, selectedId]);
 
-  if (relics.length === 0) {
+  if (requisitions.length === 0) {
     return (
       <View style={styles.empty}>
         <TerminalText size={9} letterSpacing={0.6} style={styles.emptyTitle}>
-          NO EXPEDITION RELICS AVAILABLE
+          NO EXPEDITION REQUISITIONS AVAILABLE
         </TerminalText>
         <TerminalText size={8.5} style={styles.emptyBody}>
-          Unlock relics through progression before arming one for descent.
+          No enabled Requisition is available for deployment.
         </TerminalText>
       </View>
     );
@@ -77,12 +77,12 @@ export default function RelicWorkspace({
         : null)}
     >
       <View style={styles.signalGrid}>
-        {relics.map((relic) => {
-          const selected = selectedId === relic.id;
-          const equipped = account.equippedKeepsakeId === relic.id;
+        {requisitions.map((requisition) => {
+          const selected = selectedId === requisition.id;
+          const equipped = account.equippedRequisitionId === requisition.id;
           return (
             <View
-              key={relic.id}
+              key={requisition.id}
               style={styles.signal}
               {...(Platform.OS === 'web'
                 ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
@@ -90,10 +90,10 @@ export default function RelicWorkspace({
             >
               {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
               <HapticPressable
-                onPress={() => onSelect(relic.id)}
+                onPress={() => onSelect(requisition.id)}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                accessibilityLabel={`Inspect ${relic.name}`}
+                accessibilityLabel={`Inspect Requisition ${requisition.name}`}
                 style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
                   styles.signalSelect,
                   compact && styles.signalSelectCompact,
@@ -108,10 +108,10 @@ export default function RelicWorkspace({
                     style={[styles.signalTitle, selected && styles.signalTitleSelected]}
                     numberOfLines={1}
                   >
-                    {relic.name.toUpperCase()}
+                    {requisition.name.toUpperCase()}
                   </TerminalText>
                   <TerminalText size={7.5} letterSpacing={0.45} style={styles.signalTags} numberOfLines={1}>
-                    {formatKeepsakeRoleLine(relic).toUpperCase()}
+                    {`${requisition.family} // ${requisition.subtype}`.toUpperCase()}
                   </TerminalText>
                 </View>
                 <TerminalText
@@ -132,19 +132,36 @@ export default function RelicWorkspace({
 
 export function resolveRelicDossier(
   account: ReturnType<typeof usePlayerAccount>['account'],
-  selectedId: KeepsakeId | null,
-  selectedSector: ReturnType<typeof useWorldState>['selectedSector'],
+  selectedId: RequisitionId | null,
+  _selectedSector: ReturnType<typeof useWorldState>['selectedSector'],
   selectedContract: ReturnType<typeof useWorldState>['persisted']['contractBoard']['selectedContract'],
 ) {
   if (!selectedId) return null;
-  const def = EXPEDITION_KEEPSAKE_REGISTRY[selectedId];
+  const def = EXPEDITION_REQUISITION_REGISTRY[selectedId];
   if (!def) return null;
-  const equipped = account.equippedKeepsakeId === selectedId;
-  const deploymentSummary = formatKeepsakeDeploymentOptionLabel(selectedId, account.keepsakeDeployment);
-  const configured = isKeepsakeDeploymentConfigured(selectedId, account.keepsakeDeployment);
-  const warnings = resolveKeepsakeDeploymentWarnings(selectedId, selectedSector, selectedContract);
+  const equipped = account.equippedRequisitionId === selectedId;
+  const configured =
+    selectedId === 'signal_compass'
+      ? account.requisitionDeployment.attunement != null
+      : selectedId === 'ashen_cartograph'
+        ? account.requisitionDeployment.routeDoctrine != null
+        : true;
+  const deploymentSummary =
+    selectedId === 'signal_compass'
+      ? account.requisitionDeployment.attunement
+      : selectedId === 'ashen_cartograph'
+        ? account.requisitionDeployment.routeDoctrine
+        : 'No deployment configuration';
+  const warnings = [
+    ...(def.deploymentWarning ? [def.deploymentWarning] : []),
+    ...(selectedId === 'contract_seal' && !selectedContract
+      ? ['Warning: No sponsor Contract is configured.']
+      : []),
+  ];
   const currentChoice = def.deploymentChoice
-    ? getKeepsakeDeploymentChoiceValue(account.keepsakeDeployment, def.deploymentChoice)
+    ? def.deploymentChoice.kind === 'attunement'
+      ? account.requisitionDeployment.attunement
+      : account.requisitionDeployment.routeDoctrine
     : null;
   return {
     def,

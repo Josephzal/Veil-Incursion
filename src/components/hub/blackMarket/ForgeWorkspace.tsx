@@ -198,7 +198,7 @@ export default function ForgeWorkspace({
           {runItemRows.length > 0 || runItemFilter !== 'ALL' ? (
             <>
               <TerminalText size={11} letterSpacing={1.05} style={styles.sectionLabel}>
-                RUN ITEM SCHEMATICS
+                SUPPLY SCHEMATICS
               </TerminalText>
               <View style={styles.filterRow}>
                 {(['ALL', 'COMBAT', 'FIELD'] as const).map((filter) => (
@@ -218,7 +218,7 @@ export default function ForgeWorkspace({
                         fontWeight: '700',
                       }}
                     >
-                      {filter === 'ALL' ? 'ALL RUN ITEMS' : filter}
+                      {filter === 'ALL' ? 'ALL SUPPLIES' : filter === 'COMBAT' ? 'COMBAT SUPPLIES' : 'FIELD TOOLS'}
                     </TerminalText>
                   </HapticPressable>
                 ))}

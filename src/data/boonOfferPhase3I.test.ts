@@ -54,7 +54,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const ctx = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['STRIKE', 'DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'elig-1',
@@ -93,7 +93,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   };
   const without = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'abil-1',
@@ -102,7 +102,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 
   const withRuin = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['RUIN', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'abil-2',
@@ -114,14 +114,14 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const base = buildLoadoutTagLayers({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-claymore-blade',
+    weaponFamilyId: 'aegis-claymore',
     equippedAbilityIds: ['DEVASTATE', 'DEMONS_LUNG', 'RUIN'],
   });
   assert.ok(base.finalTransformedTags.includes('FRACTURE') || base.runtimeBasicTags.includes('FRACTURE'));
 
   const removed = buildLoadoutTagLayers({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-claymore-blade',
+    weaponFamilyId: 'aegis-claymore',
     equippedAbilityIds: ['DEMONS_LUNG', 'ASHEN_MANTLE', 'REAVE'],
     basicActionRuntimeTags: ['MELEE', 'KINETIC', 'FRACTURE', 'HEAVY'],
     graft: { removeTags: ['FRACTURE'] },
@@ -131,7 +131,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 
   const added = buildLoadoutTagLayers({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     equippedAbilityIds: ['SILVER_CORE_SIDEARM', 'REVENANTS_ECHO', 'RIFT_SNARE', 'ASTRAL_TARGET_LOCK'],
     graft: { addTag: 'ARMOR_PIERCE' },
   });
@@ -145,7 +145,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   assert.ok(tags.length > 0);
   const withRuin = buildLoadoutTagLayers({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['RUIN', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
   });
   tags.forEach((t) => assert.ok(withRuin.finalTransformedTags.includes(t), t));
@@ -162,14 +162,14 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   };
   const ctxMissing = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['DEMONS_LUNG', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'fault-1',
   });
   const ctxPresent = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['RUIN', 'VEIL_PIERCER', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'fault-2',
@@ -182,8 +182,8 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const ctx = buildBoonOfferContext({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-silver-core-sidearm',
-    equippedAbilityIds: sampleSlots('hex-silver-core-sidearm', 0) as unknown as string[],
+    weaponFamilyId: 'hex-revolver',
+    equippedAbilityIds: sampleSlots('hex-revolver', 0) as unknown as string[],
     ownedBoonIds: [],
     seed: 'conflict-1',
   });
@@ -199,8 +199,8 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const args = {
     classId: 'AEGIS' as const,
-    weaponFamilyId: 'aegis-runed-longsword' as const,
-    equippedAbilityIds: sampleSlots('aegis-runed-longsword', 0) as unknown as string[],
+    weaponFamilyId: 'aegis-longsword' as const,
+    equippedAbilityIds: sampleSlots('aegis-longsword', 0) as unknown as string[],
     ownedBoonIds: [] as string[],
     seed: 'det-seed-42',
     isFirstOffer: true,
@@ -216,8 +216,8 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const ctx = buildBoonOfferContext({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-silver-core-sidearm',
-    equippedAbilityIds: sampleSlots('hex-silver-core-sidearm', 0) as unknown as string[],
+    weaponFamilyId: 'hex-revolver',
+    equippedAbilityIds: sampleSlots('hex-revolver', 0) as unknown as string[],
     ownedBoonIds: [],
     seed: 'first-1',
     isFirstOffer: true,
@@ -237,16 +237,16 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
       classId: e.classId,
       weaponFamilyId:
         e.classId === 'HEX_SHOT'
-          ? 'hex-silver-core-sidearm'
+          ? 'hex-revolver'
           : e.classId === 'ENVOY'
-            ? 'envoy-null-conduit'
-            : 'aegis-runed-longsword',
+            ? 'envoy-scythe'
+            : 'aegis-longsword',
       equippedAbilityIds:
         e.classId === 'HEX_SHOT'
-          ? sampleSlots('hex-silver-core-sidearm', 0)
+          ? sampleSlots('hex-revolver', 0)
           : e.classId === 'ENVOY'
-            ? sampleSlots('envoy-null-conduit', 0)
-            : sampleSlots('aegis-runed-longsword', 0),
+            ? sampleSlots('envoy-scythe', 0)
+            : sampleSlots('aegis-longsword', 0),
       ownedBoonIds: [],
       seed: `dead-${e.id}`,
     } as never);
@@ -258,8 +258,8 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const ctx = buildBoonOfferContext({
     classId: 'HEX_SHOT',
-    weaponFamilyId: 'hex-void-cannon',
-    equippedAbilityIds: sampleSlots('hex-void-cannon', 0) as unknown as string[],
+    weaponFamilyId: 'hex-shotgun',
+    equippedAbilityIds: sampleSlots('hex-shotgun', 0) as unknown as string[],
     ownedBoonIds: [],
     seed: 'legacy-1',
   });
@@ -276,7 +276,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   assert.ok(!sanitized.includes(AEGIS_ANCHOR as never));
   const ctx = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-rift-edge',
+    weaponFamilyId: 'aegis-paired-blades',
     equippedAbilityIds: sanitized,
     ownedBoonIds: [],
     seed: 'aegis-basic',
@@ -289,7 +289,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
 {
   const ctx = buildBoonOfferContext({
     classId: 'AEGIS',
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     equippedAbilityIds: ['STRIKE', 'REAVE', 'DEMONS_LUNG', 'ASHEN_MANTLE'],
     ownedBoonIds: [],
     seed: 'anti-1',
@@ -315,8 +315,8 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
     [],
     3,
     {
-      weaponFamilyId: 'envoy-echo-lantern',
-      equippedAbilityIds: sampleSlots('envoy-echo-lantern', 0) as unknown as string[],
+      weaponFamilyId: 'envoy-vambrace',
+      equippedAbilityIds: sampleSlots('envoy-vambrace', 0) as unknown as string[],
       seed: 'weighted-envoy-1',
       isFirstOffer: true,
     },

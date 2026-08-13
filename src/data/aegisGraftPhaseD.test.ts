@@ -14,7 +14,7 @@ import {
 } from './aegisGraftTarget';
 import {
   classifyAbilitySocket as classifySocket,
-  getGraftSocketAccessForClassRank,
+  getGraftSocketAccessForRunDepth,
 } from './graftSynergy/graftCapacityEngine';
 import { evaluateGraftCompatibility } from './graftSynergy/graftCompatibilityEngine';
 import {
@@ -42,7 +42,7 @@ import { deriveAegisWeaponActions } from './aegisWeaponActionRegistry';
 import { buildAegisCombatSurface } from './aegisCombatCompatibility';
 
 const LONGSWORD_SURFACE = buildAegisGraftSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'],
 });
 
@@ -51,7 +51,7 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
   assert.equal(LONGSWORD_SURFACE.length, 7);
   assert.deepEqual(
     LONGSWORD_SURFACE.filter((r) => r.group === 'WEAPON_ACTION').map((r) => r.actionId),
-    [...deriveAegisWeaponActions('aegis-runed-longsword')!],
+    [...deriveAegisWeaponActions('aegis-longsword')!],
   );
   assert.deepEqual(
     LONGSWORD_SURFACE.filter((r) => r.group === 'TECHNIQUE').map((r) => r.actionId),
@@ -70,7 +70,7 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
       VEIL_PIERCER: 'NEUTRON_GRAFT', // not in snapshot
     },
     {
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       techniques: ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'],
     },
   );
@@ -98,13 +98,13 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
     classId: 'AEGIS',
     abilityId: 'RUPTURE',
     graftId: 'FLAYER_GRAFT',
-    classRank: 7,
+    runDepthBand: 2,
     currentMap: { 'TECH:RUIN': 'FLAYER_GRAFT' },
     sanctuarySessionActive: true,
     residueBalance: 100,
     sanctuaryOffers: ['FLAYER_GRAFT'],
     aegisSurface: {
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       techniques: ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'],
     },
   });
@@ -112,14 +112,13 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
   assert.ok(dup.rejections.includes('DUPLICATE_GRAFT_ID'));
 }
 
-// 6–7. Capacity + family Strike rank-7
+// 6–7. Capacity from run depth + family Strike access flags
 {
-  assert.equal(getGraftSocketAccessForClassRank(3).capacity, 1);
-  assert.equal(getGraftSocketAccessForClassRank(7).allowFixedBasic, true);
-  assert.equal(getGraftSocketAccessForClassRank(12).capacity, 3);
-  assert.equal(getGraftSocketAccessForClassRank(15).allowUltimate, true);
-  assert.equal(getGraftSocketAccessForClassRank(17).capacity, 4);
-  assert.equal(getGraftSocketAccessForClassRank(20).allowApexMasterwork, true);
+  assert.equal(getGraftSocketAccessForRunDepth(1).capacity, 1);
+  assert.equal(getGraftSocketAccessForRunDepth(2).allowFixedBasic, true);
+  assert.equal(getGraftSocketAccessForRunDepth(3).capacity, 3);
+  assert.equal(getGraftSocketAccessForRunDepth(3).allowUltimate, true);
+  assert.equal(getGraftSocketAccessForRunDepth(3).allowApexMasterwork, true);
   for (const id of ['WARDENS_STRIKE', 'PAIRED_BLADES_STRIKE', 'UNMAKER_STRIKE'] as const) {
     assert.equal(isAegisFixedBasicStrike(id), true);
     assert.equal(classifySocket('AEGIS', id), 'FIXED_BASIC_SIGNATURE');
@@ -142,14 +141,14 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
 
 // 12. Each current-family weapon action accepts ≥1 compatible graft
 {
-  const family = deriveAegisWeaponActions('aegis-runed-longsword')!;
+  const family = deriveAegisWeaponActions('aegis-longsword')!;
   for (const actionId of family) {
     const key = encodeAegisGraftTargetKey({ kind: 'WEAPON_ACTION', actionId });
     const probe = evaluateGraftCompatibility({
       classId: 'AEGIS',
       abilityId: key,
       graftId: actionId === 'WARDENS_STRIKE' ? 'FLAYER_GRAFT' : 'FLAYER_GRAFT',
-      classRank: 7,
+      runDepthBand: 2,
       equippedMap: {},
       graftAvailable: true,
     });
@@ -264,9 +263,9 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
   assert.equal(coerceLegacyAegisGraftKey('BLOOD_BOUND_CARAPACE'), null);
   const { map } = sanitizeAegisAbilityGrafts(
     { STRIKE: 'ECHO_GRAFT', EVISCERATE: 'APEX_GRAFT', THREEFOLD_BRAND: 'FLAYER_GRAFT' } as never,
-    7,
+    2,
     {
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       techniques: ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'],
     },
   );
@@ -276,7 +275,7 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
 // 33. New deployments start empty (engine default)
 {
   assert.deepEqual(sanitizeAegisAbilityGraftMap({}, {
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     techniques: ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'],
   }), {});
 }
@@ -284,7 +283,7 @@ const LONGSWORD_SURFACE = buildAegisGraftSurface({
 // 36. Combat surface still 4+3
 {
   const surface = buildAegisCombatSurface({
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     techniques: ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'],
   });
   assert.equal(surface.weaponActions.length, 4);

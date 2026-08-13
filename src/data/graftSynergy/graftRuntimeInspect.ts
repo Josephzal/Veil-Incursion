@@ -10,16 +10,22 @@ import { getWeaponIdentityProfile } from '../weaponIdentityProfiles';
 import { buildLoadoutTagLayers, resolveReachableInteractionHooks } from '../boonOffer/boonOfferContext';
 import { getWeaponGraftRecommendationProfile } from './weaponGraftRecommendationProfiles';
 import { evaluateGraftCompatibility } from './graftCompatibilityEngine';
-import { getGraftSocketAccessForClassRank } from './graftCapacityEngine';
+import { getGraftSocketAccessForRunDepth } from './graftCapacityEngine';
 
 export function inspectEquippedGraftBuild(args: {
   classId: ClassType;
   weaponFamilyId: WeaponFamilyId;
   equippedAbilityIds: readonly string[];
   abilityGrafts: Readonly<Record<string, string>>;
-  classRank: number;
+  /** Core Loop Depth 1–3. */
+  runDepthBand?: number;
+  /**
+   * @deprecated Stage II-B — ignored for capacity.
+   */
+  classRank?: number;
 }): string {
-  const access = getGraftSocketAccessForClassRank(args.classRank);
+  const runDepthBand = args.runDepthBand ?? 1;
+  const access = getGraftSocketAccessForRunDepth(runDepthBand);
   const layers = buildLoadoutTagLayers({
     classId: args.classId,
     weaponFamilyId: args.weaponFamilyId,
@@ -35,7 +41,7 @@ export function inspectEquippedGraftBuild(args: {
   const affinity = getWeaponIdentityProfile(args.weaponFamilyId).affinityTags;
   const lines = [
     `weapon=${args.weaponFamilyId}`,
-    `rank=${args.classRank} capacity=${access.capacity} used=${Object.keys(args.abilityGrafts).length}`,
+    `depth=${runDepthBand} capacity=${access.capacity} used=${Object.keys(args.abilityGrafts).length}`,
     `allowBasic=${access.allowFixedBasic} allowUlt=${access.allowUltimate} allowApex=${access.allowApexMasterwork}`,
     `baseTags=[${layers.baseActionTags.join(',')}]`,
     `runtimeBasic=[${layers.runtimeBasicTags.join(',')}]`,
@@ -50,13 +56,13 @@ export function inspectEquippedGraftBuild(args: {
       classId: args.classId,
       abilityId,
       graftId,
-      classRank: args.classRank,
+      runDepthBand,
       equippedMap: args.abilityGrafts,
       graftAvailable: true,
     });
     const def = getClassGraftDefinition(args.classId, graftId);
     lines.push(
-      `assign ${abilityId}←${graftId} ok=${compat.ok} rej=[${compat.rejections.join(',')}] cost=${def.cost}`,
+      `assign ${abilityId}←${graftId} ok=${compat.ok} rej=[${compat.rejections.join(',')}] catalogCost=${def.cost}`,
     );
     const rec = getWeaponGraftRecommendationProfile(args.weaponFamilyId);
     const anti = rec.antiSynergies.find((a) => a.abilityId === abilityId && a.graftId === graftId);

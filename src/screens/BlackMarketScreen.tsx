@@ -17,11 +17,7 @@ import {
   resolveKeepsakeMarkedShelfPrice,
 } from '../data/expeditionKeepsakeEconomyEngine';
 import { getBrokerMarkedDiscountPrice, hasFieldRunItem } from '../data/runItemFieldEngine';
-import {
-  getBlackMarketDiscountPct,
-} from '../data/boundRequisitionEngine';
 import { canPlaceCargoItem, listStagedBlackMarketPlacements } from '../data/cargoGridEngine';
-import { isRunItemCatalogId } from '../data/runItemInventoryEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -62,7 +58,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const {
     activeIncursion,
     appendRunLog,
-    purchaseBlackMarketCargo,
     purchaseBlackMarketCargoAtCell,
     returnStagedBlackMarketCargo,
     commitBlackMarketBindings,
@@ -80,7 +75,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
     gap,
   } = useResponsiveLayout();
 
-  const [buyingRunItemId, setBuyingRunItemId] = useState<CargoItemId | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [binding, setBinding] = useState(false);
   const [externalHover, setExternalHover] = useState<{ itemId: CargoItemId; row: number; col: number } | null>(null);
@@ -108,15 +102,15 @@ export default function BlackMarketScreen(): React.JSX.Element {
       ? activeIncursion.blackMarketStock
       : ['soul-core'],
   );
-  const blackMarketDiscountPct = getBlackMarketDiscountPct(activeIncursion);
-  const brokerMarkedId = activeIncursion.itemRuntime.brokerMarkedItemId;
-  const hasBrokerFlashcard = hasFieldRunItem(activeIncursion.runItems, 'broker-flashcard');
+  const blackMarketDiscountPct = 0;
+  const brokerMarkedId = activeIncursion.supplyRuntime.brokerMarkedItemId;
+  const hasBrokerFlashcard = hasFieldRunItem(activeIncursion.cargo, 'broker-flashcard');
   const priceForListing = (basePrice: number, itemId: CargoItemId) => {
     const keepsakePrice = resolveKeepsakeMarkedShelfPrice(
       basePrice,
       itemId,
-      activeIncursion.keepsakeRuntime,
-      blackMarketDiscountPct,
+      activeIncursion.requisitionRuntime,
+      0,
     ).price;
     return getBrokerMarkedDiscountPrice(keepsakePrice, brokerMarkedId === itemId);
   };
@@ -135,7 +129,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
   );
   const canCreditBind = hasStagedPurchases
     && stagedPurchases.length === 1
-    && canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime)
+    && canUseKeepsakeNullLedgerCredit(activeIncursion.requisitionRuntime)
     && !binding;
   const canBind = hasStagedPurchases
     && activeIncursion.runCredits >= bindTotalCost
@@ -177,13 +171,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
     return rect ? pointInWindowRect(x, y, rect, DROP_PADDING) : false;
   }, []);
 
-  const isOverCargoDeck = useCallback((x: number, y: number) => {
-    const grid = gridMetricsRef.current;
-    if (grid && pointInWindowRect(x, y, grid, DROP_PADDING)) return true;
-    const panel = cargoPanelMetricsRef.current;
-    return panel ? pointInWindowRect(x, y, panel, DROP_PADDING) : false;
-  }, []);
-
   const updateDropHighlights = useCallback((
     source: CargoDragSource | null,
     x: number,
@@ -219,20 +206,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
     return result.success;
   }, [appendRunLog, purchaseBlackMarketCargoAtCell]);
 
-  const tryBuyRunItemAtPoint = useCallback((
-    itemId: CargoItemId,
-    absoluteX: number,
-    absoluteY: number,
-  ) => {
-    if (!isRunItemCatalogId(itemId) || buyingRunItemId) return false;
-    if (!isOverCargoDeck(absoluteX, absoluteY)) return false;
-    setBuyingRunItemId(itemId);
-    const result = purchaseBlackMarketCargo(itemId);
-    if (result) appendRunLog(result.logLine);
-    setBuyingRunItemId(null);
-    return Boolean(result?.success);
-  }, [appendRunLog, buyingRunItemId, isOverCargoDeck, purchaseBlackMarketCargo]);
-
   const handleMarketDragStart = useCallback((_itemId: CargoItemId) => {
     rootRef.current?.measureInWindow((x, y) => {
       rootOffsetRef.current = { x, y };
@@ -242,10 +215,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
 
   const handleMarketDragMove = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
     setDragGhost({ itemId, x: absoluteX, y: absoluteY });
-    if (isRunItemCatalogId(itemId)) {
-      setExternalHover(null);
-      return;
-    }
     const metrics = gridMetricsRef.current;
     if (!metrics) {
       setExternalHover(null);
@@ -262,12 +231,8 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const handleMarketDragEnd = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
     setDragGhost(null);
     setExternalHover(null);
-    if (isRunItemCatalogId(itemId)) {
-      tryBuyRunItemAtPoint(itemId, absoluteX, absoluteY);
-      return;
-    }
     tryStageAtPoint(itemId, absoluteX, absoluteY);
-  }, [tryBuyRunItemAtPoint, tryStageAtPoint]);
+  }, [tryStageAtPoint]);
 
   const handleCargoDragPosition = useCallback((payload: { source: CargoDragSource; x: number; y: number } | null) => {
     if (!payload) {
@@ -467,7 +432,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                             listing={listing}
                             price={effectivePrice}
                             markedShelf={
-                              isKeepsakeMarkedShelfItem(activeIncursion.keepsakeRuntime, listing.id)
+                              isKeepsakeMarkedShelfItem(activeIncursion.requisitionRuntime, listing.id)
                               || brokerMarked
                             }
                             fontScale={fontScale}
@@ -500,7 +465,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                     ) : null}
                   </View>
 
-                  {canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime) ? (
+                  {canUseKeepsakeNullLedgerCredit(activeIncursion.requisitionRuntime) ? (
                     <HubPrimaryCta
                       label="[ NULL LEDGER CREDIT ]"
                       onPress={canCreditBind ? handleCreditBind : undefined}

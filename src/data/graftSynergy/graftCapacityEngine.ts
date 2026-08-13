@@ -1,116 +1,79 @@
 /**
- * Phase 3J — graft capacity on the live class-rank progression axis (ranks 1–20).
- * Permanent field: ProgressionProfile.classes[classId].rank (+ unlockedGraftLicenses hooks).
+ * Stage II-B — run-scoped graft socket access.
+ * Capacity follows Core Loop Depth 1/2/3 (= ActiveIncursionState.currentDistrict),
+ * not Class Rank. Category gates (fixed-basic / ultimate / Apex) are open for all depths;
+ * non-rank compatibility (Aegis ungraftable ultimates, mechanic tags, duplicates) still applies.
  */
-import { CLASS_RANK_MAX } from '../classRankEngine';
+import { getDistrictFromDepth, type DistrictId } from '../districtPacing';
 
 export type GraftSocketAccess = {
   capacity: number;
   allowFixedBasic: boolean;
   allowUltimate: boolean;
   allowApexMasterwork: boolean;
+  /** Historical Class Rank license hooks — informational only; never gate live access. */
   requiredLicenseHooks: readonly string[];
 };
 
-/** Approved capacity table — live and authoritative. */
-export function getGraftSocketAccessForClassRank(rank: number): GraftSocketAccess {
-  const r = Math.max(1, Math.min(CLASS_RANK_MAX, Math.floor(rank)));
-  if (r <= 2) {
-    return {
-      capacity: 0,
-      allowFixedBasic: false,
-      allowUltimate: false,
-      allowApexMasterwork: false,
-      requiredLicenseHooks: [],
-    };
-  }
-  if (r < 7) {
-    return {
-      capacity: 1,
-      allowFixedBasic: false,
-      allowUltimate: false,
-      allowApexMasterwork: false,
-      requiredLicenseHooks: ['hook.graft.basic'],
-    };
-  }
-  if (r < 12) {
-    return {
-      capacity: 2,
-      allowFixedBasic: true,
-      allowUltimate: false,
-      allowApexMasterwork: false,
-      requiredLicenseHooks: ['hook.graft.basic', 'hook.graft.advanced'],
-    };
-  }
-  if (r < 15) {
-    return {
-      capacity: 3,
-      allowFixedBasic: true,
-      allowUltimate: false,
-      allowApexMasterwork: false,
-      requiredLicenseHooks: ['hook.graft.basic', 'hook.graft.advanced', 'hook.graft.capacity_3'],
-    };
-  }
-  if (r < 17) {
-    return {
-      capacity: 3,
-      allowFixedBasic: true,
-      allowUltimate: true,
-      allowApexMasterwork: false,
-      requiredLicenseHooks: [
-        'hook.graft.basic',
-        'hook.graft.advanced',
-        'hook.graft.capacity_3',
-        'hook.graft.ultimate',
-      ],
-    };
-  }
-  if (r < 20) {
-    return {
-      capacity: 4,
-      allowFixedBasic: true,
-      allowUltimate: true,
-      allowApexMasterwork: false,
-      requiredLicenseHooks: [
-        'hook.graft.basic',
-        'hook.graft.advanced',
-        'hook.graft.capacity_3',
-        'hook.graft.ultimate',
-        'hook.graft.capacity_4',
-      ],
-    };
-  }
+/** Hard cap — Core Loop Depth 3. */
+export const MAX_RUN_GRAFT_CAPACITY = 3;
+
+/**
+ * Canonical graft-capacity depth band.
+ * Prefer `ActiveIncursionState.currentDistrict` (1–3). Falls back to deriving
+ * district from player-facing `currentDepth` (1–45) when needed.
+ */
+export function resolveRunGraftDepthBand(input: {
+  currentDistrict?: number | null;
+  currentDepth?: number | null;
+}): DistrictId {
+  const district = input.currentDistrict;
+  if (district === 1 || district === 2 || district === 3) return district;
+  return getDistrictFromDepth(input.currentDepth ?? 1);
+}
+
+/**
+ * Launch capacity policy: Depth 1 → 1, Depth 2 → 2, Depth 3 → 3 (capped).
+ * Does not read Class Rank, XP, Clearance, currency, or weapon tier.
+ */
+export function getGraftCapacityForRunDepth(depthBand: number): number {
+  const band = Math.min(MAX_RUN_GRAFT_CAPACITY, Math.max(1, Math.floor(depthBand) || 1));
+  return Math.min(MAX_RUN_GRAFT_CAPACITY, band);
+}
+
+/** Full socket access for the current run depth band — no Class Rank power. */
+export function getGraftSocketAccessForRunDepth(depthBand: number): GraftSocketAccess {
   return {
-    capacity: 4,
+    capacity: getGraftCapacityForRunDepth(depthBand),
     allowFixedBasic: true,
     allowUltimate: true,
     allowApexMasterwork: true,
-    requiredLicenseHooks: [
-      'hook.graft.basic',
-      'hook.graft.advanced',
-      'hook.graft.capacity_3',
-      'hook.graft.ultimate',
-      'hook.graft.capacity_4',
-      'hook.graft.apex_masterwork',
-    ],
+    requiredLicenseHooks: [],
   };
 }
 
 export function describeGraftCapacityProgression(): string[] {
   return [
-    'Rank 1–2: capacity 0',
-    'Rank 3: capacity 1 (basic graft license)',
-    'Rank 7: capacity 2 + fixed-basic/signature grafting',
-    'Rank 12: capacity 3',
-    'Rank 15: capacity 3 + ultimate grafting',
-    'Rank 17: capacity 4',
-    'Rank 20: capacity 4 + Apex/Masterwork access',
-    `CLASS_RANK_MAX=${CLASS_RANK_MAX}`,
+    'Depth 1 (district 1): capacity 1',
+    'Depth 2 (district 2): capacity 2',
+    'Depth 3 (district 3): capacity 3 (hard cap)',
+    'Class Rank does not grant graft capacity, tiers, ultimates, or Apex access',
+    `MAX_RUN_GRAFT_CAPACITY=${MAX_RUN_GRAFT_CAPACITY}`,
   ];
+}
+
+/**
+ * @deprecated Stage II-B — Class Rank no longer grants graft power.
+ * Prefer getGraftSocketAccessForRunDepth. This alias ignores rank and returns
+ * Depth-1 access so accidental callers cannot unlock power from career history.
+ */
+export function getGraftSocketAccessForClassRank(_rank: number): GraftSocketAccess {
+  return getGraftSocketAccessForRunDepth(1);
 }
 
 export type LiveGraftCostTier = 'STANDARD' | 'ADVANCED' | 'SPONSOR' | 'APEX' | 'MASTERWORK';
 
+/** Catalog cost banding only — not a live Residue charge or rank gate. */
 export function inferGraftCostTier(cost: number): LiveGraftCostTier {
   if (cost >= 45) return 'APEX';
   if (cost >= 35) return 'ADVANCED';

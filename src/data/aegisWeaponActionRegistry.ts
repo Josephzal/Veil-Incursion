@@ -9,9 +9,9 @@ import type {
 import type { WeaponFamilyId } from '../types/weapon';
 
 export type AegisWeaponFamilyId =
-  | 'aegis-runed-longsword'
-  | 'aegis-rift-edge'
-  | 'aegis-claymore-blade';
+  | 'aegis-longsword'
+  | 'aegis-paired-blades'
+  | 'aegis-claymore';
 
 export interface AegisWeaponActionSet {
   familyId: AegisWeaponFamilyId;
@@ -28,23 +28,23 @@ export interface AegisWeaponActionSet {
 }
 
 const AEGIS_WEAPON_ACTION_BY_FAMILY: Record<AegisWeaponFamilyId, AegisWeaponActionSet> = {
-  'aegis-runed-longsword': {
-    familyId: 'aegis-runed-longsword',
-    displayName: 'Runed Longsword',
+  'aegis-longsword': {
+    familyId: 'aegis-longsword',
+    displayName: 'Longsword',
     actions: ['WARDENS_STRIKE', 'RUPTURE', 'DREADBIND', 'NO_RESPITE'],
     ultimateId: 'ABYSSAL_VERDICT',
     ultimateDisplayName: 'ABYSSAL VERDICT',
   },
-  'aegis-rift-edge': {
-    familyId: 'aegis-rift-edge',
+  'aegis-paired-blades': {
+    familyId: 'aegis-paired-blades',
     displayName: 'Paired Blades',
     actions: ['PAIRED_BLADES_STRIKE', 'DIVERGENCE', 'ECLIPSE', 'SEVERANCE'],
     ultimateId: 'REND_THE_VEIL',
     ultimateDisplayName: 'REND THE VEIL',
   },
-  'aegis-claymore-blade': {
-    familyId: 'aegis-claymore-blade',
-    displayName: 'Unmaker',
+  'aegis-claymore': {
+    familyId: 'aegis-claymore',
+    displayName: 'Claymore',
     actions: ['UNMAKER_STRIKE', 'DREAD_HORIZON', 'UNBOWED', 'DOOMFALL'],
     ultimateId: 'GRAVEFALL',
     ultimateDisplayName: 'GRAVEFALL',
@@ -52,15 +52,15 @@ const AEGIS_WEAPON_ACTION_BY_FAMILY: Record<AegisWeaponFamilyId, AegisWeaponActi
 };
 
 export const ALL_AEGIS_WEAPON_FAMILY_IDS: readonly AegisWeaponFamilyId[] = [
-  'aegis-runed-longsword',
-  'aegis-rift-edge',
-  'aegis-claymore-blade',
+  'aegis-longsword',
+  'aegis-paired-blades',
+  'aegis-claymore',
 ];
 
 export function isAegisWeaponFamilyId(id: string | null | undefined): id is AegisWeaponFamilyId {
-  return id === 'aegis-runed-longsword'
-    || id === 'aegis-rift-edge'
-    || id === 'aegis-claymore-blade';
+  return id === 'aegis-longsword'
+    || id === 'aegis-paired-blades'
+    || id === 'aegis-claymore';
 }
 
 export function getAegisWeaponActionSet(

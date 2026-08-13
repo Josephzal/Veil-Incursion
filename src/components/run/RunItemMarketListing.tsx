@@ -70,7 +70,7 @@ export default function RunItemMarketListing({
             },
           ]}
         >
-          RUN ITEM // TAP TO BUY
+          SUPPLY // REQUIRES 1×1 CARGO CELL
         </Text>
         {markedShelf ? (
           <Text

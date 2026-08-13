@@ -1,10 +1,11 @@
 import type {
-  KeepsakeDecision,
-  KeepsakeDeployment,
-  KeepsakeId,
-  KeepsakeRuntime,
-  KeepsakeRuntimeStats,
-} from '../types/expeditionKeepsake';
+  RequisitionCombatPreparationRuntime,
+  RequisitionDecision as KeepsakeDecision,
+  RequisitionDeployment,
+  RequisitionId,
+  RequisitionRuntime as KeepsakeRuntime,
+  RequisitionRuntimeStats as KeepsakeRuntimeStats,
+} from '../types/expeditionRequisition';
 
 export function createDefaultKeepsakeRuntimeStats(): KeepsakeRuntimeStats {
   return {
@@ -18,48 +19,86 @@ export function createDefaultKeepsakeRuntimeStats(): KeepsakeRuntimeStats {
     extractionDebtPaid: 0,
     cargoValueBonus: 0,
     cargoPreserved: 0,
-    cargoBankedByTrinket: 0,
-    operationProgressAdded: 0,
+    cargoBankedByRequisition: 0,
     sponsorRepBonus: 0,
-    echoSignalsGenerated: 0,
-    echoThreadGenerated: 0,
-    echoIntelRevealed: 0,
-    echoGlassBonus: 0,
-    anchorSignalsGenerated: 0,
-    anchorTrailCleared: 0,
-    contaminationAdded: 0,
-    contaminationPurged: 0,
-    matchesLit: 0,
-    safeExtractionsSkipped: 0,
     contrabandWrapped: 0,
     markedShelfPurchases: 0,
     debtWarningsTriggered: 0,
-    rivalQuarriesCleared: 0,
-    falseBeaconsPlanted: 0,
-    keysUsed: 0,
-    outsideCargoNodesCarried: 0,
-    safehouseServiceUsed: null,
+    startingCreditsGranted: 0,
+    eligibleCombatEncountersConsumed: 0,
+    temporaryApGranted: 0,
+    directHostileDamagePrevented: 0,
+    attributableCriticalHits: 0,
+    empoweredPiercingActions: 0,
+    armorLayersBypassed: 0,
+    wardLayersBypassed: 0,
+    hostileEffectsPrevented: 0,
     triggerCount: 0,
   };
 }
 
-export function createDefaultKeepsakeDeployment(): KeepsakeDeployment {
+export function createDefaultKeepsakeDeployment(): RequisitionDeployment {
   return {
     attunement: null,
     routeDoctrine: null,
-    mirrorCategory: null,
   };
 }
 
+function createCombatPreparationRuntime(
+  requisitionId: RequisitionId,
+): RequisitionCombatPreparationRuntime | null {
+  switch (requisitionId) {
+    case 'adrenaline_primer':
+      return {
+        kind: requisitionId,
+        consumedEncounterIds: [],
+        grantedEncounterIds: [],
+        apGranted: 0,
+      };
+    case 'reinforced_trench_coat':
+      return {
+        kind: requisitionId,
+        protectedEncounterId: null,
+        protectionSpent: false,
+        damagePrevented: 0,
+      };
+    case 'hollow_point_requisition':
+      return {
+        kind: requisitionId,
+        depthOneExpired: false,
+        attributableCriticalHits: 0,
+      };
+    case 'kinetic_battery':
+      return {
+        kind: requisitionId,
+        consumedEncounterIds: [],
+        empoweredActionIds: [],
+        bypassedArmorLayers: 0,
+        bypassedWardLayers: 0,
+      };
+    case 'chalk_line_ward':
+      return {
+        kind: requisitionId,
+        protectedEncounterIds: [],
+        currentEncounterId: null,
+        currentWardAvailable: false,
+        preventedEffectIds: [],
+      };
+    default:
+      return null;
+  }
+}
+
 export function createKeepsakeRuntime(
-  keepsakeId: KeepsakeId,
-  deployment?: Partial<KeepsakeDeployment> | null,
+  requisitionId: RequisitionId,
+  deployment?: Partial<RequisitionDeployment> | null,
 ): KeepsakeRuntime {
   return {
-    keepsakeId,
+    requisitionId,
     deployment: { ...createDefaultKeepsakeDeployment(), ...(deployment ?? {}) },
     triggersUsed: {},
     perDepthTriggersUsed: {},
+    perEncounterTriggersUsed: {},
     messages: [],
     decisions: [],
     flags: {},
@@ -67,20 +106,17 @@ export function createKeepsakeRuntime(
     stats: createDefaultKeepsakeRuntimeStats(),
     taggedCargo: [],
     cargoTagByResource: {},
-    leySiphonOverdrawPending: false,
     markedShelfItemId: null,
     markedShelfCorruptedNodeId: null,
     nullLedgerDebtCredits: 0,
     nullLedgerCreditItemId: null,
     stampedExtractionNodeId: null,
     stampedExtractionConfirmed: false,
-    overextendedActive: false,
-    overextendedBonusConsumed: false,
-    overextendedDirtyThreatPending: false,
     pendingChoice: null,
     cargoSealCracked: false,
     smugglersHunterMarkActive: false,
     extractionTokenBurns: 0,
+    combatPreparation: createCombatPreparationRuntime(requisitionId),
   };
 }
 
@@ -95,6 +131,8 @@ export function mergeKeepsakeRuntime(
     deployment: patch.deployment ?? runtime.deployment,
     triggersUsed: { ...runtime.triggersUsed, ...patch.triggersUsed },
     perDepthTriggersUsed: patch.perDepthTriggersUsed ?? runtime.perDepthTriggersUsed,
+    perEncounterTriggersUsed:
+      patch.perEncounterTriggersUsed ?? runtime.perEncounterTriggersUsed,
     messages: patch.messages ?? runtime.messages,
     decisions: patch.decisions ?? runtime.decisions,
     flags: patch.flags ? { ...runtime.flags, ...patch.flags } : runtime.flags,
@@ -102,20 +140,20 @@ export function mergeKeepsakeRuntime(
     stats: { ...runtime.stats, ...patch.stats },
     taggedCargo: patch.taggedCargo ?? runtime.taggedCargo,
     cargoTagByResource: patch.cargoTagByResource ?? runtime.cargoTagByResource,
-    leySiphonOverdrawPending: patch.leySiphonOverdrawPending ?? runtime.leySiphonOverdrawPending,
     markedShelfItemId: patch.markedShelfItemId ?? runtime.markedShelfItemId,
     markedShelfCorruptedNodeId: patch.markedShelfCorruptedNodeId ?? runtime.markedShelfCorruptedNodeId,
     nullLedgerDebtCredits: patch.nullLedgerDebtCredits ?? runtime.nullLedgerDebtCredits,
     nullLedgerCreditItemId: patch.nullLedgerCreditItemId ?? runtime.nullLedgerCreditItemId,
     stampedExtractionNodeId: patch.stampedExtractionNodeId ?? runtime.stampedExtractionNodeId,
     stampedExtractionConfirmed: patch.stampedExtractionConfirmed ?? runtime.stampedExtractionConfirmed,
-    overextendedActive: patch.overextendedActive ?? runtime.overextendedActive,
-    overextendedBonusConsumed: patch.overextendedBonusConsumed ?? runtime.overextendedBonusConsumed,
-    overextendedDirtyThreatPending: patch.overextendedDirtyThreatPending ?? runtime.overextendedDirtyThreatPending,
     pendingChoice: patch.pendingChoice !== undefined ? patch.pendingChoice : runtime.pendingChoice,
     cargoSealCracked: patch.cargoSealCracked ?? runtime.cargoSealCracked,
     smugglersHunterMarkActive: patch.smugglersHunterMarkActive ?? runtime.smugglersHunterMarkActive,
     extractionTokenBurns: patch.extractionTokenBurns ?? runtime.extractionTokenBurns,
+    combatPreparation:
+      patch.combatPreparation !== undefined
+        ? patch.combatPreparation
+        : runtime.combatPreparation,
   };
 }
 
@@ -204,13 +242,12 @@ export function canUseKeepsakeTrigger(
 }
 
 export function formatKeepsakeRuntimeDebugSnapshot(runtime: KeepsakeRuntime | null | undefined): string {
-  if (!runtime) return 'EXPEDITION RELIC RUNTIME — none equipped.';
+  if (!runtime) return 'EXPEDITION REQUISITION RUNTIME — none equipped.';
   const lines = [
-    'EXPEDITION RELIC RUNTIME',
-    `id: ${runtime.keepsakeId}`,
+    'EXPEDITION REQUISITION RUNTIME',
+    `id: ${runtime.requisitionId}`,
     ...(runtime.deployment.attunement ? [`attunement: ${runtime.deployment.attunement}`] : []),
     ...(runtime.deployment.routeDoctrine ? [`routeDoctrine: ${runtime.deployment.routeDoctrine}`] : []),
-    ...(runtime.deployment.mirrorCategory ? [`mirrorCategory: ${runtime.deployment.mirrorCategory}`] : []),
     `triggers: ${runtime.stats.triggerCount}`,
     `messages: ${runtime.messages.length}`,
     ...(runtime.decisions.length > 0
@@ -219,9 +256,6 @@ export function formatKeepsakeRuntimeDebugSnapshot(runtime: KeepsakeRuntime | nu
     ...Object.entries(runtime.stats)
       .filter(([, value]) => typeof value === 'number' && value > 0)
       .map(([key, value]) => `${key}: ${value}`),
-    ...(runtime.stats.safehouseServiceUsed
-      ? [`safehouseServiceUsed: ${runtime.stats.safehouseServiceUsed}`]
-      : []),
   ];
   runtime.messages.forEach((message) => lines.push(`- ${message}`));
   return lines.join('\n');

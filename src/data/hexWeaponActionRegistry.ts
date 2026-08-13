@@ -14,16 +14,16 @@ import {
 import type { WeaponFamilyId } from '../types/weapon';
 
 export type HexWeaponFamilyId =
-  | 'hex-silver-core-sidearm'
-  | 'hex-pulse-rifle'
-  | 'hex-void-cannon';
+  | 'hex-revolver'
+  | 'hex-carbine'
+  | 'hex-shotgun';
 
 export interface HexWeaponActionSet {
   familyId: HexWeaponFamilyId;
-  /** Live registry display name (not design-kit alias). */
+  /** Live registry display name. */
   displayName: string;
-  /** Design-kit alias (Revolver / Carbine / Black Door). */
-  designKitAlias: 'Revolver' | 'Carbine' | 'Black Door';
+  /** Design-kit alias (matches live Stage II-C names). */
+  designKitAlias: 'Revolver' | 'Carbine' | 'Shotgun';
   actions: readonly [
     HexWeaponActionId,
     HexWeaponActionId,
@@ -38,39 +38,39 @@ export interface HexWeaponActionSet {
 }
 
 const HEX_WEAPON_ACTION_BY_FAMILY: Record<HexWeaponFamilyId, HexWeaponActionSet> = {
-  'hex-silver-core-sidearm': {
-    familyId: 'hex-silver-core-sidearm',
-    displayName: 'Silver-Core Sidearm',
+  'hex-revolver': {
+    familyId: 'hex-revolver',
+    displayName: 'Revolver',
     designKitAlias: 'Revolver',
     actions: HEX_REVOLVER_WEAPON_ACTIONS,
     kitComplete: true,
   },
-  'hex-pulse-rifle': {
-    familyId: 'hex-pulse-rifle',
-    displayName: 'Ash Shotgun',
+  'hex-carbine': {
+    familyId: 'hex-carbine',
+    displayName: 'Carbine',
     designKitAlias: 'Carbine',
     actions: HEX_CARBINE_WEAPON_ACTIONS,
     kitComplete: true,
   },
-  'hex-void-cannon': {
-    familyId: 'hex-void-cannon',
-    displayName: 'Nullbreach',
-    designKitAlias: 'Black Door',
+  'hex-shotgun': {
+    familyId: 'hex-shotgun',
+    displayName: 'Shotgun',
+    designKitAlias: 'Shotgun',
     actions: HEX_BLACK_DOOR_WEAPON_ACTIONS,
     kitComplete: true,
   },
 };
 
 export const ALL_HEX_WEAPON_FAMILY_IDS: readonly HexWeaponFamilyId[] = [
-  'hex-silver-core-sidearm',
-  'hex-pulse-rifle',
-  'hex-void-cannon',
+  'hex-revolver',
+  'hex-carbine',
+  'hex-shotgun',
 ];
 
 export function isHexWeaponFamilyId(id: string | null | undefined): id is HexWeaponFamilyId {
-  return id === 'hex-silver-core-sidearm'
-    || id === 'hex-pulse-rifle'
-    || id === 'hex-void-cannon';
+  return id === 'hex-revolver'
+    || id === 'hex-carbine'
+    || id === 'hex-shotgun';
 }
 
 export function getHexWeaponActionSet(

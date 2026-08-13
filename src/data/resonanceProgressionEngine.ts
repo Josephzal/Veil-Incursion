@@ -7,7 +7,7 @@ import {
   VOLATILE_CARGO_RESONANCE_PER_ITEM,
 } from '../types/sectorPacing';
 import type { CargoRunState, HarvestYieldTier } from '../types/cargoGrid';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime as KeepsakeRuntime } from '../types/expeditionRequisition';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import { applyResonanceDelta } from './sectorGraphEngine';
 import { COLLAPSE_RESONANCE_SOFT_CAP } from '../types/sectorPacing';

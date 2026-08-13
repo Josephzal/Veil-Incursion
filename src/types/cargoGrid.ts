@@ -89,6 +89,8 @@ export interface CargoItemDefinition {
   baseValue: number;
   resonanceWeight: number;
   tags: string[];
+  /** Stage IV-A — usable supplies are ordinary 1×1 cargo, never a second inventory. */
+  subtype?: 'SUPPLY';
   usableOnScanner?: boolean;
   usableInCombat?: boolean;
   combatEffect?: CargoCombatEffect;
@@ -109,6 +111,10 @@ export interface PlacedCargoItem {
   quantity?: number;
   /** Black market visit — staged on grid, not charged until bind. */
   blackMarketStaged?: boolean;
+  /** Transaction origin used for deterministic stock and post-run reconciliation. */
+  supplyOrigin?: 'HUB_STOCK' | 'FIND' | 'MARKET' | 'CRAFT' | 'DEBUG' | 'TEMPORARY_RECOVERY';
+  /** Emergency recovery floor; never deposited into persistent stock. */
+  temporarySupply?: boolean;
 }
 
 export interface ContainmentItem {
@@ -118,6 +124,8 @@ export interface ContainmentItem {
   currentValue?: number;
   /** Stack size — defaults to 1 when unset (legacy saves / consumables). */
   quantity?: number;
+  supplyOrigin?: PlacedCargoItem['supplyOrigin'];
+  temporarySupply?: boolean;
 }
 
 export interface CargoGridState {
@@ -710,6 +718,35 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
   },
   ...buildResourceCargoCatalogEntries(),
 };
+
+const CARGO_SUPPLY_FAMILIES = {
+  COMBAT_SUPPLY: [
+    'standard-coagulant', 'trauma-patch', 'grave-dust-ampoule',
+    'spall-weave-vest', 'grid-cracker-mag', 'eclipse-flare',
+    'veil-ash-grenade', 'rigged-combustion-cylinder', 'mirror-salt-vial',
+    'bloodwire-tourniquet', 'null-space-injector', 'black-iron-wedge',
+    'razorwire-spool', 'voidglass-decoy',
+  ],
+  FIELD_TOOL: [
+    'broker-flashcard', 'relay-spike', 'sonar-ping', 'null-lens-filter',
+    'dead-drop-token', 'ash-seal-canister', 'containment-foam',
+    'ley-slag-splitter', 'echo-tuning-fork', 'anchor-needle',
+  ],
+} as const satisfies Record<string, readonly CargoItemId[]>;
+
+Object.entries(CARGO_SUPPLY_FAMILIES).forEach(([family, ids]) => {
+  ids.forEach((itemId) => {
+    const definition = CARGO_ITEM_CATALOG[itemId];
+    definition.subtype = 'SUPPLY';
+    definition.width = 1;
+    definition.height = 1;
+    definition.tags = [
+      ...definition.tags.filter((tag) => tag !== 'RUN_ITEM'),
+      'SUPPLY',
+      family,
+    ];
+  });
+});
 
 export function createDefaultCargoRunState(): CargoRunState {
   return {

@@ -40,14 +40,14 @@ export function buildAegisCombatSurface(args: {
   weaponFamilyId: WeaponFamilyId | AegisWeaponFamilyId | null | undefined;
   techniques: AegisTechniqueLoadout | readonly string[] | null | undefined;
 }): AegisCombatSurface {
-  const familyId = (args.weaponFamilyId ?? 'aegis-runed-longsword') as AegisWeaponFamilyId;
+  const familyId = (args.weaponFamilyId ?? 'aegis-longsword') as AegisWeaponFamilyId;
   const actions = deriveAegisWeaponActions(familyId)
-    ?? deriveAegisWeaponActions('aegis-runed-longsword')!;
+    ?? deriveAegisWeaponActions('aegis-longsword')!;
   const techniques = sanitizeAegisTechniqueLoadout(
     args.techniques ?? DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
   );
   return {
-    familyId: (deriveAegisWeaponActions(familyId) ? familyId : 'aegis-runed-longsword'),
+    familyId: (deriveAegisWeaponActions(familyId) ? familyId : 'aegis-longsword'),
     weaponActions: actions,
     techniques,
     hudCards: [...actions, ...techniques],

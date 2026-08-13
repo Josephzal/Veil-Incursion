@@ -1440,7 +1440,11 @@ export default function CargoGridBoard({
           const source: CargoDragSource = { instanceId: item.instanceId, itemId: item.itemId, source: 'grid' };
           const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize, cellGap);
           const isDragging = activeDrag?.instanceId === item.instanceId;
-          const stackBadge = formatStackBadge(item.itemId, cargoItemQuantity(item));
+          const stackBadge = item.temporarySupply
+            ? 'TEMP'
+            : CARGO_ITEM_CATALOG[item.itemId].subtype === 'SUPPLY'
+              ? 'SUPPLY'
+              : formatStackBadge(item.itemId, cargoItemQuantity(item));
           const harvestSelected = harvestTriPaneLayout
             && selectedHarvestInstanceId === item.instanceId;
 
@@ -1567,7 +1571,7 @@ export default function CargoGridBoard({
             numberOfLines={1}
           >
             {selectedCombatItemId
-              ? `OWNED: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: ${selectedApCost} AP`
+              ? `COMBAT SUPPLY // CARGO: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: ${selectedApCost} AP`
               : ' '}
           </Text>
         </View>

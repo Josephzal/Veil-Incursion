@@ -2,7 +2,7 @@
  * Drives hub / in-run adaptive BGM from GameFlow + Veil transit state.
  *
  * Authoritative hooks:
- * - Incursion active: BREACHING ingress, BOUND_REQUISITION…SAFEHOUSE, COMBAT
+ * - Incursion active: BREACHING ingress, SCANNING…SAFEHOUSE, COMBAT
  * - Combat: combatEntryActive || currentScreen === 'COMBAT' → drum mix
  * - Out of combat (still in run): RUN_MUSIC_SCREENS → explore mix
  * - Incursion end: EXTRACTING / HUB / debrief → stop beds; hub resumes on HUB
@@ -22,7 +22,6 @@ import {
 } from '../utils/bgmController';
 
 const RUN_MUSIC_SCREENS: ReadonlySet<AppScreen> = new Set([
-  'BOUND_REQUISITION',
   'SCANNING',
   'NARRATIVE',
   'POST_COMBAT_BOON',

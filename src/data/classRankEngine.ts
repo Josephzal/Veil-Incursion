@@ -1,7 +1,7 @@
 /**
- * Progression Spine — Class Rank reward skeleton + graft capacity axis.
- * Awards class XP from runs, ranks 1–20. Ranks 1–10 preserve original rewards;
- * ranks 11–20 append graft-capacity / socket gates (non-graft rewards deferred).
+ * Progression Spine — Class Rank XP / mastery history (ranks 1–20).
+ * Reward table hooks are flavor/history only. Stage II-B: Class Rank does not
+ * grant graft capacity, socket quality, ultimates, Apex access, or combat power.
  */
 import type { ClassType } from '../types/game';
 import type { BreachGradeId, ProgressionProfile } from '../types/progression';

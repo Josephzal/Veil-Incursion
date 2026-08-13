@@ -364,9 +364,10 @@ import {
   initEnemyCombatLayers,
   isEnemyFractured,
   recoverFromFracture,
+  removeCombatTag,
   stackDoomedTag,
 } from '../data/combatFractureEngine';
-import type { WeaponFamilyId, WeaponTierNumber } from '../types/weapon';
+import type { WeaponFamilyId } from '../types/weapon';
 import {
   applyWeaponBallisticDamageMultiplier,
   applyWeaponOccultDamageMultiplier,
@@ -450,7 +451,7 @@ import {
   rollFixerRepairAmount,
 } from '../data/fixerRepairEngine';
 import type { PlayerCombatState } from '../types/combatLifecycle';
-import type { CombatSessionExtras } from '../types/combatHooks';
+import type { CombatSessionExtras, StructuredPlayerDebuff } from '../types/combatHooks';
 import { createDefaultCombatSessionExtras, addStructuredDebuff, hasStructuredDebuff, removeStructuredDebuff } from '../types/combatHooks';
 import { isHeavyArchetype, type EnemySpawnArchetype } from '../data/enemyCombatConfig';
 import {
@@ -876,7 +877,11 @@ import {
 } from '../utils/parryCollision';
 import { useRun } from '../context/RunContext';
 import { tryNormalizeRunItemId } from '../data/runItemIdAliases';
-import { getRunItemInCombatSlot } from '../data/runItemInventoryEngine';
+import { hasSupplyInstance } from '../data/cargoSupplyEngine';
+import { getRunItemDefinition } from '../data/runItemRegistry';
+import { resolveSupplyCombatTranslation } from '../data/cargoSupplyCombatSafetyEngine';
+import { resolveHollowPointCritChanceBonus } from '../data/expeditionRequisitionRuntimeEngine';
+import type { RequisitionEncounterDescriptor } from '../types/expeditionRequisition';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
@@ -989,23 +994,20 @@ interface TacticalCombatHubProps {
   combatDistrict?: 1 | 2 | 3;
   /** Veil Front / employer first-turn-only AP bonuses (not Adrenaline Primer). */
   firstTurnBonusAp?: number;
-  /** Adrenaline Primer — +1 AP for the operative's first 3 turns this encounter. */
-  adrenalinePrimerActive?: boolean;
+  /** @deprecated Requisition runtime now owns Adrenaline Primer. */
   /** VOID'S TOLL and other incursion-wide AP ceiling bonuses. */
   incursionApBonus?: number;
   /** Fired when VOID'S TOLL triggers on an ultimate kill. */
   onVoidsTollTriggered?: () => void;
   /** Employer sponsor package — flat kinetic armor layers on operative. */
   playerKineticArmorBonus?: number;
-  /** Bound requisition / forge passive — defend to overcharge next strike. */
-  kineticBatteryActive?: boolean;
+  /** @deprecated Requisition runtime now owns Kinetic Battery. */
   /** Narrative bonus boons claimed for this combat encounter. */
   narrativeCombatBoons?: import('../types/narrativeBonusReward').PendingNarrativeCombatBoons;
   /** Active weapon family locked at run start. */
   activeWeaponFamilyId?: WeaponFamilyId | null;
   /** Dev combat sandbox — start with class ultimate meter charged for every weapon. */
   primeUltimateAtStart?: boolean;
-  activeWeaponTier?: WeaponTierNumber;
   /** WU-3 — Simplified Ultimate Inputs (STANDARD grade only). */
   simplifiedUltimateInputs?: boolean;
   /** Faction passive crit bonus (e.g. Solaris +10%). */
@@ -1102,14 +1104,11 @@ export default function TacticalCombatHub({
   envoyBoons = [],
   combatDistrict = 1,
   firstTurnBonusAp = 0,
-  adrenalinePrimerActive = false,
   incursionApBonus = 0,
   onVoidsTollTriggered,
   playerKineticArmorBonus = 0,
-  kineticBatteryActive = false,
   narrativeCombatBoons,
   activeWeaponFamilyId = null,
-  activeWeaponTier = 1,
   simplifiedUltimateInputs = false,
   primeUltimateAtStart = false,
   playerCritChanceBonus = 0,
@@ -1129,6 +1128,12 @@ export default function TacticalCombatHub({
     notifyRunItemPlayerTurnStart,
     notifyRunItemCombatStart,
     activeIncursion,
+    peekActiveIncursion,
+    beginRequisitionCombatEncounter,
+    resolveRequisitionFirstTurnAp,
+    resolveRequisitionDirectHostileDamage,
+    resolveRequisitionKineticBatteryAction,
+    resolveRequisitionHostileEffect,
   } = useRun();
   const activeIncursionRefLocal = useRef(activeIncursion);
   activeIncursionRefLocal.current = activeIncursion;
@@ -1141,6 +1146,11 @@ export default function TacticalCombatHub({
     delayedCylinderDamage: 0,
     staminaLossNextTurn: 0,
     healingReceivedPenaltyPct: 0,
+    razorwireRootedUnits: new Map<string, {
+      evadeChance: number;
+      evadeActive: boolean;
+      evadeTurnsRemaining: number;
+    }>(),
   });
   const hexShotBoonMods = useMemo(
     () => aggregateHexShotBoonModifiers(
@@ -1155,9 +1165,9 @@ export default function TacticalCombatHub({
   );
   const resolvedWeapon = useMemo(
     () => (activeWeaponFamilyId
-      ? buildResolvedWeaponForRun(activeWeaponFamilyId, activeWeaponTier)
+      ? buildResolvedWeaponForRun(activeWeaponFamilyId)
       : null),
-    [activeWeaponFamilyId, activeWeaponTier],
+    [activeWeaponFamilyId],
   );
   const weaponRuntimeRef = useRef(createDefaultWeaponRuntime());
   const aegisWeaponCombatRef = useRef(createDefaultAegisWeaponCombatState());
@@ -1360,7 +1370,6 @@ export default function TacticalCombatHub({
   const abyssalRef = useRef(startingAbyssalReservePercent);
   const skipRegenRef = useRef(false);
   const wardStrikeBonusRef = useRef(false);
-  const kineticBatteryChargedRef = useRef(false);
   const counterRef = useRef(false);
   const pendingDmgRef = useRef(0);
   const pendingUnblockRef = useRef(false);
@@ -1498,7 +1507,7 @@ export default function TacticalCombatHub({
   const pendingDissolveRef = useRef<{ unitId: string; profile: EnemyCombatProfile; hp: number } | null>(null);
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
-  const adrenalinePrimerTurnsRef = useRef(0);
+  const requisitionBatteryConsumedEncounterIdsRef = useRef<Set<string>>(new Set());
   const pendingVictoryRef = useRef(false);
   const encounterHostileCountRef = useRef(0);
   const victoryFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2860,12 +2869,6 @@ export default function TacticalCombatHub({
     }
   };
 
-  const consumeAdrenalinePrimerTurnBonus = (): number => {
-    if (adrenalinePrimerTurnsRef.current <= 0) return 0;
-    adrenalinePrimerTurnsRef.current -= 1;
-    return 1;
-  };
-
   const focusEnemy = (unit: EnemyCombatProfile | null) => {
     enemyRef.current = unit;
     setEnemy(unit);
@@ -3661,6 +3664,15 @@ export default function TacticalCombatHub({
   };
 
   const applyConsumableRef = useRef((_result: IncursionConsumableUseResult) => {});
+  const isObjectiveCriticalSupplyTarget = (unitId: string | undefined): boolean => {
+    if (!unitId) return false;
+    const session = objectiveSessionRef.current;
+    return [session.primary, ...session.secondary].some(
+      (objective) =>
+        objective?.status === 'ACTIVE' &&
+        objective.markedUnitIds.includes(unitId),
+    );
+  };
   applyConsumableRef.current = (result: IncursionConsumableUseResult) => {
     if (!canPlayerCommand()) return;
     const apCost = result.apCost ?? COMBAT_CONSUMABLE_AP_COST;
@@ -3720,20 +3732,35 @@ export default function TacticalCombatHub({
           pushDefenseBreakFloat(unit.unitId, 'ward');
         }
         if (stripResult.stacksRemoved > 0 && result.frontlineBlindTurns) {
+          const safety = resolveSupplyCombatTranslation('eclipse_flare_ward_break', {
+            isBoss: unit.isBoss === true,
+            isObjectiveCritical: isObjectiveCriticalSupplyTarget(unit.unitId),
+            revealedIntent: true,
+          });
           const blindResult = applyFrontlineBlinded(
             squadRef.current,
             sessionExtrasRef.current,
-            result.frontlineBlindTurns,
+            Math.min(result.frontlineBlindTurns, safety.maxControlTurns),
             { debuffDurationPct: resolvedWeapon?.statModifiers.debuffDurationPct },
           );
           blindResult.logLines.forEach((line) => log(line));
         }
       }
     } else if (result.frontlineBlindTurns && result.frontlineBlindTurns > 0) {
+      const protectedTarget = aliveUnits(squadRef.current).find(
+        (unit) => unit.isBoss || isObjectiveCriticalSupplyTarget(unit.unitId),
+      );
+      const safety = resolveSupplyCombatTranslation('veil_ash_grenade', {
+        isBoss: protectedTarget?.isBoss === true,
+        isObjectiveCritical: protectedTarget
+          ? isObjectiveCriticalSupplyTarget(protectedTarget.unitId)
+          : false,
+        revealedIntent: true,
+      });
       const blindResult = applyFrontlineBlinded(
         squadRef.current,
         sessionExtrasRef.current,
-        result.frontlineBlindTurns,
+        Math.min(result.frontlineBlindTurns, safety.maxControlTurns),
         { debuffDurationPct: resolvedWeapon?.statModifiers.debuffDurationPct },
       );
       blindResult.logLines.forEach((line) => log(line));
@@ -3788,11 +3815,21 @@ export default function TacticalCombatHub({
       const targets = aliveUnits(squadRef.current).slice(0, rootCap);
       targets.forEach((unit) => {
         if (!unit.unitId) return;
+        const safety = resolveSupplyCombatTranslation('razorwire_spool', {
+          isBoss: unit.isBoss === true,
+          isObjectiveCritical: isObjectiveCriticalSupplyTarget(unit.unitId),
+          revealedIntent: true,
+        });
         patchUnit(unit.unitId, {
           ...addCombatTag(unit, 'ROOTED'),
           evadeChance: 0,
           evadeActive: false,
-          evadeTurnsRemaining: 0,
+          evadeTurnsRemaining: Math.min(unit.evadeTurnsRemaining ?? 0, safety.maxControlTurns),
+        });
+        runItemCombatFlagsRef.current.razorwireRootedUnits.set(unit.unitId, {
+          evadeChance: unit.evadeChance ?? 0,
+          evadeActive: unit.evadeActive ?? false,
+          evadeTurnsRemaining: unit.evadeTurnsRemaining ?? 0,
         });
       });
       if (targets.length > 0) {
@@ -3805,6 +3842,11 @@ export default function TacticalCombatHub({
       if (unit?.unitId) {
         const interruptible = enemyIsTelegraphing(unit);
         if (result.interruptChargingTarget && interruptible) {
+          const safety = resolveSupplyCombatTranslation('black_iron_wedge', {
+            isBoss: unit.isBoss === true,
+            isObjectiveCritical: isObjectiveCriticalSupplyTarget(unit.unitId),
+            revealedIntent: interruptible,
+          });
           const counter = resolveIntentCounterplay({
             intent: unit.intent,
             playerActionTags: ['INTERRUPT', 'FRACTURE'],
@@ -3817,10 +3859,14 @@ export default function TacticalCombatHub({
           });
           patchUnit(unit.unitId, applyIntentCounterplayToEnemy(unit, {
             ...counter,
-            cancelTelegraph: true,
+            cancelTelegraph: safety.cancelRevealedIntent,
             appliedFracture: true,
           }));
-          counter.logMessages.forEach((m) => log(`>> BLACK-IRON WEDGE // ${m}`));
+          if (safety.translation === 'FULL') {
+            counter.logMessages.forEach((m) => log(`>> BLACK-IRON WEDGE // ${m}`));
+          } else {
+            log('>> BLACK-IRON WEDGE // Protected intent disrupted; phase preserved.');
+          }
           if (!counter.logMessages.length) {
             log('>> BLACK-IRON WEDGE // Telegraph spike interrupted.');
           }
@@ -3903,8 +3949,17 @@ export default function TacticalCombatHub({
     registerCanDeployCargoHandler?.((itemId: CargoItemId) => {
       const runItemId = tryNormalizeRunItemId(itemId);
       const fromRunSlot = runItemId != null
-        && getRunItemInCombatSlot(activeIncursionRefLocal.current.runItems, runItemId) != null;
+        && hasSupplyInstance(activeIncursionRefLocal.current.cargo, runItemId);
       const apNeeded = fromRunSlot ? 0 : combatConsumableApCost(itemId);
+      if (
+        runItemId &&
+        getRunItemDefinition(runItemId).useBehavior === 'mirror_salt_echo' &&
+        (!lastPlayerAbilityRef.current ||
+          lastPlayerAbilityRef.current === 'EVISCERATE' ||
+          lastPlayerAbilityRef.current === 'DEVASTATE')
+      ) {
+        return false;
+      }
       return canPlayerCommand() && playerApRef.current >= apNeeded;
     });
   }, [registerCanDeployCargoHandler]);
@@ -3967,6 +4022,26 @@ export default function TacticalCombatHub({
       skipImpactSfx: true,
       attacker: attacker ?? enemyRef.current ?? undefined,
     });
+    return true;
+  };
+
+  const shouldPreventHostileEffect = (
+    effectId: string,
+    eligible: boolean,
+    unpreventable = false,
+  ): boolean => {
+    const encounter = peekActiveIncursion().activeCombatEncounter;
+    return encounter
+      ? resolveRequisitionHostileEffect(encounter, effectId, eligible, unpreventable)
+      : false;
+  };
+
+  const applyHostileStructuredDebuff = (
+    effectId: string,
+    debuff: StructuredPlayerDebuff,
+  ): boolean => {
+    if (shouldPreventHostileEffect(effectId, true)) return false;
+    addStructuredDebuff(sessionExtrasRef.current, debuff);
     return true;
   };
 
@@ -4245,13 +4320,13 @@ export default function TacticalCombatHub({
             );
             imprintRunicBrand(1);
             log('[ECLIPSE] >> Complete Evade — Tempo armed, 1 Brand.');
-          } else if (resolvedWeapon?.familyId === 'aegis-rift-edge') {
+          } else if (resolvedWeapon?.familyId === 'aegis-paired-blades') {
             weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
             log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
           }
           aegisWeaponCombatRef.current = nextWs;
           syncAegisTempoPresentation(nextWs);
-        } else if (resolvedWeapon?.familyId === 'aegis-rift-edge') {
+        } else if (resolvedWeapon?.familyId === 'aegis-paired-blades') {
           weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
           log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
         }
@@ -4275,11 +4350,20 @@ export default function TacticalCombatHub({
     } else {
       log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
     }
+    const hostileControlEffects = operativeClass === 'AEGIS'
+      ? (options?.controlEffects ?? []).filter((reason) => {
+        const actionId = options?.authoredEnemyActionId
+          ?? (options?.attacker?.unitId
+            ? `enemy-${options.attacker.unitId}-${options.attacker.intent ?? 'HIT'}`
+            : 'enemy-control');
+        return !shouldPreventHostileEffect(`${actionId}:${reason}`, true);
+      })
+      : (options?.controlEffects ?? []);
     if (
       operativeClass === 'AEGIS'
       && (
         dmg > 0
-        || (options?.controlEffects?.length ?? 0) > 0
+        || hostileControlEffects.length > 0
       )
     ) {
       const inbound = hubResolveAegisInboundPlayerHit({
@@ -4289,7 +4373,7 @@ export default function TacticalCombatHub({
         environmental: options?.environmental,
         damageOverTime: options?.damageOverTime,
         attackerUnitId: options?.attacker?.unitId ?? null,
-        controlEffects: options?.controlEffects,
+        controlEffects: hostileControlEffects,
         authoredActionId: options?.authoredEnemyActionId
           ?? (options?.attacker?.unitId
             ? `enemy-${options.attacker.unitId}-${options.attacker.intent ?? 'HIT'}`
@@ -4307,7 +4391,7 @@ export default function TacticalCombatHub({
       syncAegisTempoPresentation(inbound.weaponState);
       if (inbound.brandGain > 0) imprintRunicBrand(inbound.brandGain);
       inbound.logs.forEach((line) => log(line));
-      for (const reason of options?.controlEffects ?? []) {
+      for (const reason of hostileControlEffects) {
         if (reason === 'STUN' || reason === 'KNOCKDOWN') {
           addStructuredDebuff(sessionExtrasRef.current, {
             type: reason,
@@ -4333,7 +4417,7 @@ export default function TacticalCombatHub({
           environmental: options?.environmental === true,
           damageOverTime: options?.damageOverTime === true,
           selfDamage: !options?.attacker,
-          controlOnly: dmg <= 0 && (options?.controlEffects?.length ?? 0) > 0,
+          controlOnly: dmg <= 0 && hostileControlEffects.length > 0,
           mitigationBypass: unblockable,
         });
       }
@@ -4353,6 +4437,20 @@ export default function TacticalCombatHub({
           dmg += 8;
           log('[SEARING] >> Secondary burst — +8 damage.');
         }
+      }
+      const requisitionEncounter = activeIncursionRefLocal.current.activeCombatEncounter;
+      const eligibleDirectHostileDamage = Boolean(
+        options?.attacker
+        && options.environmental !== true
+        && options.damageOverTime !== true
+        && options.indirectDamage !== true,
+      );
+      if (requisitionEncounter && eligibleDirectHostileDamage) {
+        dmg = resolveRequisitionDirectHostileDamage(
+          requisitionEncounter,
+          dmg,
+          true,
+        );
       }
       if (!options?.skipImpactSfx) {
         Vibration.vibrate([0, 32, 48, 28]);
@@ -4558,6 +4656,17 @@ export default function TacticalCombatHub({
       ? getUnitById(squadRef.current, targetId)
       : enemyRef.current;
     if (!e || !e.unitId) return false;
+    const requisitionEncounter = activeIncursionRefLocal.current.activeCombatEncounter;
+    const requisitionDirectActionEligible = Boolean(
+      raw > 0
+      && source
+      && source !== 'COUNTER'
+      && options?.playerActionId
+      && !options?.echoHit
+      && !options?.indirectDamage
+      && !options?.nestedPresentation
+      && options?.isDirectDamage !== false,
+    );
     if (
       rawTargetId
       && targetId
@@ -4817,6 +4926,11 @@ export default function TacticalCombatHub({
         {
           abilityId: options?.abilityId,
           target: working,
+          additiveCritChanceBonus: resolveHollowPointCritChanceBonus(
+            peekActiveIncursion().requisitionRuntime,
+            combatDistrict,
+            requisitionDirectActionEligible,
+          ),
           factionCritBonus: effectiveCritBonus + (
             operativeClass === 'HEX_SHOT'
             && hasHexShotBoon(hexShotBoons, 'DEAD_EYE')
@@ -5151,7 +5265,7 @@ export default function TacticalCombatHub({
           dmg,
           resolvedWeapon.statModifiers,
           postReload,
-          resolvedWeapon.passiveBonusPct ?? 0,
+          0,
           {
             skipFamilyBallisticPct: options?.weaponFamilyBallisticAlreadyScaled === true,
           },
@@ -5280,16 +5394,6 @@ export default function TacticalCombatHub({
       }
     }
     if (
-      source === 'STRIKE'
-      && kineticBatteryChargedRef.current
-      && dmg > 0
-    ) {
-      kineticBatteryChargedRef.current = false;
-      const boosted = Math.floor(dmg * 1.4);
-      log(`${tag} >> [KINETIC BATTERY] — ${dmg} → ${boosted}.`);
-      dmg = boosted;
-    }
-    if (
       hasMutation(leyLineMutations, 'FINAL_STAND')
       && playerApRef.current === 1
       && staminaRef.current === 0
@@ -5340,6 +5444,35 @@ export default function TacticalCombatHub({
       dmg = Math.max(GOD_MODE_STRIKE_DAMAGE, lethalFloor);
       options = { ...options, channel: 'TRUE', ignoreDefenses: true };
     }
+    let armorPierceLayers: 0 | 1 = 0;
+    let wardPierceLayers: 0 | 1 = 0;
+    const requisitionRuntime = peekActiveIncursion().requisitionRuntime;
+    const batteryPreparation = requisitionRuntime?.combatPreparation;
+    const batteryAvailable = batteryPreparation?.kind === 'kinetic_battery'
+      && !batteryPreparation.consumedEncounterIds.includes(requisitionEncounter?.encounterId ?? '');
+    if (
+      requisitionEncounter
+      && batteryAvailable
+      && requisitionDirectActionEligible
+      && dmg > 0
+      && !requisitionBatteryConsumedEncounterIdsRef.current.has(requisitionEncounter.encounterId)
+      && ((working.kineticArmor ?? 0) > 0 || (working.occultWards ?? 0) > 0)
+    ) {
+      const pierce = resolveRequisitionKineticBatteryAction(
+        requisitionEncounter,
+        options!.playerActionId!,
+        {
+          kineticArmor: working.kineticArmor ?? 0,
+          occultWards: working.occultWards ?? 0,
+        },
+        true,
+      );
+      armorPierceLayers = pierce.armorPierceLayers;
+      wardPierceLayers = pierce.wardPierceLayers;
+      if (armorPierceLayers > 0 || wardPierceLayers > 0) {
+        requisitionBatteryConsumedEncounterIdsRef.current.add(requisitionEncounter.encounterId);
+      }
+    }
     if (options?.channel === 'TRUE' || bypassAllMitigation) {
       dmg = applyDamageWithFractureBonus(dmg, working);
     } else if (options?.channel) {
@@ -5362,7 +5495,11 @@ export default function TacticalCombatHub({
       } else {
         wardenDefenseMaterialRef.current = 'NONE';
       }
-      const hit = resolveHostileHpHit(working, dmg, options.channel, { ignoreDefenses });
+      const hit = resolveHostileHpHit(working, dmg, options.channel, {
+        ignoreDefenses,
+        armorPierceLayers,
+        wardPierceLayers,
+      });
       working = hit.enemy;
       dmg = hit.hpDamage;
       hit.logLines.forEach((line) => log(line));
@@ -5791,17 +5928,17 @@ export default function TacticalCombatHub({
       );
       const carbineRangedBurst = Boolean(
         directWeaponHit
-        && resolvedWeapon?.familyId === 'hex-pulse-rifle'
+        && resolvedWeapon?.familyId === 'hex-carbine'
         && burstTags.includes('RANGED'),
       );
       const pairedBladesBurst = Boolean(
         directWeaponHit
-        && resolvedWeapon?.familyId === 'aegis-rift-edge',
+        && resolvedWeapon?.familyId === 'aegis-paired-blades',
       );
       const bloodBurstRepeats = carbineRangedBurst ? 3 : pairedBladesBurst ? 2 : 1;
       const bloodMistScale = (
-        resolvedWeapon?.familyId === 'hex-void-cannon'
-        || resolvedWeapon?.familyId === 'aegis-claymore-blade'
+        resolvedWeapon?.familyId === 'hex-shotgun'
+        || resolvedWeapon?.familyId === 'aegis-claymore'
       ) ? 1.5 : 1;
       // Immediate hit FX for DoTs / class abilities. Weapon-bus + Warden + Abyssal
       // defer flash/blood/numbers to their CONTACT / IMPACT beat.
@@ -6416,10 +6553,6 @@ export default function TacticalCombatHub({
 
   markPlayerDefendedRef.current = () => {
     sessionExtrasRef.current.playerDefendedThisTurn = true;
-    if (kineticBatteryActive && !kineticBatteryChargedRef.current) {
-      kineticBatteryChargedRef.current = true;
-      log('[KINETIC BATTERY] >> Defense lattice charged — next strike +40%.');
-    }
     if (hasStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF')) {
       removeStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF');
       log('>> ECHO DISSIPATED — defensive posture absorbed the aftershock.');
@@ -6721,13 +6854,17 @@ export default function TacticalCombatHub({
     applyStamina(beforeStamina - drain);
     log(`>> ${attacker.designation} STAMINA DRAIN LEAP — stamina siphoned (-${drain}).`);
     if (getAlphaMechanic(attacker, 'appliesBleed', false)) {
-      if (!sessionExtrasRef.current.playerDebuffs.includes('BLEEDING')) {
+      const prevented = shouldPreventHostileEffect(
+        `enemy-${attacker.unitId ?? 'x'}-${attacker.intent}:BLEEDING`,
+        true,
+      );
+      if (!prevented && !sessionExtrasRef.current.playerDebuffs.includes('BLEEDING')) {
         sessionExtrasRef.current.playerDebuffs = [
           ...sessionExtrasRef.current.playerDebuffs,
           'BLEEDING',
         ];
       }
-      log('>> PLAGUE SWARM — operative bleeding.');
+      if (!prevented) log('>> PLAGUE SWARM — operative bleeding.');
     }
     if (beforeStamina > 0 && staminaRef.current <= 0) {
       sessionExtrasRef.current.playerApPenaltyNextTurn += 1;
@@ -6849,7 +6986,9 @@ export default function TacticalCombatHub({
           applyStamina(staminaRef.current - reaverFx.guardBreakStamina);
         }
         if (e.rosterId === 'rival-hexer') {
-          log(applyRivalHexMark(sessionExtrasRef.current));
+          if (!shouldPreventHostileEffect(`enemy-${e.unitId ?? 'x'}-STRIKE:HEX_MARK`, true)) {
+            log(applyRivalHexMark(sessionExtrasRef.current));
+          }
         }
         if (e.rosterId === 'fracture-hound' && !e.isEnraged) applyFractureHoundShieldDrain(e);
         if (e.rosterId === 'breacher') {
@@ -6996,11 +7135,13 @@ export default function TacticalCombatHub({
         break;
       }
       case 'VEIL_STATIC':
-        sessionExtrasRef.current = {
-          ...sessionExtrasRef.current,
-          playerApCapNextTurn: 2,
-        };
-        log(`>> ${e.designation} VEIL STATIC — operative AP capped next turn (2/3).`);
+        if (!shouldPreventHostileEffect(`enemy-${e.unitId ?? 'x'}-VEIL_STATIC`, true)) {
+          sessionExtrasRef.current = {
+            ...sessionExtrasRef.current,
+            playerApCapNextTurn: 2,
+          };
+          log(`>> ${e.designation} VEIL STATIC — operative AP capped next turn (2/3).`);
+        }
         break;
       case 'PREMATURE_IGNITION': {
         log(`>> ${e.designation} PREMATURE IGNITION — occult backlash imminent.`);
@@ -7042,13 +7183,14 @@ export default function TacticalCombatHub({
       }
       case 'KINETIC_AFTERSHOCK': {
         const dmg = resolveRosterEnemyDamage(e, 'STRIKE');
-        log(`>> ${e.designation} KINETIC AFTERSHOCK — ${dmg} impact + echo primed.`);
+        log(`>> ${e.designation} KINETIC AFTERSHOCK — ${dmg} impact.`);
         hurtPlayer(dmg, false, `>> KINETIC AFTERSHOCK — ${dmg}`, { attacker: e });
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-KINETIC_AFTERSHOCK:ECHO`, {
           type: 'ECHO_DEBUFF',
           amount: dmg,
           turnsRemaining: 1,
         });
+        if (applied) log(`>> ${e.designation} KINETIC AFTERSHOCK — echo primed.`);
         break;
       }
       case 'SCAVENGE': {
@@ -7068,15 +7210,19 @@ export default function TacticalCombatHub({
       }
       case 'SENSORY_JAM': {
         const jamTurns = Math.random() < 0.5 ? 1 : 2;
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-SENSORY_JAM`, {
           type: 'SENSORY_JAMMED',
           turnsRemaining: jamTurns,
         });
-        log(`>> ${e.designation} SENSORY JAM — hostile intents obscured (${jamTurns} turn${jamTurns > 1 ? 's' : ''}).`);
+        if (applied) {
+          log(`>> ${e.designation} SENSORY JAM — hostile intents obscured (${jamTurns} turn${jamTurns > 1 ? 's' : ''}).`);
+        }
         break;
       }
       case 'HEX_MARK': {
-        log(applyRivalHexMark(sessionExtrasRef.current));
+        if (!shouldPreventHostileEffect(`enemy-${e.unitId ?? 'x'}-HEX_MARK`, true)) {
+          log(applyRivalHexMark(sessionExtrasRef.current));
+        }
         break;
       }
       case 'BINDING_WARD': {
@@ -7101,22 +7247,22 @@ export default function TacticalCombatHub({
         break;
       }
       case 'TARGET_LOCK': {
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-TARGET_LOCK`, {
           type: 'TARGET_LOCKED',
           turnsRemaining: 2,
         });
         if (e.unitId && e.rosterId === 'spotter') {
           patchUnit(e.unitId, { spotterLockedOn: true, isCharging: true });
         }
-        log(`>> ${e.designation} LOCKED ON — artillery primed.`);
+        if (applied) log(`>> ${e.designation} LOCKED ON — artillery primed.`);
         break;
       }
       case 'ASHEN_ROT': {
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-ASHEN_ROT`, {
           type: 'ASHEN_ROT',
           turnsRemaining: 2,
         });
-        log(`>> ${e.designation} ASHEN ROT — buff/defend actions cost stamina.`);
+        if (applied) log(`>> ${e.designation} ASHEN ROT — buff/defend actions cost stamina.`);
         break;
       }
       case 'ARTILLERY_CHARGE':
@@ -7130,15 +7276,17 @@ export default function TacticalCombatHub({
         const lockTurns = e.rosterId === 'coil-spike-sniper'
           ? getAlphaMechanic(e, 'lockOnTurns', 2)
           : 1;
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-LASER_SIGHT`, {
           type: 'LASER_SIGHT',
           turnsRemaining: lockTurns,
         });
-        log(
-          e.rosterId === 'coil-spike-sniper' && lockTurns > 1
-            ? `>> ${e.designation} LASER SIGHT — true damage lock acquired (${lockTurns}-turn wind-up).`
-            : `>> ${e.designation} LASER SIGHT — true damage lock acquired.`,
-        );
+        if (applied) {
+          log(
+            e.rosterId === 'coil-spike-sniper' && lockTurns > 1
+              ? `>> ${e.designation} LASER SIGHT — true damage lock acquired (${lockTurns}-turn wind-up).`
+              : `>> ${e.designation} LASER SIGHT — true damage lock acquired.`,
+          );
+        }
         break;
       }
       case 'ARTILLERY_FIRE': {
@@ -7163,11 +7311,11 @@ export default function TacticalCombatHub({
         } else if (e.rosterId === 'splinter') {
           const chip = Math.max(4, Math.floor(dmg * 0.35));
           hurtPlayer(chip, false, `>> SEARING LASER — ${chip}`, { attacker: e });
-          addStructuredDebuff(sessionExtrasRef.current, {
+          const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-ARTILLERY_FIRE:SEARING`, {
             type: 'SEARING',
             turnsRemaining: 3,
           });
-          log(`>> ${e.designation} SEARING MARK applied.`);
+          if (applied) log(`>> ${e.designation} SEARING MARK applied.`);
         } else {
           log(`>> ${e.designation} ARTILLERY FIRE — ${dmg}.`);
           hurtPlayer(dmg, false, `>> ARTILLERY — ${dmg}`, { attacker: e });
@@ -7178,11 +7326,13 @@ export default function TacticalCombatHub({
         const dmg = resolveRosterEnemyDamage(e, 'TAR_BIND');
         const rootDuration = getAlphaMechanic(e, 'rootDuration', 1);
         hurtPlayer(dmg, false, `>> TAR BIND — ${dmg}`, { attacker: e });
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-TAR_BIND:ROOTED`, {
           type: 'ROOTED',
           turnsRemaining: rootDuration,
         });
-        log(`>> ${e.designation} ROOTED — defend/evade disabled (${rootDuration} turn${rootDuration > 1 ? 's' : ''}).`);
+        if (applied) {
+          log(`>> ${e.designation} ROOTED — defend/evade disabled (${rootDuration} turn${rootDuration > 1 ? 's' : ''}).`);
+        }
         if (e.rosterId === 'tar-choir') {
           const marked = markTarChoirOnHit(depthVariantRuntimeRef.current, e.rosterId);
           depthVariantRuntimeRef.current = marked.runtime;
@@ -7191,6 +7341,7 @@ export default function TacticalCombatHub({
         break;
       }
       case 'STAMINA_TETHER': {
+        if (shouldPreventHostileEffect(`enemy-${e.unitId ?? 'x'}-STAMINA_TETHER`, true)) break;
         const tether = applyHookWeaverTetherAction(squadRef.current, e);
         syncSquad(tether.squad);
         sessionExtrasRef.current = {
@@ -7208,16 +7359,18 @@ export default function TacticalCombatHub({
           const slot = Math.floor(Math.random() * 3);
           if (!slots.includes(slot)) slots.push(slot);
         }
-        sessionExtrasRef.current = {
-          ...sessionExtrasRef.current,
-          jammedAugmentSlot: slots[0] ?? null,
-          jammedAugmentSlots: slots,
-        };
-        addStructuredDebuff(sessionExtrasRef.current, {
+        const applied = applyHostileStructuredDebuff(`enemy-${e.unitId ?? 'x'}-JAM_AUGMENT`, {
           type: 'JAMMED_AUGMENT',
           turnsRemaining: duration,
         });
-        log(`>> ${e.designation} JAMMED AUGMENT — loadout slot(s) ${slots.map((s) => s + 1).join(', ')} disabled (${duration} turn${duration > 1 ? 's' : ''}).`);
+        if (applied) {
+          sessionExtrasRef.current = {
+            ...sessionExtrasRef.current,
+            jammedAugmentSlot: slots[0] ?? null,
+            jammedAugmentSlots: slots,
+          };
+          log(`>> ${e.designation} JAMMED AUGMENT — loadout slot(s) ${slots.map((s) => s + 1).join(', ')} disabled (${duration} turn${duration > 1 ? 's' : ''}).`);
+        }
         break;
       }
       default: break;
@@ -7347,6 +7500,15 @@ export default function TacticalCombatHub({
 
   const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
+    runItemCombatFlagsRef.current.razorwireRootedUnits.forEach((snapshot, unitId) => {
+      const unit = getUnitById(squadRef.current, unitId);
+      if (!unit) return;
+      patchUnit(unitId, {
+        ...removeCombatTag(unit, 'ROOTED'),
+        ...snapshot,
+      });
+    });
+    runItemCombatFlagsRef.current.razorwireRootedUnits.clear();
     balanceEncounterRef.current.playerTurns += 1;
     if (operativeClass === 'HEX_SHOT') {
       if (classCombatRef.current.hexElusiveCharges > 0) {
@@ -7485,7 +7647,6 @@ export default function TacticalCombatHub({
     combatBuffRef.current.bonusApThisTurn = 0;
     const apPenalty = sessionExtrasRef.current.playerApPenaltyNextTurn;
     const apCap = sessionExtrasRef.current.playerApCapNextTurn;
-    const primerAp = consumeAdrenalinePrimerTurnBonus();
     if (apPenalty > 0) {
       sessionExtrasRef.current.playerApPenaltyNextTurn = 0;
       log(`>> MIASMA FATIGUE — −${apPenalty} AP this turn.`);
@@ -7494,10 +7655,7 @@ export default function TacticalCombatHub({
       sessionExtrasRef.current.playerApCapNextTurn = null;
       log(`>> VEIL STATIC RESIDUE — operative AP capped at ${apCap}.`);
     }
-    if (primerAp > 0) {
-      log(`>> ADRENALINE PRIMER — +${primerAp} AP this turn.`);
-    }
-    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + bonusAp + primerAp - apPenalty;
+    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + bonusAp - apPenalty;
     playerApRef.current = apCap != null
       ? Math.max(0, Math.min(apCap, baseAp))
       : Math.max(0, baseAp);
@@ -8416,8 +8574,26 @@ export default function TacticalCombatHub({
       delayedCylinderDamage: 0,
       staminaLossNextTurn: 0,
       healingReceivedPenaltyPct: 0,
+      razorwireRootedUnits: new Map(),
     };
     notifyRunItemCombatStart();
+    const requisitionEncounter: RequisitionEncounterDescriptor =
+      activeIncursionRefLocal.current.activeCombatEncounter ?? {
+        encounterId: `${
+          activeIncursionRefLocal.current.currentNodeId || 'combat'
+        }:${nodeIndex}`,
+        kind: bossProfile
+          ? 'BOSS'
+          : env.eliteModifier ||
+              initialSquad.some((unit) => unit.isAlpha === true)
+            ? 'ELITE'
+            : 'STANDARD',
+      };
+    beginRequisitionCombatEncounter(requisitionEncounter);
+    activeIncursionRefLocal.current = {
+      ...activeIncursionRefLocal.current,
+      activeCombatEncounter: requisitionEncounter,
+    };
     weaponRuntimeRef.current = createDefaultWeaponRuntime();
     aegisWeaponCombatRef.current = createDefaultAegisWeaponCombatState();
     doomfallGraftPlanRef.current = null;
@@ -8429,7 +8605,7 @@ export default function TacticalCombatHub({
     clearSanguineTurnGuard(sanguineTurnGuardRef.current);
     initPlayerMaxHpDebtTracking(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
     setPlayerMaxAnchorDebt(0);
-    kineticBatteryChargedRef.current = false;
+    requisitionBatteryConsumedEncounterIdsRef.current = new Set();
     combatChanceRef.current = createDefaultCombatChanceState();
     setMagazineAmmo(maxAmmo);
     setAegisOvercharged(false);
@@ -8444,7 +8620,6 @@ export default function TacticalCombatHub({
     syncFractureBreakTarget(null);
     dissolvedHiddenRef.current = new Set();
     dissolveSeqRef.current = {};
-    adrenalinePrimerTurnsRef.current = adrenalinePrimerActive ? 3 : 0;
     setSuccessfulParryCount(0);
     setCataclysmReadyUi(false);
     cataclysmReadyPrevRef.current = false;
@@ -8485,14 +8660,15 @@ export default function TacticalCombatHub({
         && (unit.laserLockTurnsRemaining ?? 0) === 0,
     );
     if (preLockedSniper) {
-      addStructuredDebuff(sessionExtrasRef.current, {
+      const applied = applyHostileStructuredDebuff(`enemy-${preLockedSniper.unitId ?? 'x'}-PRELOCK:LASER_SIGHT`, {
         type: 'LASER_SIGHT',
         turnsRemaining: getAlphaMechanic(preLockedSniper, 'lockOnTurns', 1),
       });
-      log(`>> ${preLockedSniper.designation} EXECUTIONER LOCK — target pre-acquired.`);
+      if (applied) log(`>> ${preLockedSniper.designation} EXECUTIONER LOCK — target pre-acquired.`);
     }
     const ghostedAp = narrativeCombatBoons?.ghosted ? 1 : 0;
-    const entryPrimerAp = consumeAdrenalinePrimerTurnBonus();
+    let entryPrimerAp = 0;
+    entryPrimerAp = resolveRequisitionFirstTurnAp(requisitionEncounter);
     const entryAp = PLAYER_ACTION_POINTS_PER_TURN
       + incursionApBonus
       + Math.max(0, firstTurnBonusAp)
@@ -11088,7 +11264,7 @@ export default function TacticalCombatHub({
         rollCrit: false,
         }, unit.unitId);
         const lantern = resolveLanternFluxPurgePayoff({
-          familyId: 'envoy-echo-lantern',
+          familyId: 'envoy-vambrace',
           classState: classCombatRef.current,
           targetId: unit.unitId,
           baseDamage: Math.max(1, Math.floor(plan.baselineOccult * plan.detonationEfficiency)),
@@ -11182,7 +11358,7 @@ export default function TacticalCombatHub({
     setZeroProtocolVisible(false);
     combatPausedRef.current = false;
     if (!canFireLegacyClassUltimate('ZERO_PROTOCOL', activeWeaponFamilyId)) {
-      log('[REJECTED] >> Zero Protocol requires the Ash Shotgun.');
+      log('[REJECTED] >> Zero Protocol requires the Carbine.');
       return;
     }
     const resolved = resolveWeaponUltimateGrade({
@@ -11580,14 +11756,14 @@ export default function TacticalCombatHub({
     if (
       resolvedWeapon
       && (
-        resolvedWeapon.familyId === 'hex-silver-core-sidearm'
-        || resolvedWeapon.familyId === 'hex-void-cannon'
-        || resolvedWeapon.familyId === 'hex-pulse-rifle'
+        resolvedWeapon.familyId === 'hex-revolver'
+        || resolvedWeapon.familyId === 'hex-shotgun'
+        || resolvedWeapon.familyId === 'hex-carbine'
       )
     ) {
-      const reloadCue = resolvedWeapon.familyId === 'hex-silver-core-sidearm'
+      const reloadCue = resolvedWeapon.familyId === 'hex-revolver'
         ? 'sfx.revolver.reload_sacrifice'
-        : resolvedWeapon.familyId === 'hex-void-cannon'
+        : resolvedWeapon.familyId === 'hex-shotgun'
           ? 'sfx.blackdoor.reload_sacrifice'
           : 'sfx.carbine.reload_sacrifice';
       playCombatPresentationCue(reloadCue);
@@ -11730,14 +11906,14 @@ export default function TacticalCombatHub({
             log('[ECLIPSE] >> Perfect Parry — Tempo armed, 1 Brand.');
           } else if (
             !bound
-            && resolvedWeapon?.familyId === 'aegis-rift-edge'
+            && resolvedWeapon?.familyId === 'aegis-paired-blades'
           ) {
             weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
             log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
           }
           aegisWeaponCombatRef.current = ws;
           syncAegisTempoPresentation(ws);
-        } else if (resolvedWeapon?.familyId === 'aegis-rift-edge') {
+        } else if (resolvedWeapon?.familyId === 'aegis-paired-blades') {
           weaponRuntimeRef.current = armRiftEdgeTempo(weaponRuntimeRef.current);
           log('[RIFT EDGE] >> Tempo armed — next basic carries Occult rider.');
         }
@@ -12929,7 +13105,7 @@ export default function TacticalCombatHub({
           }`;
         }
       } else if (abilityId === 'DOOR_KNOCKER') {
-        h3bContractLine = 'DOOR KNOCKER — Nullbreach basic (Tier-I 19 via family scaling). Armored ×1.10 + KA pressure. Backline ×0.75. Live stamina.';
+        h3bContractLine = 'DOOR KNOCKER — Shotgun basic (baseline 19 via family scaling). Armored ×1.10 + KA pressure. Backline ×0.75. Live stamina.';
       } else if (abilityId === 'FATAL_FUNNEL') {
         const primary = scaleHexWeaponAuthoredDamage(FATAL_FUNNEL_PRIMARY_AUTHORED, resolvedWeapon);
         const rear = scaleHexWeaponAuthoredDamage(FATAL_FUNNEL_REAR_AUTHORED, resolvedWeapon);
@@ -13206,11 +13382,11 @@ export default function TacticalCombatHub({
         ? (classCombatRef.current.previousCatalyst ?? null)
         : undefined,
       cleanCatalystCycleReady: operativeClass === 'ENVOY'
-        && activeWeaponFamilyId === 'envoy-null-conduit'
+        && activeWeaponFamilyId === 'envoy-scythe'
         && (classCombatRef.current.previousCatalyst === 'NULL'
           || classCombatRef.current.previousCatalyst === 'BLOOD'),
       lanternDetonationReady: operativeClass === 'ENVOY'
-        && activeWeaponFamilyId === 'envoy-echo-lantern'
+        && activeWeaponFamilyId === 'envoy-vambrace'
         && envoyRotStacksTotal > 0,
       prismBrinkActive: operativeClass === 'ENVOY'
         && activeWeaponFamilyId === 'envoy-sanguine-prism'
@@ -13394,7 +13570,7 @@ export default function TacticalCombatHub({
             riposteReady: classCombatRef.current.riposteReady,
             targetFractured: !!(enemyRef.current && isEnemyFractured(enemyRef.current)),
             lanternDetonationReady: operativeClass === 'ENVOY'
-              && activeWeaponFamilyId === 'envoy-echo-lantern'
+              && activeWeaponFamilyId === 'envoy-vambrace'
               && envoyRotStacksTotal > 0,
             prismCanPayFullSacrifice: operativeClass === 'ENVOY'
               && activeWeaponFamilyId === 'envoy-sanguine-prism'
@@ -13454,7 +13630,7 @@ export default function TacticalCombatHub({
             riposteReady: classCombatRef.current.riposteReady,
             targetFractured: !!(enemyRef.current && isEnemyFractured(enemyRef.current)),
             lanternDetonationReady: operativeClass === 'ENVOY'
-              && activeWeaponFamilyId === 'envoy-echo-lantern'
+              && activeWeaponFamilyId === 'envoy-vambrace'
               && envoyRotStacksTotal > 0,
             prismCanPayFullSacrifice: operativeClass === 'ENVOY'
               && activeWeaponFamilyId === 'envoy-sanguine-prism'

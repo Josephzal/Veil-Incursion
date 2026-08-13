@@ -355,7 +355,7 @@ export function resolveRecommendedFor(sector: SectorState): string[] {
   }
   if (op.objectiveKind === 'ECHO_RECOVERY' || echoActivity === 'ELEVATED' || echoActivity === 'CRITICAL') {
     recs.push('Echo hunting');
-    recs.push('Relic chances');
+    recs.push('Requisition chances');
   }
   if (op.objectiveKind === 'EXTRACTION_SURGE' || op.objectiveKind === 'RESOURCE_SURVEY') {
     recs.push('Resource extraction');

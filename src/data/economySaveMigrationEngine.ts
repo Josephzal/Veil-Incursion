@@ -145,7 +145,6 @@ export function migratePlayerAccountEconomy(input: {
   resourceDiscovery?: ResourceDiscoveryState;
   careerEconomyTelemetry?: Partial<CareerEconomyTelemetry>;
   sealedCargoStacks?: SealedCargoStackMeta[];
-  craftedAugments?: readonly string[];
   weaponUnlocks?: readonly string[];
 }): EconomySaveMigrationResult {
   const notes: EconomySaveMigrationNote[] = [];
@@ -179,14 +178,7 @@ export function migratePlayerAccountEconomy(input: {
     });
   }
 
-  // Preserve assertions — never wipe craft/weapons during economy migrate.
-  if (input.craftedAugments && input.craftedAugments.length > 0) {
-    notes.push({
-      severity: 'info',
-      area: 'CRAFT',
-      message: `Preserved ${input.craftedAugments.length} crafted augment(s).`,
-    });
-  }
+  // Weapon ownership is independent of economy normalization.
   if (input.weaponUnlocks && input.weaponUnlocks.length > 0) {
     notes.push({
       severity: 'info',
@@ -348,7 +340,6 @@ export function formatEconomySaveMigrationDryRun(account: PlayerAccount): string
     resourceDiscovery: account.resourceDiscovery,
     careerEconomyTelemetry: account.careerEconomyTelemetry,
     sealedCargoStacks: account.sealedCargoStacks,
-    craftedAugments: account.craftedAugments,
     weaponUnlocks: account.weaponUnlocks,
   });
   return formatEconomySaveMigrationReport(result);
@@ -370,8 +361,7 @@ export function formatEconomySaveMigrationFixtureReport(): string {
         state: 'SEALED',
       },
     ],
-    craftedAugments: ['fixture-augment'],
-    weaponUnlocks: ['aegis-runed-longsword'],
+    weaponUnlocks: ['aegis-longsword'],
   });
 
   const contractSanitize = sanitizePersistedContractBoard({

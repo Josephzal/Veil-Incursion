@@ -13,7 +13,7 @@ import {
 import { DEFAULT_AEGIS_TECHNIQUE_LOADOUT } from '../types/aegisCombat';
 
 const envoy = buildEnvoyCombatSurface({
-  weaponFamilyId: 'envoy-echo-lantern',
+  weaponFamilyId: 'envoy-vambrace',
   flex: DEFAULT_ENVOY_FLEX_LOADOUT,
 });
 const envoyRail = buildCombatCommandRailModel({
@@ -36,8 +36,8 @@ assert.ok(!envoyRail.cards.some((c) => c.abilityId === 'BLACK_WICK'));
 assert.equal(envoyRail.cards.filter((c) => c.abilityId === envoy.weaponActions[0]).length, 1);
 
 for (const familyId of [
-  'envoy-echo-lantern',
-  'envoy-null-conduit',
+  'envoy-vambrace',
+  'envoy-scythe',
   'envoy-sanguine-prism',
 ] as const) {
   const surface = buildEnvoyCombatSurface({
@@ -56,7 +56,7 @@ for (const familyId of [
 }
 
 const aegis = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
 });
 const aegisRail = buildCombatCommandRailModel({
@@ -70,7 +70,7 @@ assert.deepEqual(aegisRail.cards.map((c) => c.abilityId), [...aegis.hudCards]);
 assert.ok(assertMechanicOutsideRail(aegisRail, ['WRAITH_PARRY', 'PARRY']));
 
 const hex = buildHexCombatSurface({
-  weaponFamilyId: 'hex-silver-core-sidearm',
+  weaponFamilyId: 'hex-revolver',
   flex: DEFAULT_HEX_FLEX_LOADOUT,
 });
 const hexRail = buildCombatCommandRailModel({

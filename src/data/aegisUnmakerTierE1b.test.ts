@@ -1,11 +1,13 @@
 /**
- * Phase E.1b — Unmaker Tier III Fracture-break Reserve + Aegis strikeDamagePct presentation.
+ * Phase E.1b — Claymore family Fracture cashout + retired T3 FRACTURE_BREAK_RESERVE.
+ * Stage II-C — T3 once-per-combat passives fail closed; family kit cashout remains.
  */
 import assert from 'node:assert/strict';
 import { resolveWeaponState } from './weaponProgressionEngine';
 import { formatWeaponStatLines, runWeaponOnFractureHooks } from './weaponCombatEngine';
 import { createDefaultWeaponRuntime } from './weaponRunState';
 import { WEAPON_REGISTRY } from './weaponRegistry';
+import { resolveClaymoreFractureBreakReserve } from './weaponBasicEngine';
 import {
   UNMAKER_T3_FRACTURE_BREAK_PLAYER_COPY,
   UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT,
@@ -22,28 +24,25 @@ import { planAegisWeaponAction, planWardensStrike } from './aegisWeaponActionRes
 import { deriveAegisWeaponActions } from './aegisWeaponActionRegistry';
 import { scaleClassGraftDamage, buildClassGraftCastPlan } from './classGraftEngine';
 
-const unmakerT1 = resolveWeaponState('aegis-claymore-blade', 1);
-const unmakerT2 = resolveWeaponState('aegis-claymore-blade', 2);
-const unmakerT3 = resolveWeaponState('aegis-claymore-blade', 3);
+const claymore = resolveWeaponState('aegis-claymore');
 
-// 1–2. Tier I/II unchanged passives; T3 no Stamina
+// Tierless Claymore baseline — no oncePerCombatPassive / T3 FRACTURE_BREAK_RESERVE
 {
-  assert.equal(unmakerT1.oncePerCombatPassive, undefined);
-  assert.equal(unmakerT2.oncePerCombatPassive, undefined);
-  assert.equal(unmakerT3.oncePerCombatPassive, 'FRACTURE_BREAK_RESERVE');
-  assert.equal(unmakerT3.passiveBonusPct, 1);
-  assert.ok(!/stamina/i.test(unmakerT3.effectSummary));
-  assert.ok(unmakerT3.effectSummary.includes('Abyssal Reserve'));
-  assert.equal(unmakerT3.effectSummary, UNMAKER_T3_FRACTURE_BREAK_PLAYER_COPY);
-  assert.ok(weaponHasUnmakerTier3FractureBreakReserve(unmakerT3));
-  assert.equal(weaponHasUnmakerTier3FractureBreakReserve(unmakerT1), false);
-  assert.equal(weaponHasUnmakerTier3FractureBreakReserve(unmakerT2), false);
+  assert.equal('oncePerCombatPassive' in claymore, false);
+  assert.equal('passiveBonusPct' in claymore, false);
+  assert.equal('tiers' in WEAPON_REGISTRY['aegis-claymore'], false);
+  assert.deepEqual(claymore.statModifiers, WEAPON_REGISTRY['aegis-claymore'].baselineStatModifiers);
+  assert.equal(claymore.effectSummary, WEAPON_REGISTRY['aegis-claymore'].baselineEffectSummary);
+  assert.ok(!/stamina/i.test(claymore.effectSummary));
+  assert.equal(weaponHasUnmakerTier3FractureBreakReserve(claymore), false);
+  // Historical copy retained for compat docs, but not live effectSummary
+  assert.ok(UNMAKER_T3_FRACTURE_BREAK_PLAYER_COPY.includes('Abyssal Reserve'));
 }
 
-// Legacy stamina hook path grants nothing
+// Legacy stamina / fracture hook path grants nothing (T3 retired)
 {
   const hooks = runWeaponOnFractureHooks({
-    weapon: unmakerT3,
+    weapon: claymore,
     runtime: createDefaultWeaponRuntime(),
     squad: [],
     player: { hp: 100, maxHp: 100 },
@@ -53,10 +52,25 @@ const unmakerT3 = resolveWeaponState('aegis-claymore-blade', 3);
   assert.deepEqual(hooks.logLines, []);
 }
 
-// 3–9. Grant rules
+// Family Claymore Fracture-break cashout still works (not the retired T3 passive)
+{
+  const first = resolveClaymoreFractureBreakReserve('aegis-claymore', createDefaultWeaponRuntime());
+  const second = resolveClaymoreFractureBreakReserve(
+    'aegis-claymore',
+    { ...createDefaultWeaponRuntime(), claymoreBreakCashoutUsed: true },
+  );
+  assert.ok(first.reserveGain > second.reserveGain);
+  assert.equal(first.runtimePatch?.claymoreBreakCashoutUsed, true);
+  assert.equal(
+    resolveClaymoreFractureBreakReserve('aegis-longsword', createDefaultWeaponRuntime()).reserveGain,
+    0,
+  );
+}
+
+// T3 FRACTURE_BREAK_RESERVE engine always inactive
 {
   const base = {
-    weapon: unmakerT3,
+    weapon: claymore,
     causesFractureBreak: true,
     abilityId: 'UNMAKER_STRIKE',
     playerActionId: 'act-1',
@@ -64,99 +78,32 @@ const unmakerT3 = resolveWeaponState('aegis-claymore-blade', 3);
     grantedForPlayerActionId: null as string | null,
   };
   const grant = resolveUnmakerTier3FractureBreakReserveGrant(base);
-  assert.equal(grant.reserveGain, UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT);
-  assert.equal(grant.nextGrantedForPlayerActionId, 'act-1');
-  assert.ok(grant.logLine?.includes('Abyssal Reserve'));
+  assert.equal(grant.reserveGain, 0);
+  assert.equal(grant.nextGrantedForPlayerActionId, null);
+  assert.equal(grant.logLine, null);
 
-  // No break
   assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
     ...base, causesFractureBreak: false,
   }).reserveGain, 0);
 
-  // Graft-added
   assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
     ...base, echoHit: true,
   }).reserveGain, 0);
 
-  // Once per action
   assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    ...base, grantedForPlayerActionId: 'act-1',
+    ...base, abilityId: 'DOOMFALL', playerActionId: 'df-release',
   }).reserveGain, 0);
 
-  // Multi-hit same action — second call blocked
-  const first = resolveUnmakerTier3FractureBreakReserveGrant(base);
-  const second = resolveUnmakerTier3FractureBreakReserveGrant({
-    ...base,
-    grantedForPlayerActionId: first.nextGrantedForPlayerActionId,
-  });
-  assert.equal(first.reserveGain, 1);
-  assert.equal(second.reserveGain, 0);
-
-  // Multi-target (Horizon) — same playerActionId
-  assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    ...base,
-    abilityId: 'DREAD_HORIZON',
-    playerActionId: 'act-row',
-    grantedForPlayerActionId: 'act-row',
-  }).reserveGain, 0);
-
-  // Density etc. do not change count (still 1)
-  assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    ...base, playerActionId: 'act-dens',
-  }).reserveGain, 1);
-
-  // Non-Unmaker WA
   assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
     ...base, abilityId: 'WARDENS_STRIKE', playerActionId: 'act-w',
   }).reserveGain, 0);
-
-  // T1/T2 never
-  assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    ...base, weapon: unmakerT1,
-  }).reserveGain, 0);
 }
 
-// 10–12. Doomfall Charge / Release / interrupt semantics (engine-level)
-{
-  // Charge has no fracture delivery — no grant without causesFractureBreak
-  assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    weapon: unmakerT3,
-    causesFractureBreak: false,
-    abilityId: 'DOOMFALL',
-    playerActionId: 'df-charge',
-    echoHit: false,
-    grantedForPlayerActionId: null,
-  }).reserveGain, 0);
-
-  // Release may grant once when break occurs
-  const release = resolveUnmakerTier3FractureBreakReserveGrant({
-    weapon: unmakerT3,
-    causesFractureBreak: true,
-    abilityId: 'DOOMFALL',
-    playerActionId: 'df-release',
-    echoHit: false,
-    grantedForPlayerActionId: null,
-  });
-  assert.equal(release.reserveGain, 1);
-
-  // Interrupted Charge = no Release break → nothing (no grant key without break)
-  assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    weapon: unmakerT3,
-    causesFractureBreak: false,
-    abilityId: 'DOOMFALL',
-    playerActionId: 'df-interrupted',
-    echoHit: false,
-    grantedForPlayerActionId: null,
-  }).reserveGain, 0);
-}
-
-// 13. Cap respected by chargeAr — grant amount is 1 (hub Math.min with cap)
 assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
 
-// 14. No Brand/AP/etc. — grant result only exposes reserveGain + log
 {
   const g = resolveUnmakerTier3FractureBreakReserveGrant({
-    weapon: unmakerT3,
+    weapon: claymore,
     causesFractureBreak: true,
     abilityId: 'UNBOWED',
     playerActionId: 'act-u',
@@ -164,31 +111,31 @@ assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
     grantedForPlayerActionId: null,
   });
   assert.deepEqual(Object.keys(g).sort(), ['logLine', 'nextGrantedForPlayerActionId', 'reserveGain']);
+  assert.equal(g.reserveGain, 0);
 }
 
-// 15–16. strikeDamagePct not applied to WA; UI does not claim Strike Damage for Aegis
+// strikeDamagePct not applied to WA; UI does not claim Strike Damage for Aegis
 {
-  const linesT3 = formatWeaponStatLines(unmakerT3);
-  assert.ok(!linesT3.some((l) => /Strike Damage/i.test(l)));
-  assert.ok(!linesT3.some((l) => /Stamina Cost/i.test(l)));
-  assert.ok(linesT3.some((l) => /Fracture from melee/i.test(l)));
-  assert.ok(linesT3.some((l) => /Abyssal Reserve/i.test(l)));
+  const lines = formatWeaponStatLines(claymore);
+  assert.ok(!lines.some((l) => /Strike Damage/i.test(l)));
+  assert.ok(!lines.some((l) => /Stamina Cost/i.test(l)));
+  assert.ok(lines.some((l) => /Fracture from melee/i.test(l)));
+  assert.ok(!lines.some((l) => /Abyssal Reserve/i.test(l)));
 
-  for (const fam of ['aegis-runed-longsword', 'aegis-rift-edge', 'aegis-claymore-blade'] as const) {
-    for (const tier of [1, 2, 3] as const) {
-      const lines = formatWeaponStatLines(resolveWeaponState(fam, tier));
-      assert.ok(
-        !lines.some((l) => /Strike Damage/i.test(l)),
-        `${fam} T${tier} must not claim Strike Damage for WA surface`,
-      );
-    }
+  for (const fam of ['aegis-longsword', 'aegis-paired-blades', 'aegis-claymore'] as const) {
+    const famLines = formatWeaponStatLines(resolveWeaponState(fam));
+    assert.ok(
+      !famLines.some((l) => /Strike Damage/i.test(l)),
+      `${fam} must not claim Strike Damage for WA surface`,
+    );
   }
 
-  // Fields remain dormant on registry (migration/legacy)
-  assert.equal(WEAPON_REGISTRY['aegis-claymore-blade'].tiers[2].statModifiers.strikeDamagePct, 25);
+  // Baseline retains dormant strikeDamagePct / technique fields (former T1)
+  assert.equal(WEAPON_REGISTRY['aegis-claymore'].baselineStatModifiers.strikeDamagePct, 15);
+  assert.equal(WEAPON_REGISTRY['aegis-claymore'].baselineStatModifiers.aegisTechniquePowerPct, 15);
 }
 
-// 17. All 12 ungrafted WA damage plans unchanged
+// All 12 ungrafted WA damage plans unchanged
 {
   const expected: Record<string, number[]> = {
     WARDENS_STRIKE: [14],
@@ -230,7 +177,7 @@ assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
   assert.deepEqual(release.hits.map(weaponHitPlanDamage), [46]);
 }
 
-// 18. E.1a graft totals unchanged
+// E.1a graft totals unchanged
 {
   const plan = planWardensStrike();
   assert.deepEqual(
@@ -253,7 +200,6 @@ assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
     previewWeaponActionGraftHitDamages(plan, buildWeaponActionGraftCastPlan('WARDENS_STRIKE', 'SHRAPNEL_GRAFT')),
     [8],
   );
-  // Graft-added cannot grant (echo hits tagged)
   const echoed = applyGraftTransformToWeaponPlan(
     planAegisWeaponAction('UNMAKER_STRIKE', {
       tempoArmed: false,
@@ -265,7 +211,7 @@ assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
   );
   assert.ok(echoed.hits.some((h) => h.graftAdded));
   assert.equal(resolveUnmakerTier3FractureBreakReserveGrant({
-    weapon: unmakerT3,
+    weapon: claymore,
     causesFractureBreak: true,
     abilityId: 'UNMAKER_STRIKE',
     playerActionId: 'echo-act',
@@ -274,7 +220,7 @@ assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
   }).reserveGain, 0);
 }
 
-// 19. Hex / Envoy smoke — class graft scale unchanged
+// Hex / Envoy smoke — class graft scale unchanged
 {
   const hex = buildClassGraftCastPlan('HEX_SHOT', 'SILVER_CORE_SIDEARM', 'BOTTOMLESS_DRUM_GRAFT');
   assert.equal(scaleClassGraftDamage(10, hex, {
@@ -286,15 +232,13 @@ assert.equal(UNMAKER_T3_FRACTURE_BREAK_RESERVE_AMOUNT, 1);
   }), 40);
 }
 
-// Surface still 4 Unmaker actions
-assert.deepEqual(deriveAegisWeaponActions('aegis-claymore-blade'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-claymore'), [
   'UNMAKER_STRIKE', 'DREAD_HORIZON', 'UNBOWED', 'DOOMFALL',
 ]);
 
-// Deprecated alias still recognized
-assert.ok(weaponHasUnmakerTier3FractureBreakReserve({
-  familyId: 'aegis-claymore-blade',
-  oncePerCombatPassive: 'FIRST_FRACTURE_STAMINA_REFUND',
-}));
+// Deprecated alias still fails closed (Stage II-C)
+assert.equal(weaponHasUnmakerTier3FractureBreakReserve({
+  familyId: 'aegis-claymore',
+}), false);
 
 console.log('aegisUnmakerTierE1b.test.ts: ok');

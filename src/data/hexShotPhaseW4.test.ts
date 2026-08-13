@@ -93,10 +93,10 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
 // ── Family / surface ────────────────────────────────────────────────────
 {
-  assert.equal(isHexWeaponKitComplete('hex-silver-core-sidearm'), true);
-  assert.equal(isHexWeaponKitComplete('hex-pulse-rifle'), true);
-  assert.equal(isHexWeaponKitComplete('hex-void-cannon'), true);
-  assert.deepEqual(deriveHexWeaponActions('hex-void-cannon'), [
+  assert.equal(isHexWeaponKitComplete('hex-revolver'), true);
+  assert.equal(isHexWeaponKitComplete('hex-carbine'), true);
+  assert.equal(isHexWeaponKitComplete('hex-shotgun'), true);
+  assert.deepEqual(deriveHexWeaponActions('hex-shotgun'), [
     'DOOR_KNOCKER',
     'FATAL_FUNNEL',
     'THRESHOLD',
@@ -106,7 +106,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.equal(formatHexWeaponActionLabel('FATAL_FUNNEL'), '[ FATAL FUNNEL ]');
   assert.equal(formatHexWeaponActionLabel('THRESHOLD'), '[ THRESHOLD ]');
   assert.equal(formatHexWeaponActionLabel('DEADBOLT'), '[ DEADBOLT ]');
-  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-void-cannon'), 'DOOR_KNOCKER');
+  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-shotgun'), 'DOOR_KNOCKER');
   assert.ok(isHexFixedBasicAbilityId('DOOR_KNOCKER'));
   assert.equal(classifyAbilitySocket('HEX_SHOT', 'DOOR_KNOCKER'), 'FIXED_BASIC_SIGNATURE');
   assert.equal(
@@ -120,7 +120,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.equal(classAbilityTargetMode('AEGIS', 'DREAD_HORIZON'), 'ROW');
 
   const flex = DEFAULT_HEX_FLEX_LOADOUT;
-  const nullbreach = buildHexCombatSurface({ weaponFamilyId: 'hex-void-cannon', flex });
+  const nullbreach = buildHexCombatSurface({ weaponFamilyId: 'hex-shotgun', flex });
   assert.equal(nullbreach.mode, 'WEAPON_KIT');
   assert.equal(nullbreach.weaponActionCount, 4);
   assert.equal(nullbreach.techniqueCount, 3);
@@ -129,9 +129,9 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   ]);
   assert.ok(!nullbreach.hudCards.includes('SILVER_CORE_SIDEARM'));
 
-  const revolver = buildHexCombatSurface({ weaponFamilyId: 'hex-silver-core-sidearm', flex });
+  const revolver = buildHexCombatSurface({ weaponFamilyId: 'hex-revolver', flex });
   assert.deepEqual(revolver.hudCards.slice(0, 4), ['QUICKDRAW', 'SLIPSHOT', 'SIX_BELLS', 'LAST_WORD']);
-  const carbine = buildHexCombatSurface({ weaponFamilyId: 'hex-pulse-rifle', flex });
+  const carbine = buildHexCombatSurface({ weaponFamilyId: 'hex-carbine', flex });
   assert.deepEqual(carbine.hudCards.slice(0, 4), [
     'CENTER_MASS', 'CONTROLLED_BURST', 'SUPPRESSIVE_BARRAGE', 'CONTACT_FRONT',
   ]);
@@ -170,7 +170,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
 // ── Door Knocker ────────────────────────────────────────────────────────
 {
-  const weapon = resolveWeaponState('hex-void-cannon', 1);
+  const weapon = resolveWeaponState('hex-shotgun');
   const fl = enemy({ unitId: 'fl', gridSlot: 'FL_0', kineticArmor: 0 });
   const plan = resolveHexBasicShot({
     weapon,
@@ -226,7 +226,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
 // ── Fatal Funnel ────────────────────────────────────────────────────────
 {
-  const weapon = resolveWeaponState('hex-void-cannon', 1);
+  const weapon = resolveWeaponState('hex-shotgun');
   const fl = enemy({ unitId: 'fl0', gridSlot: 'FL_0', currentHp: 100 });
   const bl = enemy({ unitId: 'bl0', gridSlot: 'BL_0', currentHp: 100 });
   const other = enemy({ unitId: 'fl1', gridSlot: 'FL_1', currentHp: 100 });
@@ -354,7 +354,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.equal(consumed.next.thresholdArmed, false);
 
   // Arm via executor
-  const weapon = resolveWeaponState('hex-void-cannon', 1);
+  const weapon = resolveWeaponState('hex-shotgun');
   let ammo = 4;
   let stam = 40;
   let clearedFlags = false;
@@ -425,25 +425,25 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
   let opp = clearHexDeadboltOpportunity({ deadboltReloadOpportunity: false });
   assert.equal(armHexDeadboltReloadOpportunity(opp, {
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     roundsRestored: 4,
   }).deadboltReloadOpportunity, false);
   assert.equal(armHexDeadboltReloadOpportunity(opp, {
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     roundsRestored: 0,
   }).deadboltReloadOpportunity, false);
   opp = armHexDeadboltReloadOpportunity(opp, {
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     roundsRestored: 4,
   });
   assert.equal(opp.deadboltReloadOpportunity, true);
   opp = armHexDeadboltReloadOpportunity(opp, {
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     roundsRestored: 4,
   });
   assert.equal(opp.deadboltReloadOpportunity, true); // refresh, no stack
 
-  const weapon = resolveWeaponState('hex-void-cannon', 1);
+  const weapon = resolveWeaponState('hex-shotgun');
   const target = enemy({ unitId: 't', gridSlot: 'FL_0' });
 
   // Unprimed 22

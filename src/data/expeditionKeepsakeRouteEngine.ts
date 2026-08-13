@@ -1,7 +1,7 @@
 import type {
-  KeepsakeAttunement,
-  KeepsakeRouteDoctrine,
-} from '../types/expeditionKeepsake';
+  RequisitionAttunement as KeepsakeAttunement,
+  RequisitionRouteDoctrine as KeepsakeRouteDoctrine,
+} from '../types/expeditionRequisition';
 import type { ProceduralNodeType, ProceduralRunTree } from '../types/proceduralRunTree';
 import type { NodeContextModifiers } from '../types/worldState';
 import { localProceduralDepth } from './proceduralScannerBridge';

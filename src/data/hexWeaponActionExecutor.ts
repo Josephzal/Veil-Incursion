@@ -154,7 +154,7 @@ export function scaleHexWeaponAuthoredDamage(
     authored,
     weapon.statModifiers,
     false,
-    weapon.passiveBonusPct ?? 0,
+    0,
   );
 }
 
@@ -696,8 +696,8 @@ function executeDoorKnocker(
     ctx.log('[REJECTED] >> Door Knocker requires a target.');
     return { ok: false, reason: 'NO_TARGET', refundAp: apCost };
   }
-  if (!ctx.resolvedWeapon || ctx.resolvedWeapon.familyId !== 'hex-void-cannon') {
-    ctx.log('[REJECTED] >> Door Knocker requires Nullbreach.');
+  if (!ctx.resolvedWeapon || ctx.resolvedWeapon.familyId !== 'hex-shotgun') {
+    ctx.log('[REJECTED] >> Door Knocker requires Shotgun.');
     return { ok: false, reason: 'WRONG_FAMILY', refundAp: apCost };
   }
   const plan = resolveHexBasicShot({
@@ -789,8 +789,8 @@ function executeThresholdArm(
     ctx.log('[REJECTED] >> Threshold already armed.');
     return { ok: false, reason: 'ALREADY_ARMED', refundAp: apCost };
   }
-  if (!ctx.resolvedWeapon || ctx.resolvedWeapon.familyId !== 'hex-void-cannon') {
-    ctx.log('[REJECTED] >> Threshold requires Nullbreach.');
+  if (!ctx.resolvedWeapon || ctx.resolvedWeapon.familyId !== 'hex-shotgun') {
+    ctx.log('[REJECTED] >> Threshold requires Shotgun.');
     return { ok: false, reason: 'WRONG_FAMILY', refundAp: apCost };
   }
   if (!ctx.thresholdArmSnapshot) {
@@ -844,8 +844,8 @@ function executeDeadbolt(
     ctx.log('[REJECTED] >> Deadbolt requires a target.');
     return { ok: false, reason: 'NO_TARGET', refundAp: apCost };
   }
-  if (!ctx.resolvedWeapon || ctx.resolvedWeapon.familyId !== 'hex-void-cannon') {
-    ctx.log('[REJECTED] >> Deadbolt requires Nullbreach.');
+  if (!ctx.resolvedWeapon || ctx.resolvedWeapon.familyId !== 'hex-shotgun') {
+    ctx.log('[REJECTED] >> Deadbolt requires Shotgun.');
     return { ok: false, reason: 'WRONG_FAMILY', refundAp: apCost };
   }
   if (ctx.currentAmmo < DEADBOLT_AMMO_COST) {

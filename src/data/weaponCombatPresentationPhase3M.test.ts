@@ -63,19 +63,19 @@ async function run(): Promise<void> {
 
   // Presentation cannot mutate packet (immutable flags)
   const packet = buildWeaponCombatFeedbackPacket({
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     actionKind: 'ANCHOR',
     actionId: 'WARDENS_STRIKE',
     displayActionName: "WARDEN'S STRIKE",
     hits: [hit],
   });
   assert.equal(packet.presentationOnly, true);
-  assert.equal(packet.weaponFamilyId, 'aegis-runed-longsword');
+  assert.equal(packet.weaponFamilyId, 'aegis-longsword');
 
   // Miss must not schedule flesh cue as primary contact path
   clearCombatPresentationPlayedCues();
   dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     actionKind: 'ANCHOR',
     actionId: 'SILVER_VERDICT',
     displayActionName: 'SILVER VERDICT',
@@ -93,7 +93,7 @@ async function run(): Promise<void> {
   // Black Door zero rounds — no loaded release unless labForced
   clearCombatPresentationPlayedCues();
   dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
-    weaponFamilyId: 'hex-void-cannon',
+    weaponFamilyId: 'hex-shotgun',
     actionKind: 'ANCHOR',
     actionId: 'BREACH_ROUND',
     displayActionName: 'BREACH ROUND',
@@ -121,7 +121,7 @@ async function run(): Promise<void> {
   // Reload once — reload cue only, never attack/release
   clearCombatPresentationPlayedCues();
   dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     actionKind: 'RELOAD',
     actionId: 'RELOAD',
     displayActionName: 'RELOAD',
@@ -151,7 +151,7 @@ async function run(): Promise<void> {
 
   // presentResolvedWeaponHit does not throw without mount visuals
   presentResolvedWeaponHit({
-    weaponFamilyId: 'aegis-rift-edge',
+    weaponFamilyId: 'aegis-paired-blades',
     targetId: 't1',
     damage: 8,
     critical: false,
@@ -166,7 +166,7 @@ async function run(): Promise<void> {
     reducedFlash: true,
   });
   dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
-    weaponFamilyId: 'aegis-claymore-blade',
+    weaponFamilyId: 'aegis-claymore',
     actionKind: 'ULTIMATE',
     actionId: 'GRAVEFALL',
     displayActionName: 'GRAVEFALL',
@@ -181,15 +181,15 @@ async function run(): Promise<void> {
     reducedFlash: false,
   });
   const aegisAttackByFamily: Record<string, string> = {
-    'aegis-runed-longsword': 'sfx.aegis.attack',
-    'aegis-rift-edge': 'sfx.paired.attack',
-    'aegis-claymore-blade': 'sfx.unmaker.attack',
+    'aegis-longsword': 'sfx.aegis.attack',
+    'aegis-paired-blades': 'sfx.paired.attack',
+    'aegis-claymore': 'sfx.unmaker.attack',
   };
   for (const [familyId, attackCue] of Object.entries(aegisAttackByFamily)) {
     clearCombatPresentationTimers();
     clearCombatPresentationPlayedCues();
     dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
-      weaponFamilyId: familyId as keyof typeof aegisAttackByFamily,
+      weaponFamilyId: familyId as import('../types/weapon').WeaponFamilyId,
       actionKind: 'ANCHOR',
       actionId: 'STRIKE',
       displayActionName: 'STRIKE',
@@ -205,7 +205,7 @@ async function run(): Promise<void> {
   clearCombatPresentationTimers();
   clearCombatPresentationPlayedCues();
   dispatchWeaponCombatPresentation(buildWeaponCombatFeedbackPacket({
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     actionKind: 'ANCHOR',
     actionId: 'STRIKE',
     displayActionName: 'STRIKE',

@@ -61,14 +61,14 @@ function validateGraftMap(
 ): boolean {
   if (Object.keys(map).length === 0) return true;
   const classId = getWeaponFamily(weaponFamilyId).classId;
-  const rank = buildState === 'RANK3_SANCTUARY_GRAFT' ? 3 : 17;
+  const runDepthBand = buildState === 'RANK3_SANCTUARY_GRAFT' ? 1 : 3;
   const equipped: Record<string, string> = {};
   for (const [abilityId, graftId] of Object.entries(map)) {
     const compat = evaluateGraftCompatibility({
       classId,
       abilityId,
       graftId,
-      classRank: rank,
+      runDepthBand,
       equippedMap: equipped,
       graftAvailable: true,
     });

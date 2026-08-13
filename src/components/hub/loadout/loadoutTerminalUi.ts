@@ -14,7 +14,7 @@ export const MUTED = HUB_META;
 export const TEXT_PRIMARY = HUB_TEXT_PRIMARY;
 export const TEXT_SECONDARY = HUB_TEXT_SECONDARY;
 
-export type LoadoutCategory = 'CHASSIS' | 'RELIC' | 'DECK' | 'FIELD_KIT' | 'CARGO';
+export type LoadoutCategory = 'CHASSIS' | 'REQUISITION' | 'DECK' | 'CARGO';
 
 export const CATEGORY_COPY: Record<
   LoadoutCategory,
@@ -27,12 +27,12 @@ export const CATEGORY_COPY: Record<
     manifestLabel: 'WEAPON CHASSIS',
     channelCode: 'CH-01',
   },
-  RELIC: {
-    eyebrow: 'EXPEDITION RELIC',
-    title: 'EXPEDITION RELIC',
-    description: 'Choose one relic that changes route planning, cargo pressure, or extraction.',
-    manifestLabel: 'RELIC',
-    channelCode: 'RL-01',
+  REQUISITION: {
+    eyebrow: 'EXPEDITION REQUISITION',
+    title: 'EXPEDITION REQUISITION',
+    description: 'Choose exactly one Requisition for the next deployment.',
+    manifestLabel: 'REQUISITION',
+    channelCode: 'RQ-01',
   },
   DECK: {
     eyebrow: 'ABILITY DECK',
@@ -41,17 +41,10 @@ export const CATEGORY_COPY: Record<
     manifestLabel: 'ABILITY DECK',
     channelCode: 'DK-01',
   },
-  FIELD_KIT: {
-    eyebrow: 'FIELD KIT',
-    title: 'FIELD KIT',
-    description: 'One-use combat consumables and field tools prepared for descent.',
-    manifestLabel: 'FIELD KIT',
-    channelCode: 'FK-01',
-  },
   CARGO: {
     eyebrow: 'CARGO MANIFEST',
     title: 'CARGO MANIFEST',
-    description: 'Review staged cargo and available capacity before descent.',
+    description: 'Pack resources, Combat Supplies, and Field Tools into the shared 3×4 hold.',
     manifestLabel: 'CARGO',
     channelCode: 'CG-01',
   },

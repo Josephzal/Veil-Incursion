@@ -78,7 +78,7 @@ export function runItemMarketListing(itemId: RunItemId): RunItemMarketListing {
     id: itemId,
     name: def.name,
     description: def.description,
-    effect: `EFFECT: ${def.effectSummary.toUpperCase()} // ${def.slotType} SLOT`,
+    effect: `EFFECT: ${def.effectSummary.toUpperCase()} // 1×1 ${def.slotType === 'COMBAT' ? 'COMBAT SUPPLY' : 'FIELD TOOL'} CARGO`,
     price: def.marketPrice,
     slotType: def.slotType,
   };

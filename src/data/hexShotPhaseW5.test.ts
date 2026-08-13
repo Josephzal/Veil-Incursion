@@ -99,22 +99,22 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     }
   }
 
-  assert.deepEqual(deriveHexWeaponActions('hex-silver-core-sidearm'), [
+  assert.deepEqual(deriveHexWeaponActions('hex-revolver'), [
     'QUICKDRAW', 'SLIPSHOT', 'SIX_BELLS', 'LAST_WORD',
   ]);
-  assert.deepEqual(deriveHexWeaponActions('hex-pulse-rifle'), [
+  assert.deepEqual(deriveHexWeaponActions('hex-carbine'), [
     'CENTER_MASS', 'CONTROLLED_BURST', 'SUPPRESSIVE_BARRAGE', 'CONTACT_FRONT',
   ]);
-  assert.deepEqual(deriveHexWeaponActions('hex-void-cannon'), [
+  assert.deepEqual(deriveHexWeaponActions('hex-shotgun'), [
     'DOOR_KNOCKER', 'FATAL_FUNNEL', 'THRESHOLD', 'DEADBOLT',
   ]);
 
-  assert.equal(familyDesignKitAlias('hex-silver-core-sidearm'), 'Revolver');
-  assert.equal(familyDesignKitAlias('hex-pulse-rifle'), 'Carbine');
-  assert.equal(familyDesignKitAlias('hex-void-cannon'), 'Black Door');
-  assert.equal(getHexWeaponActionSet('hex-silver-core-sidearm')?.displayName, 'Silver-Core Sidearm');
-  assert.equal(getHexWeaponActionSet('hex-pulse-rifle')?.displayName, 'Ash Shotgun');
-  assert.equal(getHexWeaponActionSet('hex-void-cannon')?.displayName, 'Nullbreach');
+  assert.equal(familyDesignKitAlias('hex-revolver'), 'Revolver');
+  assert.equal(familyDesignKitAlias('hex-carbine'), 'Carbine');
+  assert.equal(familyDesignKitAlias('hex-shotgun'), 'Shotgun');
+  assert.equal(getHexWeaponActionSet('hex-revolver')?.displayName, 'Revolver');
+  assert.equal(getHexWeaponActionSet('hex-carbine')?.displayName, 'Carbine');
+  assert.equal(getHexWeaponActionSet('hex-shotgun')?.displayName, 'Shotgun');
 
   const flex = DEFAULT_HEX_FLEX_LOADOUT;
   for (const familyId of ALL_HEX_WEAPON_FAMILY_IDS) {
@@ -143,10 +143,10 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.throws(() => requireHexWeaponActions(null), /Unknown or missing/);
 
   const hist = historicalBasicCanonicalMap();
-  assert.equal(hist['hex-silver-core-sidearm'], 'QUICKDRAW');
-  assert.equal(hist['hex-pulse-rifle'], 'CENTER_MASS');
-  assert.equal(hist['hex-void-cannon'], 'DOOR_KNOCKER');
-  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-void-cannon'), 'DOOR_KNOCKER');
+  assert.equal(hist['hex-revolver'], 'QUICKDRAW');
+  assert.equal(hist['hex-carbine'], 'CENTER_MASS');
+  assert.equal(hist['hex-shotgun'], 'DOOR_KNOCKER');
+  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-shotgun'), 'DOOR_KNOCKER');
 
   // Labels
   assert.equal(formatHexWeaponActionLabel('SUPPRESSIVE_BARRAGE'), '[ SUPPRESSIVE FIRE ]');
@@ -215,9 +215,9 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 // ── Weapon switch preserves flex ────────────────────────────────────────
 {
   const flex = ['PANOPTICON_PROTOCOL', 'GHOST_GRID_CAMO', 'BLACKSITE_TRIAGE'] as const;
-  const a = buildHexCombatSurface({ weaponFamilyId: 'hex-silver-core-sidearm', flex });
-  const b = buildHexCombatSurface({ weaponFamilyId: 'hex-pulse-rifle', flex });
-  const c = buildHexCombatSurface({ weaponFamilyId: 'hex-void-cannon', flex });
+  const a = buildHexCombatSurface({ weaponFamilyId: 'hex-revolver', flex });
+  const b = buildHexCombatSurface({ weaponFamilyId: 'hex-carbine', flex });
+  const c = buildHexCombatSurface({ weaponFamilyId: 'hex-shotgun', flex });
   assert.deepEqual(a.flex, [...flex]);
   assert.deepEqual(b.flex, [...flex]);
   assert.deepEqual(c.flex, [...flex]);
@@ -279,15 +279,15 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   // Deadbolt opportunity — Black Door only via qualifying reload helper
   let db = clearHexDeadboltOpportunity({ deadboltReloadOpportunity: false });
   assert.equal(armHexDeadboltReloadOpportunity(db, {
-    familyId: 'hex-silver-core-sidearm',
+    familyId: 'hex-revolver',
     roundsRestored: 4,
   }).deadboltReloadOpportunity, false);
   assert.equal(armHexDeadboltReloadOpportunity(db, {
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     roundsRestored: 4,
   }).deadboltReloadOpportunity, false);
   db = armHexDeadboltReloadOpportunity(db, {
-    familyId: 'hex-void-cannon',
+    familyId: 'hex-shotgun',
     roundsRestored: 4,
   });
   assert.equal(db.deadboltReloadOpportunity, true);

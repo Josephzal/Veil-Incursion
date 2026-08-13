@@ -4,11 +4,12 @@ import HapticPressable from '../components/HapticPressable';
 import SanctuaryBg from '../../assets/images/location images/sanctuary.png';
 import ClassGraftUI, { type GraftInjectSelection } from '../components/ClassGraftUI';
 import TerminalOverlay from '../components/TerminalOverlay';
-import { canAffordAnySanctuaryGraft, getMinimumClassGraftCost } from '../data/classGraftEngine';
 import { buildAegisGraftSurface } from '../data/aegisGraftTarget';
-import { getGraftSocketAccessForClassRank } from '../data/graftSynergy/graftCapacityEngine';
+import {
+  getGraftSocketAccessForRunDepth,
+  resolveRunGraftDepthBand,
+} from '../data/graftSynergy/graftCapacityEngine';
 import { useRun } from '../context/RunContext';
-import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -202,10 +203,8 @@ export default function RestScreen(): React.JSX.Element {
     openSanctuaryGraftTerminal,
     clearSanctuaryGraftSession,
     applyClassGraftToAbility,
-    getVeilResidueBalance,
     getSelectedVectorNode,
   } = useRun();
-  const { account } = usePlayerAccount();
   const { completeCurrentNode } = useNodeProgression();
   const {
     isDesktop,
@@ -230,20 +229,19 @@ export default function RestScreen(): React.JSX.Element {
   } | null>(null);
 
   const activeClass = activeIncursion.activeClass ?? 'AEGIS';
-  const residueBalance = getVeilResidueBalance();
   const graftOffers = activeIncursion.sanctuaryGraftOffers ?? [];
-  const graftAffordable = canAffordAnySanctuaryGraft(activeClass, residueBalance);
-  const minimumGraftCost = getMinimumClassGraftCost(activeClass);
+
+  const runDepthBand = resolveRunGraftDepthBand(activeIncursion);
+  const graftAccess = useMemo(
+    () => getGraftSocketAccessForRunDepth(runDepthBand),
+    [runDepthBand],
+  );
 
   const loadout = useMemo(() => {
     if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotLoadout;
     if (activeClass === 'ENVOY') return activeIncursion.envoyLoadout;
     return sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout);
   }, [activeClass, activeIncursion.aegisTechniqueLoadout, activeIncursion.envoyLoadout, activeIncursion.hexShotLoadout]);
-
-  const classRank = account.progressionProfile.classes[activeClass]?.rank ?? 1;
-  const graftAccess = useMemo(() => getGraftSocketAccessForClassRank(classRank), [classRank]);
-
   const aegisSurfaceRows = useMemo(() => {
     if (activeClass !== 'AEGIS') return undefined;
     return buildAegisGraftSurface({
@@ -318,7 +316,7 @@ export default function RestScreen(): React.JSX.Element {
   };
 
   const handleSelectGraft = () => {
-    if (confirmed || !graftAffordable || corruptedSanctuaryPending) return;
+    if (confirmed || corruptedSanctuaryPending) return;
     setSelectedChoice('GRAFT');
     setGraftComplete(false);
     setGraftSelection({ graftId: null, abilityId: null, canInject: false });
@@ -424,20 +422,18 @@ export default function RestScreen(): React.JSX.Element {
             secondaryLabel={
               corruptedSanctuaryPending
                 ? 'OFFLINE — twisted conduit'
-                : !graftAffordable
-                  ? `INSUFFICIENT RESIDUE — REQUIRES ${minimumGraftCost}+`
-                  : 'Spend Veil Residue to mutate an equipped ability'
+                : 'Patch a graft onto an equipped ability'
             }
             selected={selectedChoice === 'GRAFT'}
             dimmed={selectedChoice === 'ATTUNE' || (confirmed && selectedChoice !== 'GRAFT') || corruptedSanctuaryPending}
-            locked={!graftAffordable || corruptedSanctuaryPending}
+            locked={corruptedSanctuaryPending}
             tone="occult"
             primaryFontSize={choicePrimarySize}
             secondaryFontSize={choiceSecondarySize}
             paddingVertical={choicePaddingVertical}
             paddingHorizontal={choicePaddingHorizontal}
             onPress={handleSelectGraft}
-            disabled={confirmed || !graftAffordable || corruptedSanctuaryPending}
+            disabled={confirmed || corruptedSanctuaryPending}
           />
         </View>
       ) : null}
@@ -448,7 +444,6 @@ export default function RestScreen(): React.JSX.Element {
             activeClass={activeClass}
             loadout={loadout}
             offers={graftOffers}
-            residueBalance={residueBalance}
             abilityGrafts={abilityGrafts}
             onSelectionChange={handleGraftSelectionChange}
             compact
@@ -460,7 +455,7 @@ export default function RestScreen(): React.JSX.Element {
             canInject={graftSelection.canInject}
             injectDisabled={confirmed}
             cancelDisabled={confirmed}
-            classRank={classRank}
+            runDepthBand={runDepthBand}
             aegisSurfaceRows={aegisSurfaceRows}
             capacityUsed={graftCapacityUsed}
             capacityAvailable={graftCapacityAvailable}
@@ -490,7 +485,7 @@ export default function RestScreen(): React.JSX.Element {
               <RunEventNodeHeader
                 eyebrow="VEIL-GRAFT TERMINAL"
                 title={graftTerminalLabel}
-                subtitle={`${residueBalance} residue available`}
+                subtitle={`Depth ${runDepthBand} · capacity ${graftCapacityUsed}/${graftAccess.capacity}`}
                 fontScale={fontScale}
                 showRunChrome
               />

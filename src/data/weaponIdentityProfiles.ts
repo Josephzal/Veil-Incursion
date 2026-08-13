@@ -7,10 +7,10 @@ import { ALL_WEAPON_FAMILY_IDS, getWeaponFamily } from './weaponRegistry';
  * Registry IDs and live display names are preserved; planned renames are recorded only.
  */
 export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProfile> = {
-  'aegis-runed-longsword': {
-    id: 'aegis-runed-longsword',
+  'aegis-longsword': {
+    id: 'aegis-longsword',
     classId: 'AEGIS',
-    liveDisplayName: 'Runed Longsword',
+    liveDisplayName: 'Longsword',
     plannedDisplayName: null,
     oneSentencePlaystyle: 'Build Fracture through steady melee, survive with parry, cash out with Reserve.',
     primaryRole: 'Starter / balanced fracture setup',
@@ -24,9 +24,10 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Steady Abyssal Reserve on hits; natural Parry integration.',
     uniqueBasicSummary: '1 AP kinetic strike — moderate damage, reliable Fracture, small Reserve.',
     drawbackSummary: 'Weak backline access; not best burst or hard control.',
+    debugNotes: 'Former live alias: Runed Longsword.',
   },
-  'aegis-rift-edge': {
-    id: 'aegis-rift-edge',
+  'aegis-paired-blades': {
+    id: 'aegis-paired-blades',
     classId: 'AEGIS',
     liveDisplayName: 'Paired Blades',
     plannedDisplayName: null,
@@ -46,12 +47,12 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Reserve favored from tempo payoffs; weak chip Reserve vs Longsword.',
     uniqueBasicSummary: 'Fast kinetic basic; Occult rider only when riftEdgeTempoArmed.',
     drawbackSummary: 'Poor armor cracking without setup; weak vs swarms.',
-    debugNotes: 'Tempo is weapon-scoped state, not a global status.',
+    debugNotes: 'Tempo is weapon-scoped state, not a global status. Former alias: Rift Edge.',
   },
-  'aegis-claymore-blade': {
-    id: 'aegis-claymore-blade',
+  'aegis-claymore': {
+    id: 'aegis-claymore',
     classId: 'AEGIS',
-    liveDisplayName: 'Unmaker',
+    liveDisplayName: 'Claymore',
     plannedDisplayName: null,
     oneSentencePlaystyle: 'Spend stamina on heavy Fracture pressure and cash out on breaks.',
     primaryRole: 'Heavy Fracture-break cashout',
@@ -69,11 +70,12 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Major Reserve on Fracture break; weak Reserve on chip hits.',
     uniqueBasicSummary: 'Heavy 1 AP strike — high Fracture, high stamina, modest base damage.',
     drawbackSummary: 'Stamina hungry; punished by drain and fast multi-attacker pressure.',
+    debugNotes: 'Former live alias: Unmaker.',
   },
-  'hex-silver-core-sidearm': {
-    id: 'hex-silver-core-sidearm',
+  'hex-revolver': {
+    id: 'hex-revolver',
     classId: 'HEX_SHOT',
-    liveDisplayName: 'Silver-Core Sidearm',
+    liveDisplayName: 'Revolver',
     plannedDisplayName: null,
     oneSentencePlaystyle: 'Efficient shots, frequent reloads, precise finishes, steady Protocol Charge.',
     primaryRole: 'Starter / precision reload-tempo',
@@ -87,12 +89,12 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Standard magazine; Perfect Reload → Protocol Charge → weapon ultimate.',
     uniqueBasicSummary: '1 AP / 1 ammo precise shot; inherits loaded ammo payload.',
     drawbackSummary: 'Does not specialize hard — needs boons/grafts to explode.',
-    debugNotes: 'Legacy presentation alias: Revolver. Persistent ID unchanged.',
+    debugNotes: 'Former live alias: Silver-Core Sidearm.',
   },
-  'hex-pulse-rifle': {
-    id: 'hex-pulse-rifle',
+  'hex-carbine': {
+    id: 'hex-carbine',
     classId: 'HEX_SHOT',
-    liveDisplayName: 'Ash Shotgun',
+    liveDisplayName: 'Carbine',
     plannedDisplayName: null,
     oneSentencePlaystyle: 'Dump ammo into frontline clusters; treat reload as a burst window.',
     primaryRole: 'Close-range AoE / crowd clear',
@@ -111,12 +113,12 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Tighter mag; frequent reload; empty-mag is part of the loop.',
     uniqueBasicSummary: 'Repeatable short-range spread (primary + adjacent) — not Ash-Jacket Salvo.',
     drawbackSummary: 'Poor backline; weak vs isolated priority targets; ammo inefficient.',
-    debugNotes: 'Legacy presentation alias: Carbine / Pulse Rifle. Zero Protocol binds to this family only.',
+    debugNotes: 'Former live aliases: Ash Shotgun / Pulse Rifle. Kit is Carbine — do not swap with Shotgun. Zero Protocol binds to this family only.',
   },
-  'hex-void-cannon': {
-    id: 'hex-void-cannon',
+  'hex-shotgun': {
+    id: 'hex-shotgun',
     classId: 'HEX_SHOT',
-    liveDisplayName: 'Nullbreach',
+    liveDisplayName: 'Shotgun',
     plannedDisplayName: null,
     oneSentencePlaystyle: 'Spend scarce ammo to crack Kinetic Armor and delete priority tanks.',
     primaryRole: 'Armor-breach single-target burst',
@@ -135,10 +137,10 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Small magazine; reloads are commitment; misses are expensive.',
     uniqueBasicSummary: 'High-impact single-target shot; pierce from weapon mods + ammo payload.',
     drawbackSummary: 'Weak crowd handling; ammo hungry.',
-    debugNotes: 'Legacy presentation alias: Black Door / Void Cannon. Not an overwatch weapon.',
+    debugNotes: 'Former live aliases: Nullbreach / Black Door / Void Cannon. Kit is Shotgun — do not swap with Carbine. Not an overwatch weapon.',
   },
-  'envoy-null-conduit': {
-    id: 'envoy-null-conduit',
+  'envoy-scythe': {
+    id: 'envoy-scythe',
     classId: 'ENVOY',
     liveDisplayName: 'Scythe',
     plannedDisplayName: null,
@@ -161,8 +163,8 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     drawbackSummary: 'Lower peak than Prism; needs discipline vs jam/silence.',
     debugNotes: 'Former Envoy starter (Null Conduit). Display name Scythe; Clean Cycle soft affinity only.',
   },
-  'envoy-echo-lantern': {
-    id: 'envoy-echo-lantern',
+  'envoy-vambrace': {
+    id: 'envoy-vambrace',
     classId: 'ENVOY',
     liveDisplayName: 'Vambrace',
     plannedDisplayName: null,
@@ -178,12 +180,12 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Dumps scale with Rot density; weaker raw chip.',
     uniqueBasicSummary: 'Low damage Splinter variant that applies extra Rot; rewards setup.',
     drawbackSummary: 'Poor when enemies die too fast for setup.',
-    debugNotes: 'New Envoy starter (was Echo Lantern). Permanent ID envoy-echo-lantern unchanged.',
+    debugNotes: 'New Envoy starter (was Echo Lantern). Permanent ID envoy-vambrace unchanged.',
   },
   'envoy-sanguine-prism': {
     id: 'envoy-sanguine-prism',
     classId: 'ENVOY',
-    liveDisplayName: "Heart's Due",
+    liveDisplayName: 'Sanguine Prism',
     plannedDisplayName: null,
     oneSentencePlaystyle: 'Spend capped HP and skim Brink Flux for spike casts, then vent.',
     primaryRole: 'Sacrifice / Brink',
@@ -201,6 +203,7 @@ export const WEAPON_IDENTITY_PROFILES: Record<WeaponFamilyId, WeaponIdentityProf
     meterSummary: 'Bonus near low Flux / Void-Siphoned brink; no overfill overload.',
     uniqueBasicSummary: 'Higher damage Splinter with capped HP sacrifice + brink amp.',
     drawbackSummary: 'Self-harm risk; bad in attrition without vents.',
+    debugNotes: "Former live alias: Heart's Due.",
   },
 };
 

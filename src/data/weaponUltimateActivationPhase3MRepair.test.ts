@@ -47,14 +47,14 @@ const EXPECTED: Array<{
   displayName: string;
   controller: string;
 }> = [
-  { weaponFamilyId: 'aegis-runed-longsword', displayName: 'ABYSSAL VERDICT', controller: 'THREEFOLD_BRAND_SLICE' },
-  { weaponFamilyId: 'aegis-rift-edge', displayName: 'REND THE VEIL', controller: 'WU4_STAGED' },
-  { weaponFamilyId: 'aegis-claymore-blade', displayName: 'GRAVEFALL', controller: 'WU4_STAGED' },
-  { weaponFamilyId: 'hex-silver-core-sidearm', displayName: 'SIXTH SEAL', controller: 'WU4_STAGED' },
-  { weaponFamilyId: 'hex-pulse-rifle', displayName: 'ZERO PROTOCOL', controller: 'ZERO_PROTOCOL_GRID' },
-  { weaponFamilyId: 'hex-void-cannon', displayName: 'LAST KNOCK', controller: 'WU4_STAGED' },
-  { weaponFamilyId: 'envoy-echo-lantern', displayName: 'FUNERAL KNOT', controller: 'WU4_STAGED' },
-  { weaponFamilyId: 'envoy-null-conduit', displayName: 'NULL CIRCUIT', controller: 'NULL_CIRCUIT_SIGIL' },
+  { weaponFamilyId: 'aegis-longsword', displayName: 'ABYSSAL VERDICT', controller: 'THREEFOLD_BRAND_SLICE' },
+  { weaponFamilyId: 'aegis-paired-blades', displayName: 'REND THE VEIL', controller: 'WU4_STAGED' },
+  { weaponFamilyId: 'aegis-claymore', displayName: 'GRAVEFALL', controller: 'WU4_STAGED' },
+  { weaponFamilyId: 'hex-revolver', displayName: 'SIXTH SEAL', controller: 'WU4_STAGED' },
+  { weaponFamilyId: 'hex-carbine', displayName: 'ZERO PROTOCOL', controller: 'ZERO_PROTOCOL_GRID' },
+  { weaponFamilyId: 'hex-shotgun', displayName: 'LAST KNOCK', controller: 'WU4_STAGED' },
+  { weaponFamilyId: 'envoy-vambrace', displayName: 'FUNERAL KNOT', controller: 'WU4_STAGED' },
+  { weaponFamilyId: 'envoy-scythe', displayName: 'NULL CIRCUIT', controller: 'NULL_CIRCUIT_SIGIL' },
   { weaponFamilyId: 'envoy-sanguine-prism', displayName: 'CRIMSON REFRACTION', controller: 'WU4_STAGED' },
 ];
 
@@ -85,8 +85,8 @@ function run(): void {
   }
 
   assert.notEqual(
-    resolveWeaponUltimateInteractionController('aegis-rift-edge'),
-    resolveWeaponUltimateInteractionController('aegis-runed-longsword'),
+    resolveWeaponUltimateInteractionController('aegis-paired-blades'),
+    resolveWeaponUltimateInteractionController('aegis-longsword'),
   );
 
   assert.equal(
@@ -157,7 +157,7 @@ function run(): void {
 
   packets = [];
   presentResolvedWeaponHit({
-    weaponFamilyId: 'aegis-claymore-blade',
+    weaponFamilyId: 'aegis-claymore',
     abilityId: 'EVISCERATE',
     targetId: 'e1',
     damage: 20,
@@ -172,7 +172,7 @@ function run(): void {
 
   packets = [];
   presentResolvedWeaponHit({
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     abilityId: 'WARDENS_STRIKE',
     targetId: 'e1',
     damage: 10,
@@ -187,7 +187,7 @@ function run(): void {
 
   packets = [];
   presentResolvedWeaponHit({
-    weaponFamilyId: 'aegis-rift-edge',
+    weaponFamilyId: 'aegis-paired-blades',
     abilityId: 'EVISCERATE',
     targetId: 'e1',
     damage: 8,
@@ -195,7 +195,7 @@ function run(): void {
     killed: false,
   });
   presentResolvedWeaponHit({
-    weaponFamilyId: 'aegis-rift-edge',
+    weaponFamilyId: 'aegis-paired-blades',
     abilityId: 'EVISCERATE',
     targetId: 'e1',
     damage: 8,
@@ -207,11 +207,11 @@ function run(): void {
   const calibrations = listPoseCalibrations();
   assert.equal(calibrations.length, 9);
   // Size lock: every pose contentH scales to the same Vambrace idle target height.
-  const REF_CONTENT_H = 1714; // envoy-echo-lantern idle
+  const REF_CONTENT_H = 1714; // envoy-vambrace idle
   const referenceContentDisplayH = 400; // arbitrary on-screen target
   const samples: Array<{ id: string; contentH: number }> = [
-    { id: 'envoy-echo-lantern-idle', contentH: 1714 },
-    { id: 'envoy-echo-lantern-attack', contentH: 1469 },
+    { id: 'envoy-vambrace-idle', contentH: 1714 },
+    { id: 'envoy-vambrace-attack', contentH: 1469 },
     { id: 'aegis-longsword-idle', contentH: 1140 },
     { id: 'aegis-paired-attack', contentH: 1340 },
     { id: 'aegis-unmaker-idle', contentH: 1533 },
@@ -242,9 +242,9 @@ function run(): void {
   }
 
   // Placement + size: visualScale is the per-image tune knob.
-  assert.ok(getPoseCalibrationForFamily('envoy-echo-lantern', 'idle').visualScale > 0.9);
-  assert.ok(getPoseCalibrationForFamily('aegis-runed-longsword', 'idle').visualScale > 0);
-  assert.ok(getPoseCalibrationForFamily('envoy-null-conduit', 'attack').visualScale < 1);
+  assert.ok(getPoseCalibrationForFamily('envoy-vambrace', 'idle').visualScale > 0.9);
+  assert.ok(getPoseCalibrationForFamily('aegis-longsword', 'idle').visualScale > 0);
+  assert.ok(getPoseCalibrationForFamily('envoy-scythe', 'attack').visualScale < 1);
   assert.ok(getPoseCalibrationForFamily('envoy-sanguine-prism', 'attack').visualScale < 1);
 
   // visualScale must affect display size
@@ -256,7 +256,7 @@ function run(): void {
   });
   assert.ok(Math.abs(tuned.height - base.height * 0.8) < 0.01);
 
-  const snap = 'hex-void-cannon' as WeaponFamilyId;
+  const snap = 'hex-shotgun' as WeaponFamilyId;
   assert.equal(resolveWeaponUltimateDisplayName(snap), 'LAST KNOCK');
   assert.equal(resolveWeaponUltimateInteractionController(snap), 'WU4_STAGED');
 

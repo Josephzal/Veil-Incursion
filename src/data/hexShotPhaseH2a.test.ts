@@ -34,9 +34,9 @@ import { getWeaponLoadoutRecommendationProfile } from './weaponLoadoutRecommenda
 console.log('Phase H.2a — Hex fixed-basic scaling + ammo delivery');
 
 const HEX_IDS = [
-  'hex-silver-core-sidearm',
-  'hex-void-cannon',
-  'hex-pulse-rifle',
+  'hex-revolver',
+  'hex-shotgun',
+  'hex-carbine',
 ] as const;
 
 const primary: EnemyCombatProfile = {
@@ -68,7 +68,7 @@ const adj: EnemyCombatProfile = {
 
 function planFor(familyId: typeof HEX_IDS[number], tier: 1 | 2 | 3, squad = [primary], targetId = 'e1') {
   return resolveHexBasicShot({
-    weapon: resolveWeaponState(familyId, tier),
+    weapon: resolveWeaponState(familyId),
     squad,
     primaryTargetId: targetId,
     catalogBaseDamage: HEX_SHOT_ABILITY_CATALOG.SILVER_CORE_SIDEARM.baseDamage,
@@ -77,78 +77,83 @@ function planFor(familyId: typeof HEX_IDS[number], tier: 1 | 2 | 3, squad = [pri
 
 function execFromPlan(
   familyId: typeof HEX_IDS[number],
-  tier: 1 | 2 | 3,
   planDmg: number,
   postReload = false,
 ) {
-  const w = resolveWeaponState(familyId, tier);
+  const w = resolveWeaponState(familyId);
   return applyWeaponBallisticDamageMultiplier(
     planDmg,
     w.statModifiers,
     postReload,
-    w.passiveBonusPct ?? 0,
+    0,
     { skipFamilyBallisticPct: true },
   );
 }
 
 // ── Single ballistic scaling / preview = execution ──────────────────────
 for (const id of HEX_IDS) {
-  for (const tier of [1, 2, 3] as const) {
-    const plan = planFor(id, tier, id === 'hex-pulse-rifle' ? [primary, adj] : [primary]);
-    const hit = plan.hits[0]!;
-    const exec = execFromPlan(id, tier, hit.damage);
-    assert.equal(exec, hit.damage, `${id} T${tier} preview/exec once-scaled`);
-    const doubleWrong = applyWeaponBallisticDamageMultiplier(
-      hit.damage,
-      resolveWeaponState(id, tier).statModifiers,
-      false,
-      0,
-    );
-    // When a second application would change the value, prove we skip it.
-    if (doubleWrong !== hit.damage) {
-      assert.equal(exec, hit.damage, `${id} T${tier} skips second scale`);
-    }
+  const plan = planFor(id, 1, id === 'hex-carbine' ? [primary, adj] : [primary]);
+  const hit = plan.hits[0]!;
+  const exec = execFromPlan(id, hit.damage);
+  assert.equal(exec, hit.damage, `${id} preview/exec once-scaled`);
+  const doubleWrong = applyWeaponBallisticDamageMultiplier(
+    hit.damage,
+    resolveWeaponState(id).statModifiers,
+    false,
+    0,
+  );
+  // When a second application would change the value, prove we skip it.
+  if (doubleWrong !== hit.damage) {
+    assert.equal(exec, hit.damage, `${id} skips second scale`);
   }
 }
 
 // Audited H.2 baselines restored
 {
-  const nb = planFor('hex-void-cannon', 1);
+  const nb = planFor('hex-shotgun', 1);
   assert.equal(nb.hits[0]!.damage, 19);
-  assert.equal(execFromPlan('hex-void-cannon', 1, 19), 19);
-  const ash = planFor('hex-pulse-rifle', 1);
+  assert.equal(execFromPlan('hex-shotgun', 19), 19);
+  const ash = planFor('hex-carbine', 1);
   assert.equal(ash.hits[0]!.damage, 7);
-  assert.equal(execFromPlan('hex-pulse-rifle', 1, 7), 7);
+  assert.equal(execFromPlan('hex-carbine', 7), 7);
 }
 
 // Positive / zero / negative pct once
 {
-  assert.equal(planFor('hex-void-cannon', 1).hits[0]!.damage, 19); // +20 once
-  assert.equal(planFor('hex-silver-core-sidearm', 1).hits[0]!.damage, 10); // 0
-  assert.equal(planFor('hex-pulse-rifle', 1).hits[0]!.damage, 7); // -5 once
+  assert.equal(planFor('hex-shotgun', 1).hits[0]!.damage, 19); // +20 once
+  assert.equal(planFor('hex-revolver', 1).hits[0]!.damage, 10); // 0
+  assert.equal(planFor('hex-carbine', 1).hits[0]!.damage, 7); // -5 once
 }
 
 // Multi-target packets not re-scaled per target
 {
-  const ash = planFor('hex-pulse-rifle', 1, [primary, adj]);
+  const ash = planFor('hex-carbine', 1, [primary, adj]);
   assert.ok(ash.hits.length >= 2);
   for (const h of ash.hits) {
-    assert.equal(execFromPlan('hex-pulse-rifle', 1, h.damage), h.damage);
+    assert.equal(execFromPlan('hex-carbine', h.damage), h.damage);
   }
 }
 
-// Post-reload Tier-III still applies when family pct skipped
+// Post-reload Tier-III bonus retired — no extra damage
 {
-  const ash3 = resolveWeaponState('hex-pulse-rifle', 3);
-  const planDmg = planFor('hex-pulse-rifle', 3).hits[0]!.damage;
+  const carbine = resolveWeaponState('hex-carbine');
+  const planDmg = planFor('hex-carbine', 1).hits[0]!.damage;
   const withPost = applyWeaponBallisticDamageMultiplier(
     planDmg,
-    ash3.statModifiers,
+    carbine.statModifiers,
     true,
-    ash3.passiveBonusPct ?? 0,
+    10,
     { skipFamilyBallisticPct: true },
   );
-  assert.equal(withPost, Math.floor(planDmg * 1.1));
+  const without = applyWeaponBallisticDamageMultiplier(
+    planDmg,
+    carbine.statModifiers,
+    false,
+    0,
+    { skipFamilyBallisticPct: true },
+  );
+  assert.equal(withPost, without);
+  assert.equal(withPost, planDmg);
 }
 
 // ── Heavy-shot eligibility ──────────────────────────────────────────────
@@ -339,12 +344,12 @@ for (const familyId of HEX_IDS) {
 
 // Ash 1/2/3 targets
 {
-  const one = planFor('hex-pulse-rifle', 1, [primary]);
+  const one = planFor('hex-carbine', 1, [primary]);
   assert.equal(one.hits.length, 1);
-  const two = planFor('hex-pulse-rifle', 1, [primary, adj]);
+  const two = planFor('hex-carbine', 1, [primary, adj]);
   assert.equal(two.hits.length, 2);
   // FL_1 adjacents are FL_0 + BL_1 only (4-slot grid).
-  const three = planFor('hex-pulse-rifle', 1, [
+  const three = planFor('hex-carbine', 1, [
     primary,
     adj,
     { ...adj, unitId: 'e6', gridSlot: 'BL_1' } as EnemyCombatProfile,
@@ -359,17 +364,17 @@ for (const familyId of HEX_IDS) {
     const card = resolveWeaponAnchorCardPresentation({
       classId: 'HEX_SHOT',
       abilityId: 'SILVER_CORE_SIDEARM',
-      weapon: resolveWeaponState(id, 1),
+      weapon: resolveWeaponState(id),
       runtime: createDefaultWeaponRuntime(),
       catalogBaseDamage: HEX_SHOT_ABILITY_CATALOG.SILVER_CORE_SIDEARM.baseDamage,
       pulseSpreadSecondaryCount: 2,
       currentAmmo: 4,
     });
     assert.ok(card);
-    const plan = planFor(id, 1, id === 'hex-pulse-rifle' ? [primary, adj] : [primary]);
+    const plan = planFor(id, 1, id === 'hex-carbine' ? [primary, adj] : [primary]);
     const expected = `${plan.hits[0]!.damage} BALLISTIC`;
     assert.equal(card!.primaryOutcome, expected, `${id} card preview`);
-    if (id === 'hex-void-cannon') {
+    if (id === 'hex-shotgun') {
       assert.ok(card!.secondaryCost?.includes('STAM'), 'Nullbreach stamina in preview');
     }
   }
@@ -378,9 +383,9 @@ for (const familyId of HEX_IDS) {
 // Names / anchors stable
 for (const id of HEX_IDS) {
   assert.equal(getWeaponFamily(id).name, {
-    'hex-silver-core-sidearm': 'Silver-Core Sidearm',
-    'hex-void-cannon': 'Nullbreach',
-    'hex-pulse-rifle': 'Ash Shotgun',
+    'hex-revolver': 'Revolver',
+    'hex-shotgun': 'Shotgun',
+    'hex-carbine': 'Carbine',
   }[id]);
   assert.ok(getWeaponAnchorAttack(id));
 }
@@ -407,7 +412,7 @@ for (const id of HEX_IDS) {
 }
 
 // Aegis representative — Longsword name unchanged
-assert.equal(getWeaponFamily('aegis-runed-longsword').name, 'Runed Longsword');
-assert.equal(getWeaponFamily('envoy-echo-lantern').name, 'Vambrace');
+assert.equal(getWeaponFamily('aegis-longsword').name, 'Longsword');
+assert.equal(getWeaponFamily('envoy-vambrace').name, 'Vambrace');
 
 console.log('Phase H.2a — all assertions passed');

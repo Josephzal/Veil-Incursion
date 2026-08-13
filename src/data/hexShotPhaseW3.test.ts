@@ -88,10 +88,10 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
 // ── Family / surface ────────────────────────────────────────────────────
 {
-  assert.equal(isHexWeaponKitComplete('hex-pulse-rifle'), true);
-  assert.equal(isHexWeaponKitComplete('hex-silver-core-sidearm'), true);
-  assert.equal(isHexWeaponKitComplete('hex-void-cannon'), true);
-  assert.deepEqual(deriveHexWeaponActions('hex-pulse-rifle'), [
+  assert.equal(isHexWeaponKitComplete('hex-carbine'), true);
+  assert.equal(isHexWeaponKitComplete('hex-revolver'), true);
+  assert.equal(isHexWeaponKitComplete('hex-shotgun'), true);
+  assert.deepEqual(deriveHexWeaponActions('hex-carbine'), [
     'CENTER_MASS',
     'CONTROLLED_BURST',
     'SUPPRESSIVE_BARRAGE',
@@ -99,9 +99,9 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   ]);
   assert.equal(formatHexWeaponActionLabel('SUPPRESSIVE_BARRAGE'), '[ SUPPRESSIVE FIRE ]');
   assert.equal(getHexWeaponActionDefinition('SUPPRESSIVE_BARRAGE')?.label, '[ SUPPRESSIVE FIRE ]');
-  assert.equal(isHexWeaponActionExecutable('hex-pulse-rifle', 'CENTER_MASS'), true);
-  assert.equal(isHexWeaponActionExecutable('hex-void-cannon', 'DEADBOLT'), true);
-  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-pulse-rifle'), 'CENTER_MASS');
+  assert.equal(isHexWeaponActionExecutable('hex-carbine', 'CENTER_MASS'), true);
+  assert.equal(isHexWeaponActionExecutable('hex-shotgun', 'DEADBOLT'), true);
+  assert.equal(mapHexFixedBasicSignatureToWeaponAction('hex-carbine'), 'CENTER_MASS');
   assert.ok(isHexFixedBasicAbilityId('CENTER_MASS'));
   assert.equal(classifyAbilitySocket('HEX_SHOT', 'CENTER_MASS'), 'FIXED_BASIC_SIGNATURE');
   assert.equal(
@@ -114,17 +114,17 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.equal(classAbilityTargetMode('AEGIS', 'DIVERGENCE'), 'DUAL');
 
   const flex = DEFAULT_HEX_FLEX_LOADOUT;
-  const carbine = buildHexCombatSurface({ weaponFamilyId: 'hex-pulse-rifle', flex });
+  const carbine = buildHexCombatSurface({ weaponFamilyId: 'hex-carbine', flex });
   assert.equal(carbine.mode, 'WEAPON_KIT');
   assert.deepEqual(carbine.hudCards, [
     'CENTER_MASS', 'CONTROLLED_BURST', 'SUPPRESSIVE_BARRAGE', 'CONTACT_FRONT', ...flex,
   ]);
   assert.ok(!carbine.hudCards.includes('SILVER_CORE_SIDEARM'));
 
-  const revolver = buildHexCombatSurface({ weaponFamilyId: 'hex-silver-core-sidearm', flex });
+  const revolver = buildHexCombatSurface({ weaponFamilyId: 'hex-revolver', flex });
   assert.deepEqual(revolver.hudCards.slice(0, 4), ['QUICKDRAW', 'SLIPSHOT', 'SIX_BELLS', 'LAST_WORD']);
 
-  const nullbreach = buildHexCombatSurface({ weaponFamilyId: 'hex-void-cannon', flex });
+  const nullbreach = buildHexCombatSurface({ weaponFamilyId: 'hex-shotgun', flex });
   assert.equal(nullbreach.mode, 'WEAPON_KIT');
   assert.deepEqual(nullbreach.hudCards, [
     'DOOR_KNOCKER', 'FATAL_FUNNEL', 'THRESHOLD', 'DEADBOLT', ...flex,
@@ -133,11 +133,11 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
   const kept = ['PANOPTICON_PROTOCOL', 'GHOST_GRID_CAMO', 'BLACKSITE_TRIAGE'] as const;
   assert.deepEqual(
-    buildHexCombatSurface({ weaponFamilyId: 'hex-pulse-rifle', flex: kept }).flex,
+    buildHexCombatSurface({ weaponFamilyId: 'hex-carbine', flex: kept }).flex,
     [...kept],
   );
   assert.deepEqual(
-    buildHexCombatSurface({ weaponFamilyId: 'hex-silver-core-sidearm', flex: kept }).flex,
+    buildHexCombatSurface({ weaponFamilyId: 'hex-revolver', flex: kept }).flex,
     [...kept],
   );
 }
@@ -212,7 +212,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 5,
     classState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     currentPlayerTurn: 1,
     log: () => {},
     spendAmmo: (n) => {
@@ -229,7 +229,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   assert.equal(ok.ok, true);
   assert.equal(ammo, 4);
   assert.equal(packs.length, 1);
-  assert.equal(packs[0], scaleHexWeaponAuthoredDamage(9, resolveWeaponState('hex-pulse-rifle', 1)));
+  assert.equal(packs[0], scaleHexWeaponAuthoredDamage(9, resolveWeaponState('hex-carbine')));
   assert.equal(classState.firingSolutionUnitId, 'e1');
   assert.equal(classState.firingSolutionExpiresAfterPlayerTurn, 2);
   assert.ok(landed);
@@ -246,7 +246,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo2,
     maxAmmo: 5,
     classState: missState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     currentPlayerTurn: 1,
     log: () => {},
     spendAmmo: (n) => {
@@ -271,7 +271,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: 5,
     maxAmmo: 5,
     classState: killState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     currentPlayerTurn: 1,
     log: () => {},
     spendAmmo: () => true,
@@ -324,7 +324,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 5,
     classState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammo -= n;
@@ -355,7 +355,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammoK,
     maxAmmo: 5,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammoK -= n;
@@ -416,7 +416,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 5,
     classState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammo -= n;
@@ -443,7 +443,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: 5,
     maxAmmo: 5,
     classState: fsState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: () => true,
     hurtEnemy: () => {
@@ -464,7 +464,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: 5,
     maxAmmo: 5,
     classState: missState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: () => true,
     hurtEnemy: () => {
@@ -510,7 +510,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo,
     maxAmmo: 5,
     classState,
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammo -= n;
@@ -540,7 +540,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammo40,
     maxAmmo: 5,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammo40 -= n;
@@ -568,7 +568,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammoD,
     maxAmmo: 5,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammoD -= n;
@@ -597,7 +597,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
     currentAmmo: ammoR,
     maxAmmo: 5,
     classState: createDefaultClassCombatEncounterState(),
-    resolvedWeapon: resolveWeaponState('hex-pulse-rifle', 1),
+    resolvedWeapon: resolveWeaponState('hex-carbine'),
     log: () => {},
     spendAmmo: (n) => {
       ammoR -= n;
@@ -611,7 +611,7 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 
 // FS accuracy never changes damage
 {
-  const weapon = resolveWeaponState('hex-pulse-rifle', 1);
+  const weapon = resolveWeaponState('hex-carbine');
   const withFs = scaleHexWeaponAuthoredDamage(CENTER_MASS_BASE_DAMAGE, weapon);
   const without = scaleHexWeaponAuthoredDamage(CENTER_MASS_BASE_DAMAGE, weapon);
   assert.equal(withFs, without);

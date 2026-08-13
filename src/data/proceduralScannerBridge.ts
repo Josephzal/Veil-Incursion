@@ -176,7 +176,7 @@ export function buildProceduralScannerCluster(inc: ActiveIncursionState): Incurs
   const tree = inc.proceduralRunTree;
   if (!tree) return [];
 
-  const interpreted = new Set(inc.keepsakeFullyInterpretedNodeIds ?? []);
+  const interpreted = new Set(inc.requisitionFullyInterpretedNodeIds ?? []);
   const ids = getAvailableProceduralNodeIds(inc);
   return ids
     .map((id) => tree.nodes[id])

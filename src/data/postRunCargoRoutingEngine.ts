@@ -63,7 +63,7 @@ import type { AppraisalValueBand, SealedCargoState } from '../types/sealedCargo'
 import { mergeResourceQuantities } from './runResourceLedgerEngine';
 import { OPERATION_CONTRIBUTION_VALUES } from './worldStateHelpers';
 import { applyKeepsakeDeliveredQuantityBonus, resolveKeepsakeFenceValueMultiplier } from './expeditionKeepsakeCargoEngine';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime } from '../types/expeditionRequisition';
 
 function normalizeResourceLabel(label: string): string {
   return label.toLowerCase().replace(/[\s-]/g, '');
@@ -513,7 +513,7 @@ export function applyCargoRoutingDecisions({
   stash,
   cabalCredits,
   operationContributionPerStack,
-  keepsakeRuntime,
+  requisitionRuntime,
   routingContext,
 }: {
   decisions: CargoRoutingDecision[];
@@ -522,7 +522,7 @@ export function applyCargoRoutingDecisions({
   stash: ResourceQuantity;
   cabalCredits: number;
   operationContributionPerStack: number;
-  keepsakeRuntime?: KeepsakeRuntime | null;
+  requisitionRuntime?: RequisitionRuntime | null;
   routingContext?: CargoRoutingContext | null;
 }): {
   result: CargoRoutingResult;
@@ -622,7 +622,7 @@ export function applyCargoRoutingDecisions({
           throw new Error(`Fence sale failed for ${decision.resourceId}.`);
         }
         const valueMultiplier = resolveKeepsakeFenceValueMultiplier(
-          keepsakeRuntime,
+          requisitionRuntime,
           decision.resourceId,
         );
         const unitSellValue = routableItem?.sealedSellValue ?? resolveFenceUnitValue(decision.resourceId);
@@ -812,7 +812,7 @@ export function resolveFinalContractResultAfterRouting(
   items: RoutableCargoItem[],
   extractedSuccessfully: boolean,
   ledger?: RunResourceLedger,
-  keepsakeRuntime?: KeepsakeRuntime | null,
+  requisitionRuntime?: RequisitionRuntime | null,
 ): ContractResult {
   if (
     routingState.initialContractPendingDelivery
@@ -825,13 +825,13 @@ export function resolveFinalContractResultAfterRouting(
       items,
       extractedSuccessfully,
       ledger,
-      keepsakeRuntime,
+      requisitionRuntime,
     });
   }
 
   const adjustedDelivered = applyKeepsakeDeliveredQuantityBonus(
     routingResult?.deliveredResourcesForContract ?? {},
-    keepsakeRuntime,
+    requisitionRuntime,
   );
   if (
     routingState.activeContract?.objectiveKind
@@ -874,14 +874,14 @@ export function previewPostRunCargoRouting({
   items,
   routingState,
   ledger,
-  keepsakeRuntime,
+  requisitionRuntime,
   cabalCredits = 0,
 }: {
   decisions: CargoRoutingDecision[];
   items: RoutableCargoItem[];
   routingState: PostRunRoutingDebriefState;
   ledger?: RunResourceLedger;
-  keepsakeRuntime?: KeepsakeRuntime | null;
+  requisitionRuntime?: RequisitionRuntime | null;
   cabalCredits?: number;
 }): PostRunCargoRoutingPreview {
   const issues = validateCargoRoutingDecisions(items, decisions);
@@ -908,7 +908,7 @@ export function previewPostRunCargoRouting({
       stash: {},
       cabalCredits,
       operationContributionPerStack: routingState.operationContributionPerStack,
-      keepsakeRuntime,
+      requisitionRuntime,
       routingContext: routingState.routingContext,
     });
     const contract = resolveFinalContractResultAfterRouting(
@@ -918,7 +918,7 @@ export function previewPostRunCargoRouting({
       items,
       true,
       ledger,
-      keepsakeRuntime,
+      requisitionRuntime,
     );
     return {
       valid: true,

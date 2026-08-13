@@ -19,14 +19,14 @@ export interface WeaponUnlockPathRow {
 }
 
 const SLOT_BY_ID: Record<WeaponFamilyId, WeaponSlotPosition> = {
-  'aegis-runed-longsword': 1,
-  'aegis-rift-edge': 2,
-  'aegis-claymore-blade': 3,
-  'hex-silver-core-sidearm': 1,
-  'hex-void-cannon': 2,
-  'hex-pulse-rifle': 3,
-  'envoy-echo-lantern': 1,
-  'envoy-null-conduit': 2,
+  'aegis-longsword': 1,
+  'aegis-paired-blades': 2,
+  'aegis-claymore': 3,
+  'hex-revolver': 1,
+  'hex-shotgun': 2,
+  'hex-carbine': 3,
+  'envoy-vambrace': 1,
+  'envoy-scythe': 2,
   'envoy-sanguine-prism': 3,
 };
 

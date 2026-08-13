@@ -52,36 +52,34 @@ export default function VeilGraftUI({
   return (
     <View style={[styles.overlay, { borderColor }]}>
       <Text style={[styles.header, { color: TERMINAL_ACCENT }]}>
-        VEIL-GRAFT TERMINAL // RESIDUE {residueBalance}
+        VEIL-GRAFT TERMINAL (LEGACY — USE ClassGraftUI)
       </Text>
       <Text style={[styles.subheader, { color: mutedColor }]}>
-        Select a graft, then an ability slot. Ultimate abilities are locked.
+        Quarantined four-slot UI. Live Sanctuary uses ClassGraftUI (no Residue charge).
       </Text>
 
       <View style={styles.offerCol}>
         {offers.map((graftId) => {
           const graft = getVeilGraftDefinition(graftId);
-          const affordable = residueBalance >= graft.cost;
           const selected = selectedGraftId === graftId;
           return (
             <HapticPressable
               key={graftId}
-              disabled={!affordable}
               onPress={() => setSelectedGraftId(graftId)}
               style={({ pressed }) => [
                 styles.offerBtn,
                 {
                   borderColor: selected ? graft.accentColor : borderColor,
                   backgroundColor: selected ? `${graft.accentColor}18` : '#0a0b0f',
-                  opacity: affordable ? pressed ? 0.75 : 1 : 0.35,
+                  opacity: pressed ? 0.75 : 1,
                 },
               ]}
             >
               <Text style={[styles.offerTitle, { color: selected ? graft.accentColor : primaryColor }]}>
-                {graft.name.toUpperCase()} — {graft.cost} RESIDUE
+                {graft.name.toUpperCase()}
               </Text>
               <Text style={[styles.offerBody, { color: mutedColor }]}>
-                {formatGraftOfferLine(graftId, residueBalance).split('\n')[1]}
+                {formatGraftOfferLine(graftId).split('\n')[1]}
               </Text>
             </HapticPressable>
           );
@@ -97,9 +95,7 @@ export default function VeilGraftUI({
       <View style={styles.loadoutGrid}>
         {abilityRows.map(({ abilityId, def, graftId, graftable }) => {
           const existing = graftId ? getVeilGraftDefinition(graftId) : null;
-          const canApply = graftable
-            && selectedGraftId != null
-            && residueBalance >= (selectedGraft?.cost ?? 0);
+          const canApply = graftable && selectedGraftId != null;
           return (
             <HapticPressable
               key={abilityId}

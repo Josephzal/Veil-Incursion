@@ -218,10 +218,9 @@ export function isUltimateDisabledForEncounter(
   );
 }
 
-export function formatGraftOfferLine(graftId: VeilGraftId, residueBalance: number): string {
+export function formatGraftOfferLine(graftId: VeilGraftId, _residueBalance?: number): string {
   const graft = getVeilGraftDefinition(graftId);
-  const affordable = residueBalance >= graft.cost ? 'OK' : 'LOCKED';
-  return `[ ${graft.name.toUpperCase()} ] — ${graft.cost} RESIDUE // ${affordable}\n${graft.description}`;
+  return `[ ${graft.name.toUpperCase()} ] — SANCTUARY ATTUNE\n${graft.description}`;
 }
 
 export function effectiveAbilityTags(

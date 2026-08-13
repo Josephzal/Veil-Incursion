@@ -271,6 +271,8 @@ export function placeStagedBlackMarketCargoAtCell(
           originRow,
           originCol,
           currentValue: def.baseValue,
+          quantity: def.subtype === 'SUPPLY' ? 1 : undefined,
+          supplyOrigin: def.subtype === 'SUPPLY' ? 'MARKET' : undefined,
           blackMarketStaged: true,
         },
       ],

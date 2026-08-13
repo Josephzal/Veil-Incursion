@@ -8,11 +8,14 @@ import {
   rollClassGraftOffers,
 } from '../data/classGraftEngine';
 import {
-  filterGraftOffersForClassRank,
+  filterGraftOffersForRunDepth,
   recomputeMaxSoulAnchorFromGraftBaseline,
   validateSanctuaryGraftApplication,
 } from '../data/graftSynergy/permanentGraftLoadoutEngine';
-import { getGraftSocketAccessForClassRank } from '../data/graftSynergy/graftCapacityEngine';
+import {
+  getGraftSocketAccessForRunDepth,
+  resolveRunGraftDepthBand,
+} from '../data/graftSynergy/graftCapacityEngine';
 import { sanitizeAegisAbilityGrafts } from '../data/graftSynergy/graftSanitizationEngine';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { resolveStartingRunCanisterResidue } from '../data/veilResidueRunEngine';
@@ -64,9 +67,9 @@ import {
   buildEncounter,
   getThemedSkillChecks,
   INITIAL_SECTOR_POOL,
-  pickRandomTrinkets,
-  TRINKET_POOL,
 } from '../data/regions';
+import { createInitialRunState } from '../data/createInitialRunState';
+import { applySkillCheckTierEffects } from '../data/skillCheckTierEngine';
 import {
   BASE_MAX_SOUL_ANCHOR,
   BASE_MAX_STAMINA,
@@ -75,7 +78,6 @@ import {
   RadarDot,
   RunState,
   SkillCheckEvent,
-  Trinket,
   TOTAL_RUN_NODES,
 } from '../types/run';
 import {
@@ -303,7 +305,7 @@ import {
   resolveEffectiveRareLootBonusPct,
 } from '../data/unstableCargoEffectsEngine';
 import type { CargoRunState } from '../types/cargoGrid';
-import { CARGO_ITEM_CATALOG, HARVEST_YIELD_OPTIONS } from '../types/cargoGrid';
+import { CARGO_ITEM_CATALOG, HARVEST_YIELD_OPTIONS, createDefaultCargoRunState } from '../types/cargoGrid';
 import type { HarvestYieldTier } from '../types/cargoGrid';
 import {
   MAX_SECTOR_NODES,
@@ -380,10 +382,7 @@ import {
 } from '../data/postRunCargoRoutingDebugEngine';
 import { buildPostRunRoutingDebriefState } from '../data/postRunCargoRoutingEngine';
 import { resolveContractExtractionKind } from '../data/contractExtractionKind';
-import {
-  applyKeepsakeOnRunStart,
-  initializeKeepsakeRuntime,
-} from '../data/expeditionKeepsakeEngine';
+import { applyKeepsakeOnRunStart } from '../data/expeditionKeepsakeEngine';
 import {
   applyKeepsakeOnNodeRevealed,
   applyKeepsakeOnNodeSelected,
@@ -393,8 +392,6 @@ import {
   applyKeepsakeDeadDropHarvestBonus,
   applyKeepsakeCargoSealOnDirtyExtract,
   applyKeepsakeCargoSealOnNodeClear,
-  applyKeepsakeLeySiphonOverdraw,
-  applyKeepsakeOnNodeEngagedForLeySiphon,
   clearKeepsakeJettisonLocks,
   isKeepsakeJettisonBlocked,
   isKeepsakeSafehouseBankBlocked,
@@ -404,17 +401,12 @@ import {
   applyKeepsakeMarkedShelfCorruption,
   applyKeepsakeNullLedgerCreditPurchase,
   applyKeepsakeOnBlackMarketOpen,
-  applyKeepsakeOnDirtyExtractionStart,
-  applyKeepsakeOnSafeExtractionSkip,
   applyKeepsakeOnStampedSafeExtractionConfirm,
-  applyKeepsakeOverextendedOnNodeClear,
   canUseKeepsakeNullLedgerCredit,
-  consumeKeepsakeDirtyExtractionThreat,
   isKeepsakeMarkedShelfItem,
   resolveKeepsakeExtractionPayoutAdjustments,
   resolveKeepsakeMarkedPurchaseCreditSaved,
   resolveKeepsakeMarkedShelfPrice,
-  shouldApplyKeepsakeDirtyExtractionThreat,
   computeBaseSectorExtractionPayout,
   stageKeepsakeExtractionTokenChoice,
 } from '../data/expeditionKeepsakeEconomyEngine';
@@ -422,31 +414,10 @@ import {
   applyKeepsakeNullLedgerDepthInterest,
   applyKeepsakeNullLedgerRunStart,
   commitKeepsakePendingChoice as resolveKeepsakePendingChoice,
-  shouldDeferHarvestForKeepsakeChoice,
 } from '../data/expeditionKeepsakeChoiceEngine';
-import {
-  applyKeepsakePhaseDOnNodeClear,
-  applyKeepsakePhaseDOnRunStart,
-  attachKeepsakeBentNailOutsideHook,
-  stripKeepsakeOutsideHookOnDirtyExtract,
-} from '../data/expeditionKeepsakePhaseDEngine';
 import {
   applyKeepsakeContractSealOnRunStart,
 } from '../data/expeditionKeepsakeContractEngine';
-import {
-  applyKeepsakeOnSafehouseEnter,
-} from '../data/expeditionKeepsakeSafehouseEngine';
-import {
-  appendKeepsakeThreatReinforcement,
-  applyKeepsakeAnchorCharmOnCombatEngage,
-  applyKeepsakeAnchorCharmOnSignalClear,
-  applyKeepsakeEchoLureCargoBonus,
-  applyKeepsakeEchoLureOnCombatEngage,
-  applyKeepsakeGravePolaroidOnNodeClear,
-  applyKeepsakeOnEchoSignalResolved,
-  scaleKeepsakeEchoCredits,
-} from '../data/expeditionKeepsakeAnchorEchoEngine';
-import type { KeepsakeId } from '../types/expeditionKeepsake';
 import {
   formatKeepsakeIncursionDebugSnapshot,
   formatKeepsakeDebugValidation,
@@ -497,24 +468,26 @@ import type {
   RunItemId,
   RunItemOfferResolution,
   RunItemOfferSource,
-  RunItemsSlotState,
 } from '../types/runItem';
-import { createDefaultRunItemsSlotState } from '../types/runItem';
-import {
-  clearRunItemAtSlot,
-  cloneRunItemsSlots,
-  consumeRunItemFromCombatSlot,
-  getRunItemInCombatSlot,
-  isRunItemCatalogId,
-  resolveRunItemOffer,
-  tryAutoPlaceRunItem,
-} from '../data/runItemInventoryEngine';
+import { createDefaultRunItemRuntime } from '../types/runItem';
 import { getRunItemDefinition } from '../data/runItemRegistry';
-import { tryNormalizeRunItemId } from '../data/runItemIdAliases';
+import { ALL_RESOURCE_ITEM_IDS } from '../data/resourceRegistry';
+import { isRunItemId, tryNormalizeRunItemId } from '../data/runItemIdAliases';
+import {
+  consumeSupplyInstance,
+  applyRecoverySupplyMarketFloor,
+  findSupplyInstance,
+  isRecoverySupplyId,
+  isSupplyCargoItemId,
+  placeSupplyAtFirstOpenCell,
+  stageImmediateSupplyTransaction,
+} from '../data/cargoSupplyEngine';
 import {
   hydrateRunItemIncursionFields,
   mergeRunItemRuntime,
   recordRunItemTrigger,
+  recordSupplyAcquisition,
+  recordSupplyUse,
   resetRunItemCombatCounters,
   resetRunItemTurnCounters,
 } from '../data/runItemRunState';
@@ -546,22 +519,23 @@ import {
   tryOpenRelaySpikePayoffChoice,
 } from '../data/runItemFieldChoiceEngine';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
-import type { BoundRequisitionDefinition, BoundRequisitionId } from '../types/boundRequisition';
-import { rollBoundRequisitionOffers } from '../data/boundRequisitions';
 import {
-  applyBoundRequisitionAtRunStart,
-  applyCraftedAugmentPassives,
-  buildBoundRequisitionRuntime,
-  consumeAdrenalinePrimerCombat,
-  consumeScavengerMarkDiscount,
-  getBlackMarketDiscountPct,
-  getEffectiveBlackMarketPrice,
-  isLeyScarAcquisitionBlocked,
-  modifyScanResonanceGain,
-  shouldGrantAdrenalinePrimerAp,
-  tickChalkLineWardAfterNodeClear,
-} from '../data/boundRequisitionEngine';
-import type { PlayerAccount } from '../types/game';
+  applyRequisitionOnNewRun,
+  beginRequisitionCombatEncounter as beginRequisitionCombatEncounterRuntime,
+  completeRequisitionCombatEncounter as completeRequisitionCombatEncounterRuntime,
+  consumeKineticBatteryAction,
+  grantAdrenalinePrimerFirstTurnAp,
+  initializeRequisitionRuntime,
+  interceptChalkLineHostileEffect,
+  reduceReinforcedTrenchCoatDamage,
+} from '../data/expeditionRequisitionRuntimeEngine';
+import type {
+  RequisitionDeployment,
+  RequisitionEncounterDescriptor,
+  RequisitionId,
+  RequisitionRuntime,
+} from '../types/expeditionRequisition';
+import { isRetainedKeepsakeRequisition } from '../data/expeditionRequisitionRegistry';
 import { usePlayerAccount } from './PlayerAccountContext';
 import type { UnstableCargoEffectId } from '../types/unstableCargoEffects';
 
@@ -572,6 +546,16 @@ function mergeUnstableCargoPickupLog(
 ): UnstableCargoEffectId[] {
   const newPickups = detectNewUnstableCargoPickups(beforeCargo, afterCargo, alreadyLogged);
   return [...alreadyLogged, ...newPickups];
+}
+
+function applyRetainedRequisitionOnRunStart(
+  runtime: RequisitionRuntime | null,
+  runContext: import('../types/worldState').RunGenerationContext | null,
+): { runtime: RequisitionRuntime | null; logLines: string[] } {
+  if (!runtime || !isRetainedKeepsakeRequisition(runtime.requisitionId)) {
+    return { runtime, logLines: [] };
+  }
+  return applyKeepsakeOnRunStart(runtime, runContext);
 }
 
 export interface RunStartConfig {
@@ -585,19 +569,17 @@ export interface RunStartConfig {
   alignedFaction?: FactionType | null;
   /** Safehouse cargo grid + tactical slots committed on descent. */
   initialCargo?: import('../types/cargoGrid').CargoRunState;
-  /** Pre-run Run Item v2 slots committed on descent. */
-  initialRunItems?: RunItemsSlotState;
+  /** Pre-run Supply v2 slots committed on descent. */
   /** Persistent Veil Residue balance loaded into the run canister at descent. */
   startingVeilResidueBalance?: number;
   runGenerationContext?: import('../types/worldState').RunGenerationContext;
   runWorldBrief?: import('../types/runWorldBrief').RunWorldBrief | null;
   runModifiers?: import('../types/worldState').RunModifierSnapshot;
-  equippedKeepsakeId?: KeepsakeId | null;
-  keepsakeDeployment?: import('../types/expeditionKeepsake').KeepsakeDeployment | null;
-  /** Weapon family + tier locked at descent. */
+  equippedRequisitionId?: RequisitionId | null;
+  requisitionDeployment?: RequisitionDeployment | null;
+  /** Weapon family locked at descent. */
   activeWeaponFamilyId?: import('../types/weapon').WeaponFamilyId;
-  activeWeaponTier?: import('../types/weapon').WeaponTierNumber;
-  /** Class rank carried for Sanctuary capacity/socket validation (not a graft snapshot). */
+  /** @deprecated Stage II-B — Class Rank no longer validates Sanctuary graft access. */
   classRank?: number;
 }
 
@@ -609,7 +591,6 @@ export interface BadgeTestCombatConfig {
   alignedFaction?: FactionType | null;
   /** Equipped weapon locked for sandbox combat — required for class-correct portraits/ultimates. */
   activeWeaponFamilyId?: import('../types/weapon').WeaponFamilyId;
-  activeWeaponTier?: import('../types/weapon').WeaponTierNumber;
 }
 
 interface RunContextType {
@@ -625,15 +606,28 @@ interface RunContextType {
   beginCombatRunLogSession: () => void;
   setCombatLogActive: (active: boolean) => void;
   clearRunLog: () => void;
-  startNewRun: (config?: RunStartConfig) => void;
+  startNewRun: (config?: RunStartConfig) => boolean;
   recordRunKillAttacker: (designation: string) => void;
-  boundRequisitionOffers: BoundRequisitionDefinition[];
-  prepareBoundRequisitionOffers: (account: PlayerAccount) => void;
-  confirmBoundRequisition: (
-    id: BoundRequisitionId,
-    craftedAugments?: readonly BoundRequisitionId[],
-  ) => void;
-  consumeAdrenalinePrimerAfterCombat: () => void;
+  beginRequisitionCombatEncounter: (encounter: RequisitionEncounterDescriptor) => void;
+  resolveRequisitionFirstTurnAp: (encounter: RequisitionEncounterDescriptor) => number;
+  resolveRequisitionDirectHostileDamage: (
+    encounter: RequisitionEncounterDescriptor,
+    finalDamage: number,
+    eligible: boolean,
+  ) => number;
+  resolveRequisitionKineticBatteryAction: (
+    encounter: RequisitionEncounterDescriptor,
+    actionId: string,
+    targetLayers: { kineticArmor: number; occultWards: number },
+    eligible: boolean,
+  ) => { armorPierceLayers: 0 | 1; wardPierceLayers: 0 | 1 };
+  resolveRequisitionHostileEffect: (
+    encounter: RequisitionEncounterDescriptor,
+    effectId: string,
+    eligible: boolean,
+    unpreventable: boolean,
+  ) => boolean;
+  completeRequisitionCombatEncounter: (encounter: RequisitionEncounterDescriptor) => void;
   /** Read pending next-combat narrative boons without mutating run state. */
   peekPendingNarrativeCombatBoons: () => PendingNarrativeCombatBoons;
   /** Clears pending narrative boons after they have been consumed by combat init. */
@@ -650,7 +644,6 @@ interface RunContextType {
   incrementCombatNodesCleared: () => void;
   syncAfterCombat: (remainingHp: number, remainingStamina: number) => void;
   refillStaminaAfterCombat: () => void;
-  applyTrinket: (trinket: Trinket) => void;
   preparePostCombatMutations: () => PostCombatBoonOffer[];
   applyLeyLineMutation: (mutationId: LeyLineMutationId) => void;
   applyHexShotBoon: (boonId: HexShotBoonId) => void;
@@ -794,13 +787,12 @@ interface RunContextType {
   ) => { success: boolean; logLine: string; needsChoice?: boolean };
   resolvePendingRunItemOffer: (
     resolution: RunItemOfferResolution,
-    slotIndex?: number,
+    cargoInstanceId?: string,
   ) => { success: boolean; logLine: string; usedNow?: boolean; itemId?: RunItemId };
-  clearRunItemSlot: (slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => void;
   devGrantRunItem: (itemId: RunItemId) => { success: boolean; logLine: string };
-  /** Reset per-turn Run Item combat counters (call at player turn start). */
+  /** Reset per-turn Supply combat counters (call at player turn start). */
   notifyRunItemPlayerTurnStart: () => { staminaLoss: number; message: string | null };
-  /** Reset per-combat Run Item counters (call at combat start). */
+  /** Reset per-combat Supply counters (call at combat start). */
   notifyRunItemCombatStart: () => void;
   useBrokerFlashcard: () => boolean;
   useRelaySpikeOnNode: (nodeId: string, isBossNode?: boolean) => boolean;
@@ -820,7 +812,6 @@ interface RunContextType {
   setAegisTechniqueLoadout: (loadout: AegisTechniqueLoadout) => void;
   setHexShotLoadout: (loadout: HexShotLoadout) => void;
   setEnvoyLoadout: (loadout: EnvoyLoadout) => void;
-  purchaseBlackMarketCargo: (itemId: CargoItemId) => { success: boolean; logLine: string } | null;
   purchaseBlackMarketCargoAtCell: (
     itemId: CargoItemId,
     row: number,
@@ -942,44 +933,6 @@ function resolveActiveVectorNode(inc: ActiveIncursionState): IncursionNode | nul
   return inc.encounterPath[inc.nodesCleared] ?? inc.encounterPath[inc.currentEncounterIndex] ?? null;
 }
 
-function aggregateModifiers(trinkets: Trinket[]) {
-  return trinkets.reduce(
-    (acc, t) => ({
-      parryWindowBonus: acc.parryWindowBonus + (t.parryWindowBonus ?? 0),
-      parryMultiplierBonus: acc.parryMultiplierBonus + (t.parryMultiplierBonus ?? 0),
-      sliceDamagePenalty: acc.sliceDamagePenalty + (t.sliceDamagePenalty ?? 0),
-      startingAbyssalReservePercent: Math.max(acc.startingAbyssalReservePercent, t.startingAbyssalReservePercent ?? 0),
-    }),
-    { parryWindowBonus: 0, parryMultiplierBonus: 0, sliceDamagePenalty: 0, startingAbyssalReservePercent: 0 },
-  );
-}
-
-function createInitialRunState(): RunState {
-  return {
-    runActive: false,
-    currentNode: 0,
-    totalNodes: TOTAL_RUN_NODES,
-    maxStamina: BASE_MAX_STAMINA,
-    currentStamina: BASE_MAX_STAMINA,
-    maxSoulAnchor: BASE_MAX_SOUL_ANCHOR,
-    soulAnchorIntegrity: BASE_MAX_SOUL_ANCHOR,
-    climateCluster: null,
-    currentSector: null,
-    activeTrinkets: [],
-    pendingEncounter: null,
-    pendingEnemy: null,
-    pendingEnemies: [],
-    pendingAmbush: false,
-    parryWindowBonus: 0,
-    parryMultiplierBonus: 0,
-    sliceDamagePenalty: 0,
-    startingAbyssalReservePercent: 0,
-    combatNodesCleared: 0,
-    combatTestPreset: null,
-    devSandboxPreset: null,
-  };
-}
-
 export function RunProvider({ children }: { children: React.ReactNode }) {
   const { transferVeilResidueIntoRun, restoreVeilResidueBaseline, persistRunBankedSnapshot, account } = usePlayerAccount();
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
@@ -993,7 +946,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   scanSessionKeyRef.current = scanSessionKey;
   const pocketResonanceAccumRef = useRef(0);
   const [postCombatMutationChoices, setPostCombatMutationChoices] = useState<PostCombatBoonOffer[]>([]);
-  const [boundRequisitionOffers, setBoundRequisitionOffers] = useState<BoundRequisitionDefinition[]>([]);
   const [activeIncursion, setActiveIncursion] = useState<ActiveIncursionState>(
     createDefaultActiveIncursionState,
   );
@@ -1050,6 +1002,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startNewRun = useCallback((config?: RunStartConfig) => {
+    if (!config?.equippedRequisitionId) {
+      return false;
+    }
     runStartedAtMsRef.current = Date.now();
     lastKillingEnemyRef.current = null;
     setDeathSummary(null);
@@ -1089,12 +1044,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const startingCanisterResidue = resolveStartingRunCanisterResidue(
       config?.startingVeilResidueBalance ?? 0,
     );
-    const keepsakeRuntimeBase = initializeKeepsakeRuntime(
-      config?.equippedKeepsakeId ?? null,
-      config?.keepsakeDeployment ?? null,
+    const requisitionRuntimeBase = initializeRequisitionRuntime(
+      config?.equippedRequisitionId ?? null,
+      config?.requisitionDeployment ?? null,
     );
-    const keepsakeStart = applyKeepsakeOnRunStart(
-      keepsakeRuntimeBase,
+    const requisitionRunStart = applyRequisitionOnNewRun(requisitionRuntimeBase, 0);
+    const keepsakeStart = applyRetainedRequisitionOnRunStart(
+      requisitionRunStart.runtime,
       config?.runGenerationContext ?? null,
     );
     const nullLedgerStart = applyKeepsakeNullLedgerRunStart(keepsakeStart.runtime);
@@ -1111,18 +1067,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeContract = contractSeal.contract;
     }
     contractSeal.logLines.forEach((line) => keepsakeStart.logLines.push(line));
-    const phaseDStart = applyKeepsakePhaseDOnRunStart(keepsakeStart.runtime, activeContract);
-    if (phaseDStart.runtime) {
-      keepsakeStart.runtime = phaseDStart.runtime;
-    }
-    if (phaseDStart.contract) {
-      activeContract = phaseDStart.contract;
-    }
-    keepsakeStart.logLines.push(...phaseDStart.logLines);
-    const starterCargoBase = applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState());
-    const starterCargo = keepsakeStart.runtime?.keepsakeId === 'bent_nail'
-      ? attachKeepsakeBentNailOutsideHook(starterCargoBase)
-      : starterCargoBase;
+    const starterCargo = config?.initialCargo ?? createDefaultCargoRunState();
+    const packedSupplyIds = [
+      ...starterCargo.grid.placed.map((item) => item.itemId),
+      ...starterCargo.containment.map((item) => item.itemId),
+    ].filter(isSupplyCargoItemId);
+    const initialSupplyRuntime = createDefaultRunItemRuntime();
+    initialSupplyRuntime.stats.suppliesPacked = packedSupplyIds.length;
+    initialSupplyRuntime.stats.runsStartedWithoutRecoveryAccess =
+      packedSupplyIds.some(isRecoverySupplyId) ? 0 : 1;
     const runGenerationContext = config?.runGenerationContext ?? null;
     let resolvedRunWorldBrief = config?.runWorldBrief ?? runGenerationContext?.runWorldBrief ?? null;
     if (!resolvedRunWorldBrief && runGenerationContext) {
@@ -1164,7 +1117,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       scanConfirmOverlayVisible: false,
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
-      runCredits: 0,
+      runCredits: requisitionRunStart.runCredits,
       sectorGraph: sectorInit.sectorGraph,
       proceduralRunTree: sectorInit.proceduralRunTree,
       revealedSonarNodeIds: [],
@@ -1206,6 +1159,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       pendingLeyBoonSwap: null,
       pendingClassBoonSwap: null,
       blackMarketStock: [],
+      recoverySupplyMarketFloorPending: !starterCargo.grid.placed.some(
+        (instance) => isRecoverySupplyId(instance.itemId),
+      ),
       aegisTechniqueLoadout: hydrateAegisTechniqueLoadout({
         aegisTechniqueLoadout: config?.aegisTechniqueLoadout
           ?? createDefaultActiveIncursionState().aegisTechniqueLoadout,
@@ -1218,15 +1174,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         : createDefaultActiveIncursionState().envoyLoadout,
       activeClass: config?.activeClass ?? 'AEGIS',
       cargo: starterCargo,
-      runItems: config?.initialRunItems ?? createDefaultRunItemsSlotState(),
-      runItemsAtRunStart: cloneRunItemsSlots(
-        config?.initialRunItems ?? createDefaultRunItemsSlotState(),
-      ),
+      supplyRuntime: initialSupplyRuntime,
       ...(() => {
         const weaponSnapshot = config?.activeWeaponFamilyId
           ? {
             activeWeaponFamilyId: config.activeWeaponFamilyId,
-            activeWeaponTier: config.activeWeaponTier ?? 1,
             weaponRuntime: createDefaultWeaponRuntime(),
           }
           : snapshotWeaponForRun(
@@ -1252,13 +1204,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen([], starterCargo),
       sessionVeilResidueCollected: startingCanisterResidue,
       runVeilResidueBaseline: startingCanisterResidue,
-      keepsakeRuntime: keepsakeStart.runtime,
-      keepsakeFullyInterpretedNodeIds: [],
-      keepsakeCartographGhostNodeId: null,
-      keepsakeCartographGhostNodeIds: [],
-      keepsakeGravePolaroidPreview: null,
-      keepsakeJettisonLockedInstanceIds: [],
-      keepsakeStampedExtractionNodeId: null,
+      requisitionRuntime: keepsakeStart.runtime as RequisitionRuntime | null,
+      requisitionFullyInterpretedNodeIds: [],
+      requisitionCartographGhostNodeId: null,
+      requisitionCartographGhostNodeIds: [],
+      requisitionJettisonLockedInstanceIds: [],
+      requisitionStampedExtractionNodeId: null,
+      activeCombatEncounter: null,
       pendingExtractionNodeId: null,
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
@@ -1273,7 +1225,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     resetCargoInstanceCounter();
     setScanSessionKey(1);
     setPostCombatMutationChoices([]);
-    setBoundRequisitionOffers([]);
     combatLogActiveRef.current = false;
     const initialLog: string[] = [];
     if (startingCanisterResidue > 0) {
@@ -1286,6 +1237,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
     keepsakeStart.logLines.forEach((line) => initialLog.push(line));
     setRunLog(initialLog);
+    return true;
   }, [transferVeilResidueIntoRun]);
 
   const refreshOverworldFeatures = useCallback(() => {
@@ -1315,64 +1267,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setScanSessionKey((k) => k + 1);
     setTimeout(() => refreshOverworldFeatures(), 0);
   }, [refreshOverworldFeatures]);
-
-  const prepareBoundRequisitionOffers = useCallback((account: PlayerAccount) => {
-    const inc = activeIncursionRef.current;
-    const offers = rollBoundRequisitionOffers(account, inc.alignedFaction);
-    setBoundRequisitionOffers(offers);
-  }, []);
-
-  const confirmBoundRequisition = useCallback((
-    id: BoundRequisitionId,
-    craftedAugments: readonly BoundRequisitionId[] = [],
-  ) => {
-    const run = runStateRef.current;
-    const inc = activeIncursionRef.current;
-    const result = applyBoundRequisitionAtRunStart(id, run, inc);
-    const mergedRun = { ...run, ...result.runPatch };
-    const mergedInc = { ...inc, ...result.incursionPatch };
-    const primaryRuntime = mergedInc.boundRequisition ?? buildBoundRequisitionRuntime(id);
-    const passiveResult = applyCraftedAugmentPassives(
-      craftedAugments,
-      id,
-      mergedRun,
-      mergedInc,
-      primaryRuntime,
-    );
-
-    const nextRun = { ...mergedRun, ...passiveResult.runPatch };
-    if (Object.keys({ ...result.runPatch, ...passiveResult.runPatch }).length > 0) {
-      runStateRef.current = nextRun;
-      setRunState(nextRun);
-    }
-
-    setActiveIncursion((prev) => {
-      const next = {
-        ...prev,
-        ...result.incursionPatch,
-        ...passiveResult.incursionPatch,
-      };
-      activeIncursionRef.current = next;
-      return next;
-    });
-
-    [...result.logLines, ...passiveResult.logLines].forEach((line) => appendRunLog(line));
-    setBoundRequisitionOffers([]);
-  }, [appendRunLog]);
-
-  const consumeAdrenalinePrimerAfterCombat = useCallback(() => {
-    const inc = activeIncursionRef.current;
-    const req = inc.boundRequisition;
-    if (!req || req.adrenalinePrimerCombatsRemaining <= 0) return;
-
-    const nextReq = consumeAdrenalinePrimerCombat(req);
-    setActiveIncursion((prev) => {
-      const next = { ...prev, boundRequisition: nextReq };
-      activeIncursionRef.current = next;
-      return next;
-    });
-    appendRunLog('>> ADRENALINE PRIMER SPENT — COMBAT CHARGE CONSUMED.');
-  }, [appendRunLog]);
 
   const peekPendingNarrativeCombatBoons = useCallback((): PendingNarrativeCombatBoons => {
     const inc = activeIncursionRef.current;
@@ -1429,49 +1323,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const isPostCombatBoonBlocked = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
-    if (isLeyScarAcquisitionBlocked(inc)) return true;
     const node = resolveActiveVectorNode(inc);
     return node?.type !== 'ELITE_COMBAT';
   }, []);
-
-  const applyTrinket = useCallback((trinket: Trinket) => {
-    setRunState((prev) => {
-      const activeTrinkets = [...prev.activeTrinkets, trinket];
-      const mods = aggregateModifiers(activeTrinkets);
-      let maxSoulAnchor = prev.maxSoulAnchor;
-      let maxStamina = prev.maxStamina;
-      let soulAnchorIntegrity = prev.soulAnchorIntegrity;
-      let currentStamina = prev.currentStamina;
-
-      if (trinket.maxHpBonus) {
-        maxSoulAnchor += trinket.maxHpBonus;
-        soulAnchorIntegrity += trinket.maxHpBonus;
-      }
-      if (trinket.maxStaminaBonus) {
-        maxStamina += trinket.maxStaminaBonus;
-        currentStamina += trinket.maxStaminaBonus;
-      }
-      if (trinket.hpRestore) {
-        soulAnchorIntegrity = Math.min(soulAnchorIntegrity + trinket.hpRestore, maxSoulAnchor);
-      }
-      if (trinket.staminaRestore) {
-        currentStamina = Math.min(currentStamina + trinket.staminaRestore, maxStamina);
-      }
-
-      const next = {
-        ...prev,
-        activeTrinkets,
-        maxSoulAnchor,
-        maxStamina,
-        soulAnchorIntegrity,
-        currentStamina,
-        ...mods,
-      };
-      runStateRef.current = next;
-      return next;
-    });
-    appendRunLog(`>> Trinket acquired: ${trinket.name} — ${trinket.effect}`);
-  }, [appendRunLog]);
 
   const commitRadarDot = useCallback((dot: RadarDot): EncounterNode => {
     const prev = runStateRef.current;
@@ -1548,10 +1402,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyLeyLineMutation = useCallback((mutationId: LeyLineMutationId) => {
     const inc = activeIncursionRef.current;
-    if (isLeyScarAcquisitionBlocked(inc)) {
-      appendRunLog('>> LEY-SCAR ACQUISITION BLOCKED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
-      return;
-    }
     if (inc.leyLineMutations.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -1586,10 +1436,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyHexShotBoon = useCallback((boonId: HexShotBoonId) => {
     const inc = activeIncursionRef.current;
-    if (isLeyScarAcquisitionBlocked(inc)) {
-      appendRunLog('>> LEY-SCAR ACQUISITION BLOCKED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
-      return;
-    }
     if (inc.hexShotBoons.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -1618,10 +1464,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyEnvoyBoon = useCallback((boonId: EnvoyBoonId) => {
     const inc = activeIncursionRef.current;
-    if (isLeyScarAcquisitionBlocked(inc)) {
-      appendRunLog('>> LEY-SCAR ACQUISITION BLOCKED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
-      return;
-    }
     if (inc.envoyBoons.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -1663,13 +1505,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const rollBlackMarketStockForNode = useCallback(() => {
     const inc = activeIncursionRef.current;
     const depth = inc.currentDepth ?? 1;
-    const stock = rollBlackMarketStock(depth);
-    const keepsakeOpen = applyKeepsakeOnBlackMarketOpen(inc.keepsakeRuntime, stock);
+    const rolled = rollBlackMarketStock(depth);
+    const stock = applyRecoverySupplyMarketFloor(
+      rolled,
+      inc.recoverySupplyMarketFloorPending,
+    );
+    const keepsakeOpen = applyKeepsakeOnBlackMarketOpen(inc.requisitionRuntime, stock);
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
         blackMarketStock: stock,
-        keepsakeRuntime: keepsakeOpen.runtime,
+        recoverySupplyMarketFloorPending: false,
+        requisitionRuntime: keepsakeOpen.runtime,
       };
       activeIncursionRef.current = next;
       return next;
@@ -1709,11 +1556,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const preparePostCombatMutations = useCallback((): PostCombatBoonOffer[] => {
     const inc = activeIncursionRef.current;
-    if (isLeyScarAcquisitionBlocked(inc)) {
-      setPostCombatMutationChoices([]);
-      appendRunLog('>> LEY-SCAR BOON SKIPPED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
-      return [];
-    }
     const node = resolveActiveVectorNode(inc);
     if (node?.type !== 'ELITE_COMBAT') {
       setPostCombatMutationChoices([]);
@@ -1761,47 +1603,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applySkillCheckTier = useCallback((tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => {
     setRunState((prev) => {
-      let maxStamina = prev.maxStamina;
-      let maxSoulAnchor = prev.maxSoulAnchor;
-      let soulAnchorIntegrity = prev.soulAnchorIntegrity;
-      let currentStamina = prev.currentStamina;
-      let pendingAmbush = prev.pendingAmbush;
-      let activeTrinkets = prev.activeTrinkets;
-
-      switch (tier) {
-        case 'CRITICAL_SUCCESS': {
-          soulAnchorIntegrity = Math.min(soulAnchorIntegrity + 30, maxSoulAnchor);
-          const trinket = pickRandomTrinkets(TRINKET_POOL, 1)[0];
-          if (trinket) activeTrinkets = [...activeTrinkets, trinket];
-          break;
-        }
-        case 'SUCCESS':
-          maxStamina += 10;
-          currentStamina = Math.min(currentStamina + 20, maxStamina);
-          break;
-        case 'FAILURE':
-          soulAnchorIntegrity = Math.max(soulAnchorIntegrity - 15, 0);
-          maxStamina = Math.max(maxStamina - 30, 20);
-          currentStamina = Math.min(currentStamina, maxStamina);
-          break;
-        case 'CRITICAL_DESYNC':
-          soulAnchorIntegrity = Math.max(soulAnchorIntegrity - 25, 0);
-          if (AMBUSH_ENCOUNTERS_ENABLED) pendingAmbush = true;
-          break;
-        default:
-          break;
-      }
-
-      const mods = aggregateModifiers(activeTrinkets);
+      const effects = applySkillCheckTierEffects(prev, tier);
       const next = {
         ...prev,
-        maxStamina,
-        maxSoulAnchor,
-        soulAnchorIntegrity,
-        currentStamina,
-        pendingAmbush,
-        activeTrinkets,
-        ...mods,
+        ...effects,
       };
       runStateRef.current = next;
       return next;
@@ -1818,7 +1623,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const restore = Math.floor(
         prev.maxSoulAnchor * 0.30 * boonMultiplier * resolveCargoHealReceivedMultiplier(
           inc.cargo,
-          inc.keepsakeRuntime,
+          inc.requisitionRuntime,
         ),
       );
       const next = {
@@ -1844,15 +1649,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const openSanctuaryGraftTerminal = useCallback(() => {
     const inc = activeIncursionRef.current;
     const classId = inc.activeClass ?? 'AEGIS';
-    const classRank = account.progressionProfile.classes[classId]?.rank ?? 1;
+    const runDepthBand = resolveRunGraftDepthBand(inc);
     const rolled = rollClassGraftOffers(classId, 3);
-    const offers = filterGraftOffersForClassRank(classId, rolled as string[], classRank);
-    // If rank filtering empties the pool, fall back to rolled Standard pool (preserve economy UX).
-    const staged = (offers.length > 0 ? offers : (rolled as string[])).slice(0, 3);
+    const offers = filterGraftOffersForRunDepth(classId, rolled as string[], runDepthBand);
+    const staged = offers.slice(0, 3);
     setActiveIncursion((prev) => {
       let abilityGrafts = prev.abilityGrafts;
       if (classId === 'AEGIS') {
-        abilityGrafts = sanitizeAegisAbilityGrafts(prev.abilityGrafts, classRank, {
+        abilityGrafts = sanitizeAegisAbilityGrafts(prev.abilityGrafts, runDepthBand, {
           weaponFamilyId: prev.activeWeaponFamilyId,
           techniques: prev.aegisTechniqueLoadout,
         }).map;
@@ -1868,9 +1672,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> ${classId} GRAFT TERMINAL ONLINE — three volatile mutations staged.`);
     staged.forEach((graftId) => {
       const graft = getClassGraftDefinition(classId, graftId);
-      appendRunLog(`>> — OFFER: ${graft.name.toUpperCase()} (${graft.cost} RESIDUE)`);
+      appendRunLog(`>> — OFFER: ${graft.name.toUpperCase()}`);
     });
-  }, [account.progressionProfile.classes, appendRunLog]);
+  }, [appendRunLog]);
 
   const clearSanctuaryGraftSession = useCallback(() => {
     setActiveIncursion((prev) => {
@@ -1887,7 +1691,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   ): { success: boolean; message: string } => {
     const inc = activeIncursionRef.current;
     const classId = inc.activeClass ?? 'AEGIS';
-    const classRank = account.progressionProfile.classes[classId]?.rank ?? 1;
+    const runDepthBand = resolveRunGraftDepthBand(inc);
+    const access = getGraftSocketAccessForRunDepth(runDepthBand);
     const currentMap =
       classId === 'HEX_SHOT'
         ? (inc.hexShotAbilityGrafts as Record<string, string>)
@@ -1900,10 +1705,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       classId,
       abilityId,
       graftId,
-      classRank,
+      runDepthBand,
       currentMap,
       sanctuarySessionActive: inc.sanctuaryGraftOffers != null,
-      residueBalance: inc.sessionVeilResidueCollected,
       sanctuaryOffers: inc.sanctuaryGraftOffers,
       aegisSurface: classId === 'AEGIS'
         ? {
@@ -1918,20 +1722,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: validation.message };
     }
 
-    const access = getGraftSocketAccessForClassRank(classRank);
     if (!canGraftClassAbility(classId, abilityId, {
       allowFixedBasic: access.allowFixedBasic,
       allowUltimate: access.allowUltimate,
     })) {
-      appendRunLog('>> GRAFT REJECTED — ability socket locked for current class rank.');
-      return { success: false, message: 'This ability slot cannot be grafted at current class rank.' };
+      appendRunLog('>> GRAFT REJECTED — ability socket cannot accept grafts.');
+      return { success: false, message: 'This ability slot cannot be grafted.' };
     }
 
     const graft = getClassGraftDefinition(classId, graftId);
-    const cost = validation.cost;
     const proposedMap = validation.proposedMap;
 
-    // Atomic commit: assignment + residue after full validation.
+    // Atomic commit: assignment only — no Residue debit (Stage II-B).
     setActiveIncursion((prev) => {
       const graftPatch = classId === 'HEX_SHOT'
         ? { hexShotAbilityGrafts: proposedMap as ActiveIncursionState['hexShotAbilityGrafts'] }
@@ -1941,7 +1743,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
       const next = {
         ...prev,
-        sessionVeilResidueCollected: prev.sessionVeilResidueCollected - cost,
         ...graftPatch,
         encounterUltimateDisabled: graft.disableUltimate === true
           ? true
@@ -1968,7 +1769,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     void previousMap;
     const abilityLabel = abilityId.replace(/_/g, ' ');
-    appendRunLog(`>> GRAFT APPLIED — ${graft.name.toUpperCase()} fused to ${abilityLabel}. (−${cost} RESIDUE)`);
+    appendRunLog(`>> GRAFT APPLIED — ${graft.name.toUpperCase()} fused to ${abilityLabel}.`);
     if (graft.reduceMaxHp != null) {
       appendRunLog(`>> MARTYR TAX — max soul anchor recalculated (−${Math.round(graft.reduceMaxHp * 100)}% graft tax).`);
     }
@@ -1977,7 +1778,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { success: true, message: `${graft.name} applied.` };
-  }, [account.progressionProfile.classes, appendRunLog]);
+  }, [appendRunLog]);
 
   const clearEncounterUltimateDisabled = useCallback(() => {
     setActiveIncursion((prev) => {
@@ -2186,9 +1987,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const devValidateKeepsakePipeline = useCallback((): string => {
     const inc = activeIncursionRef.current;
     const report = formatKeepsakeDebugValidation(
-      inc.keepsakeRuntime?.keepsakeId ?? null,
+      (inc.requisitionRuntime?.requisitionId ?? null) as never,
       undefined,
-      inc.keepsakeRuntime?.deployment ?? null,
+      (inc.requisitionRuntime?.deployment ?? null) as never,
     );
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
@@ -2354,7 +2155,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const weaponSnapshot = config.activeWeaponFamilyId
       ? {
         activeWeaponFamilyId: config.activeWeaponFamilyId,
-        activeWeaponTier: config.activeWeaponTier ?? 1,
         weaponRuntime: createDefaultWeaponRuntime(),
       }
       : snapshotWeaponForRun(config.activeClass);
@@ -2408,6 +2208,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next: ActiveIncursionState = {
         ...prev,
+        requisitionRuntime: prev.activeCombatEncounter
+          ? completeRequisitionCombatEncounterRuntime(
+              prev.requisitionRuntime,
+              prev.activeCombatEncounter,
+            )
+          : prev.requisitionRuntime,
+        activeCombatEncounter: null,
         currentNarrativeId: null,
         activeChoice: null,
         bossProfile: null,
@@ -2632,7 +2439,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let requiresResourcePack = false;
     const tensionBonus = options?.tensionBonusCredits ?? 0;
     const creditReward = (result.pendingRunCredits ?? 0) + tensionBonus;
-    const narrativeKeepsakeRuntime = inc.keepsakeRuntime;
+    const narrativeKeepsakeRuntime = inc.requisitionRuntime;
     const triggerCombatAmbush = AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush;
     let narrativeKeepsakeLogs: string[] = [];
     setActiveIncursion((prev) => {
@@ -2673,15 +2480,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
       const keepsakePickup = processKeepsakeStagedCargoPickup(
-        narrativeKeepsakeRuntime ?? next.keepsakeRuntime,
+        narrativeKeepsakeRuntime ?? next.requisitionRuntime,
         nextCargo,
         stagedIds,
-        next.keepsakeJettisonLockedInstanceIds,
+        next.requisitionJettisonLockedInstanceIds,
       );
       next = {
         ...next,
-        keepsakeRuntime: keepsakePickup.runtime,
-        keepsakeJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
+        requisitionRuntime: keepsakePickup.runtime,
+        requisitionJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
       };
       narrativeKeepsakeLogs = keepsakePickup.logLines;
       if (result.spawnGridHound) {
@@ -2735,18 +2542,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     inc: ActiveIncursionState,
     cargo: CargoRunState,
     stagedInstanceIds: readonly string[],
-  ): Pick<ActiveIncursionState, 'keepsakeRuntime' | 'keepsakeJettisonLockedInstanceIds'> & {
+  ): Pick<ActiveIncursionState, 'requisitionRuntime' | 'requisitionJettisonLockedInstanceIds'> & {
     logLines: string[];
   } => {
     const pickup = processKeepsakeStagedCargoPickup(
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
       cargo,
       stagedInstanceIds,
-      inc.keepsakeJettisonLockedInstanceIds,
+      inc.requisitionJettisonLockedInstanceIds,
     );
     return {
-      keepsakeRuntime: pickup.runtime,
-      keepsakeJettisonLockedInstanceIds: pickup.jettisonLockedInstanceIds,
+      requisitionRuntime: pickup.runtime,
+      requisitionJettisonLockedInstanceIds: pickup.jettisonLockedInstanceIds,
       logLines: pickup.logLines,
     };
   }, []);
@@ -2760,7 +2567,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const signalsUsed = keepsakeResult.incursion.proceduralRunTree?.modifierRollState?.echoSignalsUsed ?? 0;
     const next = {
       ...keepsakeResult.incursion,
-      keepsakeRuntime: keepsakeResult.runtime,
+      requisitionRuntime: keepsakeResult.runtime,
       unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
         prev.unstableCargoEffectsSeen,
         prev.cargo,
@@ -2774,8 +2581,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
 
     if (next.proceduralRunTree === prev.proceduralRunTree
-      && next.keepsakeRuntime === prev.keepsakeRuntime
-      && next.keepsakeFullyInterpretedNodeIds === prev.keepsakeFullyInterpretedNodeIds
+      && next.requisitionRuntime === prev.requisitionRuntime
+      && next.requisitionFullyInterpretedNodeIds === prev.requisitionFullyInterpretedNodeIds
       && next.echoRunState.echoSignalsDiscovered === prev.echoRunState?.echoSignalsDiscovered) {
       return;
     }
@@ -2883,12 +2690,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const base = computeBaseSectorExtractionPayout(inc);
 
     const adjusted = resolveKeepsakeExtractionPayoutAdjustments(
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
       inc.cargo,
       base,
     );
-    if (adjusted.runtime !== inc.keepsakeRuntime) {
-      const next = { ...inc, keepsakeRuntime: adjusted.runtime };
+    if (adjusted.runtime !== inc.requisitionRuntime) {
+      const next = { ...inc, requisitionRuntime: adjusted.runtime };
       activeIncursionRef.current = next;
       setActiveIncursion(next);
     }
@@ -2972,11 +2779,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const discardCargoInstance = useCallback((instanceId: string) => {
     const inc = activeIncursionRef.current;
-    if (isRunItemFoamProtected(inc.itemRuntime, instanceId)) {
+    if (isRunItemFoamProtected(inc.supplyRuntime, instanceId)) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
-          itemRuntime: breakRunItemContainmentFoam(prev.itemRuntime),
+          supplyRuntime: breakRunItemContainmentFoam(prev.supplyRuntime),
         };
         activeIncursionRef.current = next;
         return next;
@@ -2984,7 +2791,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('>> CONTAINMENT FOAM // Buffer spent — cargo preserved.');
       return true;
     }
-    if (isKeepsakeJettisonBlocked(inc.keepsakeRuntime, instanceId, inc.keepsakeJettisonLockedInstanceIds)) {
+    if (isKeepsakeJettisonBlocked(inc.requisitionRuntime, instanceId, inc.requisitionJettisonLockedInstanceIds)) {
       appendRunLog('[REJECTED] >> CARGO SEAL ACTIVE — sealed unstable payload cannot be jettisoned.');
       return false;
     }
@@ -3013,6 +2820,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         cargo: nextCargo,
         harvestStagingInstanceIds: prev.harvestStagingInstanceIds.filter((id) => id !== instanceId),
         economyRunTelemetry: economy,
+        supplyRuntime: isSupplyCargoItemId(target.itemId)
+          ? mergeRunItemRuntime(prev.supplyRuntime, {
+              stats: {
+                ...prev.supplyRuntime.stats,
+                suppliesJettisoned: prev.supplyRuntime.stats.suppliesJettisoned + 1,
+              },
+            })
+          : prev.supplyRuntime,
       };
       activeIncursionRef.current = next;
       return next;
@@ -3040,7 +2855,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyHarvestChoice = useCallback((tier: HarvestYieldTier): { logLines: string[]; ambushTriggered: boolean } => {
     const inc = activeIncursionRef.current;
-    if (shouldDeferHarvestForKeepsakeChoice(inc.keepsakeRuntime)) {
+    if (inc.requisitionRuntime?.pendingChoice?.kind === 'dead_drop_action') {
       return {
         logLines: ['>> LEY-SIPHON — resolve overdraw choice before harvesting.'],
         ambushTriggered: false,
@@ -3063,18 +2878,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       nextCargo = addLootToContainment(nextCargo, itemId, count, stagedIds, harvestSpawn);
     });
 
-    let itemRuntime = inc.itemRuntime;
+    let supplyRuntime = inc.supplyRuntime;
     const bonusResourceRolls: import('../types/resourceItem').ResourceItemId[] = [];
-    if (itemRuntime.leySlagSplitterArmed) {
+    if (supplyRuntime.leySlagSplitterArmed) {
       bonusResourceRolls.push('ley-slag', 'ley-slag');
-      itemRuntime = mergeRunItemRuntime(itemRuntime, { leySlagSplitterArmed: false });
+      supplyRuntime = mergeRunItemRuntime(supplyRuntime, { leySlagSplitterArmed: false });
       logLines.push('>> LEY-SLAG SPLITTER // +2 stable resource veins opened.');
     }
-    const relayCachePending = itemRuntime.pendingEffects.some((e) => e.kind === 'relay_cache_route');
+    const relayCachePending = supplyRuntime.pendingEffects.some((e) => e.kind === 'relay_cache_route');
     if (relayCachePending) {
       bonusResourceRolls.push('ley-slag');
-      itemRuntime = mergeRunItemRuntime(itemRuntime, {
-        pendingEffects: itemRuntime.pendingEffects.filter((e) => e.kind !== 'relay_cache_route'),
+      supplyRuntime = mergeRunItemRuntime(supplyRuntime, {
+        pendingEffects: supplyRuntime.pendingEffects.filter((e) => e.kind !== 'relay_cache_route'),
       });
       logLines.push('>> RELAY CACHE ROUTE — bonus salvage roll delivered.');
     }
@@ -3090,17 +2905,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     );
     if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
 
-    const leySiphon = applyKeepsakeLeySiphonOverdraw(
-      inc.keepsakeRuntime,
-      nextCargo,
-      node?.id ?? 'harvest',
-      stagedIds,
-    );
-    nextCargo = leySiphon.cargo;
-    logLines.push(...leySiphon.logLines);
-
     const deadDrop = applyKeepsakeDeadDropHarvestBonus(
-      leySiphon.runtime,
+      inc.requisitionRuntime,
       nextCargo,
       node,
       stagedIds,
@@ -3112,7 +2918,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       deadDrop.runtime,
       nextCargo,
       stagedIds,
-      inc.keepsakeJettisonLockedInstanceIds,
+      inc.requisitionJettisonLockedInstanceIds,
     );
     logLines.push(...keepsakePickup.logLines);
 
@@ -3121,9 +2927,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
-        itemRuntime,
-        keepsakeRuntime: keepsakePickup.runtime,
-        keepsakeJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
+        supplyRuntime,
+        requisitionRuntime: keepsakePickup.runtime,
+        requisitionJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
         harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
         pendingProceduralResourcePool: [],
         ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
@@ -3177,7 +2983,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const hasSonarPingInCargo = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
-    return hasFieldRunItem(inc.runItems, 'sonar-ping')
+    return hasFieldRunItem(inc.cargo, 'sonar-ping')
       || inc.cargo.grid.placed.some((item) => item.itemId === 'sonar-ping');
   }, []);
 
@@ -3202,7 +3008,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    if (hasFieldRunItem(inc.runItems, 'sonar-ping')) {
+    if (hasFieldRunItem(inc.cargo, 'sonar-ping')) {
       const outcome = useSonarPingFieldTool(inc, nodeId);
       if (!outcome.success) {
         appendRunLog(outcome.logLine);
@@ -3212,8 +3018,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         const next = {
           ...prev,
           revealedSonarNodeIds: outcome.revealedSonarNodeIds ?? prev.revealedSonarNodeIds,
-          runItems: outcome.runItems ?? prev.runItems,
-          itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+          cargo: outcome.cargo ?? prev.cargo,
+          supplyRuntime: outcome.supplyRuntime ?? prev.supplyRuntime,
         };
         activeIncursionRef.current = next;
         return next;
@@ -3296,11 +3102,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const rareLootBonusPct = resolveEffectiveRareLootBonusPct(
       options.rareLootBonusPct ?? inc.runModifiers?.rareLootBonusPct ?? 0,
       inc.cargo,
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
     );
     const occultRewardBonusPct = resolveEffectiveOccultRewardBonusPct(
       inc.cargo,
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
     );
     const contract = inc.activeContract;
     const contractTargetIds = contract?.targetResourceId
@@ -3366,8 +3172,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
-        keepsakeRuntime: keepsakePickup.keepsakeRuntime,
-        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
+        requisitionRuntime: keepsakePickup.requisitionRuntime,
+        requisitionJettisonLockedInstanceIds: keepsakePickup.requisitionJettisonLockedInstanceIds,
         unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
           beforeCargo,
           nextCargo,
@@ -3424,8 +3230,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
-        keepsakeRuntime: keepsakePickup.keepsakeRuntime,
-        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
+        requisitionRuntime: keepsakePickup.requisitionRuntime,
+        requisitionJettisonLockedInstanceIds: keepsakePickup.requisitionJettisonLockedInstanceIds,
         unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
           beforeCargo,
           nextCargo,
@@ -3460,26 +3266,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     if (roll.resources.length === 0 && roll.credits <= 0) return [];
 
-    const lure = applyKeepsakeOnEchoSignalResolved(inc.keepsakeRuntime);
-    const adjustedCredits = scaleKeepsakeEchoCredits(roll.credits, lure.creditMultiplier);
+    const adjustedCredits = roll.credits;
     const adjustedResources = [...roll.resources];
-    if (lure.extraEchoGlass > 0) {
-      const glassEntry = adjustedResources.find((entry) => entry.resourceId === 'echo-glass-shard');
-      if (glassEntry) {
-        glassEntry.quantity += lure.extraEchoGlass;
-      } else {
-        adjustedResources.push({ resourceId: 'echo-glass-shard', quantity: lure.extraEchoGlass });
-      }
-    }
     const adjustedEchoGlassTotal = adjustedResources
       .filter((entry) => entry.resourceId === 'echo-glass-shard')
       .reduce((sum, entry) => sum + entry.quantity, 0);
 
     roll.logLines.forEach((line) => appendRunLog(line));
-    lure.logLines.forEach((line) => appendRunLog(line));
-    if (adjustedCredits > roll.credits) {
-      appendRunLog(`>> ECHO LURE YIELD — +${adjustedCredits - roll.credits} bonus run credits.`);
-    }
 
     const stagedIds: string[] = [];
     let pickupLogs: string[] = [];
@@ -3504,8 +3297,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
-        keepsakeRuntime: lure.runtime ?? keepsakePickup.keepsakeRuntime,
-        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
+        requisitionRuntime: keepsakePickup.requisitionRuntime,
+        requisitionJettisonLockedInstanceIds: keepsakePickup.requisitionJettisonLockedInstanceIds,
         runCredits: prev.runCredits + adjustedCredits,
         echoRunState: recordEchoRewardsExtracted(
           mergeEchoRunState(prev.echoRunState, {
@@ -3629,11 +3422,118 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return applied;
   }, []);
 
+  const commitRequisitionRuntime = useCallback((
+    runtime: RequisitionRuntime | null,
+    activeCombatEncounter: RequisitionEncounterDescriptor | null,
+  ) => {
+    const current = activeIncursionRef.current;
+    const next = {
+      ...current,
+      requisitionRuntime: runtime,
+      activeCombatEncounter,
+    };
+    activeIncursionRef.current = next;
+    setActiveIncursion(next);
+  }, []);
+
+  const beginRequisitionCombatEncounter = useCallback((
+    encounter: RequisitionEncounterDescriptor,
+  ): void => {
+    const inc = activeIncursionRef.current;
+    commitRequisitionRuntime(
+      beginRequisitionCombatEncounterRuntime(
+        inc.requisitionRuntime,
+        encounter,
+        inc.currentDepth,
+      ),
+      encounter,
+    );
+  }, [commitRequisitionRuntime]);
+
+  const resolveRequisitionFirstTurnAp = useCallback((
+    encounter: RequisitionEncounterDescriptor,
+  ): number => {
+    const result = grantAdrenalinePrimerFirstTurnAp(
+      activeIncursionRef.current.requisitionRuntime,
+      encounter,
+    );
+    commitRequisitionRuntime(result.runtime, activeIncursionRef.current.activeCombatEncounter);
+    return result.bonusAp;
+  }, [commitRequisitionRuntime]);
+
+  const resolveRequisitionDirectHostileDamage = useCallback((
+    encounter: RequisitionEncounterDescriptor,
+    finalDamage: number,
+    eligible: boolean,
+  ): number => {
+    const result = reduceReinforcedTrenchCoatDamage(
+      activeIncursionRef.current.requisitionRuntime,
+      encounter,
+      finalDamage,
+      eligible,
+    );
+    commitRequisitionRuntime(result.runtime, activeIncursionRef.current.activeCombatEncounter);
+    return result.damage;
+  }, [commitRequisitionRuntime]);
+
+  const resolveRequisitionKineticBatteryAction = useCallback((
+    encounter: RequisitionEncounterDescriptor,
+    actionId: string,
+    targetLayers: { kineticArmor: number; occultWards: number },
+    eligible: boolean,
+  ): { armorPierceLayers: 0 | 1; wardPierceLayers: 0 | 1 } => {
+    const result = consumeKineticBatteryAction(
+      activeIncursionRef.current.requisitionRuntime,
+      encounter,
+      actionId,
+      targetLayers,
+      eligible,
+    );
+    commitRequisitionRuntime(result.runtime, activeIncursionRef.current.activeCombatEncounter);
+    return {
+      armorPierceLayers: result.armorPierceLayers,
+      wardPierceLayers: result.wardPierceLayers,
+    };
+  }, [commitRequisitionRuntime]);
+
+  const resolveRequisitionHostileEffect = useCallback((
+    encounter: RequisitionEncounterDescriptor,
+    effectId: string,
+    eligible: boolean,
+    unpreventable: boolean,
+  ): boolean => {
+    const result = interceptChalkLineHostileEffect(
+      activeIncursionRef.current.requisitionRuntime,
+      encounter,
+      effectId,
+      eligible,
+      unpreventable,
+    );
+    commitRequisitionRuntime(result.runtime, activeIncursionRef.current.activeCombatEncounter);
+    return result.prevented;
+  }, [commitRequisitionRuntime]);
+
+  const completeRequisitionCombatEncounter = useCallback((
+    encounter: RequisitionEncounterDescriptor,
+  ): void => {
+    commitRequisitionRuntime(
+      completeRequisitionCombatEncounterRuntime(
+        activeIncursionRef.current.requisitionRuntime,
+        encounter,
+      ),
+      null,
+    );
+  }, [commitRequisitionRuntime]);
+
   const prepareBossEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const encounterNode = engagedNode ?? resolveActiveVectorNode(inc);
     if (!encounterNode || encounterNode.type !== 'BOSS_COMBAT') return;
+    beginRequisitionCombatEncounter({
+      encounterId: encounterNode.id,
+      kind: 'BOSS',
+    });
 
     const gateDepth = depthFromNodesCleared(inc.nodesCleared);
     const anchorCtx = resolveAnchorAssaultContext(encounterNode, inc.runGenerationContext);
@@ -3715,7 +3615,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (arenaLabel) {
       appendRunLog(`>> ${arenaLabel}`);
     }
-  }, [appendRunLog, beginCombatRunLogSession]);
+  }, [appendRunLog, beginCombatRunLogSession, beginRequisitionCombatEncounter]);
 
   const prepareStandardCombatEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     beginCombatRunLogSession();
@@ -3725,7 +3625,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
-          itemRuntime: deadDropRisk.runtime,
+          supplyRuntime: deadDropRisk.runtime,
           proceduralRunTree: deadDropRisk.tree ?? prev.proceduralRunTree,
         };
         activeIncursionRef.current = next;
@@ -3794,37 +3694,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       pendingEnemies = applyAnchorAssaultSpawnScaling(pendingEnemies, anchorCtx);
     }
 
-    let keepsakeCombatRuntime = inc.keepsakeRuntime;
-    const keepsakeCombatLogs: string[] = [];
-    const anchorThreat = applyKeepsakeAnchorCharmOnCombatEngage(keepsakeCombatRuntime, anchorCtx);
-    keepsakeCombatRuntime = anchorThreat.runtime;
-    keepsakeCombatLogs.push(...anchorThreat.logLines);
-    const echoThreat = applyKeepsakeEchoLureOnCombatEngage(
-      keepsakeCombatRuntime,
-      echoCtx,
-      encounterNode.contextModifiers?.echoEncounterKind,
-    );
-    keepsakeCombatRuntime = echoThreat.runtime;
-    keepsakeCombatLogs.push(...echoThreat.logLines);
-    const extraThreatUnits = (anchorThreat.extraCombatUnits ?? 0) + (echoThreat.extraCombatUnits ?? 0);
-    if (extraThreatUnits > 0) {
-      pendingEnemies = appendKeepsakeThreatReinforcement(
-        pendingEnemies,
-        inc.nodesCleared,
-        extraThreatUnits,
-      );
-    }
-    if (keepsakeCombatRuntime !== inc.keepsakeRuntime) {
-      setActiveIncursion((prevState) => ({
-        ...prevState,
-        keepsakeRuntime: keepsakeCombatRuntime,
-      }));
-      activeIncursionRef.current = {
-        ...activeIncursionRef.current,
-        keepsakeRuntime: keepsakeCombatRuntime,
-      };
-    }
-    keepsakeCombatLogs.forEach((line) => appendRunLog(line));
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
       sector,
@@ -3843,6 +3712,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       veilBiome: inc.runVeilBiome,
       contextModifiers: encounterNode.contextModifiers,
     });
+    beginRequisitionCombatEncounter({
+      encounterId: compositionSnapshot.encounterId || encounterNode.id,
+      kind: isElite ? 'ELITE' : 'STANDARD',
+    });
     const objectiveStamp = selectEncounterObjectiveStamp({
       depth: depthIndex,
       isElite,
@@ -3852,7 +3725,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       crisisTheme: inc.runWorldBrief?.crisisTheme ?? null,
       compositionTemplateId: compositionSnapshot.composition?.templateId ?? null,
       squad: pendingEnemies,
-      hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, keepsakeCombatRuntime),
+      hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.requisitionRuntime),
       nodesCleared: inc.nodesCleared,
     });
     envModifiers = applyEncounterObjectiveStampToEnvironment(envModifiers, objectiveStamp);
@@ -3873,7 +3746,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         hasObjective: Boolean(objectiveStamp),
         objectiveKind: objectiveStamp?.primaryTemplateId ?? null,
         survivalTurnsRequired: envModifiers.survivalTurnsRequired,
-        hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, keepsakeCombatRuntime),
+        hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.requisitionRuntime),
         eliteModifier: envModifiers.eliteModifier ?? null,
         crisisTheme: inc.runWorldBrief?.crisisTheme ?? null,
       }),
@@ -4042,7 +3915,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-  }, [appendRunLog, beginCombatRunLogSession]);
+  }, [appendRunLog, beginCombatRunLogSession, beginRequisitionCombatEncounter]);
 
   const startDevSandboxNode = useCallback((preset: DevSandboxPreset, config: BadgeTestCombatConfig) => {
     applyDevSandboxBaseRun(preset, config);
@@ -4057,6 +3930,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         runStateRef.current = next;
         return next;
       });
+      beginRequisitionCombatEncounter({
+        encounterId: `developer:${preset}`,
+        kind: 'DEVELOPER',
+      });
       appendRunLog(`>> HOSTILE: ${pendingEnemy?.designation ?? 'UNKNOWN'}.`);
       return;
     }
@@ -4068,6 +3945,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         const next = { ...prev, pendingEnemy, pendingEnemies };
         runStateRef.current = next;
         return next;
+      });
+      beginRequisitionCombatEncounter({
+        encounterId: `developer:${preset}`,
+        kind: 'DEVELOPER',
       });
       appendRunLog(
         `>> HOSTILE CLUSTER ×${pendingEnemies.length} — ${pendingEnemies.map((e) => e.designation).join(' / ')}.`,
@@ -4104,6 +3985,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         preset === 'elite-combat' ? 'ELITE_COMBAT' : 'STANDARD_COMBAT',
       );
       prepareStandardCombatEncounter(mockNode);
+      beginRequisitionCombatEncounter({
+        encounterId: `developer:${preset}:${mockNode.id}`,
+        kind: 'DEVELOPER',
+      });
       appendRunLog(`>> ${mockNode.label}.`);
       return;
     }
@@ -4111,6 +3996,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (preset === 'hostile-echo-combat') {
       const mockNode = buildDevSandboxHostileEchoNode('ECHO_FALLEN_AEGIS');
       prepareStandardCombatEncounter(mockNode);
+      beginRequisitionCombatEncounter({
+        encounterId: `developer:${preset}:${mockNode.id}`,
+        kind: 'DEVELOPER',
+      });
       appendRunLog(`>> ${mockNode.label}.`);
       return;
     }
@@ -4181,7 +4070,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginResourceNodeHarvest();
       appendRunLog('>> RESOURCE HARVEST — VEIL RESIDUE EXTRACTION PREVIEW.');
     }
-  }, [appendRunLog, applyDevSandboxBaseRun, beginResourceNodeHarvest, prepareStandardCombatEncounter]);
+  }, [
+    appendRunLog,
+    applyDevSandboxBaseRun,
+    beginRequisitionCombatEncounter,
+    beginResourceNodeHarvest,
+    prepareStandardCombatEncounter,
+  ]);
 
   const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
     startDevSandboxNode(preset === 'easy' ? 'combat-easy' : 'combat-hard', config);
@@ -4195,29 +4090,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const depth = depthFromNodesCleared(inc.nodesCleared);
     const district = getDistrictFromDepth(depth);
     let envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
-    const dirtyThreat = shouldApplyKeepsakeDirtyExtractionThreat(inc.keepsakeRuntime);
     let pendingEnemies = spawnCombatSquad({
       nodeIndex: inc.nodesCleared,
       isElite: true,
-      unitCount: dirtyThreat ? 2 : 1,
+      unitCount: 1,
       district,
       runSegment: inc.runSegment,
       macroBiome: inc.currentMacroBiomeFamily,
       veilBiome: inc.runVeilBiome,
       rivalMercWeightMultiplier: resolveBriefRivalMercWeightMultiplier(inc.runWorldBrief, district),
     });
-    if (dirtyThreat) {
-      const nextRuntime = consumeKeepsakeDirtyExtractionThreat(inc.keepsakeRuntime);
-      setActiveIncursion((prevState) => ({
-        ...prevState,
-        keepsakeRuntime: nextRuntime,
-      }));
-      activeIncursionRef.current = {
-        ...activeIncursionRef.current,
-        keepsakeRuntime: nextRuntime,
-      };
-      appendRunLog('>> OVEREXTENDED HEAT — dirty extraction intercept reinforced (+1 elite).');
-    }
+    beginRequisitionCombatEncounter({
+      encounterId: `dirty-extraction:${inc.currentNodeId}:${inc.nodesCleared}`,
+      kind: 'DIRTY_EXTRACTION',
+    });
 
     const objectiveStamp = selectEncounterObjectiveStamp({
       depth: district,
@@ -4226,7 +4112,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       isAnchor: false,
       defendRift: true,
       squad: pendingEnemies,
-      hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.keepsakeRuntime),
+      hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.requisitionRuntime),
       nodesCleared: inc.nodesCleared,
     });
     envModifiers = applyEncounterObjectiveStampToEnvironment(envModifiers, objectiveStamp);
@@ -4251,7 +4137,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         hasObjective: true,
         objectiveKind: objectiveStamp?.primaryTemplateId ?? 'OBJ_HOLD_EXTRACTION_WINDOW',
         survivalTurnsRequired: envModifiers.survivalTurnsRequired,
-        hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.keepsakeRuntime),
+        hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.requisitionRuntime),
         eliteModifier: envModifiers.eliteModifier ?? null,
         crisisTheme: inc.runWorldBrief?.crisisTheme ?? null,
       }),
@@ -4330,12 +4216,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (pendingEnemy) {
       appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
     }
-  }, [appendRunLog, beginCombatRunLogSession]);
+  }, [appendRunLog, beginCombatRunLogSession, beginRequisitionCombatEncounter]);
 
   const prepareHarvestAmbushEncounter = useCallback(() => {
     beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const encounterNode = resolveActiveVectorNode(inc);
+    beginRequisitionCombatEncounter({
+      encounterId: `harvest-ambush:${encounterNode?.id ?? inc.currentNodeId}:${inc.nodesCleared}`,
+      kind: 'ELITE',
+    });
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
     const envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
@@ -4382,7 +4272,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     appendRunLog('>> HARVEST AMBUSH — hostile manifest inbound.');
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
-  }, [appendRunLog, beginCombatRunLogSession]);
+  }, [appendRunLog, beginCombatRunLogSession, beginRequisitionCombatEncounter]);
 
   const advanceIncursionAfterEncounter = useCallback((message: string) => {
     appendRunLog(`>> ${message}`);
@@ -4394,11 +4284,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const completedIndex = inc.nodesCleared;
     const clearedDepth = depthFromNodesCleared(completedIndex);
 
-    let itemRuntime = inc.itemRuntime;
+    let supplyRuntime = inc.supplyRuntime;
     if (completedNode?.id) {
-      const relayChoice = tryOpenRelaySpikePayoffChoice(itemRuntime, completedNode.id);
+      const relayChoice = tryOpenRelaySpikePayoffChoice(supplyRuntime, completedNode.id);
       if (relayChoice) {
-        itemRuntime = relayChoice;
+        supplyRuntime = relayChoice;
       }
     }
 
@@ -4439,105 +4329,32 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextCargo = inc.cargo;
 
-    let keepsakeRuntime = inc.keepsakeRuntime;
+    let requisitionRuntime = inc.activeCombatEncounter
+      ? completeRequisitionCombatEncounterRuntime(
+          inc.requisitionRuntime,
+          inc.activeCombatEncounter,
+        )
+      : inc.requisitionRuntime;
     let cargoAfterKeepsake = nextCargo;
-    let overextendedOperationDelta = 0;
-    let keepsakeOperationDelta = 0;
+    let runItemOperationDelta = 0;
     let runItemCreditsDelta = 0;
 
     if (echoVictory?.recorded) {
-      const echoPayoff = applyRunItemEchoTuningPayoff(itemRuntime);
-      itemRuntime = echoPayoff.runtime;
+      const echoPayoff = applyRunItemEchoTuningPayoff(supplyRuntime);
+      supplyRuntime = echoPayoff.runtime;
       runItemCreditsDelta += echoPayoff.runCreditsDelta ?? 0;
       echoPayoff.logLines.forEach((line) => appendRunLog(line));
     }
 
     if (anchorVictory?.kind) {
-      const anchorPayoff = applyRunItemAnchorNeedlePayoff(itemRuntime, cargoAfterKeepsake, []);
-      itemRuntime = anchorPayoff.runtime;
+      const anchorPayoff = applyRunItemAnchorNeedlePayoff(supplyRuntime, cargoAfterKeepsake, []);
+      supplyRuntime = anchorPayoff.runtime;
       if (anchorPayoff.cargo) cargoAfterKeepsake = anchorPayoff.cargo;
-      keepsakeOperationDelta += anchorPayoff.operationProgressDelta ?? 0;
+      runItemOperationDelta += anchorPayoff.operationProgressDelta ?? 0;
       anchorPayoff.logLines.forEach((line) => appendRunLog(line));
     }
 
-    const overextendedKind = completedNode?.type === 'RESOURCE_HARVEST'
-      ? 'RESOURCE' as const
-      : anchorVictory?.kind
-        ? 'ANCHOR' as const
-        : echoVictory?.recorded
-          ? 'ECHO' as const
-          : null;
-    if (overextendedKind) {
-      const operationRelevant = Boolean(inc.runGenerationContext?.activeOperation?.objectiveKind);
-      const overextended = applyKeepsakeOverextendedOnNodeClear(
-        keepsakeRuntime,
-        cargoAfterKeepsake,
-        overextendedKind,
-        operationRelevant,
-      );
-      keepsakeRuntime = overextended.runtime;
-      if (overextended.cargo) cargoAfterKeepsake = overextended.cargo;
-      overextendedOperationDelta = overextended.operationProgressDelta ?? 0;
-      overextended.logLines.forEach((line) => appendRunLog(line));
-    }
-
-    keepsakeRuntime = applyKeepsakeCargoSealOnNodeClear(keepsakeRuntime);
-
-    if (anchorVictory?.kind) {
-      const operationRelevant = Boolean(inc.runGenerationContext?.activeOperation?.objectiveKind);
-      const anchorCharm = applyKeepsakeAnchorCharmOnSignalClear(
-        keepsakeRuntime,
-        cargoAfterKeepsake,
-        operationRelevant,
-      );
-      keepsakeRuntime = anchorCharm.runtime;
-      if (anchorCharm.cargo) cargoAfterKeepsake = anchorCharm.cargo;
-      keepsakeOperationDelta += anchorCharm.operationProgressDelta ?? 0;
-      anchorCharm.logLines.forEach((line) => appendRunLog(line));
-    }
-
-    if (echoVictory?.recorded && completedNode?.contextModifiers?.echoEncounterKind !== 'HOSTILE_ECHO') {
-      const echoLure = applyKeepsakeEchoLureCargoBonus(
-        keepsakeRuntime,
-        cargoAfterKeepsake,
-        `${completedNode?.id ?? 'echo'}:clear`,
-      );
-      keepsakeRuntime = echoLure.runtime;
-      if (echoLure.cargo) cargoAfterKeepsake = echoLure.cargo;
-      echoLure.logLines.forEach((line) => appendRunLog(line));
-    }
-
-    let gravePolaroidPatch: Partial<ActiveIncursionState> = {};
-    if (completedNode) {
-      const polaroid = applyKeepsakeGravePolaroidOnNodeClear(
-        inc,
-        keepsakeRuntime,
-        cargoAfterKeepsake,
-        completedNode.id,
-      );
-      keepsakeRuntime = polaroid.runtime;
-      if (polaroid.cargo) cargoAfterKeepsake = polaroid.cargo;
-      if (polaroid.incursionPatch) {
-        gravePolaroidPatch = polaroid.incursionPatch;
-      }
-      polaroid.logLines.forEach((line) => appendRunLog(line));
-    }
-
-    let phaseDPatch: Partial<ActiveIncursionState> = {};
-    let phaseDCredits = 0;
-    if (completedNode) {
-      const phaseD = applyKeepsakePhaseDOnNodeClear(
-        inc,
-        keepsakeRuntime,
-        cargoAfterKeepsake,
-        completedNode.id,
-      );
-      keepsakeRuntime = phaseD.runtime ?? keepsakeRuntime;
-      if (phaseD.cargo) cargoAfterKeepsake = phaseD.cargo;
-      if (phaseD.incursionPatch) phaseDPatch = phaseD.incursionPatch;
-      phaseDCredits = phaseD.runCreditsDelta ?? 0;
-      phaseD.logLines.forEach((line) => appendRunLog(line));
-    }
+    requisitionRuntime = applyKeepsakeCargoSealOnNodeClear(requisitionRuntime);
 
     const resolvedNextNodeId = resolveScannerGraphNodeId(
       { ...inc.sectorGraph, nodes: graphNodes },
@@ -4552,7 +4369,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const nextDepth = depthFromNodesCleared(nextNodesCleared);
     const nextDistrict = getDistrictFromDepth(nextDepth);
     if (nextDepth !== clearedDepth) {
-      itemRuntime = clearRunItemAshSealOnDepthTransition(itemRuntime);
+      supplyRuntime = clearRunItemAshSealOnDepthTransition(supplyRuntime);
     }
 
     const nextSectorGraph = expandedInc.sectorGraph;
@@ -4606,11 +4423,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         envoyBoons: inc.envoyBoons,
       },
     );
-
-    const chalkWardRuntime = tickChalkLineWardAfterNodeClear({
-      ...expandedInc,
-      nodesCleared: nextNodesCleared,
-    });
 
     let nextContractProgress = recordContractDepthReached(
       inc.contractRunProgress,
@@ -4673,7 +4485,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentNodeId: resolvedNextNodeId,
       nodesCleared: nextNodesCleared,
       runSegment: nextRunSegment,
-      boundRequisition: chalkWardRuntime ?? expandedInc.boundRequisition,
       currentDepth: nextDepth,
       currentDistrict: nextDistrict,
       depthIdentity: nextDepthIdentity,
@@ -4689,15 +4500,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentEncounterIndex: nextNodesCleared,
       encounterPath,
       cargo: cargoAfterKeepsake,
-      keepsakeRuntime,
+      requisitionRuntime,
+      activeCombatEncounter: null,
       patrolState: nextPatrolState,
       bossDefeated: wasBoss || inc.bossDefeated,
       primeExtractionBonus: wasBoss ? true : inc.primeExtractionBonus,
       contractRunProgress: nextContractProgress,
       operationContributionTransmitted: inc.operationContributionTransmitted
         + transmittedContribution
-        + overextendedOperationDelta
-        + keepsakeOperationDelta,
+        + runItemOperationDelta,
       anchorAssaultProgress: anchorVictory?.progress
         ?? inc.anchorAssaultProgress
         ?? createDefaultAnchorAssaultProgress(),
@@ -4720,11 +4531,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
       lastLevelOfferedCombat,
-      runCredits: inc.runCredits + phaseDCredits + runItemCreditsDelta,
-      itemRuntime,
+      runCredits: inc.runCredits + runItemCreditsDelta,
+      supplyRuntime,
       economyRunTelemetry: economyTelemetry,
-      ...phaseDPatch,
-      ...gravePolaroidPatch,
     };
 
     setRunState((prev) => {
@@ -4746,26 +4555,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ...incAfterClear,
           mapMode: 'SAFEHOUSE_INTERMISSION',
           runStatusEffects: incAfterClear.runStatusEffects.filter((effect) => !effect.expiresAtSafehouse),
-          keepsakeJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
+          requisitionJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
         }
       : persistExpandedSectorGraph(incAfterClear);
 
     activeIncursionRef.current = incWithMode;
     setActiveIncursion(incWithMode);
-
-    if (enteringSafehouse) {
-      const safehouseKeepsake = applyKeepsakeOnSafehouseEnter(incWithMode.keepsakeRuntime, incWithMode);
-      safehouseKeepsake.logLines.forEach((line) => appendRunLog(line));
-      if (safehouseKeepsake.runtime !== incWithMode.keepsakeRuntime || safehouseKeepsake.incursionPatch) {
-        const patched = {
-          ...incWithMode,
-          ...safehouseKeepsake.incursionPatch,
-          keepsakeRuntime: safehouseKeepsake.runtime ?? incWithMode.keepsakeRuntime,
-        };
-        activeIncursionRef.current = patched;
-        setActiveIncursion(patched);
-      }
-    }
 
     if (!enteringSafehouse) {
       setScanSessionKey((k) => k + 1);
@@ -4905,32 +4700,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(formatTwistedTemplateEngageLog(engagedNode.contextModifiers.twistedTemplate));
     }
 
-    const leySiphonEngage = applyKeepsakeOnNodeEngagedForLeySiphon(
-      activeIncursionRef.current.keepsakeRuntime,
-      engagedNode.type,
-      engagedNode.id,
-    );
-    if (leySiphonEngage.runtime !== activeIncursionRef.current.keepsakeRuntime) {
-      setActiveIncursion((prev) => {
-        const next = {
-          ...prev,
-          keepsakeRuntime: leySiphonEngage.runtime,
-        };
-        activeIncursionRef.current = next;
-        return next;
-      });
-    }
-    leySiphonEngage.logLines.forEach((line) => appendRunLog(line));
-
     const cartographResult = applyKeepsakeOnNodeSelected(activeIncursionRef.current, engagedNode.id);
-    if (cartographResult.logLines.length > 0 || cartographResult.runtime !== activeIncursionRef.current.keepsakeRuntime) {
+    if (cartographResult.logLines.length > 0 || cartographResult.runtime !== activeIncursionRef.current.requisitionRuntime) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
-          keepsakeRuntime: cartographResult.runtime,
-          keepsakeCartographGhostNodeId: cartographResult.incursion.keepsakeCartographGhostNodeId,
-          keepsakeCartographGhostNodeIds: cartographResult.incursion.keepsakeCartographGhostNodeIds
-            ?? prev.keepsakeCartographGhostNodeIds,
+          requisitionRuntime: cartographResult.runtime,
+          requisitionCartographGhostNodeId: cartographResult.incursion.requisitionCartographGhostNodeId,
+          requisitionCartographGhostNodeIds: cartographResult.incursion.requisitionCartographGhostNodeIds
+            ?? prev.requisitionCartographGhostNodeIds,
         };
         activeIncursionRef.current = next;
         return next;
@@ -4972,29 +4750,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             ? resolveCargoEcho(activeInc, engagedNode.id)
             : resolveExtractionEcho(activeInc, engagedNode);
         echoResult.logLines.forEach((line) => appendRunLog(line));
-        const echoPayoff = applyRunItemEchoTuningPayoff(activeInc.itemRuntime);
+        const echoPayoff = applyRunItemEchoTuningPayoff(activeInc.supplyRuntime);
         echoPayoff.logLines.forEach((line) => appendRunLog(line));
-        const echoLure = applyKeepsakeOnEchoSignalResolved(activeInc.keepsakeRuntime);
-        echoLure.logLines.forEach((line) => appendRunLog(line));
-        const echoCreditBonus = scaleKeepsakeEchoCredits(
-          echoResult.runCreditsDelta ?? 0,
-          echoLure.creditMultiplier,
-        );
-        if (echoCreditBonus > (echoResult.runCreditsDelta ?? 0)) {
-          appendRunLog(
-            `>> ECHO LURE YIELD — +${echoCreditBonus - (echoResult.runCreditsDelta ?? 0)} bonus run credits.`,
-          );
-        }
+        const echoCreditBonus = echoResult.runCreditsDelta ?? 0;
         let echoKeepsakeLogs: string[] = [];
         setActiveIncursion((prev) => {
           const revealed = echoResult.revealedSonarNodeIds ?? [];
           const beforeCargo = prev.cargo;
           let nextCargo = echoResult.cargo ?? prev.cargo;
-          if (echoLure.extraEchoGlass > 0) {
-            for (let i = 0; i < echoLure.extraEchoGlass; i += 1) {
-              nextCargo = addLootToContainment(nextCargo, 'echo-glass-shard', 1, []);
-            }
-          }
           const beforeIds = new Set([
             ...beforeCargo.containment.map((item) => item.instanceId),
             ...beforeCargo.grid.placed.map((item) => item.instanceId),
@@ -5011,9 +4774,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             echoRunState: echoResult.echoRunState,
             cargo: nextCargo,
-            itemRuntime: echoPayoff.runtime,
-            keepsakeRuntime: echoLure.runtime ?? keepsakePickup.keepsakeRuntime,
-            keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
+            supplyRuntime: echoPayoff.runtime,
+            requisitionRuntime: keepsakePickup.requisitionRuntime,
+            requisitionJettisonLockedInstanceIds: keepsakePickup.requisitionJettisonLockedInstanceIds,
             runCredits: prev.runCredits + echoCreditBonus + (echoPayoff.runCreditsDelta ?? 0),
             progress: echoResult.progressPatch ?? prev.progress,
             revealedSonarNodeIds: revealed.length > 0
@@ -5244,10 +5007,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         scanConfirmOverlayVisible: false,
       };
       if (kind === 'SAFE_ANCHOR') {
-        const tokenStage = stageKeepsakeExtractionTokenChoice(next.keepsakeRuntime, next);
+        const tokenStage = stageKeepsakeExtractionTokenChoice(next.requisitionRuntime, next);
         tokenStage.logLines.forEach((line) => appendRunLog(line));
         if (tokenStage.runtime) {
-          next = { ...next, keepsakeRuntime: tokenStage.runtime };
+          next = { ...next, requisitionRuntime: tokenStage.runtime };
         }
       }
       activeIncursionRef.current = next;
@@ -5263,7 +5026,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next: ActiveIncursionState = {
         ...prev,
         ...result.incursionPatch,
-        keepsakeRuntime: result.runtime,
+        requisitionRuntime: result.runtime,
         activeContract: result.contract ?? prev.activeContract,
       };
       activeIncursionRef.current = next;
@@ -5473,6 +5236,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const pendingEnemies = squadFromSingleEnemy(spawnGridHoundProfile(inc.nodesCleared));
     const pendingEnemy = pendingEnemies[0] ?? null;
     const envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
+    beginRequisitionCombatEncounter({
+      encounterId: `grid-hound:${inc.currentNodeId}:${inc.nodesCleared}`,
+      kind: 'ELITE',
+    });
 
     setActiveIncursion((prevState) => ({
       ...prevState,
@@ -5511,15 +5278,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (pendingEnemy) {
       appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
     }
-  }, [appendRunLog, beginCombatRunLogSession]);
+  }, [appendRunLog, beginCombatRunLogSession, beginRequisitionCombatEncounter]);
 
   const applyResonanceManifestScan = useCallback((nodeId: string) => {
     const prev = activeIncursionRef.current;
     const revealResult = applyKeepsakeOnNodeRevealed(prev, nodeId);
     if (
       revealResult.logLines.length === 0
-      && revealResult.runtime === prev.keepsakeRuntime
-      && revealResult.incursion.keepsakeGravePolaroidPreview === prev.keepsakeGravePolaroidPreview
+      && revealResult.runtime === prev.requisitionRuntime
       && revealResult.incursion.proceduralRunTree === prev.proceduralRunTree
     ) {
       return;
@@ -5527,7 +5293,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const next = {
       ...revealResult.incursion,
-      keepsakeRuntime: revealResult.runtime,
+      requisitionRuntime: revealResult.runtime,
     };
     activeIncursionRef.current = next;
     setActiveIncursion(next);
@@ -5549,7 +5315,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...inc.cargo.containment,
       ...inc.cargo.grid.placed,
     ].some((item) => isKeepsakeSafehouseBankBlocked(
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
       item.itemId as import('../types/resourceItem').ResourceItemId,
     ));
     if (hasWrappedContraband) {
@@ -5600,6 +5366,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     setActiveIncursion((prev) => {
       const routingContext = resolveCargoRoutingContextFromIncursion(prev);
+      const bankedSupplyCount = Object.entries(bankResult.bankedConsumables).reduce(
+        (sum, [itemId, quantity]) =>
+          sum + (isSupplyCargoItemId(itemId as CargoItemId) ? Number(quantity ?? 0) : 0),
+        0,
+      );
       const next = {
         ...prev,
         cargo: bankResult.cargo,
@@ -5619,6 +5390,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             routingContext,
           )
           : prev.cargoRoutingRunState,
+        supplyRuntime: mergeRunItemRuntime(prev.supplyRuntime, {
+          stats: {
+            ...prev.supplyRuntime.stats,
+            suppliesBanked: prev.supplyRuntime.stats.suppliesBanked + bankedSupplyCount,
+          },
+        }),
       };
       activeIncursionRef.current = next;
       return next;
@@ -5665,7 +5442,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
     const cargoHealMultiplier = resolveCargoHealReceivedMultiplier(
       inc.cargo,
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
     );
     const restoreAmount = Math.floor(run.maxSoulAnchor * 0.25 * cargoHealMultiplier);
     const nextHp = Math.min(run.maxSoulAnchor, run.soulAnchorIntegrity + restoreAmount);
@@ -5698,7 +5475,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextPatrolState = createEmptyPatrolState();
     const ledgerInterest = applyKeepsakeNullLedgerDepthInterest(
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
       depthIndex,
     );
     ledgerInterest.logLines.forEach((line) => appendRunLog(line));
@@ -5732,13 +5509,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       resonanceManifestNodeIds: [],
       proceduralRunTree,
       revealedSonarNodeIds: [],
-      keepsakeFullyInterpretedNodeIds: [],
-      keepsakeCartographGhostNodeId: null,
-      keepsakeCartographGhostNodeIds: [],
-      keepsakeGravePolaroidPreview: null,
-      keepsakeStampedExtractionNodeId: null,
+      requisitionFullyInterpretedNodeIds: [],
+      requisitionCartographGhostNodeId: null,
+      requisitionCartographGhostNodeIds: [],
+      requisitionStampedExtractionNodeId: null,
       pendingExtractionNodeId: null,
-      keepsakeRuntime: ledgerInterest.runtime,
+      requisitionRuntime: ledgerInterest.runtime,
       depthIdentity: nextDepthIdentity,
     });
 
@@ -5883,7 +5659,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const confirmSafeAnchorExtraction = useCallback((anchorIndex: 1 | 2 | 3) => {
     const inc = activeIncursionRef.current;
-    const stamped = applyKeepsakeOnStampedSafeExtractionConfirm(inc.keepsakeRuntime, inc);
+    const stamped = applyKeepsakeOnStampedSafeExtractionConfirm(inc.requisitionRuntime, inc);
     stamped.logLines.forEach((line) => appendRunLog(line));
     setActiveIncursion((prev) => {
       const cleared = prev.clearedSafeAnchors.includes(anchorIndex)
@@ -5896,8 +5672,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         pendingSafeAnchorIndex: null,
         pendingExtractionNodeId: null,
         extractionReviewKind: null,
-        keepsakeRuntime: stamped.runtime,
-        keepsakeJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
+        requisitionRuntime: stamped.runtime,
+        requisitionJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
       };
       activeIncursionRef.current = next;
       return next;
@@ -5908,21 +5684,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const continueFromExtractionReview = useCallback(() => {
     const inc = activeIncursionRef.current;
     const kind = inc.extractionReviewKind;
-    if (kind === 'SAFE_ANCHOR') {
-      const skip = applyKeepsakeOnSafeExtractionSkip(inc.keepsakeRuntime);
-      skip.logLines.forEach((line) => appendRunLog(line));
-      if (skip.runtime || skip.runCreditsDelta) {
-        setActiveIncursion((prev) => {
-          const next = {
-            ...prev,
-            keepsakeRuntime: skip.runtime ?? prev.keepsakeRuntime,
-            runCredits: prev.runCredits + (skip.runCreditsDelta ?? 0),
-          };
-          activeIncursionRef.current = next;
-          return next;
-        });
-      }
-    }
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
@@ -5952,16 +5713,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (hasVeilAshCanisterCarried(inc.cargo)) {
       appendRunLog(formatEmergencyRecallVeilAshWarning());
     }
-    const flare = applyKeepsakeOnDirtyExtractionStart(inc.keepsakeRuntime);
-    flare.logLines.forEach((line) => appendRunLog(line));
-    const sealCrack = applyKeepsakeCargoSealOnDirtyExtract(inc.keepsakeRuntime);
+    const sealCrack = applyKeepsakeCargoSealOnDirtyExtract(inc.requisitionRuntime);
     sealCrack.logLines.forEach((line) => appendRunLog(line));
-    if (flare.runtime || flare.incursionPatch || sealCrack.runtime) {
+    if (sealCrack.runtime) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
-          ...flare.incursionPatch,
-          keepsakeRuntime: sealCrack.runtime ?? flare.runtime,
+          requisitionRuntime: sealCrack.runtime,
         };
         activeIncursionRef.current = next;
         return next;
@@ -6106,6 +5864,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         : prev.depthIdentity;
       const next = {
         ...prev,
+        requisitionRuntime: prev.activeCombatEncounter
+          ? completeRequisitionCombatEncounterRuntime(
+              prev.requisitionRuntime,
+              prev.activeCombatEncounter,
+            )
+          : prev.requisitionRuntime,
+        activeCombatEncounter: null,
         depthIdentity: identity,
         defendRiftActive: false,
         extractionReviewKind: 'EMERGENCY_RECALL' as const,
@@ -6134,7 +5899,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         masterLinkUsed: true,
         extractionReviewKind: null,
         pendingSafeAnchorIndex: null,
-        keepsakeJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
+        requisitionJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
       };
       activeIncursionRef.current = next;
       return next;
@@ -6145,25 +5910,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const applyEmergencyRecallCargoBleed = useCallback((): number => {
     const inc = activeIncursionRef.current;
     const recallBonus = inc.echoRunState?.extractionRecallBonusPending === true;
-    const bentNailStrip = stripKeepsakeOutsideHookOnDirtyExtract(inc.keepsakeRuntime, inc.cargo);
-    bentNailStrip.logLines.forEach((line) => appendRunLog(line));
-    let bleedCargo = bentNailStrip.cargo;
-    let bleedRuntime = bentNailStrip.runtime ?? inc.keepsakeRuntime;
-    const crackedAshSeal = crackRunItemAshSealOnDirtyExtract(inc.itemRuntime);
-    if (crackedAshSeal !== inc.itemRuntime && inc.itemRuntime.ashSeal && !inc.itemRuntime.ashSeal.cracked) {
+    const crackedAshSeal = crackRunItemAshSealOnDirtyExtract(inc.supplyRuntime);
+    if (crackedAshSeal !== inc.supplyRuntime && inc.supplyRuntime.ashSeal && !inc.supplyRuntime.ashSeal.cracked) {
       appendRunLog('>> ASH-SEAL CANISTER // Seal cracked — dampening reduced after dirty extraction.');
     }
     let bleedPct = recallBonus
       ? EMERGENCY_EXTRACT_CARGO_BLEED_PCT - 5
       : EMERGENCY_EXTRACT_CARGO_BLEED_PCT;
-    const bleedResult = applyEmergencyExtractBleed(bleedCargo, bleedPct);
+    const bleedResult = applyEmergencyExtractBleed(inc.cargo, bleedPct);
     if (bleedResult.drainedValue > 0) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
           cargo: bleedResult.cargo,
-          keepsakeRuntime: bleedRuntime,
-          itemRuntime: crackedAshSeal,
+          supplyRuntime: crackedAshSeal,
           extractionReviewKind: null,
           unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
             prev.unstableCargoEffectsSeen,
@@ -6240,8 +6000,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        runItems: outcome.runItems ?? prev.runItems,
-        itemRuntime: outcome.runtime ?? prev.itemRuntime,
+        supplyRuntime: outcome.runtime ?? prev.supplyRuntime,
         cargo: outcome.cargo ?? prev.cargo,
         proceduralRunTree: outcome.proceduralRunTree ?? prev.proceduralRunTree,
         revealedSonarNodeIds: outcome.revealedSonarNodeIds ?? prev.revealedSonarNodeIds,
@@ -6287,21 +6046,27 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const def = getRunItemDefinition(itemId);
     let placed = false;
     let needsChoice = false;
+    const origin = source === 'BUY'
+      ? 'MARKET'
+      : source === 'FIND'
+        ? 'FIND'
+        : source === 'CRAFT'
+          ? 'CRAFT'
+          : source === 'DEBUG'
+            ? 'DEBUG'
+            : 'HUB_STOCK';
     setActiveIncursion((prev) => {
       const hydrated = hydrateWeaponIncursionFields(
         hydrateRunItemIncursionFields(prev),
         prev.activeClass ?? 'AEGIS',
       );
-      const auto = tryAutoPlaceRunItem(hydrated.runItems, itemId);
-      if (auto.placed) {
+      const cargo = placeSupplyAtFirstOpenCell(hydrated.cargo, itemId, origin);
+      if (cargo) {
         placed = true;
         const next = {
           ...hydrated,
-          runItems: auto.slots,
-          itemRuntime: recordRunItemTrigger(
-            hydrated.itemRuntime,
-            `${def.triggerText}`,
-          ),
+          cargo,
+          supplyRuntime: recordSupplyAcquisition(hydrated.supplyRuntime, source),
         };
         activeIncursionRef.current = next;
         return next;
@@ -6309,11 +6074,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       needsChoice = true;
       const next = {
         ...hydrated,
-        itemRuntime: mergeRunItemRuntime(hydrated.itemRuntime, {
+        supplyRuntime: mergeRunItemRuntime(hydrated.supplyRuntime, {
           pendingOffer: {
             itemId,
             source,
-            slotType: def.slotType,
             purchaseCost: options?.purchaseCost,
           },
         }),
@@ -6324,30 +6088,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (placed) {
       return {
         success: true,
-        logLine: `>> RUN ITEM ACQUIRED — ${def.name} slotted (${def.slotType}).`,
+        logLine: `>> SUPPLY ACQUIRED — ${def.name} placed in cargo.`,
       };
     }
     if (needsChoice) {
       return {
         success: false,
         needsChoice: true,
-        logLine: `>> RUN ITEM PENDING — ${def.name} waiting for slot decision.`,
+        logLine: `>> SUPPLY PENDING — ${def.name} requires cargo placement, decline, or immediate use.`,
       };
     }
-    return { success: false, logLine: '[REJECTED] >> Run Item could not be received.' };
+    return { success: false, logLine: '[REJECTED] >> Supply could not be received.' };
   }, []);
 
   const resolvePendingRunItemOffer = useCallback((
     resolution: RunItemOfferResolution,
-    slotIndex?: number,
+    cargoInstanceId?: string,
   ): { success: boolean; logLine: string; usedNow?: boolean; itemId?: RunItemId } => {
     const inc = activeIncursionRef.current;
-    const offer = inc.itemRuntime.pendingOffer;
+    const offer = inc.supplyRuntime.pendingOffer;
     if (!offer) {
-      return { success: false, logLine: '[REJECTED] >> No pending Run Item offer.' };
+      return { success: false, logLine: '[REJECTED] >> No pending Supply offer.' };
     }
     const def = getRunItemDefinition(offer.itemId);
-    const resolved = resolveRunItemOffer(inc.runItems, offer, resolution, slotIndex);
     let logLine = '';
     let usedNow = false;
 
@@ -6356,30 +6119,134 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         hydrateRunItemIncursionFields(prev),
         prev.activeClass ?? 'AEGIS',
       );
-      const currentOffer = hydrated.itemRuntime.pendingOffer;
+      const currentOffer = hydrated.supplyRuntime.pendingOffer;
       if (!currentOffer) return prev;
 
       let nextCredits = hydrated.runCredits;
-      if (resolution === 'cancel_purchase' && currentOffer.purchaseCost) {
-        nextCredits += currentOffer.purchaseCost;
-        logLine = `>> PURCHASE CANCELLED — +${currentOffer.purchaseCost} run credits refunded.`;
+      let nextStock = hydrated.blackMarketStock;
+      if (resolution === 'cancel_purchase') {
+        logLine = '>> PURCHASE CANCELLED — no credits charged.';
       } else if (resolution === 'discard') {
-        logLine = `>> RUN ITEM DISCARDED — ${def.name} dropped.`;
-      } else if (resolution === 'replace' && slotIndex != null) {
-        logLine = `>> RUN ITEM REPLACED — ${def.name} equipped in ${def.slotType} slot ${slotIndex + 1}.`;
+        logLine = `>> SUPPLY DECLINED — ${def.name} left behind.`;
+      } else if (resolution === 'replace') {
+        const purchaseCost = currentOffer.source === 'BUY'
+          ? currentOffer.purchaseCost ?? 0
+          : 0;
+        if (hydrated.runCredits < purchaseCost) {
+          logLine = '[REJECTED] >> Insufficient run credits.';
+          return prev;
+        }
+        if (!cargoInstanceId) {
+          logLine = '[REJECTED] >> Select cargo to jettison.';
+          return prev;
+        }
+        if (
+          isRunItemFoamProtected(hydrated.supplyRuntime, cargoInstanceId) ||
+          isKeepsakeJettisonBlocked(
+            hydrated.requisitionRuntime,
+            cargoInstanceId,
+            hydrated.requisitionJettisonLockedInstanceIds,
+          )
+        ) {
+          logLine = '[REJECTED] >> Selected cargo is protected from jettison.';
+          return prev;
+        }
+        const displaced = hydrated.cargo.grid.placed.find((item) => item.instanceId === cargoInstanceId);
+        const afterJettison = removePlacedCargoItem(hydrated.cargo, cargoInstanceId);
+        const cargo = placeSupplyAtFirstOpenCell(
+          afterJettison,
+          currentOffer.itemId,
+          currentOffer.source === 'BUY' ? 'MARKET' : 'FIND',
+        );
+        if (!cargo) {
+          logLine = '[REJECTED] >> No cargo cell available for incoming Supply.';
+          return prev;
+        }
+        logLine = `>> SUPPLY PLACED — ${def.name} secured in cargo.`;
+        const acquiredRuntime = recordSupplyAcquisition(
+          hydrated.supplyRuntime,
+          currentOffer.source,
+        );
+        const next = {
+          ...hydrated,
+          cargo,
+          runCredits: hydrated.runCredits - purchaseCost,
+          blackMarketStock: currentOffer.source === 'BUY'
+            ? hydrated.blackMarketStock.filter((id) => id !== currentOffer.itemId)
+            : hydrated.blackMarketStock,
+          supplyRuntime: mergeRunItemRuntime(acquiredRuntime, {
+            pendingOffer: null,
+            brokerMarkedItemId: hydrated.supplyRuntime.brokerMarkedItemId === currentOffer.itemId
+              ? null
+              : hydrated.supplyRuntime.brokerMarkedItemId,
+            stats: {
+              ...acquiredRuntime.stats,
+              suppliesJettisoned: acquiredRuntime.stats.suppliesJettisoned
+                + (displaced && isSupplyCargoItemId(displaced.itemId) ? 1 : 0),
+              resourcesDisplacedForSupply: acquiredRuntime.stats.resourcesDisplacedForSupply
+                + (displaced && ALL_RESOURCE_ITEM_IDS.includes(displaced.itemId as ResourceItemId) ? 1 : 0),
+            },
+          }),
+        };
+        activeIncursionRef.current = next;
+        return next;
       } else if (resolution === 'use_now') {
-        usedNow = resolved.consumedFromSlot;
-        logLine = `>> RUN ITEM USED — ${def.triggerText}`;
+        const purchaseCost = currentOffer.source === 'BUY'
+          ? currentOffer.purchaseCost ?? 0
+          : 0;
+        if (hydrated.runCredits < purchaseCost) {
+          logLine = '[REJECTED] >> Insufficient run credits.';
+          return prev;
+        }
+        const preview = resolveRunItemCombatUse(currentOffer.itemId, {
+          maxSoulAnchor: runStateRef.current.maxSoulAnchor,
+          currentSoulAnchor: runStateRef.current.soulAnchorIntegrity,
+          currentStamina: runStateRef.current.currentStamina,
+          maxStamina: runStateRef.current.maxStamina,
+          runtime: hydrated.supplyRuntime,
+          livingEnemyCount: 1,
+        });
+        if (preview.rejected) {
+          logLine = `[REJECTED] >> ${preview.rejected}`;
+          return prev;
+        }
+        const cargo = stageImmediateSupplyTransaction(
+          hydrated.cargo,
+          currentOffer.itemId,
+          currentOffer.source === 'BUY' ? 'MARKET' : 'FIND',
+        );
+        if (!cargo) return prev;
+        usedNow = true;
+        logLine = `>> SUPPLY READIED FOR IMMEDIATE USE — ${def.name}.`;
+        const next = {
+          ...hydrated,
+          cargo,
+          runCredits: hydrated.runCredits - purchaseCost,
+          blackMarketStock: currentOffer.source === 'BUY'
+            ? hydrated.blackMarketStock.filter((id) => id !== currentOffer.itemId)
+            : hydrated.blackMarketStock,
+          supplyRuntime: mergeRunItemRuntime(
+            recordSupplyAcquisition(hydrated.supplyRuntime, currentOffer.source),
+            {
+            pendingOffer: null,
+            brokerMarkedItemId: hydrated.supplyRuntime.brokerMarkedItemId === currentOffer.itemId
+              ? null
+              : hydrated.supplyRuntime.brokerMarkedItemId,
+            },
+          ),
+        };
+        activeIncursionRef.current = next;
+        return next;
       } else {
-        logLine = '[REJECTED] >> Could not resolve Run Item offer.';
+        logLine = '[REJECTED] >> Could not resolve Supply offer.';
       }
 
       const next = {
         ...hydrated,
         runCredits: nextCredits,
-        runItems: resolved.slots,
-        itemRuntime: mergeRunItemRuntime(
-          recordRunItemTrigger(hydrated.itemRuntime, logLine),
+        blackMarketStock: nextStock,
+        supplyRuntime: mergeRunItemRuntime(
+          recordRunItemTrigger(hydrated.supplyRuntime, logLine),
           { pendingOffer: null },
         ),
       };
@@ -6388,24 +6255,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     return {
-      success: resolution !== 'discard' || true,
+      success: Boolean(logLine) && !logLine.startsWith('[REJECTED]'),
       logLine,
       usedNow,
       itemId: offer.itemId,
     };
-  }, []);
-
-  const clearRunItemSlot = useCallback((slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => {
-    setActiveIncursion((prev) => {
-      const hydrated = hydrateWeaponIncursionFields(
-        hydrateRunItemIncursionFields(prev),
-        prev.activeClass ?? 'AEGIS',
-      );
-      const cleared = clearRunItemAtSlot(hydrated.runItems, slotType, slotIndex);
-      const next = { ...hydrated, runItems: cleared.slots };
-      activeIncursionRef.current = next;
-      return next;
-    });
   }, []);
 
   const devGrantRunItem = useCallback((itemId: RunItemId): { success: boolean; logLine: string } => {
@@ -6420,7 +6274,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const lines = ALL_RUN_ITEM_IDS.map((itemId) => devGrantRunItem(itemId).logLine);
     const report = lines.join('\n');
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      appendRunLog(`>> RUN ITEM GRANT ALL — ${ALL_RUN_ITEM_IDS.length} grant attempts queued.`);
+      appendRunLog(`>> SUPPLY GRANT ALL — ${ALL_RUN_ITEM_IDS.length} grant attempts queued.`);
     }
     return report;
   }, [appendRunLog, devGrantRunItem]);
@@ -6428,31 +6282,32 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const useIncursionConsumable = useCallback((itemId: CargoItemId): IncursionConsumableUseResult | null => {
     const inc = activeIncursionRef.current;
     const normalizedRunItem = tryNormalizeRunItemId(itemId);
-    const fromRunItemSlot = normalizedRunItem
-      && getRunItemInCombatSlot(inc.runItems, normalizedRunItem) != null;
+    const supplyInstance = normalizedRunItem
+      ? findSupplyInstance(inc.cargo, normalizedRunItem)
+      : null;
 
-    if (fromRunItemSlot && normalizedRunItem) {
+    if (supplyInstance && normalizedRunItem) {
       const livingEnemyCount = 1; // combat hub re-targets; engine uses this for root fallback sizing
       const resolved = resolveRunItemCombatUse(normalizedRunItem, {
         maxSoulAnchor: runStateRef.current.maxSoulAnchor,
         currentSoulAnchor: runStateRef.current.soulAnchorIntegrity,
         currentStamina: runStateRef.current.currentStamina,
         maxStamina: runStateRef.current.maxStamina,
-        runtime: inc.itemRuntime,
+        runtime: inc.supplyRuntime,
         livingEnemyCount,
       });
       if (resolved.rejected) {
         appendRunLog(resolved.result.logLine);
         return null;
       }
-      const nextRunItems = consumeRunItemFromCombatSlot(inc.runItems, normalizedRunItem);
-      if (!nextRunItems) return null;
+      const consumed = consumeSupplyInstance(inc.cargo, supplyInstance.instanceId);
+      if (!consumed) return null;
 
       setActiveIncursion((prev) => {
         const next: ActiveIncursionState = {
           ...prev,
-          runItems: nextRunItems,
-          itemRuntime: resolved.runtime,
+          cargo: consumed.cargo,
+          supplyRuntime: recordSupplyUse(resolved.runtime, normalizedRunItem),
         };
         activeIncursionRef.current = next;
         return next;
@@ -6557,6 +6412,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next: ActiveIncursionState = {
         ...prev,
         cargo: nextCargo,
+        supplyRuntime: recordSupplyUse(prev.supplyRuntime, itemId),
         spectralWeaponImbued: def.combatEffect === 'spectral_imbue'
           ? true
           : prev.spectralWeaponImbued,
@@ -6607,12 +6463,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         hydrateRunItemIncursionFields(prev),
         prev.activeClass ?? 'AEGIS',
       );
-      const crashed = consumeGraveDustStaminaCrash(hydrated.itemRuntime);
+      const crashed = consumeGraveDustStaminaCrash(hydrated.supplyRuntime);
       staminaLoss = crashed.staminaLoss;
       message = crashed.message;
       const next = {
         ...hydrated,
-        itemRuntime: resetRunItemTurnCounters(crashed.runtime),
+        supplyRuntime: resetRunItemTurnCounters(crashed.runtime),
       };
       activeIncursionRef.current = next;
       return next;
@@ -6629,7 +6485,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       );
       const next = {
         ...hydrated,
-        itemRuntime: resetRunItemCombatCounters(hydrated.itemRuntime),
+        supplyRuntime: resetRunItemCombatCounters(hydrated.supplyRuntime),
       };
       activeIncursionRef.current = next;
       return next;
@@ -6646,8 +6502,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        runItems: outcome.runItems ?? prev.runItems,
-        itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+        supplyRuntime: outcome.supplyRuntime ?? prev.supplyRuntime,
         blackMarketStock: outcome.blackMarketStock ?? prev.blackMarketStock,
       };
       activeIncursionRef.current = next;
@@ -6667,8 +6522,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        runItems: outcome.runItems ?? prev.runItems,
-        itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+        cargo: outcome.cargo ?? prev.cargo,
+        supplyRuntime: outcome.supplyRuntime ?? prev.supplyRuntime,
       };
       activeIncursionRef.current = next;
       return next;
@@ -6687,17 +6542,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        runItems: outcome.runItems ?? prev.runItems,
-        itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
         cargo: outcome.cargo ?? prev.cargo,
+        supplyRuntime: outcome.supplyRuntime ?? prev.supplyRuntime,
         blackMarketStock: outcome.blackMarketStock ?? prev.blackMarketStock,
         revealedSonarNodeIds: outcome.revealedSonarNodeIds ?? prev.revealedSonarNodeIds,
         proceduralRunTree: outcome.proceduralRunTree ?? prev.proceduralRunTree,
-        keepsakeFullyInterpretedNodeIds:
-          outcome.keepsakeFullyInterpretedNodeIds ?? prev.keepsakeFullyInterpretedNodeIds,
+        requisitionFullyInterpretedNodeIds:
+          outcome.requisitionFullyInterpretedNodeIds ??
+          prev.requisitionFullyInterpretedNodeIds,
       };
       if (outcome.pendingFieldChoice !== undefined) {
-        next.itemRuntime = mergeRunItemRuntime(next.itemRuntime, {
+        next.supplyRuntime = mergeRunItemRuntime(next.supplyRuntime, {
           pendingFieldChoice: outcome.pendingFieldChoice,
         });
       }
@@ -6751,7 +6606,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        itemRuntime: mergeRunItemRuntime(prev.itemRuntime, {
+        supplyRuntime: mergeRunItemRuntime(prev.supplyRuntime, {
           pendingFieldChoice: outcome.pendingFieldChoice ?? null,
         }),
       };
@@ -6769,7 +6624,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const useDeadDropTokenFromCargo = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
-    if (hasFieldRunItem(inc.runItems, 'dead-drop-token')) {
+    if (hasFieldRunItem(inc.cargo, 'dead-drop-token')) {
       const outcome = useDeadDropTokenFieldTool(inc);
       if (!outcome.success) {
         appendRunLog(outcome.logLine);
@@ -6778,8 +6633,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
-          runItems: outcome.runItems ?? prev.runItems,
-          itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+          supplyRuntime: outcome.supplyRuntime ?? prev.supplyRuntime,
           cargo: outcome.cargo ?? prev.cargo,
         };
         activeIncursionRef.current = next;
@@ -6814,7 +6668,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const inc = activeIncursionRef.current;
     const cargoMultiplier = resolveCargoHealReceivedMultiplier(
       inc.cargo,
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
     );
     const effectiveAmount = Math.floor(amount * cargoMultiplier);
     setRunState((prev) => {
@@ -6860,137 +6714,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const purchaseBlackMarketCargo = useCallback((itemId: CargoItemId): { success: boolean; logLine: string } | null => {
-    const inc = activeIncursionRef.current;
-    const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
-    const listing = listingsForStock(stock).find((entry) => entry.id === itemId)
-      ?? listingsForStock(rollBlackMarketStock()).find((entry) => entry.id === itemId);
-    const basePrice = listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
-    const discountPct = getBlackMarketDiscountPct(inc);
-    const brokerMarked = inc.itemRuntime.brokerMarkedItemId === itemId;
-    const price = getBrokerMarkedDiscountPrice(
-      getEffectiveBlackMarketPrice(basePrice, discountPct),
-      brokerMarked,
-    );
-    if (stock.length > 0 && !stock.includes(itemId)) {
-      return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
-    }
-    if (inc.runCredits < price) {
-      return { success: false, logLine: '[REJECTED] >> Insufficient run credits for cargo purchase.' };
-    }
-
-    const normalizedRunItem = tryNormalizeRunItemId(itemId);
-    if (normalizedRunItem && isRunItemCatalogId(itemId)) {
-      const stockIndex = stock.indexOf(itemId);
-      const nextStock = stockIndex >= 0
-        ? [...stock.slice(0, stockIndex), ...stock.slice(stockIndex + 1)]
-        : stock;
-
-      setActiveIncursion((prev) => {
-        let nextRuntime = prev.itemRuntime;
-        if (brokerMarked) {
-          nextRuntime = mergeRunItemRuntime(
-            recordRunItemTrigger(prev.itemRuntime, 'BROKER FLASHCARD // Discount accepted. Future signal corrupted.'),
-            {
-              brokerMarkedItemId: null,
-              stats: {
-                ...prev.itemRuntime.stats,
-                creditsSavedByItems: prev.itemRuntime.stats.creditsSavedByItems
-                  + Math.max(0, getEffectiveBlackMarketPrice(basePrice, discountPct) - price),
-                riskAddedByItems: prev.itemRuntime.stats.riskAddedByItems + 1,
-              },
-            },
-          );
-        }
-        const next = {
-          ...prev,
-          runCredits: prev.runCredits - price,
-          blackMarketStock: nextStock,
-          itemRuntime: nextRuntime,
-        };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      const received = receiveRunItem(normalizedRunItem, 'BUY', { purchaseCost: price });
-      if (received.needsChoice) {
-        return {
-          success: true,
-          logLine: `>> BLACK MARKET — ${getRunItemDefinition(normalizedRunItem).name} purchased (-${price} CR). Choose a slot.`,
-        };
-      }
-      if (!received.success) {
-        setActiveIncursion((prev) => {
-          const next = {
-            ...prev,
-            runCredits: prev.runCredits + price,
-            blackMarketStock: prev.blackMarketStock.includes(itemId)
-              ? prev.blackMarketStock
-              : [...prev.blackMarketStock, itemId],
-          };
-          activeIncursionRef.current = next;
-          return next;
-        });
-        return { success: false, logLine: received.logLine };
-      }
-      const discountNote = [
-        discountPct > 0 ? `SCAVENGER MARK -${discountPct}%` : null,
-        brokerMarked ? 'BROKER-MARKED −35%' : null,
-      ].filter(Boolean).join(' // ');
-      return {
-        success: true,
-        logLine: `>> BLACK MARKET RUN ITEM — ${getRunItemDefinition(normalizedRunItem).name} slotted. -${price} RUN CREDITS.${discountNote ? ` // ${discountNote}` : ''}`,
-      };
-    }
-
-    let keepsakeLogs: string[] = [];
-    setActiveIncursion((prev) => {
-      const stagedIds: string[] = [];
-      const nextCargo = addLootToContainment(prev.cargo, itemId, 1, stagedIds);
-      const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
-      keepsakeLogs = keepsakePickup.logLines;
-      let nextReq = prev.boundRequisition;
-      if (nextReq?.scavengerMarkBlackMarketPending) {
-        nextReq = consumeScavengerMarkDiscount(nextReq);
-      }
-      let nextRuntime = prev.itemRuntime;
-      if (brokerMarked) {
-        nextRuntime = mergeRunItemRuntime(
-          recordRunItemTrigger(prev.itemRuntime, 'BROKER FLASHCARD // Discount accepted. Future signal corrupted.'),
-          {
-            brokerMarkedItemId: null,
-            stats: {
-              ...prev.itemRuntime.stats,
-              creditsSavedByItems: prev.itemRuntime.stats.creditsSavedByItems
-                + Math.max(0, getEffectiveBlackMarketPrice(basePrice, discountPct) - price),
-              riskAddedByItems: prev.itemRuntime.stats.riskAddedByItems + 1,
-            },
-          },
-        );
-      }
-      const next = {
-        ...prev,
-        runCredits: prev.runCredits - price,
-        cargo: nextCargo,
-        keepsakeRuntime: keepsakePickup.keepsakeRuntime,
-        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
-        boundRequisition: nextReq,
-        itemRuntime: nextRuntime,
-      };
-      activeIncursionRef.current = next;
-      return next;
-    });
-    keepsakeLogs.forEach((line) => appendRunLog(line));
-
-    const discountNote = [
-      discountPct > 0 ? `SCAVENGER MARK -${discountPct}%` : null,
-      brokerMarked ? 'BROKER-MARKED −35%' : null,
-    ].filter(Boolean).join(' // ');
-    return {
-      success: true,
-      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.${discountNote ? ` // ${discountNote}` : ''}`,
-    };
-  }, [appendRunLog, mergeKeepsakeCargoPickup, receiveRunItem]);
-
   const purchaseBlackMarketCargoAtCell = useCallback((
     itemId: CargoItemId,
     row: number,
@@ -7000,12 +6723,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
     if (stock.length > 0 && !stock.includes(itemId)) {
       return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
-    }
-    if (isRunItemCatalogId(itemId)) {
-      return {
-        success: false,
-        logLine: '[REJECTED] >> Run items route to dedicated slots — drag onto the cargo deck to purchase.',
-      };
     }
     const placed = placeStagedBlackMarketCargoAtCell(inc.cargo, itemId, row, col);
     if (!placed) {
@@ -7063,16 +6780,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return { success: false, logLine: '[REJECTED] >> No staged contraband to bind.' };
     }
 
-    const discountPct = getBlackMarketDiscountPct(inc);
+    const discountPct = 0;
     const totalPrice = staged.reduce((sum, item) => {
       const base = resolveBlackMarketListingPrice(item.itemId);
       const priced = resolveKeepsakeMarkedShelfPrice(
         base,
         item.itemId,
-        inc.keepsakeRuntime,
+        inc.requisitionRuntime,
         discountPct,
       );
-      return sum + priced.price;
+      return sum + getBrokerMarkedDiscountPrice(
+        priced.price,
+        inc.supplyRuntime.brokerMarkedItemId === item.itemId,
+      );
     }, 0);
 
     if (inc.runCredits < totalPrice) {
@@ -7080,36 +6800,60 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     const purchasedMarked = staged.some((item) => (
-      isKeepsakeMarkedShelfItem(inc.keepsakeRuntime, item.itemId)
+      isKeepsakeMarkedShelfItem(inc.requisitionRuntime, item.itemId)
     ));
-    let keepsakeRuntime = inc.keepsakeRuntime;
+    let requisitionRuntime = inc.requisitionRuntime;
+    let supplyRuntime = inc.supplyRuntime;
     staged.forEach((item) => {
       const base = resolveBlackMarketListingPrice(item.itemId);
       const priced = resolveKeepsakeMarkedShelfPrice(
         base,
         item.itemId,
-        keepsakeRuntime,
+        requisitionRuntime,
         discountPct,
       );
-      keepsakeRuntime = resolveKeepsakeMarkedPurchaseCreditSaved(
-        keepsakeRuntime,
+      requisitionRuntime = resolveKeepsakeMarkedPurchaseCreditSaved(
+        requisitionRuntime,
         item.itemId,
         base,
         priced.price,
       );
+      if (supplyRuntime.brokerMarkedItemId === item.itemId) {
+        const brokerPrice = getBrokerMarkedDiscountPrice(priced.price, true);
+        supplyRuntime = mergeRunItemRuntime(
+          recordRunItemTrigger(
+            supplyRuntime,
+            'BROKER FLASHCARD // Discount accepted. Future signal corrupted.',
+          ),
+          {
+            brokerMarkedItemId: null,
+            stats: {
+              ...supplyRuntime.stats,
+              creditsSavedByItems: supplyRuntime.stats.creditsSavedByItems
+                + Math.max(0, priced.price - brokerPrice),
+              riskAddedByItems: supplyRuntime.stats.riskAddedByItems + 1,
+            },
+          },
+        );
+      }
     });
+    const purchasedSupplyCount = staged.filter((item) => isSupplyCargoItemId(item.itemId)).length;
+    if (purchasedSupplyCount > 0) {
+      supplyRuntime = mergeRunItemRuntime(supplyRuntime, {
+        stats: {
+          ...supplyRuntime.stats,
+          suppliesPurchased: supplyRuntime.stats.suppliesPurchased + purchasedSupplyCount,
+        },
+      });
+    }
 
     setActiveIncursion((prev) => {
-      let nextReq = prev.boundRequisition;
-      if (nextReq?.scavengerMarkBlackMarketPending) {
-        nextReq = consumeScavengerMarkDiscount(nextReq);
-      }
       const next = {
         ...prev,
         runCredits: prev.runCredits - totalPrice,
         cargo: clearBlackMarketStagedFlags(prev.cargo),
-        boundRequisition: nextReq,
-        keepsakeRuntime,
+        requisitionRuntime,
+        supplyRuntime,
       };
       activeIncursionRef.current = next;
       return next;
@@ -7117,7 +6861,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     if (purchasedMarked) {
       const corruption = applyKeepsakeMarkedShelfCorruption(
-        keepsakeRuntime,
+        requisitionRuntime,
         inc.proceduralRunTree,
         inc.nodesCleared,
         true,
@@ -7128,7 +6872,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           const next = {
             ...prev,
             ...corruption.incursionPatch,
-            keepsakeRuntime: corruption.runtime,
+            requisitionRuntime: corruption.runtime,
           };
           activeIncursionRef.current = next;
           return next;
@@ -7145,7 +6889,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const commitBlackMarketCreditPurchase = useCallback((): { success: boolean; logLine: string } | null => {
     const inc = activeIncursionRef.current;
-    if (!canUseKeepsakeNullLedgerCredit(inc.keepsakeRuntime)) {
+    if (!canUseKeepsakeNullLedgerCredit(inc.requisitionRuntime)) {
       return { success: false, logLine: '[REJECTED] >> Null Ledger credit already spent this run.' };
     }
     const staged = listStagedBlackMarketPlacements(inc.cargo);
@@ -7154,27 +6898,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     const item = staged[0]!;
-    const discountPct = getBlackMarketDiscountPct(inc);
+    const discountPct = 0;
     const base = resolveBlackMarketListingPrice(item.itemId);
     const credit = applyKeepsakeNullLedgerCreditPurchase(
-      inc.keepsakeRuntime,
+      inc.requisitionRuntime,
       item.itemId,
       base,
       discountPct,
     );
     credit.logLines.forEach((line) => appendRunLog(line));
 
-    const purchasedMarked = isKeepsakeMarkedShelfItem(inc.keepsakeRuntime, item.itemId);
+    const purchasedMarked = isKeepsakeMarkedShelfItem(inc.requisitionRuntime, item.itemId);
     setActiveIncursion((prev) => {
-      let nextReq = prev.boundRequisition;
-      if (nextReq?.scavengerMarkBlackMarketPending) {
-        nextReq = consumeScavengerMarkDiscount(nextReq);
-      }
       const next = {
         ...prev,
         cargo: clearBlackMarketStagedFlags(prev.cargo),
-        boundRequisition: nextReq,
-        keepsakeRuntime: credit.runtime,
+        requisitionRuntime: credit.runtime,
       };
       activeIncursionRef.current = next;
       return next;
@@ -7193,7 +6932,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           const next = {
             ...prev,
             ...corruption.incursionPatch,
-            keepsakeRuntime: corruption.runtime,
+            requisitionRuntime: corruption.runtime,
           };
           activeIncursionRef.current = next;
           return next;
@@ -7271,10 +7010,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       clearRunLog,
       startNewRun,
       recordRunKillAttacker,
-      boundRequisitionOffers,
-      prepareBoundRequisitionOffers,
-      confirmBoundRequisition,
-      consumeAdrenalinePrimerAfterCombat,
+      beginRequisitionCombatEncounter,
+      resolveRequisitionFirstTurnAp,
+      resolveRequisitionDirectHostileDamage,
+      resolveRequisitionKineticBatteryAction,
+      resolveRequisitionHostileEffect,
+      completeRequisitionCombatEncounter,
       peekPendingNarrativeCombatBoons,
       clearPendingNarrativeCombatBoons,
       claimPendingNarrativeCombatBoons,
@@ -7287,7 +7028,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       incrementCombatNodesCleared,
       syncAfterCombat,
       refillStaminaAfterCombat,
-      applyTrinket,
       preparePostCombatMutations,
       applyLeyLineMutation,
       applyHexShotBoon,
@@ -7342,7 +7082,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useIncursionConsumable,
       receiveRunItem,
       resolvePendingRunItemOffer,
-      clearRunItemSlot,
       devGrantRunItem,
       notifyRunItemPlayerTurnStart,
       notifyRunItemCombatStart,
@@ -7359,7 +7098,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setAegisTechniqueLoadout,
       setHexShotLoadout,
       setEnvoyLoadout,
-      purchaseBlackMarketCargo,
       purchaseBlackMarketCargoAtCell,
       returnStagedBlackMarketCargo,
       commitBlackMarketBindings,
@@ -7463,10 +7201,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setCombatLogActive,
       clearRunLog,
       startNewRun,
-      boundRequisitionOffers,
-      prepareBoundRequisitionOffers,
-      confirmBoundRequisition,
-      consumeAdrenalinePrimerAfterCombat,
+      beginRequisitionCombatEncounter,
+      resolveRequisitionFirstTurnAp,
+      resolveRequisitionDirectHostileDamage,
+      resolveRequisitionKineticBatteryAction,
+      resolveRequisitionHostileEffect,
+      completeRequisitionCombatEncounter,
       peekPendingNarrativeCombatBoons,
       clearPendingNarrativeCombatBoons,
       claimPendingNarrativeCombatBoons,
@@ -7479,7 +7219,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       incrementCombatNodesCleared,
       syncAfterCombat,
       refillStaminaAfterCombat,
-      applyTrinket,
       preparePostCombatMutations,
       applyLeyLineMutation,
       applyHexShotBoon,
@@ -7534,7 +7273,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useIncursionConsumable,
       receiveRunItem,
       resolvePendingRunItemOffer,
-      clearRunItemSlot,
       devGrantRunItem,
       notifyRunItemPlayerTurnStart,
       notifyRunItemCombatStart,
@@ -7551,7 +7289,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setAegisTechniqueLoadout,
       setHexShotLoadout,
       setEnvoyLoadout,
-      purchaseBlackMarketCargo,
       purchaseBlackMarketCargoAtCell,
       returnStagedBlackMarketCargo,
       commitBlackMarketBindings,
@@ -7656,5 +7393,3 @@ export function useRun() {
   }
   return context;
 }
-
-export { pickRandomTrinkets, TRINKET_POOL };

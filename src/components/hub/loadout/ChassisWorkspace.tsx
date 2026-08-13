@@ -6,9 +6,7 @@ import { usePlayerAccount } from '../../../context/PlayerAccountContext';
 import { listWeaponFamiliesForClass } from '../../../data/weaponRegistry';
 import {
   canUnlockWeaponFamily,
-  canUpgradeWeaponTier,
   getEquippedWeaponForClass,
-  getWeaponTier,
   resolveWeaponState,
 } from '../../../data/weaponProgressionEngine';
 import { countMissingCost, formatWeaponCostLine } from '../../../data/weaponResourceEngine';
@@ -32,8 +30,7 @@ export type ChassisStatus =
   | 'EQUIPPED'
   | 'AVAILABLE'
   | 'BLUEPRINT LOCKED'
-  | 'MISSING MATERIALS'
-  | 'UPGRADE AVAILABLE';
+  | 'MISSING MATERIALS';
 
 export interface ChassisRowModel {
   familyId: WeaponFamilyId;
@@ -42,7 +39,6 @@ export interface ChassisRowModel {
   loopCue: string;
   selectionSummary: string;
   description: string;
-  tier: number;
   unlocked: boolean;
   equipped: boolean;
   status: ChassisStatus;
@@ -54,62 +50,50 @@ export interface ChassisRowModel {
 function resolveStatus(args: {
   unlocked: boolean;
   equipped: boolean;
-  canUnlock: boolean;
-  canUpgrade: boolean;
   lockedAffordable: boolean;
 }): ChassisStatus {
   if (args.equipped) return 'EQUIPPED';
   if (!args.unlocked) {
     return args.lockedAffordable ? 'BLUEPRINT LOCKED' : 'MISSING MATERIALS';
   }
-  if (args.canUpgrade) return 'UPGRADE AVAILABLE';
   return 'AVAILABLE';
 }
 
 export function buildChassisRows(account: ReturnType<typeof usePlayerAccount>['account']): ChassisRowModel[] {
   const progression = {
     weaponUnlocks: account.weaponUnlocks,
-    weaponTiers: account.weaponTiers,
     equippedWeaponByClass: account.equippedWeaponByClass,
   };
   const equippedId = getEquippedWeaponForClass(progression, account.activeClass);
   return listWeaponFamiliesForClass(account.activeClass).map((def) => {
     const unlocked = account.weaponUnlocks.includes(def.id);
-    const tier = getWeaponTier(progression, def.id);
-    const tierState = resolveWeaponState(def.id, tier);
+    const weaponState = resolveWeaponState(def.id);
     const equipped = equippedId === def.id;
     const canUnlock = !unlocked && canUnlockWeaponFamily(account.resourceStash, progression, def.id);
-    const canUpgrade = unlocked && tier < 3 && canUpgradeWeaponTier(account.resourceStash, progression, def.id);
     const unlockMissing = !unlocked
       ? countMissingCost(account.resourceStash, def.unlockRequirement)
       : { missingTotal: 0, parts: [] as string[] };
     const status = resolveStatus({
       unlocked,
       equipped,
-      canUnlock,
-      canUpgrade,
-      lockedAffordable: unlockMissing.missingTotal === 0,
+      lockedAffordable: unlockMissing.missingTotal === 0 || canUnlock,
     });
-    const nextTier = tier === 1 ? def.tiers[1] : tier === 2 ? def.tiers[2] : null;
     const nextSummary = !unlocked
       ? 'UNLOCK REQUIREMENTS IN DOSSIER'
-      : nextTier
-        ? `NEXT: ${nextTier.effectSummary.toUpperCase()}`
-        : 'MAX TIER';
+      : null;
     const statusColor = status === 'MISSING MATERIALS'
       ? MISSING
-      : status === 'UPGRADE AVAILABLE' || status === 'EQUIPPED'
+      : status === 'EQUIPPED'
         ? TERMINAL
         : MUTED;
     const facing = getWeaponPlayerFacingSummary(def.id);
     return {
       familyId: def.id,
-      name: tierState.displayName,
+      name: weaponState.displayName,
       role: facing.roleLabel,
       loopCue: facing.loopCueTag,
       selectionSummary: facing.selectionSummary,
       description: facing.selectionSummary,
-      tier,
       unlocked,
       equipped,
       status,
@@ -203,9 +187,6 @@ export default function ChassisWorkspace({
                 </View>
               </View>
               <View style={styles.signalClassCol}>
-                <TerminalText size={8} letterSpacing={0.7} style={styles.signalTier}>
-                  {`TIER ${['I', 'II', 'III'][row.tier - 1] ?? row.tier}`}
-                </TerminalText>
                 <TerminalText size={7.5} letterSpacing={0.5} style={styles.signalRole} numberOfLines={2}>
                   {row.unlocked ? 'LINK READY' : 'LOCKED'}
                 </TerminalText>
@@ -227,43 +208,38 @@ export function resolveChassisDossier(account: ReturnType<typeof usePlayerAccoun
   if (!familyId) return null;
   const progression = {
     weaponUnlocks: account.weaponUnlocks,
-    weaponTiers: account.weaponTiers,
     equippedWeaponByClass: account.equippedWeaponByClass,
   };
   const def = listWeaponFamiliesForClass(account.activeClass).find((entry) => entry.id === familyId);
   if (!def) return null;
   const facing = getWeaponPlayerFacingSummary(def.id);
   const unlocked = account.weaponUnlocks.includes(def.id);
-  const tier = getWeaponTier(progression, def.id);
-  const tierState = resolveWeaponState(def.id, tier);
+  const weaponState = resolveWeaponState(def.id);
   const equipped = getEquippedWeaponForClass(progression, account.activeClass) === def.id;
   const canUnlock = !unlocked && canUnlockWeaponFamily(account.resourceStash, progression, def.id);
-  const canUpgrade = unlocked && tier < 3 && canUpgradeWeaponTier(account.resourceStash, progression, def.id);
-  const nextTier = tier === 1 ? def.tiers[1] : tier === 2 ? def.tiers[2] : null;
-  const upgradeCost = unlocked && tier < 3 ? (def.tiers[tier - 1]?.upgradeCost ?? []) : [];
   const unlockCost = def.unlockRequirement;
-  const activeCost = !unlocked ? unlockCost : upgradeCost;
-  const costLines = activeCost.map((cost) => ({
-    label: getResourceDisplayName(cost.resourceId),
-    owned: getStashCount(account.resourceStash, cost.resourceId),
-    need: cost.quantity,
-  }));
-  const missing = countMissingCost(account.resourceStash, activeCost);
+  const costLines = !unlocked
+    ? unlockCost.map((cost) => ({
+      label: getResourceDisplayName(cost.resourceId),
+      owned: getStashCount(account.resourceStash, cost.resourceId),
+      need: cost.quantity,
+    }))
+    : [];
+  const missing = countMissingCost(account.resourceStash, !unlocked ? unlockCost : []);
   return {
     def,
     facing,
-    tierState,
-    tier,
+    tierState: weaponState,
     unlocked,
     equipped,
     canUnlock,
-    canUpgrade,
-    nextTier,
-    statLines: formatWeaponStatLines(tierState),
+    canUpgrade: false,
+    nextTier: null,
+    statLines: formatWeaponStatLines(weaponState),
     costLines,
     missing,
     unlockCostLine: formatWeaponCostLine(unlockCost),
-    upgradeCostLine: formatWeaponCostLine(upgradeCost),
+    upgradeCostLine: formatWeaponCostLine([]),
   };
 }
 
@@ -358,6 +334,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingTop: 2,
   },
-  signalTier: { color: TEXT_PRIMARY, fontWeight: '700', fontVariant: ['tabular-nums'] },
   signalRole: { color: MUTED, fontWeight: '700', lineHeight: 14 },
 });

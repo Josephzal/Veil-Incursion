@@ -60,9 +60,6 @@ function collectRecipeUseCounts(): Map<ResourceItemId, number> {
   });
   Object.values(WEAPON_REGISTRY).forEach((family) => {
     family.unlockRequirement.forEach((req) => bump(req.resourceId));
-    family.tiers.forEach((tier) => {
-      tier.upgradeCost.forEach((req) => bump(req.resourceId));
-    });
   });
   return counts;
 }

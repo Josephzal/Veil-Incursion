@@ -13,7 +13,7 @@ import {
 import { countCargoItemInstances } from './cargoGridEngine';
 import { getResourceDisplayName } from './resourceRegistry';
 import { applyKeepsakeUnstableDampening } from './expeditionKeepsakeCargoEngine';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime as KeepsakeRuntime } from '../types/expeditionRequisition';
 
 const DEFAULT_AGGREGATED: AggregatedCarriedCargoModifiers = {
   rareLootBonusPct: 0,
@@ -161,15 +161,15 @@ function aggregateCarriedModifiers(
 /** Each unique unstable cargo effect applies once — duplicate copies do not stack. */
 export function buildActiveCarriedCargoSnapshot(
   cargo: CargoRunState,
-  keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null,
-  itemRuntime?: RunItemRuntime | null,
+  keepsakeRuntime?: KeepsakeRuntime | null,
+  supplyRuntime?: RunItemRuntime | null,
 ): ActiveCarriedCargoSnapshot {
   const activeEffects = UNSTABLE_CARRIED_EFFECT_IDS
     .filter((resourceId) => countPhysicalCargoResource(cargo, resourceId) > 0)
     .map((resourceId) => UNSTABLE_CARRIED_EFFECTS[resourceId]);
 
   const dampenedKeepsake = applyKeepsakeUnstableDampening(activeEffects, keepsakeRuntime);
-  const dampened = applyRunItemAshSealDampening(dampenedKeepsake, itemRuntime);
+  const dampened = applyRunItemAshSealDampening(dampenedKeepsake, supplyRuntime);
 
   return {
     activeEffects: dampened,
@@ -180,9 +180,9 @@ export function buildActiveCarriedCargoSnapshot(
 /** Ash-Seal Canister — 50% downside dampen (25% if cracked). */
 export function applyRunItemAshSealDampening(
   effects: readonly UnstableCarriedEffectDefinition[],
-  itemRuntime?: RunItemRuntime | null,
+  supplyRuntime?: RunItemRuntime | null,
 ): UnstableCarriedEffectDefinition[] {
-  const seal = itemRuntime?.ashSeal;
+  const seal = supplyRuntime?.ashSeal;
   if (!seal) return [...effects];
 
   const dampenFactor = seal.cracked ? 0.25 : 0.5;

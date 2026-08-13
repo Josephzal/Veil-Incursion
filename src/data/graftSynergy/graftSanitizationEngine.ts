@@ -1,6 +1,7 @@
 /**
  * Phase 3J — sanitize equipped graft maps (ownership preserved; invalid assignments dropped).
  * Phase D — Aegis maps use encoded WA:/TECH: keys + surface sanitize (never redirect).
+ * Stage II-B — capacity from run depth band, not Class Rank.
  */
 import type { ClassType } from '../../types/game';
 import type { AbilityGraftMap } from '../../types/veilGraft';
@@ -8,7 +9,7 @@ import type { EnvoyAbilityGraftMap, HexShotAbilityGraftMap } from '../../types/c
 import type { AegisTechniqueLoadout } from '../../types/aegisCombat';
 import type { WeaponFamilyId } from '../../types/weapon';
 import { evaluateGraftCompatibility, isLiveGraftId } from './graftCompatibilityEngine';
-import { getGraftSocketAccessForClassRank } from './graftCapacityEngine';
+import { getGraftSocketAccessForRunDepth } from './graftCapacityEngine';
 import { canGraftClassAbility } from '../classGraftEngine';
 import { migrateHexShotAbilityId } from '../hexShotMigration';
 import { sanitizeAegisAbilityGraftMap } from '../aegisGraftTarget';
@@ -23,9 +24,9 @@ export type GraftSanitizeReport = {
 function sanitizeMap(
   classId: ClassType,
   raw: Readonly<Record<string, string | undefined>>,
-  classRank: number,
+  runDepthBand: number,
 ): GraftSanitizeReport {
-  const access = getGraftSocketAccessForClassRank(classRank);
+  const access = getGraftSocketAccessForRunDepth(runDepthBand);
   const removed: GraftSanitizeReport['removed'] = [];
   const candidates: { abilityId: string; graftId: string }[] = [];
 
@@ -59,7 +60,7 @@ function sanitizeMap(
     deduped.push(c);
   });
 
-  // Capacity clamp — keep earliest assignments, disable excess (do not delete ownership concept; maps are assignments).
+  // Capacity clamp — keep earliest assignments.
   const kept: Record<string, string> = {};
   deduped.forEach((c, index) => {
     if (index >= access.capacity) {
@@ -70,7 +71,7 @@ function sanitizeMap(
       classId,
       abilityId: c.abilityId,
       graftId: c.graftId,
-      classRank,
+      runDepthBand,
       equippedMap: kept,
       graftAvailable: true,
     });
@@ -91,19 +92,17 @@ function sanitizeMap(
 
 export function sanitizeAegisAbilityGrafts(
   map: AbilityGraftMap,
-  classRank: number,
+  runDepthBand: number,
   surface?: {
     weaponFamilyId?: WeaponFamilyId | null;
     techniques?: AegisTechniqueLoadout | readonly string[] | null;
   },
 ): { map: AbilityGraftMap; report: GraftSanitizeReport } {
-  // First: drop legacy / other-family / Parry / Ultimate / unknown keys (never redirect).
   const surfaceClean = sanitizeAegisAbilityGraftMap(map as Record<string, string>, {
     weaponFamilyId: surface?.weaponFamilyId,
     techniques: surface?.techniques,
   });
-  const report = sanitizeMap('AEGIS', surfaceClean, classRank);
-  // Drop mechanic-incompatible pairs that capacity sanitize would still keep.
+  const report = sanitizeMap('AEGIS', surfaceClean, runDepthBand);
   const kept: Record<string, string> = {};
   const removed = [...report.removed];
   Object.entries(report.kept).forEach(([abilityId, graftId]) => {
@@ -111,7 +110,7 @@ export function sanitizeAegisAbilityGrafts(
       classId: 'AEGIS',
       abilityId,
       graftId,
-      classRank,
+      runDepthBand,
       equippedMap: kept,
       graftAvailable: true,
     });
@@ -134,7 +133,7 @@ export function sanitizeAegisAbilityGrafts(
       capacityUsed: Object.keys(kept).length,
       capacityAvailable: Math.max(
         0,
-        getGraftSocketAccessForClassRank(classRank).capacity - Object.keys(kept).length,
+        getGraftSocketAccessForRunDepth(runDepthBand).capacity - Object.keys(kept).length,
       ),
     },
   };
@@ -142,16 +141,16 @@ export function sanitizeAegisAbilityGrafts(
 
 export function sanitizeHexShotAbilityGrafts(
   map: HexShotAbilityGraftMap,
-  classRank: number,
+  runDepthBand: number,
 ): { map: HexShotAbilityGraftMap; report: GraftSanitizeReport } {
-  const report = sanitizeMap('HEX_SHOT', map as Record<string, string>, classRank);
+  const report = sanitizeMap('HEX_SHOT', map as Record<string, string>, runDepthBand);
   return { map: report.kept as HexShotAbilityGraftMap, report };
 }
 
 export function sanitizeEnvoyAbilityGrafts(
   map: EnvoyAbilityGraftMap,
-  classRank: number,
+  runDepthBand: number,
 ): { map: EnvoyAbilityGraftMap; report: GraftSanitizeReport } {
-  const report = sanitizeMap('ENVOY', map as Record<string, string>, classRank);
+  const report = sanitizeMap('ENVOY', map as Record<string, string>, runDepthBand);
   return { map: report.kept as EnvoyAbilityGraftMap, report };
 }

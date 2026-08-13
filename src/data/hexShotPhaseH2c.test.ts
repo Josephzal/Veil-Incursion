@@ -4,7 +4,7 @@
  *
  * Authorized only:
  *   HEX_MAGAZINE_CONFIG.wraithglassFlatOccult: 6 → 3
- *   hex-silver-core-sidearm T3 ballisticDamagePct: 15 → 20
+ * Stage II-C — weapon tiers retired; baselines == former Tier I.
  */
 import assert from 'node:assert/strict';
 import {
@@ -34,9 +34,9 @@ import type { EnemyCombatProfile } from '../types/run';
 console.log('Phase H.2c — Hex authored retunes + corrected-baseline verification');
 
 const HEX_IDS = [
-  'hex-silver-core-sidearm',
-  'hex-void-cannon',
-  'hex-pulse-rifle',
+  'hex-revolver',
+  'hex-shotgun',
+  'hex-carbine',
 ] as const;
 
 const heavy = isHexAmmoHeavyShot({
@@ -58,25 +58,24 @@ function enemy(partial: Partial<EnemyCombatProfile> & { unitId: string }): Enemy
 
 function planFor(
   familyId: typeof HEX_IDS[number],
-  tier: 1 | 2 | 3,
   squad: EnemyCombatProfile[],
   targetId: string,
 ) {
   return resolveHexBasicShot({
-    weapon: resolveWeaponState(familyId, tier),
+    weapon: resolveWeaponState(familyId),
     squad,
     primaryTargetId: targetId,
     catalogBaseDamage: HEX_SHOT_ABILITY_CATALOG.SILVER_CORE_SIDEARM.baseDamage,
   });
 }
 
-function execOnceScaled(familyId: typeof HEX_IDS[number], tier: 1 | 2 | 3, planDmg: number) {
-  const w = resolveWeaponState(familyId, tier);
+function execOnceScaled(familyId: typeof HEX_IDS[number], planDmg: number) {
+  const w = resolveWeaponState(familyId);
   return applyWeaponBallisticDamageMultiplier(
     planDmg,
     w.statModifiers,
     false,
-    w.passiveBonusPct ?? 0,
+    0,
     { skipFamilyBallisticPct: true },
   );
 }
@@ -122,85 +121,75 @@ assert.equal(HEX_MAGAZINE_CONFIG.maxProtocolCharges, 3);
 assert.equal(HEX_RELOAD_AP_COST, 1);
 
 {
-  const sidearm = getWeaponFamily('hex-silver-core-sidearm');
-  assert.equal(sidearm.tiers[0]!.statModifiers.ballisticDamagePct ?? 0, 0);
-  assert.equal(sidearm.tiers[1]!.statModifiers.ballisticDamagePct, 10);
-  assert.equal(sidearm.tiers[2]!.statModifiers.ballisticDamagePct, 20);
-  assert.equal(sidearm.tiers[2]!.oncePerCombatPassive, 'FIRST_RELOAD_STAMINA');
-  assert.equal(sidearm.tiers[2]!.passiveBonusPct, 10);
-  // Sibling families unchanged by this pass
-  assert.equal(getWeaponFamily('hex-void-cannon').tiers[2]!.statModifiers.ballisticDamagePct, 32);
-  assert.equal(getWeaponFamily('hex-pulse-rifle').tiers[2]!.statModifiers.ballisticDamagePct, 5);
+  const sidearm = getWeaponFamily('hex-revolver');
+  assert.equal('tiers' in sidearm, false);
+  assert.equal(sidearm.baselineStatModifiers.ballisticDamagePct ?? 0, 0);
+  assert.deepEqual(
+    resolveWeaponState('hex-revolver').statModifiers,
+    sidearm.baselineStatModifiers,
+  );
+  // Sibling baselines (former Tier I only — no T2/T3 deltas)
+  assert.equal(getWeaponFamily('hex-shotgun').baselineStatModifiers.ballisticDamagePct, 20);
+  assert.equal(getWeaponFamily('hex-carbine').baselineStatModifiers.ballisticDamagePct, -5);
 }
 
-// ── Sidearm SILVER_CORE ladder 10 → 11 → 12 ─────────────────────────────
+// ── Sidearm SILVER_CORE baseline (tierless == former T1) ────────────────
 {
   const neu = [enemy({ unitId: 'n' })];
-  const t1 = planFor('hex-silver-core-sidearm', 1, neu, 'n').hits[0]!.damage;
-  const t2 = planFor('hex-silver-core-sidearm', 2, neu, 'n').hits[0]!.damage;
-  const t3 = planFor('hex-silver-core-sidearm', 3, neu, 'n').hits[0]!.damage;
-  assert.equal(t1, 10);
-  assert.equal(t2, 11);
-  assert.equal(t3, 12);
-  assert.equal(t3, Math.floor(10 * 1.2));
-  assert.equal(execOnceScaled('hex-silver-core-sidearm', 3, t3), 12);
-  // Double-scale must not apply
+  const dmg = planFor('hex-revolver', neu, 'n').hits[0]!.damage;
+  assert.equal(dmg, 10);
+  assert.equal(execOnceScaled('hex-revolver', dmg), 10);
+  // Family ballistic already in plan — hub must not double-scale
   const doubleWrong = applyWeaponBallisticDamageMultiplier(
-    t3,
-    resolveWeaponState('hex-silver-core-sidearm', 3).statModifiers,
+    dmg,
+    resolveWeaponState('hex-revolver').statModifiers,
     false,
     0,
   );
-  assert.equal(doubleWrong, Math.floor(12 * 1.2)); // would be 14 if hub re-scaled
-  assert.notEqual(doubleWrong, 12);
-  assert.equal(execOnceScaled('hex-silver-core-sidearm', 3, t3), t3);
+  assert.equal(doubleWrong, 10);
+  assert.equal(execOnceScaled('hex-revolver', dmg), dmg);
 
   const mag = DEFAULT_MAGAZINE_SIZE + resolveWeaponMagazineBonus(
-    resolveWeaponState('hex-silver-core-sidearm', 3).statModifiers,
+    resolveWeaponState('hex-revolver').statModifiers,
   );
   assert.equal(mag, 6);
-  assert.equal(t3 * mag, 72);
+  assert.equal(dmg * mag, 60);
   const shotsBeforeP3 = mag * 3;
-  assert.equal(t3 * shotsBeforeP3, 216);
+  assert.equal(dmg * shotsBeforeP3, 180);
   const apToP3 = shotsBeforeP3 + 3 * HEX_RELOAD_AP_COST;
   assert.equal(apToP3, 21);
   assert.equal(Math.ceil(apToP3 / 3), 7);
 }
 
-// Execute threshold unchanged; T3 payoff scales with plan damage
+// Execute threshold unchanged at baseline plan damage
 {
   const execTarget = [enemy({ unitId: 'x', currentHp: 24, maxHp: 80 })];
   const healthy = [enemy({ unitId: 'h', currentHp: 80, maxHp: 80 })];
-  const t3Exec = planFor('hex-silver-core-sidearm', 3, execTarget, 'x').hits[0]!;
-  const t3Healthy = planFor('hex-silver-core-sidearm', 3, healthy, 'h').hits[0]!;
-  assert.equal(t3Healthy.damage, 12);
-  assert.equal(t3Healthy.fractureGain, 15);
-  assert.equal(t3Exec.damage, Math.floor(12 * 1.15)); // 13
-  assert.equal(t3Exec.fractureGain, 20);
+  const execHit = planFor('hex-revolver', execTarget, 'x').hits[0]!;
+  const healthyHit = planFor('hex-revolver', healthy, 'h').hits[0]!;
+  assert.equal(healthyHit.damage, 10);
+  assert.equal(healthyHit.fractureGain, 15);
+  assert.equal(execHit.damage, Math.floor(10 * 1.15)); // 11
+  assert.equal(execHit.fractureGain, 20);
 }
 
 // FAILED precedes Overcharge (locked multipliers unchanged)
 {
-  const base = 12;
+  const base = 10;
   const failed = Math.floor(base * (1 - HEX_MAGAZINE_CONFIG.failedFirstShotDamagePct / 100));
   const perfect = Math.floor(base * (1 + HEX_MAGAZINE_CONFIG.overchargedDamagePct / 100));
-  assert.equal(failed, 10);
-  assert.equal(perfect, 14);
-  // Combined order FAILED then OC: floor(floor(12*0.9)*1.2) if both pending is hub-owned;
-  // prove multipliers themselves are unchanged.
+  assert.equal(failed, 9);
+  assert.equal(perfect, 12);
   assert.equal(HEX_MAGAZINE_CONFIG.failedFirstShotDamagePct, 10);
   assert.equal(HEX_MAGAZINE_CONFIG.overchargedDamagePct, 20);
 }
 
-// Sidearm ladder under all three ammo types (plan damage unchanged by ammo)
+// Sidearm baseline under all three ammo types (plan damage unchanged by ammo)
 {
   for (const ammo of ['SILVER_CORE', 'WRAITHGLASS', 'STASIS_LOCK'] as HexAmmoType[]) {
-    for (const tier of [1, 2, 3] as const) {
-      const plan = planFor('hex-silver-core-sidearm', tier, [enemy({ unitId: 'n' })], 'n');
-      const expected = tier === 1 ? 10 : tier === 2 ? 11 : 12;
-      assert.equal(plan.hits[0]!.damage, expected, `Sidearm T${tier} plan under ${ammo}`);
-      assert.equal(execOnceScaled('hex-silver-core-sidearm', tier, plan.hits[0]!.damage), expected);
-    }
+    const plan = planFor('hex-revolver', [enemy({ unitId: 'n' })], 'n');
+    assert.equal(plan.hits[0]!.damage, 10, `Sidearm plan under ${ammo}`);
+    assert.equal(execOnceScaled('hex-revolver', plan.hits[0]!.damage), 10);
   }
 }
 
@@ -258,10 +247,9 @@ assert.equal(HEX_RELOAD_AP_COST, 1);
   assert.equal(ammo.damageMultiplier, 1);
 }
 
-// ── Wraithglass matrices T1 + T3 ────────────────────────────────────────
+// ── Wraithglass matrices (tierless baseline) ────────────────────────────
 function wraithCase(
   familyId: typeof HEX_IDS[number],
-  tier: 1 | 2 | 3,
   fixture: EnemyCombatProfile,
   label: string,
   opts?: { backline?: boolean; forceSingle?: boolean },
@@ -269,14 +257,14 @@ function wraithCase(
   const targetId = fixture.unitId ?? 'target';
   const squad = [fixture];
   const plan = resolveHexBasicShot({
-    weapon: resolveWeaponState(familyId, tier),
+    weapon: resolveWeaponState(familyId),
     squad,
     primaryTargetId: targetId,
     catalogBaseDamage: HEX_SHOT_ABILITY_CATALOG.SILVER_CORE_SIDEARM.baseDamage,
     forceSingleTarget: opts?.forceSingle,
   });
   const planDmg = plan.hits[0]!.damage;
-  assert.equal(execOnceScaled(familyId, tier, planDmg), planDmg, `${label} preview=exec`);
+  assert.equal(execOnceScaled(familyId, planDmg), planDmg, `${label} preview=exec`);
 
   const tracker = createHexAmmoCastTracker();
   const results = plan.hits.map((hit, hitIndex) => {
@@ -343,21 +331,18 @@ function wraithCase(
     baseOccultWards: 1,
   } as any);
 
-  for (const tier of [1, 3] as const) {
-    for (const familyId of HEX_IDS) {
-      const n = wraithCase(familyId, tier, neu, `${familyId} T${tier} neu`);
-      assert.ok(n.results[0]!.agg > n.planDmg || n.results[0]!.voidM === 2, 'damage-positive or mark');
-      // Always damage-positive vs plan on neutral (flat echo + conversion net)
-      assert.ok(n.results[0]!.agg >= n.planDmg, `${familyId} T${tier} Wraith >= plan`);
+  for (const familyId of HEX_IDS) {
+    const n = wraithCase(familyId, neu, `${familyId} neu`);
+    assert.ok(n.results[0]!.agg > n.planDmg || n.results[0]!.voidM === 2, 'damage-positive or mark');
+    assert.ok(n.results[0]!.agg >= n.planDmg, `${familyId} Wraith >= plan`);
 
-      wraithCase(familyId, tier, ka, `${familyId} T${tier} KA`);
-      const w = wraithCase(familyId, tier, ow, `${familyId} T${tier} OW`);
-      assert.equal(w.results[0]!.stripWard, true);
-      assert.equal(w.results[0]!.voidM, 2);
-      wraithCase(familyId, tier, both, `${familyId} T${tier} KA+OW`);
-    }
-    wraithCase('hex-silver-core-sidearm', tier, neu, `Sidearm T${tier} backline`, { backline: true });
+    wraithCase(familyId, ka, `${familyId} KA`);
+    const w = wraithCase(familyId, ow, `${familyId} OW`);
+    assert.equal(w.results[0]!.stripWard, true);
+    assert.equal(w.results[0]!.voidM, 2);
+    wraithCase(familyId, both, `${familyId} KA+OW`);
   }
+  wraithCase('hex-revolver', neu, 'Sidearm backline', { backline: true });
 
   // Ash cluster 1/2/3 — unused packets do not collapse; per-hit echo; strip once
   const t0 = enemy({ unitId: 't0', gridSlot: 'FL_1', currentHp: 50, maxHp: 80 });
@@ -365,7 +350,7 @@ function wraithCase(
   const t2 = enemy({ unitId: 't2', gridSlot: 'BL_1', currentHp: 50, maxHp: 80 });
 
   const ash1 = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad: [t0],
     primaryTargetId: 't0',
     catalogBaseDamage: 10,
@@ -374,7 +359,7 @@ function wraithCase(
   assert.equal(ash1.hits[0]!.damage, 7);
 
   const ash2 = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad: [t0, t1],
     primaryTargetId: 't0',
     catalogBaseDamage: 10,
@@ -383,7 +368,7 @@ function wraithCase(
   assert.equal(ash2.hits.reduce((a, h) => a + h.damage, 0), 10);
 
   const ash3 = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad: [t0, t1, t2],
     primaryTargetId: 't0',
     catalogBaseDamage: 10,
@@ -423,7 +408,7 @@ function wraithCase(
   assert.ok(wraithChannels(7).aggregate < wraithChannels(10).aggregate);
 
   // Ash SILVER iso remains weaker than Ash Wraith but Wraith no longer nearly doubles
-  assert.equal(7, planFor('hex-pulse-rifle', 1, [t0], 't0').hits[0]!.damage);
+  assert.equal(7, planFor('hex-carbine', [t0], 't0').hits[0]!.damage);
   assert.equal(wraithChannels(7).aggregate - 7, 3); // +3 net vs plan (was +6 before retune)
 }
 
@@ -448,27 +433,31 @@ function wraithCase(
   assert.equal(applyHexAmmoFractureBonus(15, r), Math.floor(15 * 1.25));
 }
 
-// Tier-III Sidearm Wraith uses plan 12
+// Baseline Sidearm Wraith uses plan 10; retired T3 plan-12 bonus does not apply
 {
-  const ch = wraithChannels(12);
-  assert.equal(ch.converted, 4); // floor(12*0.4)=4
-  assert.equal(ch.split.primaryDamage, 8);
-  assert.equal(ch.split.occultDamage, 7); // 4+3
-  assert.equal(ch.aggregate, 15);
-  assert.equal(execOnceScaled('hex-silver-core-sidearm', 3, 12), 12);
+  const ch = wraithChannels(10);
+  assert.equal(ch.converted, 4);
+  assert.equal(ch.split.primaryDamage, 6);
+  assert.equal(ch.split.occultDamage, 7);
+  assert.equal(ch.aggregate, 13);
+  assert.equal(execOnceScaled('hex-revolver', 10), 10);
+  // Post-reload / passiveBonusPct T3 bonus is inert
+  const mods = resolveWeaponState('hex-revolver').statModifiers;
+  assert.equal(
+    applyWeaponBallisticDamageMultiplier(10, mods, true, 10, { skipFamilyBallisticPct: true }),
+    applyWeaponBallisticDamageMultiplier(10, mods, false, 0, { skipFamilyBallisticPct: true }),
+  );
 }
 
-// H.2a structural guards still hold for T3 Sidearm
+// H.2a structural guards — preview equals exec for all Hex families
 {
   for (const id of HEX_IDS) {
-    for (const tier of [1, 2, 3] as const) {
-      const plan = planFor(id, tier, [enemy({ unitId: 'e' })], 'e');
-      assert.equal(execOnceScaled(id, tier, plan.hits[0]!.damage), plan.hits[0]!.damage);
-    }
+    const plan = planFor(id, [enemy({ unitId: 'e' })], 'e');
+    assert.equal(execOnceScaled(id, plan.hits[0]!.damage), plan.hits[0]!.damage);
   }
 }
 
 console.log('Phase H.2c — all assertions passed');
 console.log('  wraithglassFlatOccult =', HEX_MAGAZINE_CONFIG.wraithglassFlatOccult);
-console.log('  Sidearm T3 ballisticDamagePct =', getWeaponFamily('hex-silver-core-sidearm').tiers[2]!.statModifiers.ballisticDamagePct);
-console.log('  Sidearm ladder 10/11/12 · Wraith T1 agg 13/22/10 · backline 14');
+console.log('  Sidearm baseline ballisticDamagePct =', getWeaponFamily('hex-revolver').baselineStatModifiers.ballisticDamagePct ?? 0);
+console.log('  Sidearm baseline 10 · Wraith T1 agg 13/22/10 · backline 14');

@@ -39,6 +39,8 @@ export interface PlayerCritContext {
   abilityId?: string;
   target: EnemyCombatProfile;
   factionCritBonus: number;
+  /** Action-scoped additive chance applied before the canonical 0..1 clamp. */
+  additiveCritChanceBonus?: number;
   hasShatterPoint: boolean;
   guaranteedCrits: number;
 }

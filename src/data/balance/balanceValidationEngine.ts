@@ -323,33 +323,29 @@ function validateOperations(issues: BalanceValidationIssue[], runSims: boolean):
 function validateWeapons(issues: BalanceValidationIssue[]): void {
   ALL_WEAPON_FAMILY_IDS.forEach((familyId) => {
     const family = WEAPON_REGISTRY[familyId];
-    let cumulative = 0;
-    family.tiers.forEach((tier) => {
-      const pct = tier.statModifiers.strikeDamagePct ?? 0;
-      if (pct > WEAPON_BALANCE_TIER_STRIKE_DAMAGE_PCT_SOFT_CAP) {
-        push(issues, {
-          domain: 'weapon',
-          severity: 'warn',
-          code: 'WEAPON_TIER_STRIKE_CAP',
-          message: `${familyId} T${tier.tierNumber} strikeDamagePct ${pct}% > soft cap ${WEAPON_BALANCE_TIER_STRIKE_DAMAGE_PCT_SOFT_CAP}%.`,
-        });
-      }
-      if (pct > 0) cumulative += pct;
-    });
-    if (cumulative > WEAPON_BALANCE_CUMULATIVE_STRIKE_DAMAGE_PCT_SOFT_CAP) {
+    const pct = family.baselineStatModifiers.strikeDamagePct ?? 0;
+    if (pct > WEAPON_BALANCE_TIER_STRIKE_DAMAGE_PCT_SOFT_CAP) {
+      push(issues, {
+        domain: 'weapon',
+        severity: 'warn',
+        code: 'WEAPON_TIER_STRIKE_CAP',
+        message: `${familyId} baseline strikeDamagePct ${pct}% > soft cap ${WEAPON_BALANCE_TIER_STRIKE_DAMAGE_PCT_SOFT_CAP}%.`,
+      });
+    }
+    if (pct > WEAPON_BALANCE_CUMULATIVE_STRIKE_DAMAGE_PCT_SOFT_CAP) {
       push(issues, {
         domain: 'weapon',
         severity: 'warn',
         code: 'WEAPON_CUMULATIVE_STRIKE_CAP',
-        message: `${familyId} cumulative positive strikeDamagePct ${cumulative}% > soft cap ${WEAPON_BALANCE_CUMULATIVE_STRIKE_DAMAGE_PCT_SOFT_CAP}%.`,
+        message: `${familyId} baseline strikeDamagePct ${pct}% > soft cap ${WEAPON_BALANCE_CUMULATIVE_STRIKE_DAMAGE_PCT_SOFT_CAP}%.`,
       });
     }
-    if (!family.tiers.some((t) => t.tierNumber === 1)) {
+    if (!family.baselineEffectSummary) {
       push(issues, {
         domain: 'weapon',
         severity: 'error',
-        code: 'WEAPON_MISSING_T1',
-        message: `${familyId} missing tier 1 definition.`,
+        code: 'WEAPON_MISSING_BASELINE',
+        message: `${familyId} missing baselineEffectSummary.`,
       });
     }
   });

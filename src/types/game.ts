@@ -11,7 +11,6 @@ import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward
 import type { ResourceQuantity } from './resourceItem';
 import {
   createDefaultRunItemRuntime,
-  createDefaultRunItemsSlotState,
 } from './runItem';
 import {
   createEmptyRunPhysicalBankSnapshot,
@@ -22,7 +21,6 @@ import type { LeyLineMutationId } from './leyLineMutation';
 import type { EnvoyBoonId, HexShotBoonId } from './classBoon';
 import type { EnvoyGraftId, HexShotGraftId } from './classGraft';
 import type { VeilGraftId } from './veilGraft';
-import type { BoundRequisitionRuntime } from './boundRequisition';
 import { DEFAULT_AEGIS_TECHNIQUE_LOADOUT } from './aegisCombat';
 import {
   DEFAULT_ENVOY_LOADOUT,
@@ -117,7 +115,6 @@ export interface PlayerAccount {
   equipment: {
     weaponId: string | null;
     armorId: string | null;
-    trinketId: string | null;
   };
   inventory: PlayerInventoryState;
   /** Cabal vault — banked extraction cargo persists across runs. */
@@ -141,7 +138,8 @@ export interface PlayerAccount {
   /** Hub-unlocked Envoy abilities. */
   unlockedEnvoyAbilities: import('./operativeClass').EnvoyAbilityId[];
   /**
-   * Class-rank progression unlocks graft tier/socket/capacity access.
+   * Informational Class Rank mastery track (XP/history).
+   * Does not unlock graft capacity, tiers, sockets, or combat power (Stage II-B).
    * Individual graft applications are run-scoped on ActiveIncursion — not stored here.
    */
   /** @deprecated Not an equipment surface — ignored on load. Grafts apply at Sanctuary. */
@@ -162,8 +160,11 @@ export interface PlayerAccount {
   unlockedBlueprints?: string[];
   /** Permanent weapon family unlocks. */
   weaponUnlocks: import('./weapon').WeaponFamilyId[];
-  /** Highest tier achieved per weapon family (1–3). */
-  weaponTiers: Partial<Record<import('./weapon').WeaponFamilyId, import('./weapon').WeaponTierNumber>>;
+  /**
+   * @deprecated Stage II-C — weapon tiers removed from live account shape.
+   * May appear on stored input only; stripped by normalizeWeaponProgression.
+   */
+  weaponTiers?: Partial<Record<string, 1 | 2 | 3>>;
   /** Equipped weapon per operative class. */
   equippedWeaponByClass: Partial<Record<ClassType, import('./weapon').WeaponFamilyId>>;
   /**
@@ -177,20 +178,10 @@ export interface PlayerAccount {
    * Missing / undefined on older saves ⇒ false (FULL inputs).
    */
   simplifiedUltimateInputs?: boolean;
-  /** Hub-forged passive augments available for pre-run loadout staging. */
-  craftedAugments: import('./boundRequisition').BoundRequisitionId[];
   /** Hub-crafted tactical consumables awaiting run deployment. */
   hubCraftedConsumables: Partial<Record<import('./cargoGrid').CargoItemId, number>>;
   /** Pre-run cargo grid draft staged at the Safehouse. */
   preRunCargo: import('./cargoGrid').CargoRunState;
-  /** Three tactical consumable slots armed for the next descent (legacy non-run items). */
-  tacticalLoadout: [
-    import('./cargoGrid').CargoItemId | null,
-    import('./cargoGrid').CargoItemId | null,
-    import('./cargoGrid').CargoItemId | null,
-  ];
-  /** Pre-run Run Item v2 slots — 2 combat + 2 field, separate from cargo grid. */
-  runItemLoadout: import('./runItem').RunItemsSlotState;
   /** @deprecated Reset on load — use equippedWeaponByClass. */
   equippedBlueprintId?: import('./equipmentBlueprint').BlueprintId | null;
   /** Safehouse decryption queue — gatekeeper cores/caskets land here as locked containers. */
@@ -205,12 +196,12 @@ export interface PlayerAccount {
   sealedCargoStacks: import('../types/sealedCargo').SealedCargoStackMeta[];
   /** Career sealed cargo action totals. */
   careerSealedCargo: import('../types/sealedCargo').CareerSealedCargoStats;
-  /** Pre-run Expedition Relic equipped for the next incursion (Trinkets v2). */
-  equippedKeepsakeId: import('../types/expeditionKeepsake').KeepsakeId | null;
-  /** Hub-unlocked Expedition Relics available for equip. */
-  unlockedKeepsakeIds: readonly import('../types/expeditionKeepsake').KeepsakeId[];
-  /** Pre-run deployment choices for relics that expose configuration (attunement/doctrine/mirror category). */
-  keepsakeDeployment: import('../types/expeditionKeepsake').KeepsakeDeployment;
+  /** Single Expedition Requisition equipped before deployment. */
+  equippedRequisitionId: import('./expeditionRequisition').RequisitionId | null;
+  /** Enabled and inert compatibility Requisitions owned by this account. */
+  unlockedRequisitionIds: readonly import('./expeditionRequisition').RecognizedRequisitionId[];
+  /** Sanitized pre-run configuration for the equipped Requisition. */
+  requisitionDeployment: import('./expeditionRequisition').RequisitionDeployment;
   /** Career last-N run balance summaries for the balance dashboard (Phase B). */
   careerBalanceHistory: import('../data/balance/balanceDashboardEngine').CareerBalanceHistory;
   /**
@@ -512,6 +503,8 @@ export interface ActiveIncursionState {
   pendingClassBoonSwap: import('./overworldFeatures').PendingClassBoonSwap | null;
   /** Current black market node stock (soul-core + 2–4 rotating listings). */
   blackMarketStock: CargoItemId[];
+  /** Stage IV-A recovery floor: first market guarantees a normal-price basic supply. */
+  recoverySupplyMarketFloorPending: boolean;
   focusedNodeIds: string[];
   bossDefeated: boolean;
   primeExtractionBonus: boolean;
@@ -530,8 +523,6 @@ export interface ActiveIncursionState {
   defendRiftActive: boolean;
   /** Whether the prior scanner hub offered any combat vector (pity-timer input). */
   lastLevelOfferedCombat: boolean;
-  /** Active bound requisition modifiers — set at run start after requisition pick. */
-  boundRequisition: BoundRequisitionRuntime | null;
   /** Next-combat narrative boons acquired from bonus loot. */
   pendingNarrativeCombatBoons: import('./narrativeBonusReward').PendingNarrativeCombatBoons;
   /** Veil Residue vacuumed into the run canister this incursion (capped at 100). */
@@ -576,6 +567,8 @@ export interface ActiveIncursionState {
   depthIdentity: import('./depthIdentity').DepthIdentityState | null;
   /** Phase B — pre-combat warning card pending confirm/back. */
   pendingEncounterWarning: import('./encounterComposition').EncounterWarningCard | null;
+  /** Stable identity and mechanical class of the active combat, when any. */
+  activeCombatEncounter: import('./expeditionRequisition').RequisitionEncounterDescriptor | null;
   /** Phase D — composition telemetry for Encounter Highlights. */
   compositionRunState: import('./encounterComposition').CompositionRunState | null;
   /** Sponsor contract snapshot frozen at descent. */
@@ -604,40 +597,34 @@ export interface ActiveIncursionState {
   echoRunState: import('../data/echoRunState').EchoRunState;
   /** Special cargo acquisition and banking tracked for debrief and telemetry. */
   cargoRoutingRunState: import('../data/postRunCargoRoutingRunState').CargoRoutingRunState;
-  /** Expedition keepsake runtime for this incursion (Trinkets v1.5). */
-  keepsakeRuntime: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+  /** The single Expedition Requisition runtime for this incursion. */
+  requisitionRuntime: import('./expeditionRequisition').RequisitionRuntime | null;
   /** Signal Compass — nodes fully interpreted on the active scanner layer. */
-  keepsakeFullyInterpretedNodeIds: readonly string[];
+  requisitionFullyInterpretedNodeIds: readonly string[];
   /** Ashen Cartograph — next-depth node id receiving a ghost type preview. */
-  keepsakeCartographGhostNodeId: string | null;
+  requisitionCartographGhostNodeId: string | null;
   /** Ashen Cartograph — two-step ghost route preview node ids. */
-  keepsakeCartographGhostNodeIds: readonly string[];
-  /** Grave Polaroid — imprint intel shown before echo entry. */
-  keepsakeGravePolaroidPreview: {
-    nodeId: string;
-    lines: readonly string[];
-  } | null;
+  requisitionCartographGhostNodeIds: readonly string[];
   /** Cargo Seal — sealed unstable instances cannot be jettisoned until safehouse/extract. */
-  keepsakeJettisonLockedInstanceIds: readonly string[];
+  requisitionJettisonLockedInstanceIds: readonly string[];
   /** Extraction Token — stamped safe extraction node highlighted on scanner. */
-  keepsakeStampedExtractionNodeId: string | null;
+  requisitionStampedExtractionNodeId: string | null;
   /** Node id for active extraction review (safe anchor / master link). */
   pendingExtractionNodeId: string | null;
   /** In-run safehouse physical bank — survives death within the same run. */
   runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
   /** Per-run resource collection, banking, extraction, and loss accounting. */
   runResourceLedger: import('../types/runResourceLedger').RunResourceLedger;
-  /** Run Item v2 slot inventory — separate from cargo grid (2 combat + 2 field). */
-  runItems: import('../types/runItem').RunItemsSlotState;
-  /** Snapshot of run items committed at descent — used for debrief "brought" lines. */
-  runItemsAtRunStart: import('../types/runItem').RunItemsSlotState;
-  /** Run Item v2 per-run counters, triggers, and pending effects. */
-  itemRuntime: import('../types/runItem').RunItemRuntime;
-  /** Weapon family locked at run start. */
+  /** Cargo supply counters, triggers, and pending effects; not an inventory. */
+  supplyRuntime: import('../types/runItem').RunItemRuntime;
+  /** Weapon family locked at run start (canonical ID). */
   activeWeaponFamilyId: import('./weapon').WeaponFamilyId;
-  /** Weapon tier locked at run start. */
-  activeWeaponTier: import('./weapon').WeaponTierNumber;
-  /** Once-per-combat weapon passive counters. */
+  /**
+   * @deprecated Stage II-C — active weapon tiers removed.
+   * May appear on stored/in-memory legacy snapshots only; stripped on hydrate.
+   */
+  activeWeaponTier?: 1 | 2 | 3;
+  /** Encounter weapon kit flags (non-tier family identity state). */
   weaponRuntime: import('./weapon').WeaponRuntimeState;
   /** Phase B — in-run combat/economy counters for balance telemetry. */
   balanceRunStats: import('../data/balance/balanceRunStats').BalanceRunStats;
@@ -703,6 +690,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     pendingLeyBoonSwap: null,
     pendingClassBoonSwap: null,
     blackMarketStock: [],
+    recoverySupplyMarketFloorPending: false,
     focusedNodeIds: [],
     bossDefeated: false,
     primeExtractionBonus: false,
@@ -718,7 +706,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     masterLinkUsed: false,
     defendRiftActive: false,
     lastLevelOfferedCombat: true,
-    boundRequisition: null,
     pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
     sessionVeilResidueCollected: 0,
     runVeilResidueBaseline: 0,
@@ -746,6 +733,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     runWorldBrief: null,
     depthIdentity: null,
     pendingEncounterWarning: null,
+    activeCombatEncounter: null,
     compositionRunState: null,
     activeContract: null,
     contractRunProgress: createEmptyContractRunProgress(),
@@ -780,30 +768,21 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       specialCargoStacksBanked: 0,
       pendingRoutingStacksAtExtract: 0,
     },
-    keepsakeRuntime: null,
-    keepsakeFullyInterpretedNodeIds: [],
-    keepsakeCartographGhostNodeId: null,
-    keepsakeCartographGhostNodeIds: [],
-    keepsakeGravePolaroidPreview: null,
-    keepsakeJettisonLockedInstanceIds: [],
-    keepsakeStampedExtractionNodeId: null,
+    requisitionRuntime: null,
+    requisitionFullyInterpretedNodeIds: [],
+    requisitionCartographGhostNodeId: null,
+    requisitionCartographGhostNodeIds: [],
+    requisitionJettisonLockedInstanceIds: [],
+    requisitionStampedExtractionNodeId: null,
     pendingExtractionNodeId: null,
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),
-    runItems: createDefaultRunItemsSlotState(),
-    runItemsAtRunStart: createDefaultRunItemsSlotState(),
-    itemRuntime: createDefaultRunItemRuntime(),
-    activeWeaponFamilyId: 'aegis-runed-longsword',
-    activeWeaponTier: 1,
+    supplyRuntime: createDefaultRunItemRuntime(),
+    activeWeaponFamilyId: 'aegis-longsword',
     weaponRuntime: {
-      firstMeleeHitUsed: false,
-      firstFractureUsed: false,
-      firstReloadUsed: false,
-      firstOccultAbilityUsed: false,
-      firstDebuffApplied: false,
-      sacrificeHpBonusUsed: false,
-      firstArmoredHitUsed: false,
-      postReloadBallisticBonus: false,
+      riftEdgeTempoArmed: false,
+      claymoreBreakCashoutUsed: false,
+      magazineEmptiedThisCombat: false,
     },
     balanceRunStats: createDefaultBalanceRunStats(),
     economyRunTelemetry: createDefaultEconomyRunTelemetry(),

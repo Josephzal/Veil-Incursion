@@ -24,7 +24,7 @@ import {
 } from './combatPresentationAudio';
 
 /** Scythe never stacks secondary weapon cues — only attack + delayed impact. */
-const SCYTHE_WEAPON_FAMILY: WeaponFamilyId = 'envoy-null-conduit';
+const SCYTHE_WEAPON_FAMILY: WeaponFamilyId = 'envoy-scythe';
 const SCYTHE_ALLOWED_CUES = new Set([
   'sfx.scythe.release',
   'sfx.scythe.impact',
@@ -32,9 +32,9 @@ const SCYTHE_ALLOWED_CUES = new Set([
 ]);
 
 const AEGIS_WEAPON_FAMILIES = new Set<WeaponFamilyId>([
-  'aegis-runed-longsword',
-  'aegis-claymore-blade',
-  'aegis-rift-edge',
+  'aegis-longsword',
+  'aegis-claymore',
+  'aegis-paired-blades',
 ]);
 
 function isAegisWeaponFamily(weaponFamilyId: WeaponFamilyId): boolean {
@@ -257,7 +257,7 @@ export function dispatchWeaponCombatPresentation(packet: WeaponCombatFeedbackPac
   // Black Door: never play loaded release at zero rounds (non-lab).
   // Requires an explicit zero — default packet ammo is 1 for normal hits.
   if (
-    packet.weaponFamilyId === 'hex-void-cannon'
+    packet.weaponFamilyId === 'hex-shotgun'
     && packet.ammoRoundsConsumed === 0
     && packet.actionKind === 'ANCHOR'
     && !packet.labForced
@@ -480,7 +480,7 @@ export function dispatchCombatPresentationFromJuice(event: CombatJuiceFeedbackEv
   }
   visualListener?.({
     id: event.id,
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     primitive: settings.reducedFlash ? 'outline_pulse' : 'impact_spark',
     palette: 'PALE_STEEL_MINT',
     stage: 'CONTACT',

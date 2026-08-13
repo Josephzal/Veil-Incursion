@@ -212,21 +212,6 @@ export interface EnemyCombatProfile {
   aiMemory?: import('../data/enemyAiMemory').EnemyAiMemory;
 }
 
-export interface Trinket {
-  id: string;
-  name: string;
-  description: string;
-  effect: string;
-  parryWindowBonus?: number;
-  parryMultiplierBonus?: number;
-  sliceDamagePenalty?: number;
-  maxHpBonus?: number;
-  maxStaminaBonus?: number;
-  startingAbyssalReservePercent?: number;
-  hpRestore?: number;
-  staminaRestore?: number;
-}
-
 export interface SkillCheckEvent {
   id: string;
   narrative: string;
@@ -244,12 +229,16 @@ export interface RunState {
   soulAnchorIntegrity: number;
   climateCluster: ClimateClusterId | null;
   currentSector: SectorDefinition | null;
-  activeTrinkets: Trinket[];
   pendingEncounter: EncounterNode | null;
   pendingEnemy: EnemyCombatProfile | null;
   /** Multi-enemy squad for combat encounters (max 4). */
   pendingEnemies: EnemyCombatProfile[];
   pendingAmbush: boolean;
+  /**
+   * Generic combat timing/damage params. Narrative events may patch
+   * `startingAbyssalReservePercent`. Legacy mid-run combat trinkets no longer
+   * contribute; values remain zero unless another retained system writes them.
+   */
   parryWindowBonus: number;
   parryMultiplierBonus: number;
   sliceDamagePenalty: number;

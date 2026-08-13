@@ -98,30 +98,31 @@ function run(): void {
   const envoyById = Object.fromEntries(
     unlockRows.filter((r) => r.id.startsWith('envoy-')).map((r) => [r.id, r]),
   );
-  assert.equal(envoyById['envoy-echo-lantern']?.slot, 1, 'Vambrace is Envoy slot 1 / starter');
-  assert.equal(envoyById['envoy-null-conduit']?.slot, 2, 'Scythe is Envoy slot 2');
-  assert.equal(envoyById['envoy-sanguine-prism']?.slot, 3, "Heart's Due is Envoy slot 3");
-  assert.equal(envoyById['envoy-echo-lantern']?.resourceRequirements.length, 0);
-  assert.ok(envoyById['envoy-null-conduit']!.resourceRequirements.length > 0);
+  assert.equal(envoyById['envoy-vambrace']?.slot, 1, 'Vambrace is Envoy slot 1 / starter');
+  assert.equal(envoyById['envoy-scythe']?.slot, 2, 'Scythe is Envoy slot 2');
+  assert.equal(envoyById['envoy-sanguine-prism']?.slot, 3, 'Sanguine Prism is Envoy slot 3');
+  assert.equal(envoyById['envoy-vambrace']?.resourceRequirements.length, 0);
+  assert.ok(envoyById['envoy-scythe']!.resourceRequirements.length > 0);
   assert.ok(envoyById['envoy-sanguine-prism']!.resourceRequirements.length > 0);
-  assert.equal(envoyById['envoy-echo-lantern']?.liveDisplayName, 'Vambrace');
-  assert.equal(envoyById['envoy-null-conduit']?.liveDisplayName, 'Scythe');
-  assert.equal(envoyById['envoy-sanguine-prism']?.liveDisplayName, "Heart's Due");
-  // Existing-save ownership preserved
+  assert.equal(envoyById['envoy-vambrace']?.liveDisplayName, 'Vambrace');
+  assert.equal(envoyById['envoy-scythe']?.liveDisplayName, 'Scythe');
+  assert.equal(envoyById['envoy-sanguine-prism']?.liveDisplayName, 'Sanguine Prism');
+  // Existing-save ownership preserved; weaponTiers stripped on migrate
   const migrated = normalizeWeaponProgression({
-    weaponUnlocks: ['aegis-rift-edge', 'hex-void-cannon'],
-    weaponTiers: { 'aegis-rift-edge': 2 },
-    equippedWeaponByClass: { AEGIS: 'aegis-rift-edge' },
+    weaponUnlocks: ['aegis-paired-blades', 'hex-shotgun'],
+    weaponTiers: { 'aegis-paired-blades': 2 },
+    equippedWeaponByClass: { AEGIS: 'aegis-paired-blades' },
   } as Parameters<typeof normalizeWeaponProgression>[0]);
-  assert.ok(migrated.weaponUnlocks.includes('aegis-rift-edge'));
-  assert.ok(migrated.weaponUnlocks.includes('hex-void-cannon'));
-  assert.ok(migrated.weaponUnlocks.includes('aegis-runed-longsword')); // starter reseeded
-  assert.ok(formatWeaponUnlockPathMarkdown().includes('aegis-claymore-blade'));
+  assert.ok(migrated.weaponUnlocks.includes('aegis-paired-blades'));
+  assert.ok(migrated.weaponUnlocks.includes('hex-shotgun'));
+  assert.ok(migrated.weaponUnlocks.includes('aegis-longsword')); // starter reseeded
+  assert.equal('weaponTiers' in migrated, false);
+  assert.ok(formatWeaponUnlockPathMarkdown().includes('aegis-claymore'));
 
   // ---------- Pulse: never 3-hit single-target when isolated ----------
   const isolated = unit({ unitId: 'solo', gridSlot: 'FL_1' });
   const isolatedPlan = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad: [isolated],
     primaryTargetId: 'solo',
     catalogBaseDamage: 10,
@@ -136,7 +137,7 @@ function run(): void {
     unit({ unitId: 'c', gridSlot: 'BL_1' }),
   ];
   const spreadPlan = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad: clustered,
     primaryTargetId: 'a',
     catalogBaseDamage: 10,
@@ -147,9 +148,9 @@ function run(): void {
 
   // ---------- Runtime tags + graft add/remove ----------
   const pulseTags = inspectWeaponBasicTagLayers({
-    familyId: 'hex-pulse-rifle',
+    familyId: 'hex-carbine',
     basicActionRuntimeTags: resolveHexBasicShot({
-      weapon: resolveWeaponState('hex-pulse-rifle', 1),
+      weapon: resolveWeaponState('hex-carbine'),
       squad: clustered,
       primaryTargetId: 'a',
       catalogBaseDamage: 10,
@@ -160,7 +161,7 @@ function run(): void {
   assert.ok(pulseTags.graftRemovedTags.includes('FRACTURE') || !pulseTags.finalTransformedTags.includes('FRACTURE'));
   // Pulse base may not include FRACTURE — force a tag that exists then remove
   const withFracture = inspectWeaponBasicTagLayers({
-    familyId: 'aegis-claymore-blade',
+    familyId: 'aegis-claymore',
     basicActionRuntimeTags: ['MELEE', 'KINETIC', 'FRACTURE', 'HEAVY'],
     graft: { addTag: 'ARMOR_PIERCE', removeTags: ['FRACTURE'] },
   });
@@ -189,19 +190,19 @@ function run(): void {
   const armored = unit({ unitId: 'k', kineticArmor: 2, occultWards: 0 });
   const warded = unit({ unitId: 'w', kineticArmor: 0, occultWards: 2 });
   const breachU = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-void-cannon', 1),
+    weapon: resolveWeaponState('hex-shotgun'),
     squad: [unarmored],
     primaryTargetId: 'u',
     catalogBaseDamage: 10,
   });
   const breachK = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-void-cannon', 1),
+    weapon: resolveWeaponState('hex-shotgun'),
     squad: [armored],
     primaryTargetId: 'k',
     catalogBaseDamage: 10,
   });
   const breachW = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-void-cannon', 1),
+    weapon: resolveWeaponState('hex-shotgun'),
     squad: [warded],
     primaryTargetId: 'w',
     catalogBaseDamage: 10,
@@ -210,7 +211,7 @@ function run(): void {
   assert.ok(breachK.hits[0]!.damage > breachU.hits[0]!.damage, 'KA targets take armored mult');
   assert.equal(breachW.hits[0]!.damage, breachU.hits[0]!.damage, 'Occult Ward alone is not Nullbreach KA payoff');
   const pierceFloor = resolveWeaponArmorPressureLayers(
-    'hex-void-cannon',
+    'hex-shotgun',
     {}, // no pierce mod
     NULLBREACH_INNATE_ARMOR_PRESSURE_LAYERS,
   );
@@ -219,11 +220,11 @@ function run(): void {
   assert.equal(stripped.kineticArmor, 1);
 
   // ---------- Hex ammo × 3 weapons (payload + no double-strip on spread) ----------
-  for (const familyId of ['hex-silver-core-sidearm', 'hex-void-cannon', 'hex-pulse-rifle'] as const) {
+  for (const familyId of ['hex-revolver', 'hex-shotgun', 'hex-carbine'] as const) {
     for (const ammo of HEX_AMMO_TYPES) {
       const tracker = createHexAmmoCastTracker();
       const plan = resolveHexBasicShot({
-        weapon: resolveWeaponState(familyId, 1),
+        weapon: resolveWeaponState(familyId),
         squad: clustered,
         primaryTargetId: 'a',
         catalogBaseDamage: 10,
@@ -233,7 +234,7 @@ function run(): void {
         const target = clustered.find((u) => u.unitId === hit.targetId)!;
         const effect = applyHexAmmoEffect({
           ammoType: ammo,
-          isHeavyShot: plan.delivery === 'BREACH' || familyId === 'hex-void-cannon',
+          isHeavyShot: plan.delivery === 'BREACH' || familyId === 'hex-shotgun',
           hitIndex,
           isBackline: false,
           isBoss: false,
@@ -248,7 +249,7 @@ function run(): void {
         if (effect.stripArmor) armorStrips += 1;
         recordHexAmmoEffect(tracker, hit.targetId, effect);
       });
-      if (ammo === 'SILVER_CORE' && familyId === 'hex-void-cannon') {
+      if (ammo === 'SILVER_CORE' && familyId === 'hex-shotgun') {
         assert.ok(armorStrips <= 1, 'ammo armor strip capped once per cast even on multi-hit');
       }
       assert.ok(plan.hits.length >= 1, `${familyId}×${ammo} resolves hits`);
@@ -322,7 +323,7 @@ function run(): void {
   // All 9 basics via plan + executor where applicable
   for (const id of ALL_WEAPON_FAMILY_IDS) {
     const def = getWeaponFamily(id);
-    const weapon = resolveWeaponState(id, 1);
+    const weapon = resolveWeaponState(id);
     const tags = inspectWeaponBasicTagLayers({
       familyId: id,
       basicActionRuntimeTags: (() => {
@@ -360,7 +361,7 @@ function run(): void {
   let ammo = 6;
   let stamina = 100;
   const hexSquad = clustered.map((u) => ({ ...u }));
-  const hexWeapon = resolveWeaponState('hex-void-cannon', 1);
+  const hexWeapon = resolveWeaponState('hex-shotgun');
   const hexResult = executeHexShotAbility({
     abilityId: 'SILVER_CORE_SIDEARM',
     squad: hexSquad,
@@ -395,7 +396,7 @@ function run(): void {
   classState.currentCatalyst = 'BLOOD';
   let fluxBonusSeen = 0;
   let hpSacrificeCalls = 0;
-  const envoyWeapon = resolveWeaponState('envoy-null-conduit', 1);
+  const envoyWeapon = resolveWeaponState('envoy-scythe');
   const envoyResult = executeEnvoyAbility({
     abilityId: 'VEIL_SPLINTER',
     squad: [unit({ unitId: 't1' })],
@@ -442,7 +443,7 @@ function run(): void {
   // Lantern/Prism cannot trigger clean cycle
   assert.equal(
     resolveEnvoySplinterBasic({
-      weapon: resolveWeaponState('envoy-echo-lantern', 1),
+      weapon: resolveWeaponState('envoy-vambrace'),
       catalogDamage: 10,
       catalogFluxCost: 5,
       veilFlux: 80,
@@ -454,7 +455,7 @@ function run(): void {
   );
   assert.equal(
     resolveEnvoySplinterBasic({
-      weapon: resolveWeaponState('envoy-sanguine-prism', 1),
+      weapon: resolveWeaponState('envoy-sanguine-prism'),
       catalogDamage: 10,
       catalogFluxCost: 5,
       veilFlux: 20,
@@ -472,7 +473,7 @@ function run(): void {
   infectVeilRot(rotState, rotTarget, 2, log);
   assert.equal(getVeilRotStacks(rotState, 'rot1'), 2);
   const lanternBasic = resolveEnvoySplinterBasic({
-    weapon: resolveWeaponState('envoy-echo-lantern', 1),
+    weapon: resolveWeaponState('envoy-vambrace'),
     catalogDamage: 10,
     catalogFluxCost: 5,
     veilFlux: 50,
@@ -483,7 +484,7 @@ function run(): void {
   // Basic does not consume/detonate
   assert.equal(getVeilRotStacks(rotState, 'rot1'), 2);
   const purge = resolveLanternFluxPurgePayoff({
-    familyId: 'envoy-echo-lantern',
+    familyId: 'envoy-vambrace',
     classState: rotState,
     targetId: 'rot1',
     baseDamage: 10,
@@ -494,7 +495,7 @@ function run(): void {
   // Non-lantern consumes 1 only
   assert.equal(
     resolveLanternFluxPurgePayoff({
-      familyId: 'envoy-null-conduit',
+      familyId: 'envoy-scythe',
       classState: rotState,
       targetId: 'rot1',
       baseDamage: 10,
@@ -557,7 +558,7 @@ function run(): void {
     syncSquad: () => undefined,
     healOperative: () => undefined,
     reduceEnemyAp: () => undefined,
-    resolvedWeapon: resolveWeaponState('envoy-sanguine-prism', 1),
+    resolvedWeapon: resolveWeaponState('envoy-sanguine-prism'),
     weaponRuntime: createDefaultWeaponRuntime(),
     operativeHp: 100,
     applyHpSacrifice: () => { hpSacrificeCalls += 1; },
@@ -567,15 +568,15 @@ function run(): void {
   // Envoy hooks scoped + no double-fire
   const extras = createDefaultCombatSessionExtras();
   const makeHook = (family: Parameters<typeof resolveWeaponState>[0]) => ({
-    weapon: resolveWeaponState(family, 3),
+    weapon: resolveWeaponState(family),
     runtime: createDefaultWeaponRuntime(),
     blueprintId: null,
     player: { hp: 100, maxHp: 100, shield: 0, shieldTurnsRemaining: 0, debuffs: [] as never[] },
     squad: [] as EnemyCombatProfile[],
   });
-  const occult1 = runWeaponOnOccultCastHooks(makeHook('envoy-null-conduit'));
+  const occult1 = runWeaponOnOccultCastHooks(makeHook('envoy-scythe'));
   const occult2 = runWeaponOnOccultCastHooks({
-    ...makeHook('envoy-null-conduit'),
+    ...makeHook('envoy-scythe'),
     runtime: { ...createDefaultWeaponRuntime(), ...occult1.runtimePatch },
   });
   // Second call should not re-fire once-per-combat if first consumed
@@ -583,15 +584,15 @@ function run(): void {
     assert.ok(!occult2.veilFluxDelta || occult2.veilFluxDelta === 0 || occult1.runtimePatch);
   }
   assert.equal(
-    runWeaponOnSacrificeHpHooks(makeHook('envoy-echo-lantern')).veilFluxDelta ?? 0,
+    runWeaponOnSacrificeHpHooks(makeHook('envoy-vambrace')).veilFluxDelta ?? 0,
     0,
   );
   const sac = runWeaponOnSacrificeHpHooks(makeHook('envoy-sanguine-prism'));
   assert.ok((sac.logLines?.length ?? 0) >= 0);
-  const debuffHook = runWeaponOnDebuffAppliedHooks(makeHook('envoy-echo-lantern'), extras);
+  const debuffHook = runWeaponOnDebuffAppliedHooks(makeHook('envoy-vambrace'), extras);
   assert.ok(debuffHook);
   assert.equal(
-    runWeaponOnDebuffAppliedHooks(makeHook('envoy-null-conduit'), extras).logLines?.some((l) =>
+    runWeaponOnDebuffAppliedHooks(makeHook('envoy-scythe'), extras).logLines?.some((l) =>
       l.includes('ECHO LANTERN') || l.includes('WARD'),
     ) ?? false,
     false,
@@ -608,7 +609,7 @@ function run(): void {
   // Longsword single-target
   assert.equal(
     resolveAegisStrikeBasic({
-      weapon: resolveWeaponState('aegis-runed-longsword', 1),
+      weapon: resolveWeaponState('aegis-longsword'),
       runtime: createDefaultWeaponRuntime(),
       riposte: false,
       targetFractured: false,
@@ -618,7 +619,7 @@ function run(): void {
   // Rift tempo gated
   assert.equal(
     resolveAegisStrikeBasic({
-      weapon: resolveWeaponState('aegis-rift-edge', 1),
+      weapon: resolveWeaponState('aegis-paired-blades'),
       runtime: createDefaultWeaponRuntime(),
       riposte: false,
       targetFractured: false,
@@ -627,13 +628,13 @@ function run(): void {
   );
   // Claymore stamina + low chip reserve
   const clay = resolveAegisStrikeBasic({
-    weapon: resolveWeaponState('aegis-claymore-blade', 1),
+    weapon: resolveWeaponState('aegis-claymore'),
     runtime: createDefaultWeaponRuntime(),
     riposte: false,
     targetFractured: false,
   });
   const long = resolveAegisStrikeBasic({
-    weapon: resolveWeaponState('aegis-runed-longsword', 1),
+    weapon: resolveWeaponState('aegis-longsword'),
     runtime: createDefaultWeaponRuntime(),
     riposte: false,
     targetFractured: false,
@@ -643,7 +644,7 @@ function run(): void {
   // Sidearm no AoE
   assert.equal(
     resolveHexBasicShot({
-      weapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+      weapon: resolveWeaponState('hex-revolver'),
       squad: clustered,
       primaryTargetId: 'a',
       catalogBaseDamage: 10,

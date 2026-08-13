@@ -19,7 +19,6 @@ import ChassisWorkspace, { resolveChassisDossier } from './loadout/ChassisWorksp
 import WeaponChassisBriefModal from './loadout/WeaponChassisBriefModal';
 import RelicWorkspace, { resolveRelicDossier } from './loadout/RelicWorkspace';
 import DeckWorkspace, { type DeckInspectModel, type DeckSelection } from './loadout/DeckWorkspace';
-import FieldKitWorkspace, { type FieldKitSelection } from './loadout/FieldKitWorkspace';
 import CargoWorkspace, { resolveCargoOccupancy } from './loadout/CargoWorkspace';
 import {
   CATEGORY_COPY,
@@ -64,22 +63,19 @@ import { CLASS_DEFINITIONS } from '../../data/classes';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useWorldState } from '../../context/WorldStateContext';
-import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../../data/weaponProgressionEngine';
-import { getKeepsakeDefinition } from '../../data/expeditionKeepsakeRegistry';
-import { EXPEDITION_KEEPSAKE_REGISTRY } from '../../data/expeditionKeepsakeRegistry';
-import {
-  getKeepsakeDeploymentChoiceValue,
-  isKeepsakeDeploymentConfigured,
-} from '../../data/expeditionKeepsakeDeploymentEngine';
-import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
-import { formatRunItemSlotLabel } from '../../data/runItemUseEngine';
+import { getEquippedWeaponForClass, resolveWeaponState } from '../../data/weaponProgressionEngine';
+import { EXPEDITION_REQUISITION_REGISTRY } from '../../data/expeditionRequisitionRegistry';
 import { formatCargoRoutingPostExtractReminder } from '../../data/cargoRoutingIntelEngine';
 import { resolvePlayerBadgePortrait } from '../../utils/combatPlayerPortrait';
 import type { WeaponFamilyId } from '../../types/weapon';
-import type { KeepsakeId } from '../../types/expeditionKeepsake';
+import type {
+  RequisitionAttunement,
+  RequisitionId,
+  RequisitionRouteDoctrine,
+} from '../../types/expeditionRequisition';
 import { shouldOpenWeaponFirstUseBrief } from '../../data/weaponPlayerFacing/weaponBriefPersistence';
 
-const CATEGORIES: LoadoutCategory[] = ['CHASSIS', 'RELIC', 'DECK', 'FIELD_KIT', 'CARGO'];
+const CATEGORIES: LoadoutCategory[] = ['CHASSIS', 'REQUISITION', 'DECK', 'CARGO'];
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -126,15 +122,11 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     appendHubLog,
     equipWeaponFamily,
     unlockWeaponFamilyAccount,
-    upgradeWeaponFamilyTier,
     acknowledgeWeaponBrief,
     hasAcknowledgedWeaponBrief,
-    setEquippedKeepsake,
-    setKeepsakeAttunement,
-    setKeepsakeRouteDoctrine,
-    setKeepsakeMirrorCategory,
-    equipRunItemLoadoutSlot,
-    clearRunItemLoadoutSlot,
+    setEquippedRequisition,
+    setRequisitionAttunement,
+    setRequisitionRouteDoctrine,
   } = usePlayerAccount();
   const { selectedSector, persisted } = useWorldState();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -146,13 +138,12 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const [briefOpen, setBriefOpen] = useState(false);
   const [briefMode, setBriefMode] = useState<'first-use' | 'reopen'>('first-use');
   const pendingFirstUseFamilyIdRef = useRef<WeaponFamilyId | null>(null);
-  const [relicId, setRelicId] = useState<KeepsakeId | null>(null);
+  const [relicId, setRelicId] = useState<RequisitionId | null>(null);
   const [deckSelection, setDeckSelection] = useState<DeckSelection | null>(null);
   const [deckInspect, setDeckInspect] = useState<DeckInspectModel | null>(null);
-  const [fieldSelection, setFieldSelection] = useState<FieldKitSelection>(null);
   const [deploymentModalVisible, setDeploymentModalVisible] = useState(false);
-  const [pendingEquipId, setPendingEquipId] = useState<KeepsakeId | null>(null);
-  const [modalKeepsakeId, setModalKeepsakeId] = useState<KeepsakeId | null>(null);
+  const [pendingEquipId, setPendingEquipId] = useState<RequisitionId | null>(null);
+  const [modalKeepsakeId, setModalKeepsakeId] = useState<RequisitionId | null>(null);
   const [modalDraftValue, setModalDraftValue] = useState<string | null>(null);
   const [dossierFooterHeight, setDossierFooterHeight] = useState(96);
 
@@ -236,7 +227,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     }
   }, [account.weaponBriefAcknowledged, account.weaponUnlocks, playDossierLock]);
 
-  const handleSelectRelic = useCallback((id: KeepsakeId | null) => {
+  const handleSelectRelic = useCallback((id: RequisitionId | null) => {
     setRelicId(id);
     playDossierLock();
   }, [playDossierLock]);
@@ -246,25 +237,18 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     playDossierLock();
   }, [playDossierLock]);
 
-  const handleSelectField = useCallback((selection: FieldKitSelection) => {
-    setFieldSelection(selection);
-    playDossierLock();
-  }, [playDossierLock]);
-
   const progression = useMemo(() => ({
     weaponUnlocks: account.weaponUnlocks,
-    weaponTiers: account.weaponTiers,
     equippedWeaponByClass: account.equippedWeaponByClass,
-  }), [account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks]);
+  }), [account.equippedWeaponByClass, account.weaponUnlocks]);
 
   const weaponDisplay = useMemo(() => {
     const familyId = getEquippedWeaponForClass(progression, account.activeClass);
-    const tier = getWeaponTier(progression, familyId);
-    return resolveWeaponState(familyId, tier).displayName;
+    return resolveWeaponState(familyId).displayName;
   }, [account.activeClass, progression]);
 
-  const relicName = account.equippedKeepsakeId
-    ? getKeepsakeDefinition(account.equippedKeepsakeId).name
+  const relicName = account.equippedRequisitionId
+    ? EXPEDITION_REQUISITION_REGISTRY[account.equippedRequisitionId].name
     : 'None equipped';
 
   const abilityLoadout = useMemo(() => {
@@ -273,8 +257,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     return account.envoyLoadout;
   }, [account.activeClass, account.aegisTechniqueLoadout, account.hexShotLoadout, account.envoyLoadout]);
 
-  const fieldFilled = [...account.runItemLoadout.combatSlots, ...account.runItemLoadout.fieldSlots]
-    .filter((id) => id != null).length;
   const cargoOccupancy = useMemo(() => resolveCargoOccupancy(account), [account]);
 
   const chassisDossier = useMemo(
@@ -291,29 +273,28 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     [account, persisted.contractBoard.selectedContract, relicId, selectedSector],
   );
 
-  const openDeploymentModal = (keepsakeId: KeepsakeId, equipAfterConfirm: boolean) => {
-    const def = EXPEDITION_KEEPSAKE_REGISTRY[keepsakeId];
+  const openDeploymentModal = (requisitionId: RequisitionId, equipAfterConfirm: boolean) => {
+    const def = EXPEDITION_REQUISITION_REGISTRY[requisitionId];
     if (!def.deploymentChoice) return;
-    const current = getKeepsakeDeploymentChoiceValue(account.keepsakeDeployment, def.deploymentChoice);
-    setPendingEquipId(equipAfterConfirm ? keepsakeId : null);
-    setModalKeepsakeId(keepsakeId);
+    const current = def.deploymentChoice.kind === 'attunement'
+      ? account.requisitionDeployment.attunement
+      : account.requisitionDeployment.routeDoctrine;
+    setPendingEquipId(equipAfterConfirm ? requisitionId : null);
+    setModalKeepsakeId(requisitionId);
     setModalDraftValue(current);
     setDeploymentModalVisible(true);
   };
 
   const commitDeploymentSelection = (value: string) => {
     if (!modalKeepsakeId) return;
-    const def = EXPEDITION_KEEPSAKE_REGISTRY[modalKeepsakeId];
+    const def = EXPEDITION_REQUISITION_REGISTRY[modalKeepsakeId];
     if (!def?.deploymentChoice) return;
     switch (def.deploymentChoice.kind) {
       case 'attunement':
-        setKeepsakeAttunement(value as import('../../types/expeditionKeepsake').KeepsakeAttunement);
+        setRequisitionAttunement(value as RequisitionAttunement);
         break;
       case 'route_doctrine':
-        setKeepsakeRouteDoctrine(value as import('../../types/expeditionKeepsake').KeepsakeRouteDoctrine);
-        break;
-      case 'mirror_category':
-        setKeepsakeMirrorCategory(value as import('../../types/expeditionKeepsake').KeepsakeMirrorCategory);
+        setRequisitionRouteDoctrine(value as RequisitionRouteDoctrine);
         break;
       default:
         break;
@@ -322,28 +303,33 @@ export default function LoadoutHubPanel(): React.JSX.Element {
 
   const handleRelicEquip = () => {
     if (!relicId) return;
-    if (account.equippedKeepsakeId === relicId) {
-      setEquippedKeepsake(null);
+    if (account.equippedRequisitionId === relicId) {
+      setEquippedRequisition(null);
       return;
     }
-    const def = EXPEDITION_KEEPSAKE_REGISTRY[relicId];
-    if (def.deploymentChoice && !isKeepsakeDeploymentConfigured(relicId, account.keepsakeDeployment)) {
+    const def = EXPEDITION_REQUISITION_REGISTRY[relicId];
+    const configured = relicId === 'signal_compass'
+      ? account.requisitionDeployment.attunement != null
+      : relicId === 'ashen_cartograph'
+        ? account.requisitionDeployment.routeDoctrine != null
+        : true;
+    if (def.deploymentChoice && !configured) {
       openDeploymentModal(relicId, true);
       return;
     }
-    setEquippedKeepsake(relicId);
+    setEquippedRequisition(relicId);
   };
 
   const handleDeploymentConfirm = () => {
     if (!modalDraftValue || !modalKeepsakeId) return;
     commitDeploymentSelection(modalDraftValue);
-    if (pendingEquipId) setEquippedKeepsake(pendingEquipId);
+    if (pendingEquipId) setEquippedRequisition(pendingEquipId);
     setDeploymentModalVisible(false);
     setPendingEquipId(null);
     setModalKeepsakeId(null);
   };
 
-  const modalRelic = modalKeepsakeId ? EXPEDITION_KEEPSAKE_REGISTRY[modalKeepsakeId] : null;
+  const modalRelic = modalKeepsakeId ? EXPEDITION_REQUISITION_REGISTRY[modalKeepsakeId] : null;
   const modalWarnings = useMemo(() => {
     if (!modalRelic) return [];
     return resolveRelicDossier(
@@ -351,7 +337,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       modalRelic.id,
       selectedSector,
       persisted.contractBoard.selectedContract,
-    )?.warnings.map((entry) => entry.message) ?? [];
+    )?.warnings ?? [];
   }, [account, modalRelic, persisted.contractBoard.selectedContract, selectedSector]);
 
   const catalogCopy = CATEGORY_COPY[activeCategory];
@@ -362,14 +348,12 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     let primary = '';
     if (category === 'CHASSIS') {
       primary = weaponDisplay;
-    } else if (category === 'RELIC') {
+    } else if (category === 'REQUISITION') {
       primary = relicName;
     } else if (category === 'DECK') {
       // Live flex footprint is three slots (Aegis/Hex/Envoy 4+3). Fixed WA are not deck slots.
       const deckCap = Math.max(3, abilityLoadout.length);
       primary = `${abilityLoadout.filter(Boolean).length} / ${deckCap} ACTIVE`;
-    } else if (category === 'FIELD_KIT') {
-      primary = `${fieldFilled} / 4 SLOTS FILLED`;
     } else {
       primary = `${cargoOccupancy.occupied} / ${cargoOccupancy.capacity}`;
     }
@@ -425,14 +409,12 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       if (!chassisDossier) {
         return emptyDossier('Select a chassis from the equipment feed.');
       }
-      const { facing, tierState, tier, unlocked, equipped, canUnlock, canUpgrade, nextTier, costLines, missing } = chassisDossier;
+      const { facing, tierState, unlocked, equipped, canUnlock, costLines, missing } = chassisDossier;
       const status = equipped
         ? 'EQUIPPED'
         : !unlocked
           ? (missing.missingTotal > 0 ? 'MISSING MATERIALS' : 'BLUEPRINT LOCKED')
-          : canUpgrade
-            ? 'UPGRADE AVAILABLE'
-            : 'AVAILABLE';
+          : 'AVAILABLE';
       return (
         <>
           <View style={styles.dossierHeader}>
@@ -446,7 +428,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               {facing.roleLabel.toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
-              {`${status} · TIER ${['I', 'II', 'III'][tier - 1] ?? tier}`}
+              {status}
             </TerminalText>
           </View>
           <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
@@ -545,33 +527,10 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                   </TerminalText>
                 ) : null}
               </DossierSection>
-            ) : costLines.length > 0 ? (
-              <DossierSection label="UPGRADE REQUIREMENTS" last>
-                {costLines.map((line) => (
-                  <View key={line.label} style={styles.reqRow}>
-                    <TerminalText size={8} style={[styles.dossierSecondary, styles.reqLabel]} numberOfLines={2}>
-                      {line.label.toUpperCase()}
-                    </TerminalText>
-                    <TerminalText
-                      size={8}
-                      style={[
-                        styles.reqCount,
-                        { color: line.owned >= line.need ? TEXT_PRIMARY : MISSING },
-                      ]}
-                    >
-                      {`${line.owned} / ${line.need}`}
-                    </TerminalText>
-                  </View>
-                ))}
-              </DossierSection>
-            ) : nextTier ? (
-              <DossierSection label="NEXT TIER" last>
-                <TerminalText size={8.5} style={styles.dossierValueTight}>{nextTier.effectSummary}</TerminalText>
-              </DossierSection>
             ) : (
-              <DossierSection label="TIER" last>
+              <DossierSection label="CHASSIS PROFILE" last>
                 <TerminalText size={8.5} style={styles.dossierValueTight}>
-                  Max tier — {tierState.effectSummary || 'chassis fully upgraded.'}
+                  {tierState.effectSummary || 'Baseline chassis linked.'}
                 </TerminalText>
               </DossierSection>
             )}
@@ -620,24 +579,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                     </TerminalText>
                   </View>
                 )}
-                {nextTier ? (
-                  <HapticPressable
-                    disabled={!canUpgrade}
-                    onPress={() => appendHubLog(upgradeWeaponFamilyTier(chassisDossier.def.id).logLine)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Upgrade tier"
-                    style={({ pressed }) => ([
-                      styles.actionButton,
-                      styles.dossierFooterAction,
-                      canUpgrade ? styles.actionSecondary : styles.actionDisabled,
-                      pressed && canUpgrade && { opacity: 0.9 },
-                    ])}
-                  >
-                    <TerminalText size={8} letterSpacing={1} style={canUpgrade ? styles.actionSecondaryText : styles.actionDisabledText}>
-                      {canUpgrade ? '[ UPGRADE TIER ]' : '[ UPGRADE BLOCKED ]'}
-                    </TerminalText>
-                  </HapticPressable>
-                ) : null}
               </View>
             )}
           </View>
@@ -645,9 +586,9 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       );
     }
 
-    if (activeCategory === 'RELIC') {
+    if (activeCategory === 'REQUISITION') {
       if (!relicDossier) {
-        return emptyDossier('Select a relic from the equipment feed.');
+        return emptyDossier('Select a Requisition from the equipment feed.');
       }
       const { def, equipped, deploymentSummary, configured, warnings } = relicDossier;
       return (
@@ -655,7 +596,11 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           <View style={styles.dossierHeader}>
             <OccultNeonRail style={styles.dossierHeaderAccent} />
             <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>EXPEDITION RELIC</TerminalText>
+            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>
+              {def.subtype === 'Combat Preparation'
+                ? 'EXPEDITION REQUISITION // COMBAT PREPARATION'
+                : 'EXPEDITION REQUISITION'}
+            </TerminalText>
             <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {def.name.toUpperCase()}
             </TerminalText>
@@ -683,8 +628,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             {warnings.length > 0 ? (
               <DossierSection label="DEPLOYMENT WARNINGS" last>
                 {warnings.map((warning) => (
-                  <TerminalText key={warning.message} size={8.5} style={styles.dossierValueTight}>
-                    {warning.message}
+                  <TerminalText key={warning} size={8.5} style={styles.dossierValueTight}>
+                    {warning}
                   </TerminalText>
                 ))}
               </DossierSection>
@@ -699,8 +644,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             ]}>
               <HubPrimaryCta
                 onPress={handleRelicEquip}
-                accessibilityLabel={equipped ? 'Unequip relic' : 'Equip relic'}
-                label={equipped ? '[ UNEQUIP RELIC ]' : '[ EQUIP RELIC ]'}
+                accessibilityLabel={equipped ? 'Unequip Requisition' : 'Equip Requisition'}
+                label={equipped ? '[ UNEQUIP REQUISITION ]' : '[ EQUIP REQUISITION ]'}
                 minHeight={50}
                 style={styles.dossierFooterAction}
               />
@@ -818,124 +763,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 )
               ))}
             </View>
-          </View>
-        </>
-      );
-    }
-
-    if (activeCategory === 'FIELD_KIT') {
-      if (!fieldSelection) return emptyDossier('Select a field kit slot or staged item.');
-      if (fieldSelection.kind === 'SLOT') {
-        const itemId = fieldSelection.slotType === 'COMBAT'
-          ? account.runItemLoadout.combatSlots[fieldSelection.slotIndex]
-          : account.runItemLoadout.fieldSlots[fieldSelection.slotIndex];
-        const def = itemId ? getRunItemDefinitionByAnyId(itemId) : null;
-        const label = formatRunItemSlotLabel(fieldSelection.slotType, fieldSelection.slotIndex).toUpperCase();
-        return (
-          <>
-            <View style={styles.dossierHeader}>
-              <OccultNeonRail style={styles.dossierHeaderAccent} />
-              <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
-              <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>FIELD KIT SLOT</TerminalText>
-              <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
-                {def ? def.shortName.toUpperCase() : label}
-              </TerminalText>
-              <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
-                {def ? 'OCCUPIED' : 'EMPTY'}
-              </TerminalText>
-            </View>
-            <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
-              <DossierSection label="SLOT">
-                <TerminalText size={8.5} style={styles.dossierValue}>{label}</TerminalText>
-              </DossierSection>
-              {def ? (
-                <>
-                  <DossierSection label="EFFECT">
-                    <TerminalText size={8.5} style={styles.dossierValue}>{def.effectSummary}</TerminalText>
-                  </DossierSection>
-                  <DossierSection label="CATEGORY" last>
-                    <TerminalText size={8.5} style={styles.dossierValue}>{def.slotType}</TerminalText>
-                  </DossierSection>
-                </>
-              ) : (
-                <DossierSection label="INSTRUCTION" last>
-                  <TerminalText size={8.5} style={styles.dossierValue}>
-                    Select a staged {fieldSelection.slotType.toLowerCase()} consumable to equip here.
-                  </TerminalText>
-                </DossierSection>
-              )}
-            </ScrollView>
-            <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
-              <View style={styles.dossierFooterRule} />
-              {def ? (
-                <HapticPressable
-                  onPress={() => {
-                    clearRunItemLoadoutSlot(fieldSelection.slotType, fieldSelection.slotIndex);
-                    appendHubLog(`>> CLEARED ${formatRunItemSlotLabel(fieldSelection.slotType, fieldSelection.slotIndex).toUpperCase()}.`);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove from kit"
-                  style={({ pressed }) => ([styles.actionButton, styles.actionDestructive, pressed && { opacity: 0.88 }])}
-                >
-                  <TerminalText size={8} letterSpacing={1} style={styles.actionDestructiveText}>
-                    [ REMOVE FROM KIT ]
-                  </TerminalText>
-                </HapticPressable>
-              ) : (
-                <View style={[styles.actionButton, styles.actionDisabled]}>
-                  <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
-                    [ SELECT STAGED ITEM ]
-                  </TerminalText>
-                </View>
-              )}
-            </View>
-          </>
-        );
-      }
-
-      const def = getRunItemDefinitionByAnyId(fieldSelection.itemId);
-      const slotType = def?.slotType ?? 'COMBAT';
-      const emptyIndex = slotType === 'COMBAT'
-        ? account.runItemLoadout.combatSlots.findIndex((id) => id == null)
-        : account.runItemLoadout.fieldSlots.findIndex((id) => id == null);
-      const slotIndex: 0 | 1 = emptyIndex === 1 ? 1 : 0;
-      const replacing = emptyIndex < 0;
-      return (
-        <>
-          <View style={styles.dossierHeader}>
-            <OccultNeonRail style={styles.dossierHeaderAccent} />
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>STAGED CONSUMABLE</TerminalText>
-            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
-              {(def?.shortName ?? fieldSelection.itemId).toUpperCase()}
-            </TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
-              {slotType}
-            </TerminalText>
-          </View>
-          <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
-            <DossierSection label="EFFECT">
-              <TerminalText size={8.5} style={styles.dossierValue}>{def?.effectSummary ?? '—'}</TerminalText>
-            </DossierSection>
-            <DossierSection label="COMPATIBLE SLOT" last>
-              <TerminalText size={8.5} style={styles.dossierValue}>{slotType}</TerminalText>
-            </DossierSection>
-          </ScrollView>
-          <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
-          <View style={styles.dossierFooterRule} />
-            <HubPrimaryCta
-              onPress={() => {
-                const result = equipRunItemLoadoutSlot(slotType, slotIndex, fieldSelection.itemId);
-                appendHubLog(result.logLine);
-              }}
-              accessibilityLabel="Equip to kit slot"
-              label={
-                replacing
-                  ? `[ REPLACE ${formatRunItemSlotLabel(slotType, slotIndex).toUpperCase()} ]`
-                  : `[ EQUIP TO ${formatRunItemSlotLabel(slotType, slotIndex).toUpperCase()} ]`
-              }
-              minHeight={50}
-            />
           </View>
         </>
       );
@@ -1106,7 +933,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             {activeCategory === 'CHASSIS' ? (
               <ChassisWorkspace selectedId={chassisId} onSelect={handleSelectChassis} compact={compact} />
             ) : null}
-            {activeCategory === 'RELIC' ? (
+            {activeCategory === 'REQUISITION' ? (
               <RelicWorkspace selectedId={relicId} onSelect={handleSelectRelic} compact={compact} />
             ) : null}
             {activeCategory === 'DECK' ? (
@@ -1116,9 +943,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 onInspectChange={setDeckInspect}
                 compact={compact}
               />
-            ) : null}
-            {activeCategory === 'FIELD_KIT' ? (
-              <FieldKitWorkspace selection={fieldSelection} onSelect={handleSelectField} compact={compact} />
             ) : null}
             {activeCategory === 'CARGO' ? <CargoWorkspace compact={compact} /> : null}
           </View>
@@ -1138,7 +962,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       {modalRelic?.deploymentChoice ? (
         <KeepsakeDeploymentChoiceModal
           visible={deploymentModalVisible}
-          relic={modalRelic}
+          requisition={modalRelic}
           choice={modalRelic.deploymentChoice}
           selectedValue={modalDraftValue}
           accentColor={TERMINAL}

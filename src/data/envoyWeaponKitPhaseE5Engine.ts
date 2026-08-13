@@ -183,7 +183,7 @@ export function validateEnvoyWeaponKitPhaseE5(): EnvoyE5Issue[] {
     push('PROJECT_HELPER', 'projectEnvoyLiveFourSlotDeck fixture helper broken');
   }
 
-  if (STARTER_WEAPON_BY_CLASS.ENVOY !== 'envoy-echo-lantern') {
+  if (STARTER_WEAPON_BY_CLASS.ENVOY !== 'envoy-vambrace') {
     push('STARTER', 'Vambrace must remain starter');
   }
   const unlockIssues = validateWeaponUnlockPaths();
@@ -202,7 +202,7 @@ export function validateEnvoyWeaponKitPhaseE5(): EnvoyE5Issue[] {
     }
   }
   const hexSurface = buildHexCombatSurface({
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     flex: DEFAULT_HEX_FLEX_LOADOUT,
   });
   if (hexSurface.hudCards.length !== 7) {

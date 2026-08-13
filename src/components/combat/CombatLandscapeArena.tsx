@@ -38,7 +38,7 @@ import {
 
 /**
  * Shared arena scale for every class/weapon.
- * Figure height is normalized to envoy-echo-lantern idle in combatPlayerPortrait.
+ * Figure height is normalized to envoy-vambrace idle in combatPlayerPortrait.
  */
 function operativeArenaScale(isCombatDesktop: boolean): number {
   return isCombatDesktop ? 1.6 : 0.92;

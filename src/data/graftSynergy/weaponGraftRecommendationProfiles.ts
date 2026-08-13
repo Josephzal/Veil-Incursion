@@ -1,7 +1,8 @@
 /**
  * Phase 3J — advisory graft recommendation profiles (read-only).
- * Live graft model: Sanctuary residue applications during a deployment (run-scoped).
+ * Live graft model: Sanctuary Attune applications during a deployment (run-scoped; no Residue).
  * Configurations describe validated possible Sanctuary builds — not Safehouse loadouts.
+ * requiredClassRank fields are historical metadata only (Stage II-B).
  */
 import type { WeaponFamilyId } from '../../types/weapon';
 import type {
@@ -11,6 +12,7 @@ import type {
 import { ALL_WEAPON_FAMILY_IDS, getWeaponFamily } from '../weaponRegistry';
 import { getWeaponLoadoutRecommendationProfile } from '../weaponLoadoutRecommendationProfiles';
 import { WEAPON_DRAWBACK_RECORDS } from '../weaponDrawbackEngine';
+import { getGraftCapacityForRunDepth, MAX_RUN_GRAFT_CAPACITY } from './graftCapacityEngine';
 
 function app(
   partial: WeaponGraftApplication,
@@ -25,13 +27,13 @@ function sampleHas(weaponId: WeaponFamilyId, abilityId: string): boolean {
 
 function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
   const longsword: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'aegis-runed-longsword',
+    weaponFamilyId: 'aegis-longsword',
     classId: 'AEGIS',
     validationState: 'VALIDATED',
     identitySummary: 'Reliable Fracture + Parry/Reserve sequencing',
     applications: [
       app({
-        weaponFamilyId: 'aegis-runed-longsword',
+        weaponFamilyId: 'aegis-longsword',
         abilityId: 'VEIL_PIERCER',
         graftId: 'FLAYER_GRAFT',
         role: 'IDENTITY_ANCHOR',
@@ -46,15 +48,15 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Single-target flex',
         meaningfulUpside: 'Reinforces pierce/control without Claymore cashout',
         meaningfulDownside: 'FLAYER tradeoff on pierce ability',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-runed-longsword'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-longsword'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('aegis-runed-longsword', 'VEIL_PIERCER'),
+        abilityInPhase3HSample: sampleHas('aegis-longsword', 'VEIL_PIERCER'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Keeps Fracture on basic; flex pierces armor.',
       }),
       app({
-        weaponFamilyId: 'aegis-runed-longsword',
+        weaponFamilyId: 'aegis-longsword',
         abilityId: 'ASHEN_MANTLE',
         graftId: 'NULL_SPACE_GRAFT',
         role: 'DEFENSIVE_FLEX',
@@ -69,17 +71,17 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Self/defense',
         meaningfulUpside: 'Survivability without burst conversion',
         meaningfulDownside: 'Residue + graft downside',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-runed-longsword'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-longsword'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('aegis-runed-longsword', 'ASHEN_MANTLE'),
+        abilityInPhase3HSample: sampleHas('aegis-longsword', 'ASHEN_MANTLE'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Defense flex for balanced sword.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'aegis-runed-longsword',
+        weaponFamilyId: 'aegis-longsword',
         abilityId: 'WARDENS_STRIKE',
         graftId: 'ECHO_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -146,13 +148,13 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
   };
 
   const rift: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'aegis-rift-edge',
+    weaponFamilyId: 'aegis-paired-blades',
     classId: 'AEGIS',
     validationState: 'VALIDATED',
     identitySummary: 'Evade/Parry tempo → Occult rider',
     applications: [
       app({
-        weaponFamilyId: 'aegis-rift-edge',
+        weaponFamilyId: 'aegis-paired-blades',
         abilityId: 'SHADOW_STEP',
         graftId: 'NULL_SPACE_GRAFT',
         role: 'METER_SUPPORT',
@@ -167,17 +169,17 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Self',
         meaningfulUpside: 'Tempo reliability',
         meaningfulDownside: 'Graft cost',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-rift-edge'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-paired-blades'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('aegis-rift-edge', 'SHADOW_STEP'),
+        abilityInPhase3HSample: sampleHas('aegis-paired-blades', 'SHADOW_STEP'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Supports evade tempo without free Occult rider.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'aegis-rift-edge',
+        weaponFamilyId: 'aegis-paired-blades',
         abilityId: 'PAIRED_BLADES_STRIKE',
         graftId: 'DENSITY_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -244,13 +246,13 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
   };
 
   const claymore: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'aegis-claymore-blade',
+    weaponFamilyId: 'aegis-claymore',
     classId: 'AEGIS',
     validationState: 'VALIDATED',
     identitySummary: 'Committed Fracture-break + stamina planning',
     applications: [
       app({
-        weaponFamilyId: 'aegis-claymore-blade',
+        weaponFamilyId: 'aegis-claymore',
         abilityId: 'DEVASTATE',
         graftId: 'DENSITY_GRAFT',
         role: 'IDENTITY_ANCHOR',
@@ -265,17 +267,17 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Single heavy',
         meaningfulUpside: 'Break turn impact',
         meaningfulDownside: 'Reserve tax',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-claymore-blade'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['aegis-claymore'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('aegis-claymore-blade', 'DEVASTATE'),
+        abilityInPhase3HSample: sampleHas('aegis-claymore', 'DEVASTATE'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Amplify devastate after setup — stamina still on basic.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'aegis-claymore-blade',
+        weaponFamilyId: 'aegis-claymore',
         abilityId: 'UNMAKER_STRIKE',
         graftId: 'ECHO_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -346,13 +348,13 @@ function buildAegisProfiles(): WeaponGraftRecommendationProfile[] {
 
 function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
   const sidearm: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'hex-silver-core-sidearm',
+    weaponFamilyId: 'hex-revolver',
     classId: 'HEX_SHOT',
     validationState: 'VALIDATED',
     identitySummary: 'Reload / Perfect Reload / Protocol Charge precision',
     applications: [
       app({
-        weaponFamilyId: 'hex-silver-core-sidearm',
+        weaponFamilyId: 'hex-revolver',
         abilityId: 'REVENANTS_ECHO',
         graftId: 'ECHO_RECEIVER_GRAFT',
         role: 'METER_SUPPORT',
@@ -367,15 +369,15 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Unchanged',
         meaningfulUpside: 'Efficiency',
         meaningfulDownside: 'EXPOSE on non-kill',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-silver-core-sidearm'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-revolver'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('hex-silver-core-sidearm', 'REVENANTS_ECHO'),
+        abilityInPhase3HSample: sampleHas('hex-revolver', 'REVENANTS_ECHO'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Efficiency without erasing reload decisions.',
       }),
       app({
-        weaponFamilyId: 'hex-silver-core-sidearm',
+        weaponFamilyId: 'hex-revolver',
         abilityId: 'PHASE_SHIFT_RELOAD',
         graftId: 'DEAD_MAN_SWITCH_GRAFT',
         role: 'ALTERNATE_EXPRESSION',
@@ -390,7 +392,7 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'AoE on manual reload',
         meaningfulUpside: 'Reload as weaponized decision',
         meaningfulDownside: 'No overcharge from that reload',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-silver-core-sidearm'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-revolver'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
         abilityInPhase3HSample: false,
@@ -400,7 +402,7 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'hex-silver-core-sidearm',
+        weaponFamilyId: 'hex-revolver',
         abilityId: 'REVENANTS_ECHO',
         graftId: 'BLOOD_MAG_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -467,13 +469,13 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
   };
 
   const nullbreach: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'hex-void-cannon',
+    weaponFamilyId: 'hex-shotgun',
     classId: 'HEX_SHOT',
     validationState: 'VALIDATED',
     identitySummary: 'Armor breach + small-mag commitment',
     applications: [
       app({
-        weaponFamilyId: 'hex-void-cannon',
+        weaponFamilyId: 'hex-shotgun',
         abilityId: 'SINGULARITY_SLUG',
         graftId: 'GHOST_BEAM_GRAFT',
         role: 'IDENTITY_ANCHOR',
@@ -488,17 +490,17 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Single-target',
         meaningfulUpside: 'Armor identity',
         meaningfulDownside: 'AP tax',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-void-cannon'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-shotgun'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('hex-void-cannon', 'SINGULARITY_SLUG'),
+        abilityInPhase3HSample: sampleHas('hex-shotgun', 'SINGULARITY_SLUG'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Ghost-Beam keeps breach fantasy on slug.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'hex-void-cannon',
+        weaponFamilyId: 'hex-shotgun',
         abilityId: 'SINGULARITY_SLUG',
         graftId: 'RICOCHET_DEFLECTOR_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -521,7 +523,7 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
         playerFacingReason: 'Ricochet on Nullbreach is a high-risk crowd conversion.',
       }),
       app({
-        weaponFamilyId: 'hex-void-cannon',
+        weaponFamilyId: 'hex-shotgun',
         abilityId: 'SINGULARITY_SLUG',
         graftId: 'SPLITTER_BARREL_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -536,7 +538,7 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Duplicate',
         meaningfulUpside: 'More hits',
         meaningfulDownside: 'Competes with Pulse without equal loss if not careful',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-void-cannon'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-shotgun'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
         abilityInPhase3HSample: true,
@@ -588,13 +590,13 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
   };
 
   const pulse: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'hex-pulse-rifle',
+    weaponFamilyId: 'hex-carbine',
     classId: 'HEX_SHOT',
     validationState: 'VALIDATED',
     identitySummary: 'Spread cluster + ammo pressure',
     applications: [
       app({
-        weaponFamilyId: 'hex-pulse-rifle',
+        weaponFamilyId: 'hex-carbine',
         abilityId: 'ASH_JACKET_SALVO',
         graftId: 'HELL_FIRE_COMPENSATOR',
         role: 'IDENTITY_ANCHOR',
@@ -609,17 +611,17 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Salvo targeting unchanged',
         meaningfulUpside: 'Crowd DoT',
         meaningfulDownside: 'HP cost',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-pulse-rifle'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['hex-carbine'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('hex-pulse-rifle', 'ASH_JACKET_SALVO'),
+        abilityInPhase3HSample: sampleHas('hex-carbine', 'ASH_JACKET_SALVO'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Hell-Fire on Salvo — not Widow-Choke single-target.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'hex-pulse-rifle',
+        weaponFamilyId: 'hex-carbine',
         abilityId: 'ASH_JACKET_SALVO',
         graftId: 'WIDOW_CHOKE_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -690,13 +692,13 @@ function buildHexProfiles(): WeaponGraftRecommendationProfile[] {
 
 function buildEnvoyProfiles(): WeaponGraftRecommendationProfile[] {
   const conduit: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'envoy-null-conduit',
+    weaponFamilyId: 'envoy-scythe',
     classId: 'ENVOY',
     validationState: 'VALIDATED',
     identitySummary: 'Clean Cycle + stable Flux sequencing',
     applications: [
       app({
-        weaponFamilyId: 'envoy-null-conduit',
+        weaponFamilyId: 'envoy-scythe',
         abilityId: 'DIMENSIONAL_SHEAR',
         graftId: 'VOID_CONDUCTOR_GRAFT',
         role: 'METER_SUPPORT',
@@ -711,17 +713,17 @@ function buildEnvoyProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Unchanged',
         meaningfulUpside: 'Damage',
         meaningfulDownside: 'Flux pressure',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['envoy-null-conduit'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['envoy-scythe'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('envoy-null-conduit', 'DIMENSIONAL_SHEAR'),
+        abilityInPhase3HSample: sampleHas('envoy-scythe', 'DIMENSIONAL_SHEAR'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Conductor on Shear — not free Catalyst force.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'envoy-null-conduit',
+        weaponFamilyId: 'envoy-scythe',
         abilityId: 'FLUX_PURGE',
         graftId: 'OVERLOAD_CATALYST_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -788,13 +790,13 @@ function buildEnvoyProfiles(): WeaponGraftRecommendationProfile[] {
   };
 
   const lantern: WeaponGraftRecommendationProfile = {
-    weaponFamilyId: 'envoy-echo-lantern',
+    weaponFamilyId: 'envoy-vambrace',
     classId: 'ENVOY',
     validationState: 'VALIDATED',
     identitySummary: 'Rot setup → delayed FLUX_PURGE detonation',
     applications: [
       app({
-        weaponFamilyId: 'envoy-echo-lantern',
+        weaponFamilyId: 'envoy-vambrace',
         abilityId: 'FLUX_PURGE',
         graftId: 'WITHER_MARK_GRAFT',
         role: 'IDENTITY_ANCHOR',
@@ -809,17 +811,17 @@ function buildEnvoyProfiles(): WeaponGraftRecommendationProfile[] {
         targetingEffect: 'Purge targeting',
         meaningfulUpside: 'Cashout power',
         meaningfulDownside: 'Graft tradeoff',
-        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['envoy-echo-lantern'].compensationMustNotErase,
+        phase3GDrawbackGuard: WEAPON_DRAWBACK_RECORDS['envoy-vambrace'].compensationMustNotErase,
         requiredClassRank: 3,
         availableWhenWeaponUnlocks: true,
-        abilityInPhase3HSample: sampleHas('envoy-echo-lantern', 'FLUX_PURGE'),
+        abilityInPhase3HSample: sampleHas('envoy-vambrace', 'FLUX_PURGE'),
         validationState: 'VALIDATED',
         playerFacingReason: 'Wither on Purge — never same-cast auto-detonate on basic.',
       }),
     ],
     antiSynergies: [
       app({
-        weaponFamilyId: 'envoy-echo-lantern',
+        weaponFamilyId: 'envoy-vambrace',
         abilityId: 'VEIL_SPLINTER',
         graftId: 'WITHER_MARK_GRAFT',
         role: 'ANTI_SYNERGY',
@@ -1038,16 +1040,16 @@ export function validateWeaponGraftRecommendationProfiles(): string[] {
     if (p.configurations.length !== 2) issues.push(`${id} needs 2 configurations`);
     const early = p.configurations[0];
     if (early.assignments.length !== 1) issues.push(`${id} early config must be exactly 1 graft`);
-    if (early.requiredClassRank !== 3) issues.push(`${id} early config must validate at rank 3`);
+    // requiredClassRank is historical recommendation metadata only (Stage II-B).
+    if (early.assignments.length > getGraftCapacityForRunDepth(1)) {
+      issues.push(`${id} early config exceeds Depth-1 graft capacity`);
+    }
     const mature = p.configurations[1];
-    if (mature.assignments.length < 1 || mature.assignments.length > 4) {
-      issues.push(`${id} mature config must have 1–4 grafts`);
+    if (mature.assignments.length < 1 || mature.assignments.length > MAX_RUN_GRAFT_CAPACITY) {
+      issues.push(`${id} mature config must have 1–${MAX_RUN_GRAFT_CAPACITY} grafts`);
     }
-    if (mature.requiredClassRank < 15) {
-      issues.push(`${id} mature config rank must be >= 15 (got ${mature.requiredClassRank})`);
-    }
-    if (mature.requiredClassRank > 20) {
-      issues.push(`${id} mature config rank exceeds CLASS_RANK_MAX`);
+    if (mature.assignments.length > getGraftCapacityForRunDepth(3)) {
+      issues.push(`${id} mature config exceeds Depth-3 graft capacity`);
     }
   });
   return issues;

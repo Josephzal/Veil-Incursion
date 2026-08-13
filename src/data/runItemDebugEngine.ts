@@ -31,12 +31,11 @@ export function formatRunItemAcceptanceDebugReport(): string {
 
 export function formatRunItemIncursionDebugSnapshot(incursion: ActiveIncursionState): string {
   return [
-    formatRunItemRuntimeDebugSnapshot(incursion.itemRuntime, incursion.runItems),
+    formatRunItemRuntimeDebugSnapshot(incursion.supplyRuntime),
     '',
     formatRunItemDebriefPreview(
-      incursion.itemRuntime,
-      incursion.runItems,
-      incursion.runItemsAtRunStart,
+      incursion.supplyRuntime,
+      incursion.cargo,
     ),
   ].join('\n');
 }
@@ -47,28 +46,27 @@ export function listRunItemDebugIds(): string {
 
 export function previewRunItemDebriefFromIncursion(incursion: ActiveIncursionState): string {
   return formatRunItemDebriefPreview(
-    incursion.itemRuntime,
-    incursion.runItems,
-    incursion.runItemsAtRunStart,
+    incursion.supplyRuntime,
+    incursion.cargo,
   );
 }
 
 export function formatRunItemMarketSimulationReport(depth = 1): string {
   const stock = simulateRunItemMarketStock(depth);
   const lines = [
-    'RUN ITEM MARKET SIMULATION',
+    'CARGO SUPPLY MARKET SIMULATION',
     `depth: ${depth}`,
     `listings: ${stock.length}`,
     ...stock.map((itemId) => {
       const def = getRunItemDefinition(itemId);
-      return `- ${def.name} (${def.slotType}) — ${def.marketPrice} CR`;
+      return `- ${def.name} (${def.family === 'COMBAT_CONSUMABLE' ? 'COMBAT SUPPLY' : 'FIELD TOOL'}) — ${def.marketPrice} CR`;
     }),
   ];
   return lines.join('\n');
 }
 
 export function formatRunItemRecipeGapReport(stash: import('../types/resourceItem').ResourceQuantity): string {
-  const lines = ['RUN ITEM RECIPE GAPS'];
+  const lines = ['CARGO SUPPLY RECIPE GAPS'];
   ALL_RUN_ITEM_IDS.forEach((itemId) => {
     const def = getRunItemDefinition(itemId);
     if (!def.canCraft) return;

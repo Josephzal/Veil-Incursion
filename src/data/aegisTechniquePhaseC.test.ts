@@ -147,7 +147,7 @@ for (const id of ALL_AEGIS_TECHNIQUES) {
 }
 
 const surface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: ['FINAL_MERCY', 'RUNEBOUND_CARAPACE', 'RUIN'],
 });
 assert.deepEqual([...surface.techniques], ['FINAL_MERCY', 'RUNEBOUND_CARAPACE', 'RUIN']);

@@ -20,14 +20,14 @@ export const WEAPON_LOADOUT_RECOMMENDATION_PROFILES: Record<
   WeaponFamilyId,
   WeaponLoadoutRecommendationProfile
 > = {
-  'aegis-runed-longsword': AEGIS_LONGSWORD,
-  'aegis-rift-edge': AEGIS_RIFT,
-  'aegis-claymore-blade': AEGIS_CLAYMORE,
-  'hex-silver-core-sidearm': HEX_SIDEARM,
-  'hex-void-cannon': HEX_NULLBREACH,
-  'hex-pulse-rifle': HEX_PULSE,
-  'envoy-null-conduit': ENVOY_CONDUIT,
-  'envoy-echo-lantern': ENVOY_LANTERN,
+  'aegis-longsword': AEGIS_LONGSWORD,
+  'aegis-paired-blades': AEGIS_RIFT,
+  'aegis-claymore': AEGIS_CLAYMORE,
+  'hex-revolver': HEX_SIDEARM,
+  'hex-shotgun': HEX_NULLBREACH,
+  'hex-carbine': HEX_PULSE,
+  'envoy-scythe': ENVOY_CONDUIT,
+  'envoy-vambrace': ENVOY_LANTERN,
   'envoy-sanguine-prism': ENVOY_PRISM,
 };
 

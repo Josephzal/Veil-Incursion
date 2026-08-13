@@ -13,22 +13,33 @@ import { LANDSCAPE_PANEL_PADDING, LANDSCAPE_WELCOME_PRIMARY_RATIO } from '../con
 import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { viewShadow } from '../utils/adaptiveStyles';
+import { canDeployWithRequisition } from '../data/requisitionAccountNormalize';
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { width } = useLandscapeMetrics();
   const immersivePadding = useImmersiveScreenPadding();
-  const { startBoundRequisition } = useGameFlow();
+  const { openSafehouse, startScanning } = useGameFlow();
   const { startNewRun } = useRun();
-  const { account } = usePlayerAccount();
+  const { account, commitDescentLoadout } = usePlayerAccount();
 
   const handleStartScan = () => {
-    startNewRun({
+    if (!canDeployWithRequisition(account)) {
+      openSafehouse();
+      return;
+    }
+    const committed = commitDescentLoadout();
+    if (!committed) {
+      openSafehouse();
+      return;
+    }
+    const started = startNewRun({
       startingVeilResidueBalance: account.veilResidueBalance,
-      equippedKeepsakeId: account.equippedKeepsakeId,
-      keepsakeDeployment: account.keepsakeDeployment,
+      initialCargo: committed.cargo,
+      equippedRequisitionId: account.equippedRequisitionId,
+      requisitionDeployment: account.requisitionDeployment,
     });
-    startBoundRequisition();
+    if (started) startScanning();
   };
   const credentials = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;

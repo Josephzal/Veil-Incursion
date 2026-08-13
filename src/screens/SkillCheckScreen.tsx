@@ -114,7 +114,7 @@ export default function SkillCheckScreen(): React.JSX.Element {
     );
 
     const logLines: Record<RollTier, string> = {
-      CRITICAL_SUCCESS: '>> CRITICAL SUCCESS — powerful boon or +30 HP applied.',
+      CRITICAL_SUCCESS: '>> CRITICAL SUCCESS — +30 Soul Anchor HP restored.',
       SUCCESS: '>> SUCCESS — +10 Max Stamina and +20 Stamina recovered.',
       FAILURE: '>> FAILURE — -15 Soul Anchor HP, -30 Max Stamina (corruption).',
       CRITICAL_DESYNC: '>> CRITICAL DE-SYNC — -25 HP and elite ambush triggered.',

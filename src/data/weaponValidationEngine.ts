@@ -12,12 +12,15 @@ import { validateWeaponIdentityProfiles } from './weaponIdentityProfiles';
 import { validateWeaponLoadoutRecommendations } from './weaponLoadoutRecommendationEngine';
 import {
   getEquippedWeaponForClass,
-  getWeaponTier,
 } from './weaponProgressionEngine';
 import type { ActiveIncursionState } from '../types/game';
 import { resolveActiveWeaponState } from './weaponRunState';
 import { validateWeaponUltimates } from './weaponUltimateValidationEngine';
 import { validateWeaponCombatPresentation } from './weaponCombatPresentation/validation';
+import {
+  LEGACY_WEAPON_FAMILY_ID_MAP,
+  isCanonicalWeaponFamilyId,
+} from './weaponFamilyIdNormalize';
 
 export type { WeaponValidationIssue };
 
@@ -37,7 +40,7 @@ export function validateWeaponRegistry(): WeaponValidationIssue[] {
 
   validateWeaponLoadoutRecommendations().forEach((issue) => {
     issues.push({
-      severity: issue.severity,
+      severity: issue.severity === 'warning' ? 'warn' : issue.severity,
       weaponId: issue.weaponId,
       message: `Loadout recommendation: ${issue.message}`,
     });
@@ -69,33 +72,12 @@ export function validateWeaponRegistry(): WeaponValidationIssue[] {
     if (!def.classId) {
       issues.push({ severity: 'error', weaponId: id, message: 'Weapon has no classId.' });
     }
-    if (def.tiers.length !== 3) {
-      issues.push({ severity: 'error', weaponId: id, message: 'Weapon must have exactly 3 tiers.' });
+    if (!def.baselineEffectSummary) {
+      issues.push({ severity: 'error', weaponId: id, message: 'Weapon has no baseline effect summary.' });
     }
-    if (!def.tiers[0] || def.tiers[0].tierNumber !== 1) {
-      issues.push({ severity: 'error', weaponId: id, message: 'Weapon has no default Tier I.' });
+    if (!def.baselineStatModifiers) {
+      issues.push({ severity: 'error', weaponId: id, message: 'Weapon has no baselineStatModifiers.' });
     }
-    def.tiers.forEach((tier) => {
-      if (!tier.effectSummary) {
-        issues.push({ severity: 'error', weaponId: id, message: `Tier ${tier.tierNumber} has no effect summary.` });
-      }
-      tier.upgradeCost.forEach((cost) => {
-        if (!isResourceItemId(cost.resourceId)) {
-          issues.push({
-            severity: 'error',
-            weaponId: id,
-            message: `Tier ${tier.tierNumber} upgrade references missing resource ${cost.resourceId}.`,
-          });
-        }
-        if (cost.resourceId === 'anomalous-core') {
-          issues.push({
-            severity: 'warn',
-            weaponId: id,
-            message: 'Anomalous Core required for normal v1 upgrade.',
-          });
-        }
-      });
-    });
     def.unlockRequirement.forEach((cost) => {
       if (!isResourceItemId(cost.resourceId)) {
         issues.push({
@@ -194,6 +176,28 @@ export function validateActiveRunWeapon(incursion: ActiveIncursionState): Weapon
   return issues;
 }
 
+/** Prove legacy→canonical map coverage without exposing retired IDs as live keys. */
+export function validateLegacyWeaponIdMigrationMap(): WeaponValidationIssue[] {
+  const issues: WeaponValidationIssue[] = [];
+  Object.entries(LEGACY_WEAPON_FAMILY_ID_MAP).forEach(([legacy, canonical]) => {
+    if (!isCanonicalWeaponFamilyId(canonical)) {
+      issues.push({
+        severity: 'error',
+        weaponId: legacy,
+        message: `Legacy map target ${canonical} is not canonical.`,
+      });
+    }
+    if (legacy in WEAPON_REGISTRY && legacy !== canonical) {
+      issues.push({
+        severity: 'error',
+        weaponId: legacy,
+        message: 'Legacy ID must not remain a live registry key.',
+      });
+    }
+  });
+  return issues;
+}
+
 export function formatWeaponValidationReport(issues: WeaponValidationIssue[]): string {
   if (issues.length === 0) return 'WEAPON VALIDATION — PASS (0 issues).';
   const lines = issues.map((issue) => {
@@ -220,21 +224,12 @@ export function debugPrintEquippedWeapons(account: PlayerAccount): string {
     const familyId = getEquippedWeaponForClass(
       {
         weaponUnlocks: account.weaponUnlocks,
-        weaponTiers: account.weaponTiers,
         equippedWeaponByClass: account.equippedWeaponByClass,
       },
       classId,
     );
-    const tier = getWeaponTier(
-      {
-        weaponUnlocks: account.weaponUnlocks,
-        weaponTiers: account.weaponTiers,
-        equippedWeaponByClass: account.equippedWeaponByClass,
-      },
-      familyId,
-    );
     const def = WEAPON_REGISTRY[familyId];
-    return `${classId}: ${def.shortName} // Tier ${tier}`;
+    return `${classId}: ${def.shortName}`;
   });
   return lines.join('\n');
 }

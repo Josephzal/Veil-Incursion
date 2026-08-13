@@ -30,7 +30,7 @@ export const SUPPORTED_KEEPSAKE_HOOKS: readonly KeepsakeHook[] = [
   'onDebriefBuild',
 ] as const;
 
-/** Expedition Relic roster (Trinkets v2) — the 20 equippable relics. */
+/** @deprecated Stage III-B donor catalog; never expose as an equippable roster. */
 export const ALL_KEEPSAKE_IDS: readonly KeepsakeId[] = [
   'signal_compass',
   'ashen_cartograph',

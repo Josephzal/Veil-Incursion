@@ -221,21 +221,21 @@ async function main(): Promise<void> {
 
   assert.equal(
     shouldUseWardenStrikePresentation({
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       abilityId: 'STRIKE',
     }),
     true,
   );
   assert.equal(
     shouldUseWardenStrikePresentation({
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       abilityId: 'VEIL_PIERCER',
     }),
     false,
   );
   assert.equal(
     shouldUseWardenStrikePresentation({
-      weaponFamilyId: 'aegis-rift-edge',
+      weaponFamilyId: 'aegis-paired-blades',
       abilityId: 'STRIKE',
     }),
     false,
@@ -497,7 +497,7 @@ async function main(): Promise<void> {
 
   assert.equal(
     shouldUseWardenStrikePresentation({
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       abilityId: 'STRIKE',
       actionKind: 'RIPOSTE',
       playerActionKind: 'RIPOSTE',
@@ -507,7 +507,7 @@ async function main(): Promise<void> {
   );
   assert.equal(
     shouldUseWardenStrikePresentation({
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       abilityId: 'STRIKE',
       actionKind: 'RIPOSTE',
       playerActionKind: 'STRIKE',
@@ -517,7 +517,7 @@ async function main(): Promise<void> {
   );
   assert.equal(
     shouldUseWardenStrikePresentation({
-      weaponFamilyId: 'aegis-runed-longsword',
+      weaponFamilyId: 'aegis-longsword',
       abilityId: 'STRIKE',
       playerActionKind: 'STRIKE',
       nestedPresentation: true,

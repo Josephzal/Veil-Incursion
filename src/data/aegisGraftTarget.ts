@@ -111,10 +111,10 @@ export function buildAegisGraftSurface(args: {
   weaponFamilyId: WeaponFamilyId | AegisWeaponFamilyId | null | undefined;
   techniques: AegisTechniqueLoadout | readonly string[] | null | undefined;
 }): readonly AegisGraftSurfaceRow[] {
-  const familyId = (args.weaponFamilyId ?? 'aegis-runed-longsword') as AegisWeaponFamilyId;
+  const familyId = (args.weaponFamilyId ?? 'aegis-longsword') as AegisWeaponFamilyId;
   const actions = deriveAegisWeaponActions(
-    isAegisWeaponFamilyId(familyId) ? familyId : 'aegis-runed-longsword',
-  ) ?? deriveAegisWeaponActions('aegis-runed-longsword')!;
+    isAegisWeaponFamilyId(familyId) ? familyId : 'aegis-longsword',
+  ) ?? deriveAegisWeaponActions('aegis-longsword')!;
   // Only the run's snapshotted techniques — never pad from account/catalog pool.
   const techs = (args.techniques ?? []).filter(isAegisTechniqueId).slice(0, 3) as AegisTechniqueId[];
 

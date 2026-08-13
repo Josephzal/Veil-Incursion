@@ -1,7 +1,6 @@
 export type AppScreen =
   | 'HUB'
   | 'WELCOME'
-  | 'BOUND_REQUISITION'
   | 'SCANNING'
   | 'NARRATIVE'
   | 'POST_COMBAT_BOON'

@@ -1,25 +1,21 @@
 import type { CargoRunState } from '../types/cargoGrid';
 import type { IncursionNode } from '../types/game';
 import type {
-  KeepsakeCargoTagKind,
-  KeepsakeRuntime,
-  KeepsakeTaggedCargoEntry,
-} from '../types/expeditionKeepsake';
+  RequisitionCargoTagKind as KeepsakeCargoTagKind,
+  RequisitionRuntime as KeepsakeRuntime,
+  RequisitionTaggedCargoEntry as KeepsakeTaggedCargoEntry,
+} from '../types/expeditionRequisition';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import { addLootToContainment } from './cargoGridEngine';
 import {
   formatKeepsakeLogLine,
   tryKeepsakeTrigger,
 } from './expeditionKeepsakeEngine';
-import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
+import { EXPEDITION_REQUISITION_REGISTRY } from './expeditionRequisitionRegistry';
 import { patchKeepsakeStats } from './keepsakeRunState';
 import {
-  applyKeepsakeLeyContamination,
   buildDeadDropChoice,
-  buildLeySiphonOverdrawChoice,
   buildSmugglersDoubleWrapChoice,
-  clearLeyOverdrawConfirmedFlag,
-  isLeyOverdrawConfirmed,
   queueKeepsakePendingChoice,
 } from './expeditionKeepsakeChoiceEngine';
 import {
@@ -32,7 +28,6 @@ import type { UnstableCarriedEffectDefinition } from '../types/unstableCargoEffe
 export interface KeepsakeCargoApplyResult {
   runtime: KeepsakeRuntime | null;
   logLines: string[];
-  leySiphonOverdrawPending?: boolean;
   jettisonLockedInstanceIds?: string[];
 }
 
@@ -40,26 +35,12 @@ const CARGO_SEAL_VALUE_GROWTH_PCT = 5;
 const CARGO_SEAL_VALUE_CAP_PCT = 25;
 const SMUGGLERS_DOUBLE_WRAP_BONUS = 0.15;
 
-const LEY_SIPHON_BYPRODUCTS: readonly ResourceItemId[] = [
-  'veil-ash-canister',
-  'anomalous-core',
-  'ossified-ley-knot',
-];
-
 const DEAD_DROP_BONUS_RESOURCES: readonly ResourceItemId[] = [
   'ley-slag',
   'tarnished-dog-tags',
   'encrypted-grid-drive',
   'echo-glass-shard',
 ];
-
-function pickLeySiphonByproduct(nodeId: string): ResourceItemId {
-  let hash = 0;
-  for (let i = 0; i < nodeId.length; i += 1) {
-    hash = (hash * 31 + nodeId.charCodeAt(i)) >>> 0;
-  }
-  return LEY_SIPHON_BYPRODUCTS[hash % LEY_SIPHON_BYPRODUCTS.length] ?? 'veil-ash-canister';
-}
 
 function pickDeadDropBonus(nodeId: string): ResourceItemId {
   let hash = nodeId.length >>> 0;
@@ -223,11 +204,11 @@ export function applyKeepsakeOnCargoPickup(
   const category = getResourceCategory(resourceId);
 
   if (
-    runtime.keepsakeId === 'cargo_seal'
+    runtime.requisitionId === 'cargo_seal'
     && category === 'UNSTABLE'
     && isUnstableCargoEffectId(resourceId)
   ) {
-    const def = getKeepsakeDefinition('cargo_seal');
+    const def = EXPEDITION_REQUISITION_REGISTRY.cargo_seal;
     const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
     if (trigger.triggered && trigger.runtime) {
       nextRuntime = tagCargoInstances(trigger.runtime, resourceId, 'sealed', instanceIds);
@@ -243,8 +224,8 @@ export function applyKeepsakeOnCargoPickup(
     }
   }
 
-  if (runtime.keepsakeId === 'smugglers_wrap' && category === 'CONTRABAND') {
-    const def = getKeepsakeDefinition('smugglers_wrap');
+  if (runtime.requisitionId === 'smugglers_wrap' && category === 'CONTRABAND') {
+    const def = EXPEDITION_REQUISITION_REGISTRY.smugglers_wrap;
     const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
     if (trigger.triggered && trigger.runtime) {
       nextRuntime = tagCargoInstances(trigger.runtime, resourceId, 'wrapped', instanceIds);
@@ -263,82 +244,6 @@ export function applyKeepsakeOnCargoPickup(
   return { runtime: nextRuntime, logLines };
 }
 
-export function applyKeepsakeOnNodeEngagedForLeySiphon(
-  runtime: KeepsakeRuntime | null,
-  nodeType: IncursionNode['type'],
-  nodeId: string,
-): KeepsakeCargoApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'ley_siphon_needle') {
-    return { runtime, logLines: [] };
-  }
-  if (nodeType !== 'RESOURCE_HARVEST' && nodeType !== 'ANOMALY') {
-    return { runtime, logLines: [] };
-  }
-
-  let nextRuntime: KeepsakeRuntime = {
-    ...runtime,
-    leySiphonOverdrawPending: true,
-  };
-  if (!nextRuntime.pendingChoice) {
-    nextRuntime = queueKeepsakePendingChoice(nextRuntime, buildLeySiphonOverdrawChoice(nodeId));
-  }
-
-  return {
-    runtime: nextRuntime,
-    logLines: [],
-    leySiphonOverdrawPending: true,
-  };
-}
-
-export function applyKeepsakeLeySiphonOverdraw(
-  runtime: KeepsakeRuntime | null,
-  cargo: CargoRunState,
-  nodeId: string,
-  stagedInstanceIds: string[],
-): {
-  runtime: KeepsakeRuntime | null;
-  cargo: CargoRunState;
-  logLines: string[];
-} {
-  if (!runtime?.leySiphonOverdrawPending || runtime.keepsakeId !== 'ley_siphon_needle') {
-    return { runtime, cargo, logLines: [] };
-  }
-  if (!isLeyOverdrawConfirmed(runtime)) {
-    return { runtime, cargo, logLines: [] };
-  }
-
-  const def = getKeepsakeDefinition('ley_siphon_needle');
-  const trigger = tryKeepsakeTrigger(runtime, `${def.primaryTriggerKey}:${nodeId}`, 'none');
-  if (!trigger.triggered || !trigger.runtime) {
-    return { runtime: clearLeyOverdrawConfirmedFlag(runtime), cargo, logLines: [] };
-  }
-
-  const bonusResource = pickDeadDropBonus(nodeId);
-  const byproduct = pickLeySiphonByproduct(nodeId);
-  const staged: string[] = [];
-  const fieldSpawn = { asSeparatePhysicalUnits: true } as const;
-  let nextCargo = addLootToContainment(cargo, bonusResource, 1, staged, fieldSpawn);
-  nextCargo = addLootToContainment(nextCargo, byproduct, 1, staged, fieldSpawn);
-  stagedInstanceIds.push(...staged);
-
-  let nextRuntime = applyKeepsakeLeyContamination(
-    clearLeyOverdrawConfirmedFlag(trigger.runtime),
-  );
-
-  nextRuntime = patchKeepsakeStats(nextRuntime!, {
-    bonusResourcesGenerated: trigger.runtime.stats.bonusResourcesGenerated + 2,
-  });
-
-  return {
-    runtime: nextRuntime,
-    cargo: nextCargo,
-    logLines: [
-      formatKeepsakeLogLine('Siphon', def.triggerMessage),
-      '>> LEY-SIPHON OVERDRAW — bonus salvage routed; contamination +1.',
-    ],
-  };
-}
-
 export function applyKeepsakeDeadDropHarvestBonus(
   runtime: KeepsakeRuntime | null,
   cargo: CargoRunState,
@@ -349,7 +254,7 @@ export function applyKeepsakeDeadDropHarvestBonus(
   cargo: CargoRunState;
   logLines: string[];
 } {
-  if (!runtime || runtime.keepsakeId !== 'dead_drop_receiver') return { runtime, cargo, logLines: [] };
+  if (!runtime || runtime.requisitionId !== 'dead_drop_receiver') return { runtime, cargo, logLines: [] };
   if (!node?.contextModifiers?.keepsakeDeadDrop) return { runtime, cargo, logLines: [] };
   if (runtime.triggersUsed.dead_drop_receiver_harvest_bonus) {
     return { runtime, cargo, logLines: [] };
@@ -431,7 +336,7 @@ export function clearKeepsakeJettisonLocks(): readonly string[] {
 export function applyKeepsakeCargoSealOnNodeClear(
   runtime: KeepsakeRuntime | null,
 ): KeepsakeRuntime | null {
-  if (!runtime || runtime.keepsakeId !== 'cargo_seal') return runtime;
+  if (!runtime || runtime.requisitionId !== 'cargo_seal') return runtime;
   const hasSealed = runtime.taggedCargo.some((entry) => entry.tag === 'sealed');
   if (!hasSealed) return runtime;
 
@@ -451,7 +356,7 @@ export function applyKeepsakeCargoSealOnNodeClear(
 export function applyKeepsakeCargoSealOnDirtyExtract(
   runtime: KeepsakeRuntime | null,
 ): { runtime: KeepsakeRuntime | null; logLines: string[] } {
-  if (!runtime || runtime.keepsakeId !== 'cargo_seal' || runtime.cargoSealCracked) {
+  if (!runtime || runtime.requisitionId !== 'cargo_seal' || runtime.cargoSealCracked) {
     return { runtime, logLines: [] };
   }
   const hasSealed = runtime.taggedCargo.some((entry) => entry.tag === 'sealed');

@@ -67,11 +67,11 @@ console.log('Envoy Weapon-Kit Phase E.3');
 // ---------- 1–4 registry / catalog ----------
 assertEnvoyWeaponFamilyRegistryInvariant();
 assert.deepEqual(
-  [...requireEnvoyWeaponActions('envoy-echo-lantern')],
+  [...requireEnvoyWeaponActions('envoy-vambrace')],
   [...ENVOY_VAMBRACE_WEAPON_ACTIONS],
 );
 assert.deepEqual(
-  [...requireEnvoyWeaponActions('envoy-null-conduit')],
+  [...requireEnvoyWeaponActions('envoy-scythe')],
   [...ENVOY_SCYTHE_WEAPON_ACTIONS],
 );
 assert.deepEqual(
@@ -79,10 +79,10 @@ assert.deepEqual(
   [...ENVOY_HEARTS_DUE_WEAPON_ACTIONS],
 );
 assert.equal(listEnvoyWeaponActionDefinitions().length, 12);
-assert.throws(() => requireEnvoyWeaponActions('aegis-runed-longsword' as never));
+assert.throws(() => requireEnvoyWeaponActions('aegis-longsword' as never));
 assert.throws(() => requireEnvoyWeaponActions(null));
-assert.equal(deriveEnvoyWeaponActions('hex-pulse-rifle'), null);
-assert.equal(isEnvoyWeaponFamilyId('envoy-echo-lantern'), true);
+assert.equal(deriveEnvoyWeaponActions('hex-carbine'), null);
+assert.equal(isEnvoyWeaponFamilyId('envoy-vambrace'), true);
 
 for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
   const actions = requireEnvoyWeaponActions(familyId);
@@ -185,11 +185,11 @@ assert.deepEqual([...DEFAULT_ENVOY_LOADOUT], [...DEFAULT_ENVOY_FLEX_LOADOUT]);
 // Family does not alter flex
 const flexA = sanitizeEnvoyFlexLoadout(['DIMENSIONAL_SHEAR', 'PHASE_STEP', 'FLESH_WARP']);
 const surfaceV = buildEnvoyCombatSurface({
-  weaponFamilyId: 'envoy-echo-lantern',
+  weaponFamilyId: 'envoy-vambrace',
   flex: flexA,
 });
 const surfaceS = buildEnvoyCombatSurface({
-  weaponFamilyId: 'envoy-null-conduit',
+  weaponFamilyId: 'envoy-scythe',
   flex: flexA,
 });
 assert.deepEqual([...surfaceV.flex], [...flexA]);
@@ -215,24 +215,24 @@ for (const familyId of ALL_ENVOY_WEAPON_FAMILY_IDS) {
   assert.equal(surface.liveExecutableIds.length, 4);
 }
 assert.throws(() =>
-  buildEnvoyCombatSurface({ weaponFamilyId: 'aegis-runed-longsword', flex: DEFAULT_ENVOY_FLEX_LOADOUT }),
+  buildEnvoyCombatSurface({ weaponFamilyId: 'aegis-longsword', flex: DEFAULT_ENVOY_FLEX_LOADOUT }),
 );
 
 // Compatibility
 assert.equal(
-  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-echo-lantern').canonicalId,
+  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-vambrace').canonicalId,
   'GRAVEWEAVE',
 );
 assert.equal(
-  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-null-conduit').canonicalId,
+  canonicalizeEnvoyCombatActionId('VEIL_SPLINTER', 'envoy-scythe').canonicalId,
   'NULL_ARC',
 );
 assert.equal(
-  canonicalizeEnvoyCombatActionId('BLACK_WICK', 'envoy-echo-lantern').canonicalId,
+  canonicalizeEnvoyCombatActionId('BLACK_WICK', 'envoy-vambrace').canonicalId,
   'GRAVEWEAVE',
 );
 assert.equal(
-  canonicalizeEnvoyCombatActionId('CATACLYSM_SIGIL', 'envoy-null-conduit').kind,
+  canonicalizeEnvoyCombatActionId('CATACLYSM_SIGIL', 'envoy-scythe').kind,
   'ULTIMATE_COMPAT',
 );
 assert.equal(resolveEnvoyActionOneId('envoy-sanguine-prism'), 'BLOOD_REFRACTION');
@@ -245,19 +245,19 @@ assert.equal(classAbilityTargetMode('ENVOY', 'CRIMSON_VENT'), 'NONE');
 assert.equal(classAbilityTargetMode('ENVOY', 'VEIL_SPLINTER'), 'SINGLE');
 
 // ---------- 16–18 ownership / unlock unchanged ----------
-assert.equal(STARTER_WEAPON_BY_CLASS.ENVOY, 'envoy-echo-lantern');
-assert.equal(getWeaponFamily('envoy-echo-lantern').unlockRequirement.length, 0);
-assert.ok(getWeaponFamily('envoy-null-conduit').unlockRequirement.length > 0);
+assert.equal(STARTER_WEAPON_BY_CLASS.ENVOY, 'envoy-vambrace');
+assert.equal(getWeaponFamily('envoy-vambrace').unlockRequirement.length, 0);
+assert.ok(getWeaponFamily('envoy-scythe').unlockRequirement.length > 0);
 assert.deepEqual(validateWeaponUnlockPaths(), []);
 const migrated = normalizeWeaponProgression({
-  weaponUnlocks: ['envoy-null-conduit'],
-  weaponTiers: { 'envoy-null-conduit': 2 },
-  equippedWeaponByClass: { ENVOY: 'envoy-null-conduit' },
+  weaponUnlocks: ['envoy-scythe'],
+  weaponTiers: { 'envoy-scythe': 2 },
+  equippedWeaponByClass: { ENVOY: 'envoy-scythe' },
 } as Parameters<typeof normalizeWeaponProgression>[0]);
-assert.ok(migrated.weaponUnlocks.includes('envoy-echo-lantern'));
-assert.ok(migrated.weaponUnlocks.includes('envoy-null-conduit'));
-assert.equal(migrated.equippedWeaponByClass.ENVOY, 'envoy-null-conduit');
-assert.equal(migrated.weaponTiers['envoy-null-conduit'], 2);
+assert.ok(migrated.weaponUnlocks.includes('envoy-vambrace'));
+assert.ok(migrated.weaponUnlocks.includes('envoy-scythe'));
+assert.equal(migrated.equippedWeaponByClass.ENVOY, 'envoy-scythe');
+assert.equal('weaponTiers' in migrated, false);
 
 // Active-incursion style: 4-slot snapshot remains readable → flex extract
 const incSnapshot = ['VEIL_SPLINTER', 'DIMENSIONAL_SHEAR', 'SOUL_TETHER', 'MIND_SUNDER'] as const;
@@ -288,7 +288,7 @@ for (const id of ALL_HEX_WEAPON_FAMILY_IDS) {
   assert.equal(requireHexWeaponActions(id).length, 4);
 }
 const hexSurface = buildHexCombatSurface({
-  weaponFamilyId: 'hex-silver-core-sidearm',
+  weaponFamilyId: 'hex-revolver',
   flex: DEFAULT_HEX_FLEX_LOADOUT,
 });
 assert.equal(hexSurface.hudCards.length, 7);

@@ -36,7 +36,9 @@ export function resolvePlayerCritChance(ctx: PlayerCritContext): { chance: numbe
   if (ctx.guaranteedCrits > 0) {
     return { chance: 1, guaranteed: true };
   }
-  let total = COMBAT_CHANCE.PLAYER_BASE_CRIT + ctx.factionCritBonus;
+  let total = COMBAT_CHANCE.PLAYER_BASE_CRIT
+    + ctx.factionCritBonus
+    + (ctx.additiveCritChanceBonus ?? 0);
   if (ctx.abilityId === 'VEIL_PIERCER') {
     total += COMBAT_CHANCE.VEIL_PIERCER_CRIT_BONUS;
   }

@@ -6,11 +6,11 @@ import { formatKeepsakeTriggerToast } from '../data/expeditionKeepsakeRunUiEngin
 
 const TOAST_VISIBLE_MS = 3200;
 
-/** Brief terminal-style toast when a relic trigger message lands in runtime. */
+/** Brief terminal-style toast when a Requisition trigger message lands. */
 export default function KeepsakeTriggerToast(): React.JSX.Element | null {
   const { activeIncursion } = useRun();
   const { theme } = useTerminal();
-  const runtime = activeIncursion.keepsakeRuntime;
+  const runtime = activeIncursion.requisitionRuntime;
   const seenCountRef = useRef(0);
   const lastKeepsakeIdRef = useRef<string | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
@@ -25,9 +25,9 @@ export default function KeepsakeTriggerToast(): React.JSX.Element | null {
       return;
     }
 
-    if (lastKeepsakeIdRef.current !== runtime.keepsakeId) {
+    if (lastKeepsakeIdRef.current !== runtime.requisitionId) {
       seenCountRef.current = 0;
-      lastKeepsakeIdRef.current = runtime.keepsakeId;
+      lastKeepsakeIdRef.current = runtime.requisitionId;
     }
 
     const messages = runtime.messages;
@@ -46,7 +46,7 @@ export default function KeepsakeTriggerToast(): React.JSX.Element | null {
 
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => setToastLine(null), TOAST_VISIBLE_MS);
-  }, [fade, runtime?.keepsakeId, runtime?.messages]);
+  }, [fade, runtime?.requisitionId, runtime?.messages]);
 
   useEffect(() => () => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);

@@ -1,17 +1,12 @@
 import type {
   RunItemDebriefSummary,
-  RunItemId,
   RunItemRuntime,
   RunItemRuntimeStats,
-  RunItemsSlotState,
 } from '../types/runItem';
-import { getRunItemDefinition } from './runItemRegistry';
+import type { CargoRunState } from '../types/cargoGrid';
+import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import { isSupplyCargoItemId } from './cargoSupplyEngine';
 import { buildRunItemRiskLines } from './runItemRunUiEngine';
-
-function listSlottedRunItemIds(slots: RunItemsSlotState | null | undefined): RunItemId[] {
-  if (!slots) return [];
-  return [...slots.combatSlots, ...slots.fieldSlots].filter(Boolean) as RunItemId[];
-}
 
 function buildRunItemStatLines(stats: RunItemRuntimeStats): string[] {
   const lines: string[] = [];
@@ -39,71 +34,55 @@ function buildRunItemStatLines(stats: RunItemRuntimeStats): string[] {
   return lines;
 }
 
-function buildRunItemLoadoutLines(slots: RunItemsSlotState | null | undefined): string[] {
-  const slotted = listSlottedRunItemIds(slots);
-  if (slotted.length === 0) return [];
-  return slotted.map((itemId) => getRunItemDefinition(itemId).name);
-}
-
 export function buildRunItemDebriefSummary(
   runtime: RunItemRuntime | null | undefined,
-  slots: RunItemsSlotState | null | undefined,
-  broughtAtStart?: RunItemsSlotState | null,
+  cargo: CargoRunState | null | undefined,
 ): RunItemDebriefSummary | null {
-  const slotted = listSlottedRunItemIds(slots);
-  const brought = listSlottedRunItemIds(broughtAtStart);
+  const carried = cargo?.grid.placed
+    .filter((instance) => isSupplyCargoItemId(instance.itemId))
+    .map((instance) => instance.itemId) ?? [];
+  const used = runtime?.usedSupplyIds ?? [];
   const triggered = (runtime?.stats.triggerCount ?? 0) > 0;
-  if (slotted.length === 0 && brought.length === 0 && !triggered) return null;
+  if (carried.length === 0 && used.length === 0 && !triggered) return null;
 
-  const combatSlotted = (slots?.combatSlots.filter(Boolean) ?? []) as RunItemId[];
-  const fieldSlotted = (slots?.fieldSlots.filter(Boolean) ?? []) as RunItemId[];
-  const combatBrought = (broughtAtStart?.combatSlots.filter(Boolean) ?? []) as RunItemId[];
-  const fieldBrought = (broughtAtStart?.fieldSlots.filter(Boolean) ?? []) as RunItemId[];
   const statLines = runtime ? buildRunItemStatLines(runtime.stats) : [];
   const riskLines = runtime ? buildRunItemRiskLines(runtime) : [];
-  const loadoutLines = buildRunItemLoadoutLines(slots);
-  if (loadoutLines.length > 0 && statLines.length === 0) {
-    statLines.unshift(`Items remaining: ${loadoutLines.join(', ')}`);
+  if (carried.length > 0) {
+    statLines.push(
+      `Unused Supplies carried: ${carried.map((id) => CARGO_ITEM_CATALOG[id].name).join(', ')}`,
+    );
   }
 
   return {
-    itemsSlotted: slotted,
-    itemsBrought: brought,
-    combatSlotted,
-    fieldSlotted,
-    combatBrought,
-    fieldBrought,
+    suppliesUsed: [...used],
+    suppliesCarriedAtEnd: carried,
     triggered,
     triggerCount: runtime?.stats.triggerCount ?? 0,
     messages: [...(runtime?.messages ?? [])],
     riskLines,
     statLines,
-    note: triggered ? null : 'Run items were not used.',
+    note: used.length > 0 ? null : 'No Supplies were used.',
   };
 }
 
 export function formatRunItemDebriefPreview(
   runtime: RunItemRuntime | null | undefined,
-  slots: RunItemsSlotState | null | undefined,
-  broughtAtStart?: RunItemsSlotState | null,
+  cargo: CargoRunState | null | undefined,
 ): string {
-  return simulateRunItemDebriefReport(runtime, slots, broughtAtStart);
+  return simulateRunItemDebriefReport(runtime, cargo);
 }
 
 /** Full debrief simulation for dev debug and mid-run inspection. */
 export function simulateRunItemDebriefReport(
   runtime: RunItemRuntime | null | undefined,
-  slots: RunItemsSlotState | null | undefined,
-  broughtAtStart?: RunItemsSlotState | null,
+  cargo: CargoRunState | null | undefined,
 ): string {
-  const summary = buildRunItemDebriefSummary(runtime, slots, broughtAtStart);
-  if (!summary) return 'RUN ITEM DEBRIEF — none slotted or triggered.';
+  const summary = buildRunItemDebriefSummary(runtime, cargo);
+  if (!summary) return 'SUPPLY DEBRIEF — none carried or used.';
   const lines = [
-    'RUN ITEM DEBRIEF SIMULATION',
-    `combat brought: ${summary.combatBrought.map((id) => getRunItemDefinition(id).shortName).join(', ') || 'none'}`,
-    `field brought: ${summary.fieldBrought.map((id) => getRunItemDefinition(id).shortName).join(', ') || 'none'}`,
-    `combat remaining: ${summary.combatSlotted.map((id) => getRunItemDefinition(id).shortName).join(', ') || 'none'}`,
-    `field remaining: ${summary.fieldSlotted.map((id) => getRunItemDefinition(id).shortName).join(', ') || 'none'}`,
+    'CARGO SUPPLY DEBRIEF SIMULATION',
+    `used: ${summary.suppliesUsed.map((id) => CARGO_ITEM_CATALOG[id].name).join(', ') || 'none'}`,
+    `carried: ${summary.suppliesCarriedAtEnd.map((id) => CARGO_ITEM_CATALOG[id].name).join(', ') || 'none'}`,
     `triggered: ${summary.triggered ? 'yes' : 'no'}`,
     `trigger count: ${summary.triggerCount}`,
   ];

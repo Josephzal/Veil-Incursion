@@ -168,7 +168,6 @@ export default function OperativeIdentityDossier({
             {(() => {
               const familyId = getEquippedWeaponForClass({
                 weaponUnlocks: account.weaponUnlocks,
-                weaponTiers: account.weaponTiers,
                 equippedWeaponByClass: account.equippedWeaponByClass,
               }, account.activeClass);
               if (!familyId) return classDef.weaponLine;

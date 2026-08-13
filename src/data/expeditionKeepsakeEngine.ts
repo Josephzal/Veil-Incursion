@@ -1,12 +1,16 @@
-import type { KeepsakeDeployment, KeepsakeId, KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime as KeepsakeRuntime } from '../types/expeditionRequisition';
+import type {
+  RequisitionDeployment,
+  RequisitionId,
+} from '../types/expeditionRequisition';
 import type { RunGenerationContext } from '../types/worldState';
 import {
   canUseKeepsakeTrigger,
   createKeepsakeRuntime,
   recordKeepsakeTrigger,
 } from './keepsakeRunState';
-import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
-import { recordKeepsakeDeploymentDecisions } from './expeditionKeepsakeDeploymentEngine';
+import { EXPEDITION_REQUISITION_REGISTRY } from './expeditionRequisitionRegistry';
+import { appendKeepsakeDecision } from './keepsakeRunState';
 
 export interface KeepsakeTriggerResult {
   runtime: KeepsakeRuntime | null;
@@ -15,11 +19,11 @@ export interface KeepsakeTriggerResult {
 }
 
 export function initializeKeepsakeRuntime(
-  keepsakeId: KeepsakeId | null | undefined,
-  deployment?: Partial<KeepsakeDeployment> | null,
+  requisitionId: RequisitionId | null | undefined,
+  deployment?: Partial<RequisitionDeployment> | null,
 ): KeepsakeRuntime | null {
-  if (!keepsakeId) return null;
-  return createKeepsakeRuntime(keepsakeId, deployment);
+  if (!requisitionId) return null;
+  return createKeepsakeRuntime(requisitionId, deployment);
 }
 
 export function formatKeepsakeLogLine(shortName: string, message: string): string {
@@ -34,16 +38,29 @@ export function applyKeepsakeOnRunStart(
   logLines: string[];
 } {
   if (!runtime) return { runtime: null, logLines: [] };
-  const def = getKeepsakeDefinition(runtime.keepsakeId);
-  let nextRuntime = recordKeepsakeDeploymentDecisions(runtime);
+  const def = EXPEDITION_REQUISITION_REGISTRY[runtime.requisitionId];
+  let nextRuntime = runtime;
+  if (runtime.deployment.attunement) {
+    nextRuntime = appendKeepsakeDecision(nextRuntime, {
+      key: 'attunement',
+      label: 'Attunement',
+      value: runtime.deployment.attunement,
+    });
+  }
+  if (runtime.deployment.routeDoctrine) {
+    nextRuntime = appendKeepsakeDecision(nextRuntime, {
+      key: 'route_doctrine',
+      label: 'Route Doctrine',
+      value: runtime.deployment.routeDoctrine,
+    });
+  }
   const logLines: string[] = [
-    formatKeepsakeLogLine(def.shortName, `Expedition relic armed — ${def.name}.`),
+    formatKeepsakeLogLine(def.shortName, `Expedition Requisition armed — ${def.name}.`),
   ];
 
   const deploymentLabel = nextRuntime.decisions.find((decision) => (
     decision.key === 'attunement'
     || decision.key === 'route_doctrine'
-    || decision.key === 'mirror_category'
   ));
   if (deploymentLabel) {
     logLines.push(formatKeepsakeLogLine(def.shortName, `${deploymentLabel.label}: ${deploymentLabel.value}.`));
@@ -53,7 +70,10 @@ export function applyKeepsakeOnRunStart(
     return { runtime: nextRuntime, logLines };
   }
 
-  const triggerKey = `${runtime.keepsakeId}_run_start`;
+  if (runtime.requisitionId === 'hazard_pay') {
+    return { runtime: nextRuntime, logLines };
+  }
+  const triggerKey = `${runtime.requisitionId}_run_start`;
   if (!canUseKeepsakeTrigger(nextRuntime, triggerKey, 'run')) {
     return { runtime: nextRuntime, logLines };
   }
@@ -75,7 +95,7 @@ export function tryKeepsakeTrigger(
   if (!canUseKeepsakeTrigger(runtime, triggerKey, guard, depth)) {
     return { runtime, triggered: false, logLine: null };
   }
-  const def = getKeepsakeDefinition(runtime.keepsakeId);
+  const def = EXPEDITION_REQUISITION_REGISTRY[runtime.requisitionId];
   const next = recordKeepsakeTrigger(runtime, triggerKey, def.triggerMessage, depth);
   return {
     runtime: next,
@@ -86,5 +106,5 @@ export function tryKeepsakeTrigger(
 
 export function getEquippedKeepsakeShortLabel(runtime: KeepsakeRuntime | null | undefined): string | null {
   if (!runtime) return null;
-  return getKeepsakeDefinition(runtime.keepsakeId).shortName.toUpperCase();
+  return EXPEDITION_REQUISITION_REGISTRY[runtime.requisitionId].shortName.toUpperCase();
 }

@@ -107,7 +107,7 @@ export function subscribePoseAlignDebugForcedPose(
  */
 export const AEGIS_LONGSWORD_POSE_REGISTRATION: Record<RegisteredPoseKind, CombatPoseRegistration> = {
   idle: {
-    poseId: 'aegis-runed-longsword:idle',
+    poseId: 'aegis-longsword:idle',
     canvasW: 400,
     canvasH: 1172,
     plantedFoot: { x: 0.4713, y: 0.9834 },
@@ -120,7 +120,7 @@ export const AEGIS_LONGSWORD_POSE_REGISTRATION: Record<RegisteredPoseKind, Comba
     targetFacing: { x: 0.422, y: -0.907 },
   },
   attack: {
-    poseId: 'aegis-runed-longsword:attack',
+    poseId: 'aegis-longsword:attack',
     canvasW: 800,
     canvasH: 998,
     plantedFoot: { x: 0.3787, y: 0.9584 },
@@ -247,7 +247,7 @@ const REF_CONTENT_H = 1714;
 export function usesAnatomyPoseRegistration(
   weaponFamilyId: WeaponFamilyId | null | undefined,
 ): boolean {
-  return weaponFamilyId === 'aegis-runed-longsword';
+  return weaponFamilyId === 'aegis-longsword';
 }
 
 export function getPoseRegistration(

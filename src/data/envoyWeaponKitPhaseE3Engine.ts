@@ -35,8 +35,8 @@ import { isEnvoyProcUltimate } from './combatMasteryEngine';
 import { getWeaponUltimate } from './weaponUltimateRegistry';
 
 const CANONICAL_ORDER: Record<EnvoyWeaponFamilyId, readonly EnvoyWeaponActionId[]> = {
-  'envoy-echo-lantern': ENVOY_VAMBRACE_WEAPON_ACTIONS,
-  'envoy-null-conduit': ENVOY_SCYTHE_WEAPON_ACTIONS,
+  'envoy-vambrace': ENVOY_VAMBRACE_WEAPON_ACTIONS,
+  'envoy-scythe': ENVOY_SCYTHE_WEAPON_ACTIONS,
   'envoy-sanguine-prism': ENVOY_HEARTS_DUE_WEAPON_ACTIONS,
 };
 

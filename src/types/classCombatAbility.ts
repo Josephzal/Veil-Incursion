@@ -110,7 +110,7 @@ export interface ClassCombatEncounterState {
   carbineSuppressedAppliedThisAction: boolean;
   /**
    * W.4 — Deadbolt reload opportunity (Nullbreach-local, encounter-only).
-   * Armed only after Phase-Shift Reload restores ≥1 round on hex-void-cannon.
+   * Armed only after Phase-Shift Reload restores ≥1 round on hex-shotgun.
    */
   deadboltReloadOpportunity: boolean;
   /** W.4 — Threshold prepared reaction armed. */

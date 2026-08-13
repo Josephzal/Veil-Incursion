@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
-import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../data/weaponProgressionEngine';
+import { getEquippedWeaponForClass, resolveWeaponState } from '../data/weaponProgressionEngine';
 import {
   DECRYPTION_COST,
   UNIDENTIFIED_TEMPLATE_LABELS,
@@ -20,22 +20,10 @@ interface DecryptionPanelProps {
 export default function DecryptionPanel({ onStatus }: DecryptionPanelProps): React.JSX.Element {
   const { account, decryptUnidentifiedItem } = usePlayerAccount();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const equippedWeapon = resolveWeaponState(
-    getEquippedWeaponForClass({
-      weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
-      equippedWeaponByClass: account.equippedWeaponByClass,
-    }, account.activeClass),
-    getWeaponTier({
-      weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
-      equippedWeaponByClass: account.equippedWeaponByClass,
-    }, getEquippedWeaponForClass({
-      weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
-      equippedWeaponByClass: account.equippedWeaponByClass,
-    }, account.activeClass)),
-  );
+  const equippedWeapon = resolveWeaponState(getEquippedWeaponForClass({
+    weaponUnlocks: account.weaponUnlocks,
+    equippedWeaponByClass: account.equippedWeaponByClass,
+  }, account.activeClass));
 
   const locked = account.unidentifiedStash.filter((item) => item.state !== 'REVEALED');
 

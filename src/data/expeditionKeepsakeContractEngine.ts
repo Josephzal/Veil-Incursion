@@ -4,7 +4,7 @@ import type {
   ContractRunProgress,
   KeepsakeSealedClause,
 } from '../types/contract';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime as KeepsakeRuntime } from '../types/expeditionRequisition';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { RunResourceLedger } from '../types/runResourceLedger';
 import type { ResourceItemId } from '../types/resourceItem';

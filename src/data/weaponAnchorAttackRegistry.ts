@@ -33,80 +33,80 @@ export interface WeaponAnchorAttackRecord {
 }
 
 export const WEAPON_ANCHOR_ATTACK_BY_FAMILY: Record<WeaponFamilyId, WeaponAnchorAttackRecord> = {
-  'aegis-runed-longsword': {
+  'aegis-longsword': {
     id: 'WARDENS_STRIKE',
     displayName: "WARDEN'S STRIKE",
-    weaponFamilyId: 'aegis-runed-longsword',
-    weaponDisplayName: 'Runed Longsword',
+    weaponFamilyId: 'aegis-longsword',
+    weaponDisplayName: 'Longsword',
     classId: 'AEGIS',
     classCompatId: 'STRIKE',
     targetPattern: 'SINGLE',
     definingEffects: ['KINETIC', 'FRACTURE'],
   },
-  'aegis-rift-edge': {
+  'aegis-paired-blades': {
     id: 'VEILSTEP_SLASH',
     displayName: 'VEILSTEP SLASH',
-    weaponFamilyId: 'aegis-rift-edge',
+    weaponFamilyId: 'aegis-paired-blades',
     weaponDisplayName: 'Paired Blades',
     classId: 'AEGIS',
     classCompatId: 'STRIKE',
     targetPattern: 'SINGLE',
     definingEffects: ['KINETIC', 'OCCULT RIDER'],
   },
-  'aegis-claymore-blade': {
+  'aegis-claymore': {
     id: 'BREAKING_HEW',
     displayName: 'BREAKING HEW',
-    weaponFamilyId: 'aegis-claymore-blade',
-    weaponDisplayName: 'Unmaker',
+    weaponFamilyId: 'aegis-claymore',
+    weaponDisplayName: 'Claymore',
     classId: 'AEGIS',
     classCompatId: 'STRIKE',
     targetPattern: 'SINGLE',
     definingEffects: ['HEAVY FRACTURE', 'STAMINA'],
   },
-  'hex-silver-core-sidearm': {
+  'hex-revolver': {
     id: 'SILVER_VERDICT',
     displayName: 'SILVER VERDICT',
-    weaponFamilyId: 'hex-silver-core-sidearm',
-    weaponDisplayName: 'Silver-Core Sidearm',
+    weaponFamilyId: 'hex-revolver',
+    weaponDisplayName: 'Revolver',
     classId: 'HEX_SHOT',
     classCompatId: 'SILVER_CORE_SIDEARM',
     targetPattern: 'SINGLE',
     definingEffects: ['BALLISTIC', 'PRECISION'],
   },
-  'hex-void-cannon': {
+  'hex-shotgun': {
     id: 'BREACH_ROUND',
     displayName: 'BREACH ROUND',
-    weaponFamilyId: 'hex-void-cannon',
-    weaponDisplayName: 'Nullbreach',
+    weaponFamilyId: 'hex-shotgun',
+    weaponDisplayName: 'Shotgun',
     classId: 'HEX_SHOT',
     classCompatId: 'SILVER_CORE_SIDEARM',
     targetPattern: 'SINGLE',
     definingEffects: ['BREACH', 'ARMOR PRESSURE'],
   },
-  'hex-pulse-rifle': {
+  'hex-carbine': {
     id: 'CINDER_SWEEP',
     displayName: 'CINDER SWEEP',
-    weaponFamilyId: 'hex-pulse-rifle',
-    weaponDisplayName: 'Ash Shotgun',
+    weaponFamilyId: 'hex-carbine',
+    weaponDisplayName: 'Carbine',
     classId: 'HEX_SHOT',
     classCompatId: 'SILVER_CORE_SIDEARM',
     targetPattern: 'SPREAD',
     definingEffects: ['SPREAD', 'PRIMARY'],
   },
-  'envoy-null-conduit': {
+  'envoy-scythe': {
     id: 'NULL_ARC',
     displayName: 'NULL ARC',
-    weaponFamilyId: 'envoy-null-conduit',
+    weaponFamilyId: 'envoy-scythe',
     weaponDisplayName: 'Scythe',
     classId: 'ENVOY',
     classCompatId: 'VEIL_SPLINTER',
     targetPattern: 'SINGLE',
     definingEffects: ['OCCULT', 'CLEAN CYCLE'],
   },
-  'envoy-echo-lantern': {
+  'envoy-vambrace': {
     id: 'GRAVEWEAVE',
     displayName: 'GRAVEWEAVE',
-    weaponFamilyId: 'envoy-echo-lantern',
+    weaponFamilyId: 'envoy-vambrace',
     weaponDisplayName: 'Vambrace',
     classId: 'ENVOY',
     classCompatId: 'VEIL_SPLINTER',
@@ -117,7 +117,7 @@ export const WEAPON_ANCHOR_ATTACK_BY_FAMILY: Record<WeaponFamilyId, WeaponAnchor
     id: 'BLOOD_REFRACTION',
     displayName: 'BLOOD REFRACTION',
     weaponFamilyId: 'envoy-sanguine-prism',
-    weaponDisplayName: "Heart's Due",
+    weaponDisplayName: 'Sanguine Prism',
     classId: 'ENVOY',
     classCompatId: 'VEIL_SPLINTER',
     targetPattern: 'SINGLE',
@@ -142,9 +142,9 @@ const LEGACY_ANCHOR_ALIAS: Record<string, WeaponAnchorAttackId> = {
 };
 
 const CLASS_COMPAT_TO_STARTER_FAMILY: Record<string, WeaponFamilyId> = {
-  STRIKE: 'aegis-runed-longsword',
-  SILVER_CORE_SIDEARM: 'hex-silver-core-sidearm',
-  VEIL_SPLINTER: 'envoy-echo-lantern',
+  STRIKE: 'aegis-longsword',
+  SILVER_CORE_SIDEARM: 'hex-revolver',
+  VEIL_SPLINTER: 'envoy-vambrace',
 };
 
 export function getWeaponAnchorAttack(
@@ -232,24 +232,25 @@ export function resolveWeaponAnchorForAbility(
 
 /**
  * Retired player-facing strings — must never appear on active surfaces.
- * Phase H.1a: Revolver / Black Door / Carbine are legacy Hex presentation aliases.
- * Canonical Hex live names: Silver-Core Sidearm / Nullbreach / Ash Shotgun.
+ * Stage II-C — old H.1a / branded live names are retired; canonical short names are live.
  */
 export const RETIRED_WEAPON_DISPLAY_NAMES = [
+  'Unmaker',
+  "Heart's Due",
+  'Silver-Core Sidearm',
+  'Nullbreach',
+  'Ash Shotgun',
+  'Black Door',
+  'Runed Longsword',
   'Rift Edge',
+  'Echo Lantern',
+  'Null Conduit',
+  'Pulse Rifle',
+  'Void Cannon',
   'Veil Edge',
   'Nullbreach Carbine',
   'Nullbreach Shotgun',
-  /** Bare "Longsword" retired — canonical live name is Runed Longsword. */
   'Claymore Blade',
-  'Pulse Rifle',
-  'Null Conduit',
-  'Echo Lantern',
-  'Sanguine Prism',
-  /** Hex H.1a — WU-1 presentation names retired in favor of H.1a canon. */
-  'Revolver',
-  'Black Door',
-  'Carbine',
 ] as const;
 
 export const RETIRED_ANCHOR_DISPLAY_NAMES = [

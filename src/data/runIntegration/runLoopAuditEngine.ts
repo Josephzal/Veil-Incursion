@@ -3,8 +3,7 @@ import type { SectorState, WorldStatePersistedState } from '../../types/worldSta
 import type { SelectedContractState } from '../../types/contract';
 import { validateSelectedContractForDescent } from './contractValidationEngine';
 import { sumLedgerCategoryTotals } from './runIntegrationHelpers';
-import { ALL_KEEPSAKE_IDS } from '../expeditionKeepsakeRegistry';
-import { BOUND_REQUISITION_CATALOG } from '../boundRequisitions';
+import { isRequisitionId } from '../expeditionRequisitionRegistry';
 
 export type RunLoopAuditStatus = 'pass' | 'fail' | 'warn' | 'skip';
 
@@ -88,11 +87,11 @@ export function auditPreRunDescent(
 
   entries.push(entry(
     'PRE_RUN',
-    'Expedition relic valid',
-    !account.equippedKeepsakeId || ALL_KEEPSAKE_IDS.includes(account.equippedKeepsakeId)
+    'Expedition Requisition valid',
+    !account.equippedRequisitionId || isRequisitionId(account.equippedRequisitionId)
       ? 'pass'
       : 'fail',
-    account.equippedKeepsakeId ?? 'none',
+    account.equippedRequisitionId ?? 'none',
   ));
 
   entries.push(entry(
@@ -112,17 +111,14 @@ export function auditRunStartSnapshot(incursion: ActiveIncursionState): RunLoopA
   entries.push(entry('RUN_START', 'Active contract copied', incursion.activeContract ? 'pass' : 'warn'));
   entries.push(entry('RUN_START', 'Active operation snapshot', ctx?.activeOperation ? 'pass' : 'fail', ctx?.activeOperation?.title));
   entries.push(entry('RUN_START', 'Active anchor snapshot', ctx?.activeAnchor ? 'pass' : 'warn', ctx?.activeAnchor?.type));
-  entries.push(entry('RUN_START', 'Keepsake runtime initialized', incursion.keepsakeRuntime != null ? 'pass' : 'skip'));
+  entries.push(entry(
+    'RUN_START',
+    'Requisition runtime initialized',
+    incursion.requisitionRuntime != null ? 'pass' : 'skip',
+  ));
   entries.push(entry('RUN_START', 'Resource ledger initialized', incursion.runResourceLedger ? 'pass' : 'fail'));
-  entries.push(entry('RUN_START', 'Run items at start snapshot', incursion.runItemsAtRunStart ? 'pass' : 'warn'));
+  entries.push(entry('RUN_START', 'Cargo Supply runtime initialized', incursion.supplyRuntime ? 'pass' : 'fail'));
   entries.push(entry('RUN_START', 'Echo run state initialized', incursion.echoRunState ? 'pass' : 'fail'));
-
-  if (incursion.boundRequisition?.id) {
-    const valid = incursion.boundRequisition.id in BOUND_REQUISITION_CATALOG;
-    entries.push(entry('RUN_START', 'Bound requisition valid', valid ? 'pass' : 'fail', incursion.boundRequisition.id));
-  } else {
-    entries.push(entry('RUN_START', 'Bound requisition valid', 'skip', 'none equipped'));
-  }
 
   return entries;
 }

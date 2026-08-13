@@ -1,12 +1,14 @@
 /**
  * Phase 3J — hard graft compatibility (equip gates) vs advisory anti-synergy (separate).
  * Phase D — Aegis mechanic-aware eligibility via aegisGraftCompatibility.
+ * Stage II-B — capacity/category access from run depth band, not Class Rank.
  */
 import type { ClassType } from '../../types/game';
 import {
   classifyAbilitySocket,
-  getGraftSocketAccessForClassRank,
+  getGraftSocketAccessForRunDepth,
   inferGraftCostTier,
+  type GraftSocketAccess,
   type GraftSocketCategory,
 } from './graftCapacityEngine';
 import { canGraftClassAbility, getClassGraftDefinition } from '../classGraftEngine';
@@ -52,11 +54,27 @@ export function isLiveGraftId(classId: ClassType, graftId: string): boolean {
   return (ALL_VEIL_GRAFT_IDS as readonly string[]).includes(graftId);
 }
 
+function resolveAccess(args: {
+  runDepthBand?: number;
+  access?: GraftSocketAccess;
+}): GraftSocketAccess {
+  if (args.access) return args.access;
+  return getGraftSocketAccessForRunDepth(args.runDepthBand ?? 1);
+}
+
 export function evaluateGraftCompatibility(args: {
   classId: ClassType;
   abilityId: string;
   graftId: string;
-  classRank: number;
+  /** Core Loop Depth 1–3 (= currentDistrict). */
+  runDepthBand?: number;
+  /** Optional precomputed access — overrides runDepthBand. */
+  access?: GraftSocketAccess;
+  /**
+   * @deprecated Stage II-B — ignored. Class Rank no longer gates grafts.
+   * Kept optional so older call sites compile during migration.
+   */
+  classRank?: number;
   /** Current ability → graft map for this class. */
   equippedMap: Readonly<Record<string, string>>;
   /** True when the graft is permanently owned / available to equip. */
@@ -74,9 +92,10 @@ export function evaluateGraftCompatibility(args: {
   }
   if (!args.graftAvailable) rejections.push('NOT_OWNED_OR_UNAVAILABLE');
 
-  const access = getGraftSocketAccessForClassRank(args.classRank);
+  const access = resolveAccess(args);
   const equippedEntries = Object.entries(args.equippedMap).filter(([, g]) => Boolean(g));
   const alreadyOnAbility = args.equippedMap[args.abilityId];
+  // Replacement on the same ability does not consume an extra socket.
   const countIfNew = equippedEntries.filter(([ability]) => ability !== args.abilityId).length
     + (alreadyOnAbility === args.graftId ? 0 : 1);
 
@@ -86,11 +105,6 @@ export function evaluateGraftCompatibility(args: {
     ([ability, g]) => ability !== args.abilityId && g === args.graftId,
   );
   if (duplicateElsewhere) rejections.push('DUPLICATE_GRAFT_ID');
-
-  if (alreadyOnAbility && alreadyOnAbility !== args.graftId) {
-    // Overwrite is allowed in live sanctuary inject; still flag for Phase 5 one-graft rule clarity
-    // as soft — hard ban only when capacity would exceed after keeping both (N/A).
-  }
 
   if (!canGraftClassAbility(args.classId, args.abilityId, {
     allowFixedBasic: access.allowFixedBasic,
@@ -105,15 +119,7 @@ export function evaluateGraftCompatibility(args: {
     }
   }
 
-  if (socket === 'FIXED_BASIC_SIGNATURE' && !access.allowFixedBasic) {
-    if (!rejections.includes('FIXED_BASIC_LOCKED')) rejections.push('FIXED_BASIC_LOCKED');
-  }
-  if (socket === 'ULTIMATE' && !access.allowUltimate) {
-    if (!rejections.includes('ULTIMATE_LOCKED')) rejections.push('ULTIMATE_LOCKED');
-  }
-  if ((costTier === 'APEX' || costTier === 'MASTERWORK') && !access.allowApexMasterwork) {
-    rejections.push('APEX_LOCKED');
-  }
+  // Apex catalog band is no longer Class-Rank gated (Stage II-B).
 
   if (
     args.classId === 'HEX_SHOT'
@@ -145,8 +151,6 @@ export function evaluateGraftCompatibility(args: {
       }
     }
   }
-
-  // Sponsor-restricted: live catalogs have no sponsor field — none.
 
   return { ok: rejections.length === 0, rejections, socket, costTier };
 }

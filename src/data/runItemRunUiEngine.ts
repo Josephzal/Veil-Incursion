@@ -1,11 +1,11 @@
 import type {
   RunItemId,
   RunItemRuntime,
-  RunItemsSlotState,
 } from '../types/runItem';
+import type { CargoRunState } from '../types/cargoGrid';
 import type { RunStatusCategory, RunStatusEntry } from '../utils/runStatusSnapshot';
-import { countOccupiedRunItemSlots } from './runItemRunState';
 import { getRunItemDefinition } from './runItemRegistry';
+import { isRunItemId } from './runItemIdAliases';
 
 export interface RunItemLiveCounter {
   key: string;
@@ -14,28 +14,32 @@ export interface RunItemLiveCounter {
   tone: 'neutral' | 'warning' | 'accent';
 }
 
-function listSlottedRunItemIds(slots: RunItemsSlotState | null | undefined): RunItemId[] {
-  if (!slots) return [];
-  return [...slots.combatSlots, ...slots.fieldSlots].filter(Boolean) as RunItemId[];
+function listCarriedSupplyIds(cargo: CargoRunState | null | undefined): RunItemId[] {
+  if (!cargo) return [];
+  return cargo.grid.placed.flatMap((instance) => (
+    isRunItemId(instance.itemId)
+      ? [instance.itemId as RunItemId]
+      : []
+  ));
 }
 
-/** Whether the RUN ITEMS chip should show even when slots are empty (live counters / pending offer). */
+/** Whether the CARGO SUPPLIES chip should show even when slots are empty (live counters / pending offer). */
 export function shouldShowRunItemChromeChip(
   runtime: RunItemRuntime | null | undefined,
-  slots?: RunItemsSlotState | null,
+  cargo?: CargoRunState | null,
 ): boolean {
-  if (slots && countOccupiedRunItemSlots(slots) > 0) return true;
+  if (listCarriedSupplyIds(cargo).length > 0) return true;
   if (!runtime) return false;
   if (runtime.pendingOffer) return true;
-  return buildRunItemLiveCounters(runtime, slots).length > 0;
+  return buildRunItemLiveCounters(runtime, cargo).length > 0;
 }
 
-/** Compact HUD counters surfaced during an active run with run items equipped. */
+/** Compact HUD counters surfaced during an active run with supplies equipped. */
 export function buildRunItemLiveCounters(
   runtime: RunItemRuntime | null | undefined,
-  slots?: RunItemsSlotState | null,
+  cargo?: CargoRunState | null,
 ): RunItemLiveCounter[] {
-  if (!runtime && listSlottedRunItemIds(slots).length === 0) return [];
+  if (!runtime && listCarriedSupplyIds(cargo).length === 0) return [];
 
   const counters: RunItemLiveCounter[] = [];
   const push = (
@@ -111,12 +115,12 @@ export function formatRunItemLogLine(shortName: string, message: string): string
 export function formatRunItemTriggerToast(
   runtime: RunItemRuntime,
   message: string,
-  slots?: RunItemsSlotState | null,
+  cargo?: CargoRunState | null,
 ): string {
-  const slotted = listSlottedRunItemIds(slots);
-  const shortName = slotted.length === 1
-    ? getRunItemDefinition(slotted[0]).shortName
-    : 'RUN ITEM';
+  const carried = listCarriedSupplyIds(cargo);
+  const shortName = carried.length === 1
+    ? getRunItemDefinition(carried[0]).shortName
+    : 'SUPPLY';
   return formatRunItemLogLine(shortName, message);
 }
 
@@ -159,35 +163,25 @@ export function buildRunItemRiskLines(runtime: RunItemRuntime): string[] {
     lines.push(`Field choice pending: ${runtime.pendingFieldChoice.prompt}`);
   }
   if (runtime.pendingOffer) {
-    lines.push(`Run item slot offer pending: ${runtime.pendingOffer.itemId}`);
+    lines.push(`Incoming Supply pending: ${runtime.pendingOffer.itemId}`);
   }
 
   return lines;
 }
 
-/** Run status manifest entries for slotted run items and live counters. */
+/** Supply effect state; carried instances remain visible in the Cargo manifest. */
 export function buildRunItemRunStatusEntries(
   runtime: RunItemRuntime | null | undefined,
-  slots?: RunItemsSlotState | null,
+  cargo?: CargoRunState | null,
 ): RunStatusEntry[] {
-  const slotted = listSlottedRunItemIds(slots);
-  if (slotted.length === 0 && !runtime) return [];
+  if (!runtime) return [];
+  const entries: RunStatusEntry[] = [];
 
-  const entries: RunStatusEntry[] = slotted.map((itemId) => {
-    const def = getRunItemDefinition(itemId);
-    return {
-      id: `run-item-${itemId}`,
-      label: def.shortName,
-      description: def.effectSummary,
-      category: 'MACRO' satisfies RunStatusCategory,
-    };
-  });
-
-  buildRunItemLiveCounters(runtime, slots).forEach((counter) => {
+  buildRunItemLiveCounters(runtime, cargo).forEach((counter) => {
     entries.push({
       id: `run-item-counter-${counter.key}`,
       label: `${counter.label} ${counter.value}`,
-      description: 'Run item runtime counter.',
+      description: 'Cargo Supply runtime counter.',
       category: counter.tone === 'warning' ? 'HAZARD' : 'MACRO',
     });
   });
@@ -196,7 +190,7 @@ export function buildRunItemRunStatusEntries(
     buildRunItemRiskLines(runtime).forEach((risk, index) => {
       entries.push({
         id: `run-item-risk-${index}`,
-        label: 'Item Risk',
+        label: 'Supply Risk',
         description: risk,
         category: 'HAZARD',
       });

@@ -106,20 +106,20 @@ export function resolveAegisStrikeBasic(args: {
   let consumeTempo = false;
 
   switch (weapon.familyId) {
-    case 'aegis-runed-longsword':
+    case 'aegis-longsword':
       kinetic = scalePct(12, mods.strikeDamagePct);
       fractureGain = scalePct(28, mods.fractureFromMeleePct);
       reserveGain = 15 + (mods.reserveGainFlat ?? 0);
       logLines.push('[RUNED LONGSWORD] >> Steady Fracture strike.');
       break;
-    case 'aegis-claymore-blade':
+    case 'aegis-claymore':
       kinetic = scalePct(11, mods.strikeDamagePct);
       fractureGain = scalePct(38, mods.fractureFromMeleePct);
       staminaCost = Math.max(8, Math.floor(18 * (1 + (mods.strikeStaminaCostPct ?? 0) / 100)));
       reserveGain = 6 + (mods.reserveGainFlat ?? 0);
       logLines.push('[CLAYMORE] >> Heavy Fracture commitment.');
       break;
-    case 'aegis-rift-edge':
+    case 'aegis-paired-blades':
       kinetic = scalePct(9, mods.strikeDamagePct ?? -5);
       fractureGain = 14;
       reserveGain = 8 + (mods.reserveGainFlat ?? 0);
@@ -185,7 +185,7 @@ export function resolveHexBasicShot(args: {
   }
 
   switch (weapon.familyId) {
-    case 'hex-silver-core-sidearm': {
+    case 'hex-revolver': {
       let dmg = scalePct(catalogBaseDamage || 10, mods.ballisticDamagePct);
       let fractureGain = 15;
       const hpRatio = primary.maxHp > 0 ? primary.currentHp / primary.maxHp : 1;
@@ -207,7 +207,7 @@ export function resolveHexBasicShot(args: {
         innateArmorPressureLayers: 0,
       };
     }
-    case 'hex-void-cannon': {
+    case 'hex-shotgun': {
       let dmg = scalePct(16, mods.ballisticDamagePct);
       const staminaCost = Math.max(4, Math.floor(10 * (1 + (mods.strikeStaminaCostPct ?? 0) / 100)));
       const armored = (primary.kineticArmor ?? 0) > 0;
@@ -235,7 +235,7 @@ export function resolveHexBasicShot(args: {
         innateArmorPressureLayers: NULLBREACH_INNATE_ARMOR_PRESSURE_LAYERS,
       };
     }
-    case 'hex-pulse-rifle': {
+    case 'hex-carbine': {
       // Ash Shotgun fantasy — repeatable spread, weaker than Ash-Jacket Salvo burst.
       // Missing secondary contacts are NEVER redirected onto the primary.
       const primaryDmg = scalePct(8, mods.ballisticDamagePct);
@@ -340,7 +340,7 @@ export function resolveEnvoySplinterBasic(args: {
   let invokeDebuffHook = false;
 
   switch (weapon.familyId) {
-    case 'envoy-null-conduit':
+    case 'envoy-scythe':
       fluxCost = Math.max(3, fluxCost - 1);
       occultDamage = scalePct(catalogDamage || 10, mods.occultDamagePct);
       rotStacks = 1;
@@ -359,7 +359,7 @@ export function resolveEnvoySplinterBasic(args: {
         logLines.push('[SCYTHE] >> Clean Flux cycle — sequence Catalyst for payoff.');
       }
       break;
-    case 'envoy-echo-lantern':
+    case 'envoy-vambrace':
       occultDamage = Math.max(4, Math.floor(scalePct(catalogDamage || 10, mods.occultDamagePct) * 0.7));
       fluxCost = catalogFluxCost || 5;
       rotStacks = 2;
@@ -467,7 +467,7 @@ export function resolveClaymoreFractureBreakReserve(
   familyId: WeaponFamilyId,
   runtime: WeaponRuntimeState,
 ): { reserveGain: number; runtimePatch?: Partial<WeaponRuntimeState>; log?: string } {
-  if (familyId !== 'aegis-claymore-blade') return { reserveGain: 0 };
+  if (familyId !== 'aegis-claymore') return { reserveGain: 0 };
   if (runtime.claymoreBreakCashoutUsed) {
     return { reserveGain: 8, log: '[CLAYMORE] >> Fracture break — Reserve pulse.' };
   }
@@ -495,7 +495,7 @@ export function isTargetUsefulForWeaponBasic(
   target: EnemyCombatProfile | null | undefined,
 ): boolean {
   if (!target) return false;
-  if (familyId === 'hex-void-cannon') {
+  if (familyId === 'hex-shotgun') {
     return (target.kineticArmor ?? 0) > 0 || isEnemyFractured(target);
   }
   return true;

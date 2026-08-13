@@ -252,7 +252,7 @@ function makeCtx(
 
 // DEVASTATE does not grant Unmaker T3 WA-only break reserve (technique id / no WA break)
 {
-  const unmakerT3 = resolveWeaponState('aegis-claymore-blade', 3);
+  const unmakerT3 = resolveWeaponState('aegis-claymore');
   const grant = resolveUnmakerTier3FractureBreakReserveGrant({
     weapon: unmakerT3,
     causesFractureBreak: true,
@@ -271,39 +271,39 @@ function makeCtx(
   assert.ok(!desc.includes('gauge'));
 }
 
-// ── VEIL_PIERCER / REAVE matrix preservation ─────────────────────────────────
+// ── VEIL_PIERCER / REAVE — tierless baselines (== former Tier I) ─────────────
 const EXPECTED: Array<{
-  family: 'aegis-runed-longsword' | 'aegis-rift-edge' | 'aegis-claymore-blade';
-  tier: 1 | 2 | 3;
+  family: 'aegis-longsword' | 'aegis-paired-blades' | 'aegis-claymore';
   power: number;
   vp: number;
   reave: number;
 }> = [
-  { family: 'aegis-runed-longsword', tier: 1, power: 15, vp: 12, reave: 17 },
-  { family: 'aegis-runed-longsword', tier: 2, power: 16, vp: 13, reave: 18 },
-  { family: 'aegis-runed-longsword', tier: 3, power: 17, vp: 14, reave: 19 },
-  { family: 'aegis-rift-edge', tier: 1, power: 14, vp: 11, reave: 16 },
-  { family: 'aegis-rift-edge', tier: 2, power: 14, vp: 11, reave: 16 },
-  { family: 'aegis-rift-edge', tier: 3, power: 14, vp: 11, reave: 16 },
-  { family: 'aegis-claymore-blade', tier: 1, power: 17, vp: 14, reave: 19 },
-  { family: 'aegis-claymore-blade', tier: 2, power: 18, vp: 15, reave: 20 },
-  { family: 'aegis-claymore-blade', tier: 3, power: 18, vp: 15, reave: 20 },
+  { family: 'aegis-longsword', power: 15, vp: 12, reave: 17 },
+  { family: 'aegis-paired-blades', power: 14, vp: 11, reave: 16 },
+  { family: 'aegis-claymore', power: 17, vp: 14, reave: 19 },
 ];
 
 for (const row of EXPECTED) {
-  const state = resolveWeaponState(row.family, row.tier);
+  const state = resolveWeaponState(row.family);
   const stats = resolveWeaponCombatStatsFromState(state);
   const power = resolveAegisTechniqueStrikePower(state.statModifiers);
-  assert.equal(stats.aegisTechniqueStrikePower, row.power, `${row.family} T${row.tier} power field`);
-  assert.equal(power, row.power, `${row.family} T${row.tier} resolve`);
-  assert.equal(veilPiercerOccultDamage(power), row.vp, `${row.family} T${row.tier} VP`);
-  assert.equal(reaveKineticDamage(power), row.reave, `${row.family} T${row.tier} Reave`);
-  // Authored technique field is the live authority (not silent strikeDamagePct alone)
-  assert.equal(
-    state.statModifiers.aegisTechniquePowerPct,
-    state.statModifiers.aegisTechniquePowerPct ?? state.statModifiers.strikeDamagePct ?? 0,
+  assert.equal(stats.aegisTechniqueStrikePower, row.power, `${row.family} power field`);
+  assert.equal(power, row.power, `${row.family} resolve`);
+  assert.equal(veilPiercerOccultDamage(power), row.vp, `${row.family} VP`);
+  assert.equal(reaveKineticDamage(power), row.reave, `${row.family} Reave`);
+  assert.deepEqual(state.statModifiers, WEAPON_REGISTRY[row.family].baselineStatModifiers);
+}
+
+// Tierless equality — no T2/T3 power ladder
+{
+  const longsword = resolveWeaponState('aegis-longsword');
+  const claymore = resolveWeaponState('aegis-claymore');
+  assert.equal(resolveAegisTechniqueStrikePower(longsword.statModifiers), 15);
+  assert.equal(resolveAegisTechniqueStrikePower(claymore.statModifiers), 17);
+  assert.notEqual(
+    WEAPON_REGISTRY['aegis-longsword'].baselineStatModifiers.aegisTechniquePowerPct ?? 0,
+    25,
   );
-  assert.ok(state.statModifiers.aegisTechniquePowerPct != null || row.tier === 1);
 }
 
 // Migration fallback: missing aegisTechniquePowerPct uses strikeDamagePct
@@ -365,16 +365,17 @@ assert.equal(planUnmakerStrike().hits[0]!.kineticDamage, 15);
 
 // Hex / Envoy smoke: strikeDamage still from strikeDamagePct (no aegisTechniqueStrikePower)
 {
-  const hex = resolveWeaponCombatStatsFromState(resolveWeaponState('hex-silver-core-sidearm', 1));
+  const hex = resolveWeaponCombatStatsFromState(resolveWeaponState('hex-revolver'));
   assert.equal(hex.aegisTechniqueStrikePower, undefined);
   assert.ok(hex.strikeDamage >= COMBAT_ACTION.ABYSSAL_STRIKE_DAMAGE);
-  const envoy = resolveWeaponCombatStatsFromState(resolveWeaponState('envoy-echo-lantern', 1));
+  const envoy = resolveWeaponCombatStatsFromState(resolveWeaponState('envoy-vambrace'));
   assert.equal(envoy.aegisTechniqueStrikePower, undefined);
 }
 
-// Registry still carries dormant strikeDamagePct where it did historically (migration)
-assert.equal(WEAPON_REGISTRY['aegis-claymore-blade'].tiers[2].statModifiers.strikeDamagePct, 25);
-assert.equal(WEAPON_REGISTRY['aegis-claymore-blade'].tiers[2].statModifiers.aegisTechniquePowerPct, 25);
+// Registry baseline carries technique fields (former Tier I; no .tiers)
+assert.equal(WEAPON_REGISTRY['aegis-claymore'].baselineStatModifiers.strikeDamagePct, 15);
+assert.equal(WEAPON_REGISTRY['aegis-claymore'].baselineStatModifiers.aegisTechniquePowerPct, 15);
+assert.equal('tiers' in WEAPON_REGISTRY['aegis-claymore'], false);
 
 console.log('Phase E.1c.1 OK');
 console.log('loadout default', DEFAULT_AEGIS_TECHNIQUE_LOADOUT.join(','));

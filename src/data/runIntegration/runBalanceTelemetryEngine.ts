@@ -6,6 +6,7 @@ import { depthIndexFromNodesCleared } from '../worldStateHelpers';
 import { resolveContractExtractionKind } from '../contractExtractionKind';
 import { sumLedgerCategoryTotals } from './runIntegrationHelpers';
 import { getResourceSellValue, RESOURCE_REGISTRY } from '../resourceRegistry';
+import { isSupplyCargoItemId } from '../cargoSupplyEngine';
 import {
   averageTurnsForKind,
   type BalanceRunStats,
@@ -15,8 +16,7 @@ export interface RunBalanceTelemetry {
   // Loadout / context
   classId: string | null;
   weaponFamilyId: string | null;
-  weaponTier: number | null;
-  keepsakeId: string | null;
+  requisitionId: string | null;
   sectorId: string | null;
   sectorName: string | null;
   contractKind: string | null;
@@ -58,8 +58,19 @@ export interface RunBalanceTelemetry {
   contractCompleted: boolean;
   contractFailed: boolean;
   operationProgressGained: number;
-  keepsakeTriggerCount: number;
-  runItemTriggerCount: number;
+  requisitionTriggerCount: number;
+  supplyTriggerCount: number;
+  suppliesPacked: number;
+  suppliesFound: number;
+  suppliesPurchased: number;
+  suppliesUsed: number;
+  suppliesExtracted: number;
+  suppliesBanked: number;
+  suppliesLost: number;
+  suppliesJettisoned: number;
+  supplyCargoCellsOccupied: number;
+  resourcesDisplacedForSupply: number;
+  runsStartedWithoutRecoveryAccess: number;
   echoSignalsDiscovered: number;
   echoSignalsResolved: number;
   extractionKind: ContractExtractionKind;
@@ -110,6 +121,13 @@ export function buildRunBalanceTelemetry(
   const balance = incursion.balanceRunStats ?? null;
   const context = incursion.runGenerationContext;
   const samples = balance?.combats ?? [];
+  const carriedSupplies = [
+    ...incursion.cargo.grid.placed,
+    ...incursion.cargo.containment,
+  ].filter((item) => isSupplyCargoItemId(item.itemId));
+  const supplyCellsOccupied = carriedSupplies.length;
+  const persistentSuppliesCarried = carriedSupplies.filter((item) => !item.temporarySupply).length;
+  const supplyStats = incursion.supplyRuntime.stats;
 
   const eliteCombats = samples.filter((c) => c.kind === 'ELITE').length;
   const bossCombats = samples.filter((c) => c.kind === 'BOSS').length;
@@ -117,8 +135,7 @@ export function buildRunBalanceTelemetry(
   return {
     classId: incursion.activeClass ?? null,
     weaponFamilyId: incursion.activeWeaponFamilyId ?? null,
-    weaponTier: incursion.activeWeaponTier ?? null,
-    keepsakeId: incursion.keepsakeRuntime?.keepsakeId ?? null,
+    requisitionId: incursion.requisitionRuntime?.requisitionId ?? null,
     sectorId: context?.sectorState.id ?? null,
     sectorName: context?.sectorState.displayName ?? null,
     contractKind: incursion.activeContract?.objectiveKind ?? null,
@@ -158,8 +175,19 @@ export function buildRunBalanceTelemetry(
     contractCompleted: false,
     contractFailed: false,
     operationProgressGained: opts?.operationProgressGained ?? 0,
-    keepsakeTriggerCount: incursion.keepsakeRuntime?.stats.triggerCount ?? 0,
-    runItemTriggerCount: incursion.itemRuntime?.stats.triggerCount ?? 0,
+    requisitionTriggerCount: incursion.requisitionRuntime?.stats.triggerCount ?? 0,
+    supplyTriggerCount: incursion.supplyRuntime?.stats.triggerCount ?? 0,
+    suppliesPacked: supplyStats.suppliesPacked,
+    suppliesFound: supplyStats.suppliesFound,
+    suppliesPurchased: supplyStats.suppliesPurchased,
+    suppliesUsed: supplyStats.suppliesUsed,
+    suppliesExtracted: extracted ? persistentSuppliesCarried : 0,
+    suppliesBanked: supplyStats.suppliesBanked,
+    suppliesLost: extracted ? 0 : persistentSuppliesCarried,
+    suppliesJettisoned: supplyStats.suppliesJettisoned,
+    supplyCargoCellsOccupied: supplyCellsOccupied,
+    resourcesDisplacedForSupply: supplyStats.resourcesDisplacedForSupply,
+    runsStartedWithoutRecoveryAccess: supplyStats.runsStartedWithoutRecoveryAccess,
     echoSignalsDiscovered: echo?.echoSignalsDiscovered ?? 0,
     echoSignalsResolved: echo?.echoSignalsResolved ?? 0,
     extractionKind: resolveContractExtractionKind(incursion),
@@ -189,7 +217,7 @@ export function applyTelemetryContractOutcome(
 export function formatRunBalanceTelemetryReport(telemetry: RunBalanceTelemetry): string {
   const lines = [
     'RUN BALANCE TELEMETRY',
-    `loadout: ${telemetry.classId ?? '—'} // ${telemetry.weaponFamilyId ?? '—'} T${telemetry.weaponTier ?? '?'} // relic ${telemetry.keepsakeId ?? 'none'}`,
+    `loadout: ${telemetry.classId ?? '—'} // ${telemetry.weaponFamilyId ?? '—'} // Requisition ${telemetry.requisitionId ?? 'none'}`,
     `sector: ${telemetry.sectorName ?? telemetry.sectorId ?? '—'} // biome ${telemetry.veilBiome ?? '—'}`,
     `contract: ${telemetry.contractKind ?? 'none'} // op: ${telemetry.operationKind ?? '—'}`,
     `nodes cleared: ${telemetry.nodesCleared} (depth ${telemetry.maxDepthReached}, district ${telemetry.districtLayer})`,
@@ -202,7 +230,10 @@ export function formatRunBalanceTelemetryReport(telemetry: RunBalanceTelemetry):
     `unstable effects: ${telemetry.unstableEffectsSeen} // sanctuary ${telemetry.sanctuaryVisits} // market ${telemetry.marketVisits}`,
     `anchor signals: ${telemetry.anchorSignalsCleared} | operation targets: ${telemetry.operationTargetsCleared}`,
     `echo signals: ${telemetry.echoSignalsDiscovered} discovered / ${telemetry.echoSignalsResolved} resolved`,
-    `keepsake triggers: ${telemetry.keepsakeTriggerCount} | run item triggers: ${telemetry.runItemTriggerCount}`,
+    `Requisition triggers: ${telemetry.requisitionTriggerCount} | Supply triggers: ${telemetry.supplyTriggerCount}`,
+    `Supplies — packed ${telemetry.suppliesPacked} | found ${telemetry.suppliesFound} | purchased ${telemetry.suppliesPurchased} | used ${telemetry.suppliesUsed}`,
+    `Supply cargo — cells ${telemetry.supplyCargoCellsOccupied} | extracted ${telemetry.suppliesExtracted} | banked ${telemetry.suppliesBanked} | lost ${telemetry.suppliesLost} | jettisoned ${telemetry.suppliesJettisoned}`,
+    `Supply tradeoffs — resources displaced ${telemetry.resourcesDisplacedForSupply} | runs without recovery ${telemetry.runsStartedWithoutRecoveryAccess}`,
     `extraction: ${telemetry.extractionType} (${telemetry.extractionKind})`,
     `operation progress gained: ${telemetry.operationProgressGained}`,
     `contract: ${telemetry.contractCompleted ? 'complete/pending' : telemetry.contractFailed ? 'failed' : 'none'}`,

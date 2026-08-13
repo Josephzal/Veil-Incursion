@@ -36,7 +36,7 @@ export function auditReportRunItems(): string {
   const warnings = [...registry, ...acceptance].filter((issue) => issue.severity === 'warn').length;
 
   return [
-    'RUN ITEM AUDIT',
+    'SUPPLY AUDIT',
     `roster size: ${ALL_RUN_ITEM_IDS.length}`,
     `combat consumables: ${RUN_ITEM_COMBAT_IDS.length}`,
     `field tools: ${RUN_ITEM_FIELD_IDS.length}`,
@@ -61,7 +61,7 @@ export function formatRunItemEngineReport(
   ].join('\n');
 }
 
-/** Throw on registry/acceptance errors — boot verify for Run Items v2. */
+/** Throw on registry/acceptance errors — boot verify for Cargo Supplies v2. */
 export function verifyRunItemEngine(): void {
   const errors = validateRunItemEngine().filter((issue) => issue.severity === 'error');
   if (errors.length > 0) {

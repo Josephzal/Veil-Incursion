@@ -28,7 +28,7 @@ import { createDefaultCombatSessionExtras } from '../types/combatHooks';
 import type { EnemyCombatProfile } from '../types/run';
 
 function makeHookCtx(familyId: Parameters<typeof resolveWeaponState>[0], runtime = createDefaultWeaponRuntime()) {
-  const weapon = resolveWeaponState(familyId, 3);
+  const weapon = resolveWeaponState(familyId);
   return {
     weapon,
     runtime,
@@ -51,25 +51,25 @@ function run(): void {
 
   // --- Aegis basics diverge ---
   const longsword = resolveAegisStrikeBasic({
-    weapon: resolveWeaponState('aegis-runed-longsword', 1),
+    weapon: resolveWeaponState('aegis-longsword'),
     runtime: createDefaultWeaponRuntime(),
     riposte: false,
     targetFractured: false,
   });
   const claymore = resolveAegisStrikeBasic({
-    weapon: resolveWeaponState('aegis-claymore-blade', 1),
+    weapon: resolveWeaponState('aegis-claymore'),
     runtime: createDefaultWeaponRuntime(),
     riposte: false,
     targetFractured: false,
   });
   const riftCold = resolveAegisStrikeBasic({
-    weapon: resolveWeaponState('aegis-rift-edge', 1),
+    weapon: resolveWeaponState('aegis-paired-blades'),
     runtime: createDefaultWeaponRuntime(),
     riposte: false,
     targetFractured: false,
   });
   const riftHot = resolveAegisStrikeBasic({
-    weapon: resolveWeaponState('aegis-rift-edge', 1),
+    weapon: resolveWeaponState('aegis-paired-blades'),
     runtime: { ...createDefaultWeaponRuntime(), riftEdgeTempoArmed: true },
     riposte: false,
     targetFractured: false,
@@ -81,16 +81,16 @@ function run(): void {
   assert.ok(riftHot.consumeTempo, 'Tempo should be consumed on payoff');
 
   const clayCash1 = resolveClaymoreFractureBreakReserve(
-    'aegis-claymore-blade',
+    'aegis-claymore',
     createDefaultWeaponRuntime(),
   );
   const clayCash2 = resolveClaymoreFractureBreakReserve(
-    'aegis-claymore-blade',
+    'aegis-claymore',
     { ...createDefaultWeaponRuntime(), claymoreBreakCashoutUsed: true },
   );
   assert.ok(clayCash1.reserveGain > clayCash2.reserveGain, 'First Claymore break cashout is larger');
   assert.equal(
-    resolveClaymoreFractureBreakReserve('aegis-runed-longsword', createDefaultWeaponRuntime()).reserveGain,
+    resolveClaymoreFractureBreakReserve('aegis-longsword', createDefaultWeaponRuntime()).reserveGain,
     0,
   );
 
@@ -112,19 +112,19 @@ function run(): void {
   const squad = [primary, adj];
 
   const sidearm = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    weapon: resolveWeaponState('hex-revolver'),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
   });
   const breach = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-void-cannon', 1),
+    weapon: resolveWeaponState('hex-shotgun'),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
   });
   const spread = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-pulse-rifle', 1),
+    weapon: resolveWeaponState('hex-carbine'),
     squad,
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
@@ -138,7 +138,7 @@ function run(): void {
   assert.ok(spread.hits.length >= 1);
   // Low-HP execution window on sidearm
   const exec = resolveHexBasicShot({
-    weapon: resolveWeaponState('hex-silver-core-sidearm', 1),
+    weapon: resolveWeaponState('hex-revolver'),
     squad: [{ ...primary, currentHp: 20 }],
     primaryTargetId: 'e1',
     catalogBaseDamage: 10,
@@ -147,7 +147,7 @@ function run(): void {
 
   // --- Envoy basics diverge ---
   const conduit = resolveEnvoySplinterBasic({
-    weapon: resolveWeaponState('envoy-null-conduit', 2),
+    weapon: resolveWeaponState('envoy-scythe'),
     catalogDamage: 10,
     catalogFluxCost: 5,
     veilFlux: 80,
@@ -155,7 +155,7 @@ function run(): void {
     maxHp: 100,
   });
   const lantern = resolveEnvoySplinterBasic({
-    weapon: resolveWeaponState('envoy-echo-lantern', 1),
+    weapon: resolveWeaponState('envoy-vambrace'),
     catalogDamage: 10,
     catalogFluxCost: 5,
     veilFlux: 80,
@@ -163,7 +163,7 @@ function run(): void {
     maxHp: 100,
   });
   const prismSafe = resolveEnvoySplinterBasic({
-    weapon: resolveWeaponState('envoy-sanguine-prism', 1),
+    weapon: resolveWeaponState('envoy-sanguine-prism'),
     catalogDamage: 10,
     catalogFluxCost: 5,
     veilFlux: 80,
@@ -171,7 +171,7 @@ function run(): void {
     maxHp: 100,
   });
   const prismBrink = resolveEnvoySplinterBasic({
-    weapon: resolveWeaponState('envoy-sanguine-prism', 1),
+    weapon: resolveWeaponState('envoy-sanguine-prism'),
     catalogDamage: 10,
     catalogFluxCost: 5,
     veilFlux: PRISM_BRINK_FLUX_THRESHOLD,
@@ -185,30 +185,31 @@ function run(): void {
   assert.ok(prismBrink.occultDamage > prismSafe.occultDamage);
   assert.ok(conduit.fluxCost <= 5);
 
-  // --- Envoy hooks: correct weapon only, no double-fire ---
-  const conduitHook = runWeaponOnOccultCastHooks(makeHookCtx('envoy-null-conduit'));
-  assert.ok(conduitHook.veilFluxDelta && conduitHook.veilFluxDelta > 0, 'Conduit T3 occult hook grants Flux');
+  // --- Envoy hooks: Tier III once-per-combat passives retired (no-ops) ---
+  const conduitHook = runWeaponOnOccultCastHooks(makeHookCtx('envoy-scythe'));
+  assert.equal(conduitHook.veilFluxDelta ?? 0, 0, 'Scythe T3 occult hook is retired');
   const conduitHook2 = runWeaponOnOccultCastHooks({
-    ...makeHookCtx('envoy-null-conduit'),
-    runtime: { ...createDefaultWeaponRuntime(), firstOccultAbilityUsed: true },
+    ...makeHookCtx('envoy-scythe'),
+    runtime: createDefaultWeaponRuntime(),
   });
-  assert.equal(conduitHook2.veilFluxDelta ?? 0, 0, 'Conduit occult hook does not double-fire');
+  assert.equal(conduitHook2.veilFluxDelta ?? 0, 0, 'Scythe occult hook remains inert');
 
+  // Baseline sacrificeResourceBonus still applies (not a T3 once-per-combat)
   const prismHook = runWeaponOnSacrificeHpHooks(makeHookCtx('envoy-sanguine-prism'));
-  assert.ok((prismHook.veilFluxDelta ?? 0) > 0, 'Prism sacrifice hook grants Flux');
-  const longswordSac = runWeaponOnSacrificeHpHooks(makeHookCtx('aegis-runed-longsword'));
-  assert.equal(longswordSac.veilFluxDelta ?? 0, 0, 'Non-Prism weapons do not get Prism sacrifice passive');
+  assert.ok((prismHook.veilFluxDelta ?? 0) > 0, 'Prism baseline sacrificeResourceBonus grants Flux');
+  const longswordSac = runWeaponOnSacrificeHpHooks(makeHookCtx('aegis-longsword'));
+  assert.equal(longswordSac.veilFluxDelta ?? 0, 0, 'Non-Prism weapons do not get Prism sacrifice bonus');
 
   const extras = createDefaultCombatSessionExtras();
-  const lanternWard = runWeaponOnDebuffAppliedHooks(makeHookCtx('envoy-echo-lantern'), extras);
-  assert.ok(lanternWard.logLines.some((l) => l.includes('ward') || l.includes('ECHO')), 'Lantern first debuff wards');
-  assert.ok((extras.playerShield ?? 0) >= 1, 'Lantern ward mutates session extras');
+  const lanternWard = runWeaponOnDebuffAppliedHooks(makeHookCtx('envoy-vambrace'), extras);
+  assert.equal(lanternWard.logLines.length, 0, 'Vambrace T3 first-debuff ward is retired');
+  assert.equal(extras.playerShield ?? 0, 0, 'Vambrace ward does not mutate session extras');
 
-  // Debug inspect string includes affinity + live Ash Shotgun name
-  const debug = formatWeaponIdentityDebug('hex-pulse-rifle');
-  assert.ok(debug.includes('liveName=Ash Shotgun'));
+  // Debug inspect string includes affinity + canonical Carbine name
+  const debug = formatWeaponIdentityDebug('hex-carbine');
+  assert.ok(debug.includes('liveName=Carbine'));
   assert.ok(debug.includes('affinity='));
-  assert.ok(!debug.includes('liveName=Carbine'));
+  assert.ok(!debug.includes('liveName=Ash Shotgun'));
 
   ALL_WEAPON_FAMILY_IDS.forEach((id) => {
     const p = listWeaponIdentityProfiles().find((x) => x.id === id);

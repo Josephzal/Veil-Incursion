@@ -1,4 +1,4 @@
-import type { CargoRunState } from '../types/cargoGrid';
+import { CARGO_ITEM_CATALOG, type CargoRunState } from '../types/cargoGrid';
 import type { ActiveIncursionState } from '../types/game';
 import {
   ALL_RUN_ITEM_IDS,
@@ -6,7 +6,6 @@ import {
   RUN_ITEM_COMBAT_IDS,
   RUN_ITEM_FIELD_IDS,
   type RunItemId,
-  type RunItemsSlotState,
 } from '../types/runItem';
 import { RUN_ITEM_REGISTRY } from './runItemRegistry';
 import { isRunItemId, RUN_ITEM_ID_ALIASES } from './runItemIdAliases';
@@ -46,7 +45,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
   if (ALL_RUN_ITEM_IDS.length !== 24) {
     issues.push({
       severity: 'error',
-      message: `Expected 24 Run Items, found ${ALL_RUN_ITEM_IDS.length}.`,
+      message: `Expected 24 Cargo Supplies, found ${ALL_RUN_ITEM_IDS.length}.`,
     });
   }
 
@@ -79,7 +78,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
     }
 
     if (seenIds.has(id)) {
-      issues.push({ severity: 'error', itemId: id, message: 'Duplicate Run Item id in roster.' });
+      issues.push({ severity: 'error', itemId: id, message: 'Duplicate Supply id in roster.' });
     }
     seenIds.add(id);
 
@@ -87,7 +86,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
       issues.push({
         severity: 'warn',
         itemId: id,
-        message: 'Canonical Run Item id uses snake_case instead of kebab-case.',
+        message: 'Canonical Supply id uses snake_case instead of kebab-case.',
       });
     }
 
@@ -95,7 +94,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
       issues.push({
         severity: 'error',
         itemId: id,
-        message: 'Run Item uses forbidden family STARTING_REQUISITION.',
+        message: 'Supply uses forbidden family STARTING_REQUISITION.',
       });
     }
 
@@ -103,7 +102,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
       issues.push({
         severity: 'error',
         itemId: id,
-        message: 'Run Item uses forbidden slotType REQUISITION.',
+        message: 'Supply uses forbidden slotType REQUISITION.',
       });
     }
 
@@ -111,7 +110,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
       issues.push({
         severity: 'error',
         itemId: id,
-        message: 'Bound Requisition item accidentally registered as Run Item.',
+        message: 'Legacy Bound donor ID accidentally registered as a Supply.',
       });
     }
 
@@ -193,7 +192,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
       issues.push({
         severity: 'error',
         itemId: alias,
-        message: `Alias '${alias}' maps to unknown Run Item '${canonicalId}'.`,
+        message: `Alias '${alias}' maps to unknown Supply '${canonicalId}'.`,
       });
     }
   });
@@ -203,7 +202,7 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
       issues.push({
         severity: 'error',
         itemId: forbiddenId,
-        message: `${forbiddenId} must not be a Run Item id.`,
+        message: `${forbiddenId} must not be a Supply id.`,
       });
     }
   });
@@ -211,66 +210,24 @@ export function validateRunItemRegistry(): RunItemValidationIssue[] {
   return issues;
 }
 
-export function validateRunItemSlotState(
-  slots: RunItemsSlotState | null | undefined,
-): RunItemValidationIssue[] {
-  const issues: RunItemValidationIssue[] = [];
-  if (!slots) return issues;
-
-  const allSlotted = [...slots.combatSlots, ...slots.fieldSlots].filter(Boolean) as RunItemId[];
-  allSlotted.forEach((itemId) => {
-    if (!RUN_ITEM_REGISTRY[itemId]) {
-      issues.push({
-        severity: 'error',
-        itemId,
-        message: 'Unknown item stored in Run Item slot.',
-      });
-    }
-  });
-
-  slots.combatSlots.forEach((itemId, index) => {
-    if (!itemId) return;
-    const def = RUN_ITEM_REGISTRY[itemId];
-    if (def?.slotType !== 'COMBAT') {
-      issues.push({
-        severity: 'error',
-        itemId,
-        message: `Non-combat item in combat slot ${index}.`,
-      });
-    }
-  });
-
-  slots.fieldSlots.forEach((itemId, index) => {
-    if (!itemId) return;
-    const def = RUN_ITEM_REGISTRY[itemId];
-    if (def?.slotType !== 'FIELD') {
-      issues.push({
-        severity: 'error',
-        itemId,
-        message: `Non-field item in field slot ${index}.`,
-      });
-    }
-  });
-
-  return issues;
-}
-
-/** Warn when run items appear in cargo grid or cargo resources appear in run item slots. */
+/** Stage IV-A canonical storage: every former Supply is a 1×1 Supply in cargo. */
 export function validateRunItemStorageSeparation(
-  incursion: Pick<ActiveIncursionState, 'runItems' | 'cargo'>,
+  incursion: Pick<ActiveIncursionState, 'cargo'>,
 ): RunItemValidationIssue[] {
   const issues: RunItemValidationIssue[] = [];
-  issues.push(...validateRunItemSlotState(incursion.runItems));
-
-  const cargoItemIds = new Set(
-    incursion.cargo.grid.placed.map((item) => item.itemId),
-  );
-  ALL_RUN_ITEM_IDS.forEach((runItemId) => {
-    if (cargoItemIds.has(runItemId)) {
+  [...incursion.cargo.grid.placed, ...incursion.cargo.containment].forEach((instance) => {
+    if (!isRunItemId(instance.itemId)) return;
+    const definition = CARGO_ITEM_CATALOG[instance.itemId];
+    if (
+      definition.subtype !== 'SUPPLY' ||
+      definition.width !== 1 ||
+      definition.height !== 1 ||
+      (instance.quantity ?? 1) !== 1
+    ) {
       issues.push({
-        severity: 'warn',
-        itemId: runItemId,
-        message: 'Run Item is stored in cargo grid (should use runItems slots).',
+        severity: 'error',
+        itemId: instance.itemId,
+        message: 'Supply must be a non-stacking 1×1 cargo instance.',
       });
     }
   });
@@ -279,7 +236,7 @@ export function validateRunItemStorageSeparation(
 }
 
 export function validateRunItemRuntimeGuards(
-  runtime: ActiveIncursionState['itemRuntime'] | null | undefined,
+  runtime: ActiveIncursionState['supplyRuntime'] | null | undefined,
 ): RunItemValidationIssue[] {
   const issues: RunItemValidationIssue[] = [];
   if (!runtime) return issues;
@@ -303,21 +260,21 @@ export function validateRunItemRuntimeGuards(
 }
 
 export function validateRunItemPipeline(
-  incursion?: Pick<ActiveIncursionState, 'runItems' | 'cargo' | 'itemRuntime'> | null,
+  incursion?: Pick<ActiveIncursionState, 'cargo' | 'supplyRuntime'> | null,
 ): RunItemValidationIssue[] {
   return [
     ...validateRunItemRegistry(),
     ...(incursion ? validateRunItemStorageSeparation(incursion) : []),
-    ...(incursion ? validateRunItemRuntimeGuards(incursion.itemRuntime) : []),
+    ...(incursion ? validateRunItemRuntimeGuards(incursion.supplyRuntime) : []),
   ];
 }
 
 export function formatRunItemValidationReport(issues: RunItemValidationIssue[]): string {
-  if (issues.length === 0) return 'RUN ITEM VALIDATION — OK (0 issues).';
+  if (issues.length === 0) return 'CARGO SUPPLY VALIDATION — OK (0 issues).';
   const errors = issues.filter((issue) => issue.severity === 'error');
   const warns = issues.filter((issue) => issue.severity === 'warn');
   return [
-    'RUN ITEM VALIDATION',
+    'CARGO SUPPLY VALIDATION',
     `errors: ${errors.length}`,
     `warnings: ${warns.length}`,
     ...issues.map((issue) => `[${issue.severity.toUpperCase()}] ${issue.itemId ?? 'global'} — ${issue.message}`),
@@ -333,7 +290,7 @@ export function verifyRunItemRegistry(): void {
   }
 }
 
-/** Detect run items incorrectly placed in a cargo grid snapshot. */
+/** Detect supplies incorrectly placed in a cargo grid snapshot. */
 export function findRunItemsInCargoGrid(cargo: CargoRunState): RunItemId[] {
   const found: RunItemId[] = [];
   cargo.grid.placed.forEach((placed) => {

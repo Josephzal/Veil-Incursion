@@ -75,7 +75,6 @@ import {
 import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
-import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 import CombatTacticalDashboard from './combat/layouts/CombatTacticalDashboard';
 import CombatDashboardMacroLog from './combat/layouts/CombatDashboardMacroLog';
@@ -134,7 +133,6 @@ export default function CombatScreen(): React.JSX.Element {
     grantHostileEchoRewards,
     applyVoidsTollSacrifice,
     completeDefendRiftVictory,
-    consumeAdrenalinePrimerAfterCombat,
     peekPendingNarrativeCombatBoons,
     clearPendingNarrativeCombatBoons,
     clearNarrativeBoonStatusEffects,
@@ -156,12 +154,8 @@ export default function CombatScreen(): React.JSX.Element {
     activeIncursion.activeWeaponFamilyId,
   );
   const baseWeaponStats = useMemo(() => {
-    const tier = activeIncursion.activeWeaponTier ?? 1;
-    return resolveWeaponCombatStatsFromState(resolveWeaponState(combatWeaponFamilyId, tier));
-  }, [
-    combatWeaponFamilyId,
-    activeIncursion.activeWeaponTier,
-  ]);
+    return resolveWeaponCombatStatsFromState(resolveWeaponState(combatWeaponFamilyId));
+  }, [combatWeaponFamilyId]);
   const strikeBonusPct = activeIncursion.strikeDamageBonusPct ?? 0;
   const weaponCombatStats = useMemo(() => {
     if (strikeBonusPct <= 0) return baseWeaponStats;
@@ -183,18 +177,16 @@ export default function CombatScreen(): React.JSX.Element {
   const env = activeIncursion.environmentalModifiers;
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
-  const adrenalinePrimerActive = shouldGrantAdrenalinePrimerAp(activeIncursion);
   const runApBonus = activeIncursion.runModifiers?.firstTurnApBonus ?? 0;
   const runKineticArmor = activeIncursion.runModifiers?.kineticArmorBonus ?? 0;
-  const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
   const encounterModifier = getSelectedVectorNode()?.contextModifiers?.encounterModifier ?? null;
   const cargoHealReceivedMultiplier = useMemo(() => {
     const cargoMult = resolveCargoHealReceivedMultiplier(
       activeIncursion.cargo,
-      activeIncursion.keepsakeRuntime,
+      activeIncursion.requisitionRuntime,
     );
     return cargoMult * resolveStarvedHealMultiplier(encounterModifier);
-  }, [activeIncursion.cargo, activeIncursion.keepsakeRuntime, encounterModifier]);
+  }, [activeIncursion.cargo, activeIncursion.requisitionRuntime, encounterModifier]);
   const firstTurnBonusAp = runApBonus;
   const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
     peekPendingNarrativeCombatBoons,
@@ -552,8 +544,8 @@ export default function CombatScreen(): React.JSX.Element {
               : null
       }
       bloodMistScale={
-        combatWeaponFamilyId === 'hex-void-cannon'
-        || combatWeaponFamilyId === 'aegis-claymore-blade'
+        combatWeaponFamilyId === 'hex-shotgun'
+        || combatWeaponFamilyId === 'aegis-claymore'
           ? 1.5 // keep in sync with TacticalCombatHub bloodMistScaleRef
           : 1
       }
@@ -811,10 +803,6 @@ export default function CombatScreen(): React.JSX.Element {
       ? grantHostileEchoRewards(echoCtx, depth)
       : [];
     const harvestStagingIds = [...combatDropInstanceIds, ...echoDropInstanceIds];
-    if (adrenalinePrimerActive) {
-      consumeAdrenalinePrimerAfterCombat();
-    }
-
     if (runState.pendingAmbush) {
       clearPendingAmbush();
       incrementCombatNodesCleared();
@@ -861,11 +849,9 @@ export default function CombatScreen(): React.JSX.Element {
     activeIncursion.runGenerationContext,
     activeIncursion.runModifiers?.rareLootBonusPct,
     activeIncursion.runVeilBiome,
-    adrenalinePrimerActive,
     awardRunCredits,
     grantCombatResourceDrops,
     grantHostileEchoRewards,
-    consumeAdrenalinePrimerAfterCombat,
     addLockedContainer,
     appendRunLog,
     isPostCombatBoonBlocked,
@@ -1143,14 +1129,11 @@ export default function CombatScreen(): React.JSX.Element {
                       hexShotBoons={activeIncursion.hexShotBoons}
                       envoyBoons={activeIncursion.envoyBoons}
                       firstTurnBonusAp={firstTurnBonusAp}
-                      adrenalinePrimerActive={adrenalinePrimerActive}
                       incursionApBonus={activeIncursion.voidsTollApBonus}
                       onVoidsTollTriggered={applyVoidsTollSacrifice}
                       playerKineticArmorBonus={runKineticArmor}
-                      kineticBatteryActive={kineticBatteryActive}
                       narrativeCombatBoons={narrativeCombatBoons}
                       activeWeaponFamilyId={combatWeaponFamilyId}
-                      activeWeaponTier={activeIncursion.activeWeaponTier ?? 1}
                       simplifiedUltimateInputs={account.simplifiedUltimateInputs === true}
                       primeUltimateAtStart={
                         isDevSandboxCombatPreset(runState.devSandboxPreset)

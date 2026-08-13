@@ -38,15 +38,15 @@ assert.equal(new Set(ids).size, 9, 'unique anchor IDs');
 assert.equal(new Set(names).size, 9, 'unique anchor display names');
 
 const EXPECTED: Record<string, { name: string; attack: string; label: string }> = {
-  'aegis-runed-longsword': { name: 'Runed Longsword', attack: 'WARDENS_STRIKE', label: "WARDEN'S STRIKE" },
-  'aegis-rift-edge': { name: 'Paired Blades', attack: 'VEILSTEP_SLASH', label: 'VEILSTEP SLASH' },
-  'aegis-claymore-blade': { name: 'Unmaker', attack: 'BREAKING_HEW', label: 'BREAKING HEW' },
-  'hex-silver-core-sidearm': { name: 'Silver-Core Sidearm', attack: 'SILVER_VERDICT', label: 'SILVER VERDICT' },
-  'hex-void-cannon': { name: 'Nullbreach', attack: 'BREACH_ROUND', label: 'BREACH ROUND' },
-  'hex-pulse-rifle': { name: 'Ash Shotgun', attack: 'CINDER_SWEEP', label: 'CINDER SWEEP' },
-  'envoy-null-conduit': { name: 'Scythe', attack: 'NULL_ARC', label: 'NULL ARC' },
-  'envoy-echo-lantern': { name: 'Vambrace', attack: 'GRAVEWEAVE', label: 'GRAVEWEAVE' },
-  'envoy-sanguine-prism': { name: "Heart's Due", attack: 'BLOOD_REFRACTION', label: 'BLOOD REFRACTION' },
+  'aegis-longsword': { name: 'Longsword', attack: 'WARDENS_STRIKE', label: "WARDEN'S STRIKE" },
+  'aegis-paired-blades': { name: 'Paired Blades', attack: 'VEILSTEP_SLASH', label: 'VEILSTEP SLASH' },
+  'aegis-claymore': { name: 'Claymore', attack: 'BREAKING_HEW', label: 'BREAKING HEW' },
+  'hex-revolver': { name: 'Revolver', attack: 'SILVER_VERDICT', label: 'SILVER VERDICT' },
+  'hex-shotgun': { name: 'Shotgun', attack: 'BREACH_ROUND', label: 'BREACH ROUND' },
+  'hex-carbine': { name: 'Carbine', attack: 'CINDER_SWEEP', label: 'CINDER SWEEP' },
+  'envoy-scythe': { name: 'Scythe', attack: 'NULL_ARC', label: 'NULL ARC' },
+  'envoy-vambrace': { name: 'Vambrace', attack: 'GRAVEWEAVE', label: 'GRAVEWEAVE' },
+  'envoy-sanguine-prism': { name: 'Sanguine Prism', attack: 'BLOOD_REFRACTION', label: 'BLOOD REFRACTION' },
 };
 
 for (const familyId of ALL_WEAPON_FAMILY_IDS) {
@@ -69,9 +69,9 @@ for (const familyId of ALL_WEAPON_FAMILY_IDS) {
   const card = resolveWeaponAnchorCardPresentation({
     classId: def.classId,
     abilityId: anchor.classCompatId,
-    weapon: resolveWeaponState(familyId, 1),
+    weapon: resolveWeaponState(familyId),
     runtime: createDefaultWeaponRuntime(),
-    pulseSpreadSecondaryCount: familyId === 'hex-pulse-rifle' ? 0 : 1,
+    pulseSpreadSecondaryCount: familyId === 'hex-carbine' ? 0 : 1,
     veilFlux: 20,
     operativeHp: 100,
     maxOperativeHp: 100,
@@ -88,26 +88,26 @@ for (const familyId of ALL_WEAPON_FAMILY_IDS) {
 }
 
 // Three Aegis weapons cannot share the same card presentation.
-const aegisCards = (['aegis-runed-longsword', 'aegis-rift-edge', 'aegis-claymore-blade'] as const)
+const aegisCards = (['aegis-longsword', 'aegis-paired-blades', 'aegis-claymore'] as const)
   .map((id) => formatAbilityLabel('AEGIS', 'STRIKE', id));
 assert.equal(new Set(aegisCards).size, 3);
 
-assert.equal(getWeaponFamily('aegis-rift-edge').name, 'Paired Blades');
-assert.equal(getWeaponFamily('hex-void-cannon').name, 'Nullbreach');
-assert.equal(formatWeaponAnchorLabel('aegis-runed-longsword'), "[ WARDEN'S STRIKE ]");
-assert.equal(formatWeaponAnchorLabel('aegis-rift-edge'), '[ VEILSTEP SLASH ]');
-assert.equal(formatWeaponAnchorLabel('envoy-null-conduit'), '[ NULL ARC ]');
-assert.equal(formatWeaponAnchorLabel('envoy-echo-lantern'), '[ GRAVEWEAVE ]');
+assert.equal(getWeaponFamily('aegis-paired-blades').name, 'Paired Blades');
+assert.equal(getWeaponFamily('hex-shotgun').name, 'Shotgun');
+assert.equal(formatWeaponAnchorLabel('aegis-longsword'), "[ WARDEN'S STRIKE ]");
+assert.equal(formatWeaponAnchorLabel('aegis-paired-blades'), '[ VEILSTEP SLASH ]');
+assert.equal(formatWeaponAnchorLabel('envoy-scythe'), '[ NULL ARC ]');
+assert.equal(formatWeaponAnchorLabel('envoy-vambrace'), '[ GRAVEWEAVE ]');
 assert.equal(canonicalizeWeaponAnchorAttackId('BLACK_WICK'), 'GRAVEWEAVE');
 
 // Legacy inputs normalize; never returned as live labels.
 assert.equal(canonicalizeWeaponAnchorAttackId('WARDENS_CUT'), 'WARDENS_STRIKE');
 assert.equal(canonicalizeWeaponAnchorAttackId('RIFTSTEP_CUT'), 'VEILSTEP_SLASH');
 assert.equal(canonicalizeWeaponAnchorAttackId('CLEAN_DISCHARGE'), 'NULL_ARC');
-assert.equal(canonicalizeWeaponAnchorAttackId('STRIKE', 'aegis-rift-edge'), 'VEILSTEP_SLASH');
-assert.equal(toRuntimeClassBasicId('VEILSTEP_SLASH', 'aegis-rift-edge'), 'STRIKE');
-assert.equal(toRuntimeClassBasicId('NULL_ARC', 'envoy-null-conduit'), 'VEIL_SPLINTER');
-assert.equal(toRuntimeClassBasicId('GRAVEWEAVE', 'envoy-echo-lantern'), 'VEIL_SPLINTER');
+assert.equal(canonicalizeWeaponAnchorAttackId('STRIKE', 'aegis-paired-blades'), 'VEILSTEP_SLASH');
+assert.equal(toRuntimeClassBasicId('VEILSTEP_SLASH', 'aegis-paired-blades'), 'STRIKE');
+assert.equal(toRuntimeClassBasicId('NULL_ARC', 'envoy-scythe'), 'VEIL_SPLINTER');
+assert.equal(toRuntimeClassBasicId('GRAVEWEAVE', 'envoy-vambrace'), 'VEIL_SPLINTER');
 assert.equal(canonicalizeWeaponAnchorAttackId('VEIL_SPLINTER'), 'GRAVEWEAVE');
 
 for (const retired of RETIRED_WEAPON_DISPLAY_NAMES) {

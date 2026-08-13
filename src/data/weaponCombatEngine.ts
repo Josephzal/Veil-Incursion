@@ -3,15 +3,13 @@ import type { ClassType } from '../types/game';
 import type { CombatHookContext, CombatHookResult, CombatSessionExtras } from '../types/combatHooks';
 import type { EnemyCombatProfile } from '../types/run';
 import { COMBAT_ACTION } from '../types/run';
-import { DEFAULT_MAGAZINE_SIZE } from '../types/classCombatResources';
 import type {
   ResolvedWeaponState,
-  WeaponOncePerCombatPassiveId,
   WeaponRuntimeState,
   WeaponStatModifiers,
 } from '../types/weapon';
 import { resolveWeaponState } from './weaponProgressionEngine';
-import type { WeaponFamilyId, WeaponTierNumber } from '../types/weapon';
+import type { WeaponFamilyId } from '../types/weapon';
 import { getWeaponFamily } from './weaponRegistry';
 import { isEnemyFractured } from './combatFractureEngine';
 import { stripKineticArmor } from './combatDefenseLayerEngine';
@@ -60,20 +58,17 @@ export function resolveWeaponMagazineBonus(mods: WeaponStatModifiers): number {
 export function applyWeaponBallisticDamageMultiplier(
   damage: number,
   mods: WeaponStatModifiers,
-  postReloadBonus: boolean,
-  passiveBonusPct = 0,
+  _postReloadBonus = false,
+  _passiveBonusPct = 0,
   /**
    * H.2a — when true, skip family ballisticDamagePct (already applied in
-   * resolveHexBasicShot). Post-reload Tier-III bonus still applies.
+   * resolveHexBasicShot).
    */
   options?: { skipFamilyBallisticPct?: boolean },
 ): number {
-  let mult = options?.skipFamilyBallisticPct
+  const mult = options?.skipFamilyBallisticPct
     ? 1
     : 1 + (mods.ballisticDamagePct ?? 0) / 100;
-  if (postReloadBonus) {
-    mult *= 1 + passiveBonusPct / 100;
-  }
   if (mult === 1) return Math.max(0, damage);
   return Math.max(0, Math.floor(damage * mult));
 }
@@ -99,14 +94,14 @@ export function weaponArmorPierceLayers(mods: WeaponStatModifiers): number {
   return Math.max(0, mods.armorPierceLayers ?? 0);
 }
 
-/** Nullbreach floors pierce at innate pressure so armor identity is never graft-only. */
+/** Shotgun floors pierce at innate pressure so armor identity is never graft-only. */
 export function resolveWeaponArmorPressureLayers(
   familyId: WeaponFamilyId,
   mods: WeaponStatModifiers,
   innateFloor = 0,
 ): number {
   const fromMods = weaponArmorPierceLayers(mods);
-  if (familyId === 'hex-void-cannon') {
+  if (familyId === 'hex-shotgun') {
     return Math.max(fromMods, innateFloor, 1);
   }
   return Math.max(fromMods, innateFloor);
@@ -130,169 +125,62 @@ export interface WeaponHookResult extends CombatHookResult {
   enemyArmorStrip?: number;
 }
 
-function passiveLabel(passive: WeaponOncePerCombatPassiveId): string {
-  switch (passive) {
-    case 'FIRST_MELEE_RESERVE_BONUS': return 'WEAPON';
-    case 'FRACTURE_BREAK_RESERVE': return 'UNMAKER';
-    case 'FIRST_FRACTURE_STAMINA_REFUND': return 'UNMAKER';
-    case 'MELEE_CRIT_RESERVE_BONUS': return 'RIFT EDGE';
-    case 'FIRST_RELOAD_STAMINA': return 'SIDEARM';
-    case 'POST_RELOAD_BALLISTIC_DAMAGE': return 'PULSE RIFLE';
-    case 'FIRST_ARMORED_HIT_EXTRA_ARMOR_STRIP': return 'VOID CANNON';
-    case 'FIRST_OCCULT_RESOURCE_BONUS': return 'SCYTHE';
-    case 'SACRIFICE_HP_RESOURCE_BONUS': return "HEART'S DUE";
-    case 'FIRST_DEBUFF_WARD': return 'VAMBRACE';
-    default: return 'WEAPON';
-  }
-}
-
+/** Stage II-C — Tier III once-per-combat melee passives removed. */
 export function runWeaponOnMeleeHitHooks(
-  ctx: WeaponHookContext,
-  isCrit: boolean,
+  _ctx: WeaponHookContext,
+  _isCrit: boolean,
 ): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  let reserveDelta = 0;
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-
-  if (passive === 'FIRST_MELEE_RESERVE_BONUS' && !ctx.runtime.firstMeleeHitUsed) {
-    runtimePatch.firstMeleeHitUsed = true;
-    reserveDelta = bonus;
-    logLines.push(`[${passiveLabel(passive)}] >> First melee hit — +${bonus} Abyssal Reserve.`);
-  }
-  if (passive === 'MELEE_CRIT_RESERVE_BONUS' && isCrit) {
-    reserveDelta += bonus;
-    logLines.push(`[${passiveLabel(passive)}] >> Melee crit — +${bonus} Abyssal Reserve.`);
-  }
-
-  return { logLines, runtimePatch, reserveDelta };
-}
-
-export function runWeaponOnFractureHooks(ctx: WeaponHookContext): WeaponHookResult {
-  // Phase E.1b — Unmaker T3 no longer grants Stamina here.
-  // FRACTURE_BREAK_RESERVE is awarded at the Fracture-break event in the hub
-  // (authored WA only, once per action) via unmakerTier3FractureBreakEngine.
-  void ctx;
   return { logLines: [], runtimePatch: {} };
 }
 
-export function runWeaponOnReloadHooks(ctx: WeaponHookContext): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  let staminaDelta = 0;
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-
-  if (passive === 'FIRST_RELOAD_STAMINA' && !ctx.runtime.firstReloadUsed) {
-    runtimePatch.firstReloadUsed = true;
-    staminaDelta = bonus;
-    logLines.push(`[${passiveLabel(passive)}] >> First reload — +${bonus} Stamina restored.`);
-  }
-  if (passive === 'POST_RELOAD_BALLISTIC_DAMAGE') {
-    runtimePatch.postReloadBallisticBonus = true;
-    logLines.push(`[${passiveLabel(passive)}] >> Next Ballistic attack deals +${bonus}% damage.`);
-  }
-
-  return { logLines, runtimePatch, staminaDelta };
+/** Stage II-C — Tier III fracture passives removed (family claymore cashout is separate). */
+export function runWeaponOnFractureHooks(_ctx: WeaponHookContext): WeaponHookResult {
+  return { logLines: [], runtimePatch: {} };
 }
 
+/** Stage II-C — Tier III reload passives removed. */
+export function runWeaponOnReloadHooks(_ctx: WeaponHookContext): WeaponHookResult {
+  return { logLines: [], runtimePatch: {} };
+}
+
+/** Stage II-C — Tier III armored-hit passives removed (baseline pierce remains on mods). */
 export function runWeaponOnBallisticHitHooks(
-  ctx: WeaponHookContext,
-  target: EnemyCombatProfile,
+  _ctx: WeaponHookContext,
+  _target: EnemyCombatProfile,
 ): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-  const armorLayers = target.kineticArmor ?? 0;
-
-  if (
-    passive === 'FIRST_ARMORED_HIT_EXTRA_ARMOR_STRIP'
-    && !ctx.runtime.firstArmoredHitUsed
-    && armorLayers > 0
-  ) {
-    runtimePatch.firstArmoredHitUsed = true;
-    logLines.push(`[${passiveLabel(passive)}] >> First armored hit — ${bonus} additional armor stripped.`);
-    return {
-      logLines,
-      runtimePatch,
-      enemyArmorStrip: bonus,
-    };
-  }
-
-  return { logLines, runtimePatch };
+  return { logLines: [], runtimePatch: {} };
 }
 
-export function runWeaponOnOccultCastHooks(ctx: WeaponHookContext): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  let veilFluxDelta = 0;
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-
-  if (passive === 'FIRST_OCCULT_RESOURCE_BONUS' && !ctx.runtime.firstOccultAbilityUsed) {
-    runtimePatch.firstOccultAbilityUsed = true;
-    veilFluxDelta = bonus;
-    logLines.push(`[${passiveLabel(passive)}] >> First Occult ability — +${bonus} Veil-Flux.`);
-  }
-
-  return { logLines, runtimePatch, veilFluxDelta };
+/** Stage II-C — Tier III first-occult passives removed. */
+export function runWeaponOnOccultCastHooks(_ctx: WeaponHookContext): WeaponHookResult {
+  return { logLines: [], runtimePatch: {} };
 }
 
+/**
+ * Baseline sacrificeResourceBonus from family profile still applies.
+ * Tier III once-per-combat sacrifice bonus removed.
+ */
 export function runWeaponOnSacrificeHpHooks(ctx: WeaponHookContext): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  let veilFluxDelta = 0;
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-
-  if (passive === 'SACRIFICE_HP_RESOURCE_BONUS' && !ctx.runtime.sacrificeHpBonusUsed) {
-    runtimePatch.sacrificeHpBonusUsed = true;
-    veilFluxDelta = bonus;
-    logLines.push(`[${passiveLabel(passive)}] >> HP sacrifice — +${bonus} Veil-Flux.`);
-  } else if (ctx.weapon.statModifiers.sacrificeResourceBonus) {
-    veilFluxDelta = ctx.weapon.statModifiers.sacrificeResourceBonus;
-  }
-
-  return { logLines, runtimePatch, veilFluxDelta };
+  const veilFluxDelta = ctx.weapon.statModifiers.sacrificeResourceBonus ?? 0;
+  return { logLines: [], runtimePatch: {}, veilFluxDelta };
 }
 
-export function runWeaponOnDebuffAppliedHooks(ctx: WeaponHookContext, extras: CombatSessionExtras): WeaponHookResult {
-  const logLines: string[] = [];
-  const runtimePatch: Partial<WeaponRuntimeState> = {};
-  const passive = ctx.weapon.oncePerCombatPassive;
-  const bonus = ctx.weapon.passiveBonusPct ?? 0;
-
-  if (passive === 'FIRST_DEBUFF_WARD' && !ctx.runtime.firstDebuffApplied) {
-    runtimePatch.firstDebuffApplied = true;
-    extras.playerShield = (extras.playerShield ?? 0) + bonus;
-    extras.playerShieldTurnsRemaining = Math.max(extras.playerShieldTurnsRemaining ?? 0, 1);
-    logLines.push(`[${passiveLabel(passive)}] >> First debuff — +${bonus} temporary ward.`);
-    return {
-      logLines,
-      runtimePatch,
-      playerShieldDelta: bonus,
-      playerShieldTurns: 1,
-    };
-  }
-
-  return { logLines, runtimePatch };
+/** Stage II-C — Tier III first-debuff ward passive removed. */
+export function runWeaponOnDebuffAppliedHooks(
+  _ctx: WeaponHookContext,
+  _extras: CombatSessionExtras,
+): WeaponHookResult {
+  return { logLines: [], runtimePatch: {} };
 }
 
-export function buildResolvedWeaponForRun(
-  familyId: WeaponFamilyId,
-  tier: WeaponTierNumber,
-): ResolvedWeaponState {
-  return resolveWeaponState(familyId, tier);
+export function buildResolvedWeaponForRun(familyId: WeaponFamilyId): ResolvedWeaponState {
+  return resolveWeaponState(familyId);
 }
 
 export function formatWeaponStatLines(weapon: ResolvedWeaponState): string[] {
   const lines: string[] = [];
   const mods = weapon.statModifiers;
   const aegisWaSurface = weapon.classId === 'AEGIS';
-  // Aegis canonical combat is 4+3 weapon actions — strikeDamagePct / stamina cost
-  // do not scale that surface (legacy fields may remain for migration/basics).
   if (mods.strikeDamagePct && !aegisWaSurface) {
     lines.push(`${mods.strikeDamagePct > 0 ? '+' : ''}${mods.strikeDamagePct}% Strike Damage`);
   }
@@ -333,12 +221,14 @@ export function stripExtraArmorFromTarget(
   return stripKineticArmor(target, layers).enemy;
 }
 
-export function didWeaponPostReloadBonus(runtime: WeaponRuntimeState): boolean {
-  return runtime.postReloadBallisticBonus;
+/** @deprecated Stage II-C — post-reload Tier III bonus removed. */
+export function didWeaponPostReloadBonus(_runtime: WeaponRuntimeState): boolean {
+  return false;
 }
 
+/** @deprecated Stage II-C — post-reload Tier III bonus removed. */
 export function consumeWeaponPostReloadBonus(runtime: WeaponRuntimeState): WeaponRuntimeState {
-  return { ...runtime, postReloadBallisticBonus: false };
+  return runtime;
 }
 
 export function isFractureEvent(target: EnemyCombatProfile, wasFractured: boolean): boolean {
@@ -348,9 +238,8 @@ export function isFractureEvent(target: EnemyCombatProfile, wasFractured: boolea
 export function resolveWeaponForClassAccount(
   classId: ClassType,
   familyId: WeaponFamilyId,
-  tier: WeaponTierNumber,
 ): ResolvedWeaponState {
-  const weapon = resolveWeaponState(familyId, tier);
+  const weapon = resolveWeaponState(familyId);
   if (weapon.classId !== classId) {
     throw new Error(`Weapon ${familyId} does not belong to class ${classId}`);
   }

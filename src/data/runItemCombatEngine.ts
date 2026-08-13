@@ -43,7 +43,7 @@ function appendPending(
 }
 
 /**
- * Resolve a combat Run Item useBehavior into an IncursionConsumableUseResult.
+ * Resolve a combat Supply useBehavior into an IncursionConsumableUseResult.
  * Does not consume the slot — caller handles inventory mutation.
  */
 export function resolveRunItemCombatUse(
@@ -57,10 +57,10 @@ export function resolveRunItemCombatUse(
         itemId,
         healAmount: 0,
         stunsEnemy: false,
-        logLine: '[REJECTED] >> Not a combat Run Item.',
+        logLine: '[REJECTED] >> Not a combat Supply.',
       },
       runtime: ctx.runtime,
-      rejected: 'Not a combat Run Item.',
+      rejected: 'Not a combat Supply.',
     };
   }
 

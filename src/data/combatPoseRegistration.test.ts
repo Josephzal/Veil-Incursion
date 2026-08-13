@@ -18,9 +18,9 @@ const boxes = [
   { width: 304.5, height: 360, label: '1024x720-ish slot' },
 ] as const;
 
-assert.equal(usesAnatomyPoseRegistration('aegis-runed-longsword'), true);
-assert.equal(usesAnatomyPoseRegistration('aegis-rift-edge'), false);
-assert.equal(usesAnatomyPoseRegistration('envoy-echo-lantern'), false);
+assert.equal(usesAnatomyPoseRegistration('aegis-longsword'), true);
+assert.equal(usesAnatomyPoseRegistration('aegis-paired-blades'), false);
+assert.equal(usesAnatomyPoseRegistration('envoy-vambrace'), false);
 assert.equal(usesAnatomyPoseRegistration(null), false);
 
 for (const box of boxes) {

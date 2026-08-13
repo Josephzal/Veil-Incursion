@@ -6,16 +6,16 @@ import HubPrimaryCta from './HubPrimaryCta';
 import { HubSectionHeader } from './HubScreenShell';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import type {
-  ExpeditionKeepsakeDefinition,
-  KeepsakeDeploymentChoiceSpec,
-  KeepsakeDeploymentOption,
-} from '../../types/expeditionKeepsake';
+  RequisitionDefinition,
+  RequisitionDeploymentChoiceSpec,
+  RequisitionDeploymentOption,
+} from '../../types/expeditionRequisition';
 import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface KeepsakeDeploymentChoiceModalProps {
   visible: boolean;
-  relic: ExpeditionKeepsakeDefinition;
-  choice: KeepsakeDeploymentChoiceSpec;
+  requisition: RequisitionDefinition;
+  choice: RequisitionDeploymentChoiceSpec;
   selectedValue: string | null;
   accentColor: string;
   mutedColor: string;
@@ -32,7 +32,7 @@ function OptionRow({
   mutedColor,
   onPress,
 }: {
-  option: KeepsakeDeploymentOption;
+  option: RequisitionDeploymentOption;
   selected: boolean;
   accentColor: string;
   mutedColor: string;
@@ -64,7 +64,7 @@ function OptionRow({
 
 export default function KeepsakeDeploymentChoiceModal({
   visible,
-  relic,
+  requisition,
   choice,
   selectedValue,
   accentColor,
@@ -95,10 +95,10 @@ export default function KeepsakeDeploymentChoiceModal({
             letterSpacing={1}
             style={{ color: accentColor, textAlign: 'center', marginBottom: scaleSpacing(8) }}
           >
-            [ RELIC DEPLOYMENT ]
+            [ REQUISITION DEPLOYMENT ]
           </TerminalText>
           <TerminalText variant="body" style={{ color: accentColor, fontWeight: '700', textAlign: 'center' }}>
-            {relic.name.toUpperCase()}
+            {requisition.name.toUpperCase()}
           </TerminalText>
           <TerminalText variant="caption" style={{ color: mutedColor, textAlign: 'center', marginTop: scaleSpacing(4) }}>
             {choice.prompt}

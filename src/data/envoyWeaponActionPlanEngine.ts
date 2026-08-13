@@ -150,7 +150,7 @@ export function planEnvoyWeaponAction(
     const catalogDamage = def.baseDamage;
     const catalogFlux = def.fluxCost;
     const weapon = ctx.resolvedWeapon
-      ?? resolveWeaponState(ctx.familyId, 1);
+      ?? resolveWeaponState(ctx.familyId);
     const a1 = resolveEnvoySplinterBasic({
       weapon,
       catalogDamage,

@@ -80,13 +80,6 @@ function collectRecipeSinks(): RecipeSink[] {
         resourceIds: family.unlockRequirement.map((r) => r.resourceId),
       });
     }
-    family.tiers.forEach((tier) => {
-      if (tier.upgradeCost.length === 0) return;
-      sinks.push({
-        label: `${family.shortName} T${tier.tierNumber}`,
-        resourceIds: tier.upgradeCost.map((r) => r.resourceId),
-      });
-    });
   });
   return sinks;
 }

@@ -36,6 +36,10 @@ import {
 } from '../types/operativeClass';
 import { normalizeClassAccountFields, cycleOperativeClass, getClassDisplayName } from '../data/classLoadoutEngine';
 import {
+  normalizePlayerAccountEquipment,
+  type StoredPlayerAccountEquipment,
+} from '../data/playerAccountEquipmentNormalize';
+import {
   isHexShotAbilityUnlocked,
   isEnvoyAbilityUnlocked,
 } from '../data/classAbilityUnlockEngine';
@@ -62,13 +66,7 @@ import {
   loadStashResourceIntoCargo,
   loadStashResourceIntoCargoAtCell,
   calculateStashUsed,
-  clearTacticalSlotState,
-  clearRunItemLoadoutSlotState,
-  createDefaultTacticalLoadout,
-  equipRunItemFromHub,
-  equipTacticalFromHub,
   finalizeDescentLoadout,
-  finalizeDescentRunItems,
   HUB_STASH_CAPACITY,
   returnAllPreRunContainmentToStash as applyReturnAllPreRunContainmentToStash,
   returnCargoItemToHubStash,
@@ -113,28 +111,36 @@ import {
 import { migratePlayerAccountEconomy } from '../data/economySaveMigrationEngine';
 import { applyBetrayalConsequencesToAccount } from '../data/betrayalConsequencesEngine';
 import { buildBetrayalEventsFromRouting } from '../data/contractBetrayalResolver';
-import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
-import { migrateTacticalRunItemsToLoadout } from '../data/runItemInventoryEngine';
-import { createDefaultRunItemsSlotState } from '../types/runItem';
-import type { RunItemsSlotState } from '../types/runItem';
-import { createDefaultKeepsakeDeployment } from '../data/keepsakeRunState';
 import type {
-  KeepsakeAttunement,
-  KeepsakeDeployment,
-  KeepsakeId,
-  KeepsakeMirrorCategory,
-  KeepsakeRouteDoctrine,
-} from '../types/expeditionKeepsake';
+  RequisitionAttunement,
+  RequisitionId,
+  RequisitionRouteDoctrine,
+  StoredRequisitionAccountInput,
+} from '../types/expeditionRequisition';
+import {
+  createFreshProofRequisitionAccountFields,
+  normalizeRequisitionAccount,
+  sanitizeRequisitionDeployment,
+} from '../data/requisitionAccountNormalize';
+import { resolveRequisitionDonorId } from '../data/requisitionDonorDisposition';
+import { ENABLED_REQUISITION_IDS } from '../types/expeditionRequisition';
 import {
   formatPostRunCargoRoutingValidationReport,
   validateCargoRoutingResultIntegrity,
 } from '../data/postRunCargoRoutingValidation';
 import { relocateCargoItem } from '../data/cargoGridEngine';
 import { isResourceItemId } from '../data/resourceRegistry';
+import {
+  canOfferTemporaryCoagulant,
+  commitPackedSupplyStock,
+  normalizeSupplyAccount,
+  placeSupplyAtCell,
+  type StoredSupplyAccountInput,
+} from '../data/cargoSupplyEngine';
 import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem';
 import { MacroSectorId, RegionalPresenceState } from '../types/regional';
 import { createEmptyResourceStash, canAffordRecipe, deductRecipeFromStash } from '../data/resourceStashEngine';
-import { getCraftingRecipe, isRecipeOutputOwned } from '../data/craftingRegistry';
+import { getCraftingRecipe } from '../data/craftingRegistry';
 import {
   buildRecipeVisibilityStatus,
   discoverRecipeSchematic,
@@ -143,7 +149,6 @@ import {
   syncRecipeDiscoveriesFromStash,
 } from '../data/recipeVisibilityEngine';
 import type { ResourceQuantity } from '../types/resourceItem';
-import type { BoundRequisitionId } from '../types/boundRequisition';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
 import { rollDecryptionLoot } from '../data/decryptionLootEngine';
@@ -151,12 +156,10 @@ import {
   createDefaultWeaponProgression,
   equipWeaponForClass,
   getEquippedWeaponForClass,
-  getWeaponTier,
   normalizeWeaponProgression,
   resolveWeaponState,
   unlockAllWeapons,
   unlockWeaponFamily,
-  upgradeWeaponTier,
 } from '../data/weaponProgressionEngine';
 import { isDevGodModeActive, resetDevProgressionKeepItems, toggleDevGodMode } from '../data/devGodModeEngine';
 import {
@@ -287,7 +290,6 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     equipment: {
       weaponId: null,
       armorId: null,
-      trinketId: null,
     },
     inventory,
     bankedCargo: createDefaultBankedCargo(),
@@ -299,24 +301,18 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     unlockedEnvoyAbilities: [...DEFAULT_ENVOY_UNLOCKED],
     resourceStash,
     weaponUnlocks: weaponProgression.weaponUnlocks,
-    weaponTiers: weaponProgression.weaponTiers,
     equippedWeaponByClass: weaponProgression.equippedWeaponByClass,
     weaponBriefAcknowledged: [],
     simplifiedUltimateInputs: false,
-    craftedAugments: [],
     hubCraftedConsumables: {},
     preRunCargo: createDefaultCargoRunState(),
-    tacticalLoadout: createDefaultTacticalLoadout(),
-    runItemLoadout: createDefaultRunItemsSlotState(),
     unidentifiedStash: [],
     careerCargoRouting: createDefaultCareerCargoRoutingStats(),
     sponsorTrustStats: {},
     betrayalHistory: [],
     sealedCargoStacks: [],
     careerSealedCargo: createDefaultCareerSealedCargoStats(),
-    equippedKeepsakeId: null,
-    unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
-    keepsakeDeployment: createDefaultKeepsakeDeployment(),
+    ...createFreshProofRequisitionAccountFields(),
     careerBalanceHistory: createDefaultCareerBalanceHistory(),
     resourceDiscovery: seedDiscoveryFromStash(resourceStash),
     careerEconomyTelemetry: createDefaultCareerEconomyTelemetry(),
@@ -324,7 +320,13 @@ export function createDefaultPlayerAccount(): PlayerAccount {
   };
 }
 
-function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
+type StoredPlayerAccountInput = Partial<PlayerAccount> &
+  StoredRequisitionAccountInput & {
+    weaponTiers?: Partial<Record<string, unknown>>;
+  } & StoredSupplyAccountInput;
+
+/** Normalize a stored account blob into the live PlayerAccount shape (strips retired fields). */
+export function mergeStoredAccount(parsed: StoredPlayerAccountInput): PlayerAccount {
   const defaults = createDefaultPlayerAccount();
   const inventory = mergeInventory(parsed.inventory);
   const classFields = normalizeClassAccountFields(parsed);
@@ -333,12 +335,25 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     resourceDiscovery: parsed.resourceDiscovery,
     careerEconomyTelemetry: parsed.careerEconomyTelemetry,
     sealedCargoStacks: parsed.sealedCargoStacks,
-    craftedAugments: parsed.craftedAugments,
     weaponUnlocks: parsed.weaponUnlocks,
   });
+  const storedEquipment = (parsed as { equipment?: StoredPlayerAccountEquipment }).equipment;
+  const storedWeaponTiers = parsed.weaponTiers;
+  const requisitionFields = normalizeRequisitionAccount(parsed);
+  const supplyFields = normalizeSupplyAccount(parsed);
+  const {
+    weaponTiers: _retiredWeaponTiers,
+    equippedKeepsakeId: _retiredEquippedKeepsakeId,
+    unlockedKeepsakeIds: _retiredUnlockedKeepsakeIds,
+    keepsakeDeployment: _retiredKeepsakeDeployment,
+    craftedAugments: _retiredCraftedAugments,
+    tacticalLoadout: _retiredTacticalLoadout,
+    runItemLoadout: _retiredRunItemLoadout,
+    ...parsedWithoutRetiredFields
+  } = parsed;
   return {
     ...defaults,
-    ...parsed,
+    ...parsedWithoutRetiredFields,
     ...classFields,
     factionPerks: { ...defaults.factionPerks, ...parsed.factionPerks },
     progressionMatrix: {
@@ -355,10 +370,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       homeMacroSector: DEFAULT_HOME_MACRO_SECTOR,
       metropolitanNode: DEFAULT_HOME_METROPOLITAN_NODE,
     },
-    equipment: {
-      ...defaults.equipment,
-      weaponId: null,
-    },
+    equipment: normalizePlayerAccountEquipment(storedEquipment),
     inventory,
     bankedCargo: {
       ...createDefaultBankedCargo(),
@@ -369,27 +381,12 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     sponsorReputation: { ...defaults.sponsorReputation, ...parsed.sponsorReputation },
     ...normalizeWeaponProgression({
       weaponUnlocks: parsed.weaponUnlocks,
-      weaponTiers: parsed.weaponTiers,
+      weaponTiers: storedWeaponTiers,
       equippedWeaponByClass: parsed.equippedWeaponByClass,
     }),
     weaponBriefAcknowledged: normalizeWeaponBriefAcknowledged(parsed.weaponBriefAcknowledged),
     simplifiedUltimateInputs: parsed.simplifiedUltimateInputs === true,
-    craftedAugments: parsed.craftedAugments ?? defaults.craftedAugments,
-    hubCraftedConsumables: {
-      ...defaults.hubCraftedConsumables,
-      ...parsed.hubCraftedConsumables,
-    },
-    preRunCargo: parsed.preRunCargo ?? defaults.preRunCargo,
-    ...(() => {
-      const migrated = migrateTacticalRunItemsToLoadout(
-        parsed.tacticalLoadout ?? defaults.tacticalLoadout,
-        parsed.runItemLoadout ?? defaults.runItemLoadout,
-      );
-      return {
-        tacticalLoadout: migrated.tacticalLoadout as PlayerAccount['tacticalLoadout'],
-        runItemLoadout: migrated.runItemLoadout,
-      };
-    })(),
+    ...supplyFields,
     unidentifiedStash: parsed.unidentifiedStash ?? defaults.unidentifiedStash,
     careerCargoRouting: {
       ...defaults.careerCargoRouting,
@@ -405,22 +402,27 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...defaults.careerSealedCargo,
       ...parsed.careerSealedCargo,
     },
-    equippedKeepsakeId:
-      parsed.equippedKeepsakeId && isKeepsakeId(parsed.equippedKeepsakeId)
-        ? parsed.equippedKeepsakeId
-        : defaults.equippedKeepsakeId,
-    unlockedKeepsakeIds: parsed.unlockedKeepsakeIds?.length
-      ? parsed.unlockedKeepsakeIds.filter((id): id is KeepsakeId => isKeepsakeId(id))
-      : [...defaults.unlockedKeepsakeIds],
-    keepsakeDeployment: {
-      ...defaults.keepsakeDeployment,
-      ...parsed.keepsakeDeployment,
-    },
+    ...requisitionFields,
     careerBalanceHistory: {
       runs: [
-        ...(parsed.careerBalanceHistory?.runs
-          ?? defaults.careerBalanceHistory.runs),
-      ].slice(-10),
+        ...(parsed.careerBalanceHistory?.runs ??
+          defaults.careerBalanceHistory.runs),
+      ]
+        .map((entry) => {
+          const legacy = entry as typeof entry & { keepsakeId?: string | null };
+          const { keepsakeId: legacyKeepsakeId, ...canonical } = legacy;
+          const resolved = resolveRequisitionDonorId(
+            canonical.requisitionId ?? legacyKeepsakeId,
+          );
+          return {
+            ...canonical,
+            requisitionId:
+              resolved && ENABLED_REQUISITION_IDS.includes(resolved as RequisitionId)
+                ? resolved
+                : null,
+          };
+        })
+        .slice(-10),
     },
     veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
     resourceDiscovery: economy.resourceDiscovery,
@@ -498,11 +500,10 @@ interface PlayerAccountContextType {
   isDevGodModeUnlocksActive: () => boolean;
   /** Dev Test — level 1 / no unlocks; keeps stash, cargo, inventory, credits. */
   resetDevProgressionKeepItems: () => string;
-  setEquippedKeepsake: (keepsakeId: KeepsakeId | null) => void;
-  setKeepsakeAttunement: (attunement: KeepsakeAttunement | null) => void;
-  setKeepsakeRouteDoctrine: (routeDoctrine: KeepsakeRouteDoctrine | null) => void;
-  setKeepsakeMirrorCategory: (mirrorCategory: KeepsakeMirrorCategory | null) => void;
-  unlockAllKeepsakes: () => void;
+  setEquippedRequisition: (requisitionId: RequisitionId | null) => void;
+  setRequisitionAttunement: (attunement: RequisitionAttunement | null) => void;
+  setRequisitionRouteDoctrine: (routeDoctrine: RequisitionRouteDoctrine | null) => void;
+  unlockAllRequisitions: () => void;
   relocatePreRunCargoItem: (instanceId: string, row: number, col: number) => boolean;
   loadStashResourceToCargo: (resourceId: ResourceItemId) => { success: boolean; logLine: string };
   loadStashItemToCargoAtCell: (
@@ -513,17 +514,13 @@ interface PlayerAccountContextType {
   returnPreRunCargoToStash: (instanceId: string) => { success: boolean; logLine: string };
   stageStashItemToPreRunCargo: (itemId: CargoItemId) => { success: boolean; logLine: string };
   returnAllPreRunContainmentToStash: () => void;
-  equipTacticalSlot: (slotIndex: 0 | 1 | 2, itemId: CargoItemId) => { success: boolean; logLine: string };
-  clearTacticalSlot: (slotIndex: 0 | 1 | 2) => void;
-  equipRunItemLoadoutSlot: (
-    slotType: 'COMBAT' | 'FIELD',
-    slotIndex: 0 | 1,
-    itemId: CargoItemId,
+  packTemporaryRecoveryAtCell: (
+    row: number,
+    col: number,
   ) => { success: boolean; logLine: string };
-  clearRunItemLoadoutSlot: (slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => void;
   purchaseHubContraband: (cargoId: CargoItemId, discountPct?: number) => { success: boolean; logLine: string };
   sellFenceResource: (resourceId: FenceableResourceId, quantity?: number) => { success: boolean; logLine: string };
-  commitDescentLoadout: () => { cargo: CargoRunState; runItems: RunItemsSlotState };
+  commitDescentLoadout: () => { cargo: CargoRunState } | null;
   persistRunExtraction: (payload: {
     cargo: CargoRunState;
     aegisTechniqueLoadout: AegisTechniqueLoadout;
@@ -538,7 +535,7 @@ interface PlayerAccountContextType {
     decisions: CargoRoutingDecision[];
     routingState: PostRunRoutingDebriefState;
     autoStashAlreadyDeposited?: boolean;
-    keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+    requisitionRuntime?: import('../types/expeditionRequisition').RequisitionRuntime | null;
     routingAppraisalCount?: number;
   }) => import('../types/postRunCargoRouting').CargoRoutingResult;
   /** Phase B — push completed-run balance telemetry into the last-10 career buffer. */
@@ -822,14 +819,12 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     const activeClass = classId ?? account.activeClass;
     const progression = {
       weaponUnlocks: account.weaponUnlocks,
-      weaponTiers: account.weaponTiers,
       equippedWeaponByClass: account.equippedWeaponByClass,
     };
     const familyId = getEquippedWeaponForClass(progression, activeClass);
-    const tier = getWeaponTier(progression, familyId);
-    const weapon = resolveWeaponState(familyId, tier);
+    const weapon = resolveWeaponState(familyId);
     return resolveWeaponCombatStatsFromState(weapon);
-  }, [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks]);
+  }, [account.activeClass, account.equippedWeaponByClass, account.weaponUnlocks]);
 
   const equipInventoryItem = useCallback(
     (itemId: string) => {
@@ -1092,15 +1087,11 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           logLine: '>> FABRICATION REJECTED — SCHEMATIC UNKNOWN.',
         };
       }
-      if (
-        recipe.kind !== 'CONSUMABLE'
-        && isRecipeOutputOwned(
-          recipe.outputId,
-          [],
-          account.craftedAugments,
-        )
-      ) {
-        return { success: false, logLine: `>> ${recipe.label.toUpperCase()} ALREADY FORGED.` };
+      if (recipe.kind === 'AUGMENT') {
+        return {
+          success: false,
+          logLine: '>> FABRICATION REJECTED — LEGACY PASSIVE SCHEMATIC RETIRED.',
+        };
       }
       if (!canAffordRecipe(account.resourceStash, recipe)) {
         return { success: false, logLine: '>> FABRICATION REJECTED — INSUFFICIENT RESOURCES.' };
@@ -1123,14 +1114,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           resourceStash: nextStash,
           careerEconomyTelemetry: applyCareerCraftSpend(prev.careerEconomyTelemetry, spentUnits),
         };
-        if (recipe.kind === 'AUGMENT') {
-          const augmentId = recipe.outputId as BoundRequisitionId;
-          if (prev.craftedAugments.includes(augmentId)) return base;
-          return {
-            ...base,
-            craftedAugments: [...prev.craftedAugments, augmentId],
-          };
-        }
         const consumableId = recipe.outputId as CargoItemId;
         const nextConsumables = { ...prev.hubCraftedConsumables };
         nextConsumables[consumableId] = (nextConsumables[consumableId] ?? 0) + 1;
@@ -1140,12 +1123,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         };
       });
 
-      if (recipe.kind === 'AUGMENT') {
-        return {
-          success: true,
-          logLine: `>> AUGMENT FORGED — ${recipe.label.toUpperCase()} STAGED FOR DEPLOYMENT.`,
-        };
-      }
       return {
         success: true,
         logLine: `>> CONSUMABLE FABRICATED — ${recipe.label.toUpperCase()} ADDED TO HUB STAGING.`,
@@ -1170,79 +1147,63 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
   const equipWeaponFamily = useCallback(
     (familyId: WeaponFamilyId): { success: boolean; logLine: string } => {
       const def = getWeaponFamily(familyId);
-      const nextState = equipWeaponForClass(
+      const result = equipWeaponForClass(
         {
           weaponUnlocks: account.weaponUnlocks,
-          weaponTiers: account.weaponTiers,
           equippedWeaponByClass: account.equippedWeaponByClass,
         },
         def.classId,
         familyId,
       );
-      if (!nextState) {
+      if (!result.ok) {
         return { success: false, logLine: '>> WEAPON LINK REJECTED — FAMILY LOCKED OR CLASS MISMATCH.' };
       }
       updateAccount((prev) => ({
         ...prev,
-        equippedWeaponByClass: nextState.equippedWeaponByClass,
+        equippedWeaponByClass: result.state.equippedWeaponByClass,
       }));
-      const tier = getWeaponTier(nextState, familyId);
       return {
         success: true,
-        logLine: `>> WEAPON LINKED — ${resolveWeaponState(familyId, tier).displayName.toUpperCase()}.`,
+        logLine: `>> WEAPON LINKED — ${resolveWeaponState(familyId).displayName.toUpperCase()}.`,
       };
     },
-    [account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks, updateAccount],
+    [account.equippedWeaponByClass, account.weaponUnlocks, updateAccount],
   );
 
   const unlockWeaponFamilyAccount = useCallback(
     (familyId: WeaponFamilyId): { success: boolean; logLine: string } => {
       const progression = {
         weaponUnlocks: account.weaponUnlocks,
-        weaponTiers: account.weaponTiers,
         equippedWeaponByClass: account.equippedWeaponByClass,
       };
       const result = unlockWeaponFamily(account.resourceStash, progression, familyId);
-      if (!result) {
+      if (!result.ok) {
         return { success: false, logLine: '>> WEAPON UNLOCK REJECTED — INSUFFICIENT RESOURCES OR ALREADY OWNED.' };
       }
-      updateAccount((prev) => ({
-        ...prev,
-        resourceStash: result.nextStash,
-        weaponUnlocks: result.nextState.weaponUnlocks,
-        weaponTiers: result.nextState.weaponTiers,
-      }));
+      updateAccount((prev) => {
+        const { weaponTiers: _retired, ...rest } = prev;
+        return {
+          ...rest,
+          resourceStash: result.stash,
+          weaponUnlocks: result.state.weaponUnlocks,
+          equippedWeaponByClass: result.state.equippedWeaponByClass,
+        };
+      });
       return {
         success: true,
-        logLine: `>> WEAPON BLUEPRINT UNLOCKED — ${resolveWeaponState(familyId, 1).displayName.toUpperCase()}.`,
+        logLine: `>> WEAPON BLUEPRINT UNLOCKED — ${resolveWeaponState(familyId).displayName.toUpperCase()}.`,
       };
     },
-    [account.equippedWeaponByClass, account.resourceStash, account.weaponTiers, account.weaponUnlocks, updateAccount],
+    [account.equippedWeaponByClass, account.resourceStash, account.weaponUnlocks, updateAccount],
   );
 
+  /** Stage II-C — weapon tier upgrades removed; never deducts stash. */
   const upgradeWeaponFamilyTier = useCallback(
-    (familyId: WeaponFamilyId): { success: boolean; logLine: string } => {
-      const progression = {
-        weaponUnlocks: account.weaponUnlocks,
-        weaponTiers: account.weaponTiers,
-        equippedWeaponByClass: account.equippedWeaponByClass,
-      };
-      const result = upgradeWeaponTier(account.resourceStash, progression, familyId);
-      if (!result) {
-        return { success: false, logLine: '>> WEAPON UPGRADE REJECTED — INSUFFICIENT RESOURCES OR MAX TIER.' };
-      }
-      const tier = getWeaponTier(result.nextState, familyId);
-      updateAccount((prev) => ({
-        ...prev,
-        resourceStash: result.nextStash,
-        weaponTiers: result.nextState.weaponTiers,
-      }));
-      return {
-        success: true,
-        logLine: `>> WEAPON UPGRADED — ${resolveWeaponState(familyId, tier).displayName.toUpperCase()}.`,
-      };
-    },
-    [account.equippedWeaponByClass, account.resourceStash, account.weaponTiers, account.weaponUnlocks, updateAccount],
+    (_familyId: WeaponFamilyId): { success: boolean; logLine: string } => ({
+      success: false,
+      logLine: '>> WEAPON UPGRADE RETIRED — CHASSIS ARE TIERLESS.',
+    }),
+    [],
   );
 
   const acknowledgeWeaponBrief = useCallback(
@@ -1334,52 +1295,52 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     }));
   }, [updateAccount]);
 
-  const setEquippedKeepsake = useCallback(
-    (keepsakeId: KeepsakeId | null) => {
+  const setEquippedRequisition = useCallback(
+    (requisitionId: RequisitionId | null) => {
       updateAccount((prev) => {
-        if (keepsakeId && !prev.unlockedKeepsakeIds.includes(keepsakeId)) {
+        if (
+          requisitionId &&
+          !prev.unlockedRequisitionIds.includes(requisitionId)
+        ) {
           return prev;
         }
-        return { ...prev, equippedKeepsakeId: keepsakeId };
+        return {
+          ...prev,
+          equippedRequisitionId: requisitionId,
+          requisitionDeployment: sanitizeRequisitionDeployment(
+            requisitionId,
+            prev.requisitionDeployment,
+          ),
+        };
       });
     },
     [updateAccount],
   );
 
-  const setKeepsakeAttunement = useCallback(
-    (attunement: KeepsakeAttunement | null) => {
+  const setRequisitionAttunement = useCallback(
+    (attunement: RequisitionAttunement | null) => {
       updateAccount((prev) => ({
         ...prev,
-        keepsakeDeployment: { ...prev.keepsakeDeployment, attunement },
+        requisitionDeployment: { ...prev.requisitionDeployment, attunement },
       }));
     },
     [updateAccount],
   );
 
-  const setKeepsakeRouteDoctrine = useCallback(
-    (routeDoctrine: KeepsakeRouteDoctrine | null) => {
+  const setRequisitionRouteDoctrine = useCallback(
+    (routeDoctrine: RequisitionRouteDoctrine | null) => {
       updateAccount((prev) => ({
         ...prev,
-        keepsakeDeployment: { ...prev.keepsakeDeployment, routeDoctrine },
+        requisitionDeployment: { ...prev.requisitionDeployment, routeDoctrine },
       }));
     },
     [updateAccount],
   );
 
-  const setKeepsakeMirrorCategory = useCallback(
-    (mirrorCategory: KeepsakeMirrorCategory | null) => {
-      updateAccount((prev) => ({
-        ...prev,
-        keepsakeDeployment: { ...prev.keepsakeDeployment, mirrorCategory },
-      }));
-    },
-    [updateAccount],
-  );
-
-  const unlockAllKeepsakes = useCallback(() => {
+  const unlockAllRequisitions = useCallback(() => {
     updateAccount((prev) => ({
       ...prev,
-      unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
+      unlockedRequisitionIds: [...ENABLED_REQUISITION_IDS],
     }));
   }, [updateAccount]);
 
@@ -1521,97 +1482,28 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     });
   }, [updateAccount]);
 
-  const equipTacticalSlot = useCallback(
-    (slotIndex: 0 | 1 | 2, itemId: CargoItemId): { success: boolean; logLine: string } => {
+  const packTemporaryRecoveryAtCell = useCallback(
+    (row: number, col: number): { success: boolean; logLine: string } => {
       let success = false;
       updateAccount((prev) => {
-        const result = equipTacticalFromHub(
-          prev.hubCraftedConsumables,
-          prev.tacticalLoadout,
-          slotIndex,
-          itemId,
-        );
-        if (!result) return prev;
-        success = true;
-        return {
-          ...prev,
-          hubCraftedConsumables: result.hubCraftedConsumables,
-          tacticalLoadout: result.tacticalLoadout,
-        };
-      });
-      return success
-        ? { success: true, logLine: `>> TACTICAL SLOT ${slotIndex + 1} ARMED — ${itemId.replace(/-/g, ' ').toUpperCase()}.` }
-        : { success: false, logLine: '>> TACTICAL EQUIP REJECTED — CONSUMABLE NOT IN STAGING.' };
-    },
-    [updateAccount],
-  );
-
-  const clearTacticalSlot = useCallback(
-    (slotIndex: 0 | 1 | 2) => {
-      updateAccount((prev) => {
-        const result = clearTacticalSlotState(
-          prev.hubCraftedConsumables,
-          prev.tacticalLoadout,
-          slotIndex,
-        );
-        return {
-          ...prev,
-          hubCraftedConsumables: result.hubCraftedConsumables,
-          tacticalLoadout: result.tacticalLoadout,
-        };
-      });
-    },
-    [updateAccount],
-  );
-
-  const equipRunItemLoadoutSlot = useCallback(
-    (
-      slotType: 'COMBAT' | 'FIELD',
-      slotIndex: 0 | 1,
-      itemId: CargoItemId,
-    ): { success: boolean; logLine: string } => {
-      let success = false;
-      updateAccount((prev) => {
-        const result = equipRunItemFromHub(
-          prev.hubCraftedConsumables,
-          prev.runItemLoadout,
-          slotType,
-          slotIndex,
-          itemId,
-        );
-        if (!result) return prev;
-        success = true;
-        return {
-          ...prev,
-          hubCraftedConsumables: result.hubCraftedConsumables,
-          runItemLoadout: result.runItemLoadout,
-        };
-      });
-      return success
-        ? {
-          success: true,
-          logLine: `>> RUN ITEM SLOT ARMED — ${itemId.replace(/-/g, ' ').toUpperCase()}.`,
+        if (!canOfferTemporaryCoagulant(prev.hubCraftedConsumables, prev.preRunCargo)) {
+          return prev;
         }
-        : { success: false, logLine: '>> RUN ITEM EQUIP REJECTED — CHECK STASH AND SLOT TYPE.' };
-    },
-    [updateAccount],
-  );
-
-  const clearRunItemLoadoutSlot = useCallback(
-    (slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => {
-      updateAccount((prev) => {
-        const result = clearRunItemLoadoutSlotState(
-          prev.hubCraftedConsumables,
-          prev.runItemLoadout,
-          slotType,
-          slotIndex,
+        const cargo = placeSupplyAtCell(
+          prev.preRunCargo,
+          'standard-coagulant',
+          row,
+          col,
+          'TEMPORARY_RECOVERY',
+          true,
         );
-        return {
-          ...prev,
-          hubCraftedConsumables: result.hubCraftedConsumables,
-          runItemLoadout: result.runItemLoadout,
-        };
+        if (!cargo) return prev;
+        success = true;
+        return { ...prev, preRunCargo: cargo };
       });
+      return success
+        ? { success: true, logLine: '>> TEMPORARY STANDARD COAGULANT PACKED — ONE-RUN SUPPLY.' }
+        : { success: false, logLine: '>> TEMPORARY SUPPLY UNAVAILABLE OR CARGO CELL OCCUPIED.' };
     },
     [updateAccount],
   );
@@ -1666,29 +1558,26 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
-  const commitDescentLoadout = useCallback((): { cargo: CargoRunState; runItems: RunItemsSlotState } => {
+  const commitDescentLoadout = useCallback((): { cargo: CargoRunState } | null => {
     const returned = applyReturnAllPreRunContainmentToStash(
       account.resourceStash,
       account.hubCraftedConsumables,
       account.preRunCargo,
     );
-    const cargo = finalizeDescentLoadout(returned.cargo, account.tacticalLoadout);
-    const runItems = finalizeDescentRunItems(account.runItemLoadout);
+    const cargo = finalizeDescentLoadout(returned.cargo);
+    const committed = commitPackedSupplyStock(returned.hubCraftedConsumables, cargo);
+    if (!committed) return null;
     updateAccount((prev) => ({
       ...prev,
       resourceStash: returned.resourceStash,
-      hubCraftedConsumables: returned.hubCraftedConsumables,
+      hubCraftedConsumables: committed.stock,
       preRunCargo: createDefaultCargoRunState(),
-      tacticalLoadout: createDefaultTacticalLoadout(),
-      runItemLoadout: createDefaultRunItemsSlotState(),
     }));
-    return { cargo, runItems };
+    return { cargo: committed.cargo };
   }, [
     account.hubCraftedConsumables,
     account.preRunCargo,
     account.resourceStash,
-    account.runItemLoadout,
-    account.tacticalLoadout,
     updateAccount,
   ]);
 
@@ -1744,7 +1633,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       decisions: CargoRoutingDecision[];
       routingState: PostRunRoutingDebriefState;
       autoStashAlreadyDeposited?: boolean;
-      keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+      requisitionRuntime?: import('../types/expeditionRequisition').RequisitionRuntime | null;
       routingAppraisalCount?: number;
     }) => {
       let result = null as ReturnType<typeof applyCargoRoutingDecisions> | null;
@@ -1757,7 +1646,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           stash: prev.resourceStash,
           cabalCredits: prev.cabalCredits,
           operationContributionPerStack: payload.routingState.operationContributionPerStack,
-          keepsakeRuntime: payload.keepsakeRuntime ?? null,
+          requisitionRuntime: payload.requisitionRuntime ?? null,
           routingContext: payload.routingState.routingContext,
         });
         result = applied;
@@ -1780,7 +1669,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
             stash: mergedStash,
             cabalCredits: mergedCredits,
             operationContributionPerStack: payload.routingState.operationContributionPerStack,
-            keepsakeRuntime: payload.keepsakeRuntime ?? null,
+            requisitionRuntime: payload.requisitionRuntime ?? null,
             routingContext: payload.routingState.routingContext,
           });
           mergedResult = mergeCargoRoutingResults(mergedResult, secondaryApplied.result);
@@ -2692,21 +2581,17 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       resetDevProgressionKeepItems: resetDevProgressionKeepItemsAccount,
       resetWeaponFamilies,
       grantWeaponUnlockResources,
-      setEquippedKeepsake,
-      setKeepsakeAttunement,
-      setKeepsakeRouteDoctrine,
-      setKeepsakeMirrorCategory,
-      unlockAllKeepsakes,
+      setEquippedRequisition,
+      setRequisitionAttunement,
+      setRequisitionRouteDoctrine,
+      unlockAllRequisitions,
       relocatePreRunCargoItem,
       loadStashResourceToCargo,
       loadStashItemToCargoAtCell,
       returnPreRunCargoToStash,
       stageStashItemToPreRunCargo,
       returnAllPreRunContainmentToStash,
-      equipTacticalSlot,
-      clearTacticalSlot,
-      equipRunItemLoadoutSlot,
-      clearRunItemLoadoutSlot,
+      packTemporaryRecoveryAtCell,
       purchaseHubContraband,
       sellFenceResource,
       commitDescentLoadout,
@@ -2809,21 +2694,17 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       resetDevProgressionKeepItemsAccount,
       resetWeaponFamilies,
       grantWeaponUnlockResources,
-      setEquippedKeepsake,
-      setKeepsakeAttunement,
-      setKeepsakeRouteDoctrine,
-      setKeepsakeMirrorCategory,
-      unlockAllKeepsakes,
+      setEquippedRequisition,
+      setRequisitionAttunement,
+      setRequisitionRouteDoctrine,
+      unlockAllRequisitions,
       relocatePreRunCargoItem,
       loadStashResourceToCargo,
       loadStashItemToCargoAtCell,
       returnPreRunCargoToStash,
       stageStashItemToPreRunCargo,
       returnAllPreRunContainmentToStash,
-      equipTacticalSlot,
-      clearTacticalSlot,
-      equipRunItemLoadoutSlot,
-      clearRunItemLoadoutSlot,
+      packTemporaryRecoveryAtCell,
       purchaseHubContraband,
       sellFenceResource,
       commitDescentLoadout,

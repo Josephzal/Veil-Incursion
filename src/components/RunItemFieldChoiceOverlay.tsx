@@ -11,7 +11,7 @@ export default function RunItemFieldChoiceOverlay(): React.JSX.Element | null {
   const { theme } = useTerminal();
   const [selectedValue, setSelectedValue] = useState<string | null>(null);
 
-  const choice = activeIncursion.itemRuntime.pendingFieldChoice;
+  const choice = activeIncursion.supplyRuntime.pendingFieldChoice;
   const visible = choice != null;
 
   const title = useMemo(() => {

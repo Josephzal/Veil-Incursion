@@ -5,21 +5,23 @@ import TerminalText from './TerminalText';
 import HubPrimaryCta from './hub/HubPrimaryCta';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import { getKeepsakeDefinition } from '../data/expeditionKeepsakeRegistry';
+import { EXPEDITION_REQUISITION_REGISTRY } from '../data/expeditionRequisitionRegistry';
 
 export default function KeepsakeInRunChoiceOverlay(): React.JSX.Element | null {
   const { activeIncursion, commitKeepsakePendingChoice } = useRun();
   const { theme } = useTerminal();
   const [selectedValue, setSelectedValue] = useState<string | null>(null);
 
-  const runtime = activeIncursion.keepsakeRuntime;
+  const runtime = activeIncursion.requisitionRuntime;
   const choice = runtime?.pendingChoice ?? null;
-  const relic = runtime?.keepsakeId ? getKeepsakeDefinition(runtime.keepsakeId) : null;
+  const requisition = runtime
+    ? EXPEDITION_REQUISITION_REGISTRY[runtime.requisitionId]
+    : null;
 
   const accentColor = theme.primaryColor;
   const mutedColor = theme.mutedColor;
 
-  const visible = choice != null && relic != null;
+  const visible = choice != null && requisition != null;
 
   const resetSelection = useCallback(() => {
     setSelectedValue(null);
@@ -32,7 +34,7 @@ export default function KeepsakeInRunChoiceOverlay(): React.JSX.Element | null {
   }, [commitKeepsakePendingChoice, resetSelection, selectedValue]);
 
   const title = useMemo(() => {
-    if (!choice) return '[ RELIC CHOICE ]';
+    if (!choice) return '[ REQUISITION CHOICE ]';
     switch (choice.kind) {
       case 'contract_seal_clause':
         return '[ SEALED CLAUSE ]';
@@ -40,22 +42,16 @@ export default function KeepsakeInRunChoiceOverlay(): React.JSX.Element | null {
         return '[ DEAD-DROP ]';
       case 'extraction_token_action':
         return '[ EXTRACTION TOKEN ]';
-      case 'ley_siphon_overdraw':
-        return '[ LEY-SIPHON ]';
-      case 'mourners_bell_answer':
-        return "[ MOURNER'S BELL ]";
-      case 'hollow_key_unlock':
-        return '[ OCCULT LOCK ]';
-      case 'false_evac_beacon_plant':
-        return '[ FALSE BEACON ]';
-      case 'gutter_service':
-        return '[ GUTTER CROWN ]';
+      case 'cartograph_lock':
+        return '[ CARTOGRAPH LOCK ]';
+      case 'smugglers_double_wrap':
+        return "[ SMUGGLER'S WRAP ]";
       default:
-        return '[ RELIC CHOICE ]';
+        return '[ REQUISITION CHOICE ]';
     }
   }, [choice]);
 
-  if (!visible || !choice || !relic) return null;
+  if (!visible || !choice || !requisition) return null;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
@@ -65,7 +61,7 @@ export default function KeepsakeInRunChoiceOverlay(): React.JSX.Element | null {
             {title}
           </TerminalText>
           <TerminalText variant="body" style={{ color: accentColor, textAlign: 'center', marginTop: 8 }}>
-            {relic.name.toUpperCase()}
+            {requisition.name.toUpperCase()}
           </TerminalText>
           <TerminalText variant="caption" style={{ color: mutedColor, textAlign: 'center', marginTop: 6 }}>
             {choice.prompt}

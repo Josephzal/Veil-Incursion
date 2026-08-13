@@ -65,7 +65,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
   WeaponFamilyId,
   WeaponCombatPresentationProfile
 > = {
-  'aegis-runed-longsword': profile('aegis-runed-longsword', {
+  'aegis-longsword': profile('aegis-longsword', {
     cuePrefix: 'longsword',
     cues: {
       release: 'sfx.aegis.attack',
@@ -97,7 +97,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['AFTERMATH', 'fracture_crack', 320, 140, 'sfx.longsword.kill'],
     ]),
   }),
-  'aegis-rift-edge': profile('aegis-rift-edge', {
+  'aegis-paired-blades': profile('aegis-paired-blades', {
     cuePrefix: 'paired',
     cues: {
       release: 'sfx.paired.attack',
@@ -126,7 +126,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['AFTERMATH', 'ow_glyph_flare', 220, 120],
     ]),
   }),
-  'aegis-claymore-blade': profile('aegis-claymore-blade', {
+  'aegis-claymore': profile('aegis-claymore', {
     cuePrefix: 'unmaker',
     cues: {
       release: 'sfx.unmaker.attack',
@@ -154,7 +154,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['AFTERMATH', 'fracture_crack', 360, 160, 'sfx.unmaker.kill'],
     ]),
   }),
-  'hex-silver-core-sidearm': profile('hex-silver-core-sidearm', {
+  'hex-revolver': profile('hex-revolver', {
     cuePrefix: 'revolver',
     cues: {
       release: 'sfx.revolver.release',
@@ -184,7 +184,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['CONTACT', 'impact_spark', 240, 70],
     ]),
   }),
-  'hex-pulse-rifle': profile('hex-pulse-rifle', {
+  'hex-carbine': profile('hex-carbine', {
     cuePrefix: 'carbine',
     cues: {
       release: 'sfx.carbine.release',
@@ -214,7 +214,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['CONTACT', 'impact_spark', 220, 50],
     ]),
   }),
-  'hex-void-cannon': profile('hex-void-cannon', {
+  'hex-shotgun': profile('hex-shotgun', {
     cuePrefix: 'blackdoor',
     cues: {
       release: 'sfx.blackdoor.release',
@@ -243,7 +243,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['AFTERMATH', 'defense_break_float', 320, 120, 'sfx.blackdoor.break'],
     ]),
   }),
-  'envoy-echo-lantern': profile('envoy-echo-lantern', {
+  'envoy-vambrace': profile('envoy-vambrace', {
     cuePrefix: 'vambrace',
     cues: {
       release: 'sfx.vambrace.release',
@@ -271,7 +271,7 @@ export const WEAPON_COMBAT_PRESENTATION_BY_FAMILY: Record<
       ['AFTERMATH', 'resource_pulse', 280, 120, 'sfx.vambrace.resource'],
     ]),
   }),
-  'envoy-null-conduit': profile('envoy-null-conduit', {
+  'envoy-scythe': profile('envoy-scythe', {
     cuePrefix: 'scythe',
     cues: {
       release: 'sfx.scythe.release',

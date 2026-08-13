@@ -127,9 +127,6 @@ export function validateContrabandNotCrafted(): EconomyIntegrationIssue[] {
   });
   Object.values(WEAPON_REGISTRY).forEach((family) => {
     family.unlockRequirement.forEach((req) => bump(family.name, req.resourceId));
-    family.tiers.forEach((tier, index) => {
-      tier.upgradeCost.forEach((req) => bump(`${family.name} T${index + 1}`, req.resourceId));
-    });
   });
   return issues;
 }

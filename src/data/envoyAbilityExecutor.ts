@@ -117,7 +117,7 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
   switch (ctx.abilityId) {
     case 'VEIL_SPLINTER': {
       // E.4 — consolidate Action 1 through canonical weapon-action executor.
-      const familyId = (ctx.resolvedWeapon?.familyId ?? 'envoy-echo-lantern') as WeaponFamilyId;
+      const familyId = (ctx.resolvedWeapon?.familyId ?? 'envoy-vambrace') as WeaponFamilyId;
       const wa = executeEnvoyActionOneFromCompat({
         ingressId: 'VEIL_SPLINTER',
         familyId,

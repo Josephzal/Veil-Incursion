@@ -41,13 +41,13 @@ console.log('Phase B — Aegis weapon-action runtime');
 
 // 1. Each family exposes exactly its four correct weapon actions.
 assert.deepEqual(assertAegisWeaponActionCatalogComplete(), []);
-assert.deepEqual(deriveAegisWeaponActions('aegis-runed-longsword'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-longsword'), [
   'WARDENS_STRIKE', 'RUPTURE', 'DREADBIND', 'NO_RESPITE',
 ]);
-assert.deepEqual(deriveAegisWeaponActions('aegis-rift-edge'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-paired-blades'), [
   'PAIRED_BLADES_STRIKE', 'DIVERGENCE', 'ECLIPSE', 'SEVERANCE',
 ]);
-assert.deepEqual(deriveAegisWeaponActions('aegis-claymore-blade'), [
+assert.deepEqual(deriveAegisWeaponActions('aegis-claymore'), [
   'UNMAKER_STRIKE', 'DREAD_HORIZON', 'UNBOWED', 'DOOMFALL',
 ]);
 for (const familyId of ALL_AEGIS_WEAPON_FAMILY_IDS) {
@@ -56,7 +56,7 @@ for (const familyId of ALL_AEGIS_WEAPON_FAMILY_IDS) {
 
 // 2. Combat exposes 4 weapon actions + 3 techniques with no compatibility STRIKE.
 const surface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: DEFAULT_AEGIS_TECHNIQUE_LOADOUT,
 });
 assert.equal(surface.weaponActions.length, 4);
@@ -68,7 +68,7 @@ assert.ok(!surface.hudCards.includes('STRIKE'));
 assert.equal(surface.techniques[2], 'RUNEBOUND_CARAPACE');
 assert.equal(surface.hudCards[6], 'RUNEBOUND_CARAPACE');
 const mercySurface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-runed-longsword',
+  weaponFamilyId: 'aegis-longsword',
   techniques: ['FINAL_MERCY', 'RUIN', 'GRAVE_BIND'],
 });
 assert.equal(mercySurface.techniques[0], 'FINAL_MERCY');
@@ -78,11 +78,11 @@ assert.equal(mercySurface.hudCards[4], 'FINAL_MERCY');
 const runSnapshot = ['RUIN', 'GRAVE_BIND', 'RUNEBOUND_CARAPACE'] as const;
 const accountLater = ['DEVASTATE', 'VEIL_PIERCER', 'ASHEN_MANTLE'] as const;
 const runSurface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-rift-edge',
+  weaponFamilyId: 'aegis-paired-blades',
   techniques: runSnapshot,
 });
 const accountSurface = buildAegisCombatSurface({
-  weaponFamilyId: 'aegis-rift-edge',
+  weaponFamilyId: 'aegis-paired-blades',
   techniques: accountLater,
 });
 assert.notDeepEqual([...runSurface.techniques], [...accountSurface.techniques]);
@@ -418,9 +418,9 @@ for (const familyId of ALL_AEGIS_WEAPON_FAMILY_IDS) {
 }
 
 // 18. Ultimate still derived from family
-assert.equal(deriveAegisWeaponUltimateId('aegis-runed-longsword'), 'ABYSSAL_VERDICT');
-assert.equal(deriveAegisWeaponUltimateId('aegis-rift-edge'), 'REND_THE_VEIL');
-assert.equal(deriveAegisWeaponUltimateId('aegis-claymore-blade'), 'GRAVEFALL');
+assert.equal(deriveAegisWeaponUltimateId('aegis-longsword'), 'ABYSSAL_VERDICT');
+assert.equal(deriveAegisWeaponUltimateId('aegis-paired-blades'), 'REND_THE_VEIL');
+assert.equal(deriveAegisWeaponUltimateId('aegis-claymore'), 'GRAVEFALL');
 
 // 19. Other classes unchanged — cost resolver still works for Hex basic
 {

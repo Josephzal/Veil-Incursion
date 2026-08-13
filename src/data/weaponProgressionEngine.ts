@@ -2,10 +2,10 @@ import type { ClassType } from '../types/game';
 import type { ResourceQuantity } from '../types/resourceItem';
 import type {
   ResolvedWeaponState,
+  StoredWeaponProgressionInput,
   WeaponFamilyId,
   WeaponProgressionState,
   WeaponStatModifiers,
-  WeaponTierNumber,
 } from '../types/weapon';
 import {
   getStarterWeaponForClass,
@@ -16,16 +16,17 @@ import {
   WEAPON_REGISTRY,
 } from './weaponRegistry';
 import { canAffordCost, deductCostFromStash } from './weaponResourceEngine';
+import {
+  normalizeWeaponFamilyId,
+  normalizeWeaponFamilyIdList,
+} from './weaponFamilyIdNormalize';
 
 export function createDefaultWeaponProgression(): WeaponProgressionState {
   const weaponUnlocks: WeaponFamilyId[] = [];
-  const weaponTiers: Partial<Record<WeaponFamilyId, WeaponTierNumber>> = {};
   const equippedWeaponByClass: Partial<Record<ClassType, WeaponFamilyId>> = {};
 
   Object.values(STARTER_WEAPON_BY_CLASS).forEach((starterId) => {
-    const def = getWeaponFamily(starterId);
-    weaponUnlocks.push(starterId);
-    weaponTiers[starterId] = 1;
+    if (!weaponUnlocks.includes(starterId)) weaponUnlocks.push(starterId);
   });
 
   (Object.keys(STARTER_WEAPON_BY_CLASS) as ClassType[]).forEach((classId) => {
@@ -35,40 +36,47 @@ export function createDefaultWeaponProgression(): WeaponProgressionState {
   Object.values(WEAPON_REGISTRY).forEach((def) => {
     if (def.startingUnlocked && !weaponUnlocks.includes(def.id)) {
       weaponUnlocks.push(def.id);
-      weaponTiers[def.id] = 1;
     }
   });
 
-  return { weaponUnlocks, weaponTiers, equippedWeaponByClass };
+  return { weaponUnlocks, equippedWeaponByClass };
 }
 
+/**
+ * Normalize stored weapon progression:
+ * - Map legacy family IDs → canonical
+ * - Collapse duplicate legacy+canonical ownership
+ * - Recover valid ownership from retired weaponTiers map keys
+ * - Strip weaponTiers from live output
+ * - Idempotent
+ */
 export function normalizeWeaponProgression(
-  parsed: Partial<WeaponProgressionState> | undefined,
+  parsed: StoredWeaponProgressionInput | Partial<WeaponProgressionState> | undefined,
 ): WeaponProgressionState {
   const defaults = createDefaultWeaponProgression();
   if (!parsed) return defaults;
 
-  const weaponUnlocks = [...defaults.weaponUnlocks];
-  parsed.weaponUnlocks?.forEach((id) => {
-    if (isWeaponFamilyId(id) && !weaponUnlocks.includes(id)) {
-      weaponUnlocks.push(id);
-    }
-  });
+  const unlockSet = new Set<WeaponFamilyId>(defaults.weaponUnlocks);
 
-  const weaponTiers: Partial<Record<WeaponFamilyId, WeaponTierNumber>> = {
-    ...defaults.weaponTiers,
-  };
-  Object.entries(parsed.weaponTiers ?? {}).forEach(([id, tier]) => {
-    if (!isWeaponFamilyId(id)) return;
-    if (tier !== 1 && tier !== 2 && tier !== 3) return;
-    weaponTiers[id] = tier;
-  });
+  normalizeWeaponFamilyIdList(parsed.weaponUnlocks).forEach((id) => unlockSet.add(id));
+
+  // Tier-map keys may be the only ownership evidence on older saves.
+  const storedTiers = (parsed as StoredWeaponProgressionInput).weaponTiers;
+  if (storedTiers && typeof storedTiers === 'object') {
+    Object.keys(storedTiers).forEach((rawId) => {
+      const id = normalizeWeaponFamilyId(rawId);
+      if (id) unlockSet.add(id);
+    });
+  }
+
+  const weaponUnlocks = [...unlockSet];
 
   const equippedWeaponByClass: Partial<Record<ClassType, WeaponFamilyId>> = {
     ...defaults.equippedWeaponByClass,
   };
-  Object.entries(parsed.equippedWeaponByClass ?? {}).forEach(([classId, familyId]) => {
-    if (!isWeaponFamilyId(familyId)) return;
+  Object.entries(parsed.equippedWeaponByClass ?? {}).forEach(([classId, familyRaw]) => {
+    const familyId = normalizeWeaponFamilyId(familyRaw);
+    if (!familyId) return;
     const def = getWeaponFamily(familyId);
     if (def.classId !== classId) return;
     if (!weaponUnlocks.includes(familyId)) return;
@@ -82,7 +90,7 @@ export function normalizeWeaponProgression(
     }
   });
 
-  return { weaponUnlocks, weaponTiers, equippedWeaponByClass };
+  return { weaponUnlocks, equippedWeaponByClass };
 }
 
 export function getEquippedWeaponForClass(
@@ -94,14 +102,6 @@ export function getEquippedWeaponForClass(
     return equipped;
   }
   return getStarterWeaponForClass(classId);
-}
-
-export function getWeaponTier(
-  state: WeaponProgressionState,
-  familyId: WeaponFamilyId,
-): WeaponTierNumber {
-  if (!state.weaponUnlocks.includes(familyId)) return 1;
-  return state.weaponTiers[familyId] ?? 1;
 }
 
 export function mergeWeaponStatModifiers(
@@ -119,24 +119,27 @@ export function mergeWeaponStatModifiers(
   return merged;
 }
 
-export function resolveWeaponState(
-  familyId: WeaponFamilyId,
-  tier: WeaponTierNumber,
-): ResolvedWeaponState {
+/** Resolve the tierless canonical family combat profile. */
+export function resolveWeaponState(familyId: WeaponFamilyId): ResolvedWeaponState {
   const def = getWeaponFamily(familyId);
-  const tierDef = def.tiers[tier - 1];
-  const statModifiers = tierDef.statModifiers;
   return {
     familyId,
-    tier,
-    displayName: tierDef.displayName,
-    statModifiers,
-    oncePerCombatPassive: tierDef.oncePerCombatPassive,
-    passiveBonusPct: tierDef.passiveBonusPct,
-    effectSummary: tierDef.effectSummary,
+    displayName: def.name,
+    statModifiers: { ...def.baselineStatModifiers },
+    effectSummary: def.baselineEffectSummary,
     tags: def.tags,
     classId: def.classId,
   };
+}
+
+/**
+ * @deprecated Stage II-C — tier argument ignored; use resolveWeaponState(familyId).
+ */
+export function resolveWeaponStateAtTier(
+  familyId: WeaponFamilyId,
+  _tier?: 1 | 2 | 3,
+): ResolvedWeaponState {
+  return resolveWeaponState(familyId);
 }
 
 export function canUnlockWeaponFamily(
@@ -150,57 +153,56 @@ export function canUnlockWeaponFamily(
   return canAffordCost(stash, def.unlockRequirement);
 }
 
-export function canUpgradeWeaponTier(
-  stash: ResourceQuantity,
-  state: WeaponProgressionState,
-  familyId: WeaponFamilyId,
-): boolean {
-  if (!state.weaponUnlocks.includes(familyId)) return false;
-  const currentTier = getWeaponTier(state, familyId);
-  if (currentTier >= 3) return false;
-  const upgradeCost = getWeaponFamily(familyId).tiers[currentTier - 1].upgradeCost;
-  return canAffordCost(stash, upgradeCost);
-}
-
 export function unlockWeaponFamily(
   stash: ResourceQuantity,
   state: WeaponProgressionState,
   familyId: WeaponFamilyId,
-): { nextStash: ResourceQuantity; nextState: WeaponProgressionState } | null {
-  const def = getWeaponFamily(familyId);
-  if (state.weaponUnlocks.includes(familyId)) return null;
-  if (!def.startingUnlocked) {
-    const nextStash = deductCostFromStash(stash, def.unlockRequirement);
-    if (!nextStash) return null;
-    stash = nextStash;
+): { ok: boolean; state: WeaponProgressionState; stash: ResourceQuantity; message: string } {
+  if (state.weaponUnlocks.includes(familyId)) {
+    return { ok: false, state, stash, message: 'Already unlocked.' };
   }
+  const def = getWeaponFamily(familyId);
+  if (!def.startingUnlocked && !canAffordCost(stash, def.unlockRequirement)) {
+    return { ok: false, state, stash, message: 'Insufficient resources.' };
+  }
+  const nextStash = def.startingUnlocked
+    ? stash
+    : (deductCostFromStash(stash, def.unlockRequirement) ?? stash);
   return {
-    nextStash: stash,
-    nextState: {
-      ...state,
+    ok: true,
+    stash: nextStash,
+    state: {
       weaponUnlocks: [...state.weaponUnlocks, familyId],
-      weaponTiers: { ...state.weaponTiers, [familyId]: 1 },
+      equippedWeaponByClass: { ...state.equippedWeaponByClass },
     },
+    message: `${def.name} unlocked.`,
   };
 }
 
+/**
+ * @deprecated Stage II-C — weapon tier upgrades removed. Always fails closed.
+ */
+export function canUpgradeWeaponTier(
+  _stash: ResourceQuantity,
+  _state: WeaponProgressionState,
+  _familyId: WeaponFamilyId,
+): boolean {
+  return false;
+}
+
+/**
+ * @deprecated Stage II-C — weapon tier upgrades removed. No-op / fail closed.
+ */
 export function upgradeWeaponTier(
   stash: ResourceQuantity,
   state: WeaponProgressionState,
-  familyId: WeaponFamilyId,
-): { nextStash: ResourceQuantity; nextState: WeaponProgressionState } | null {
-  const currentTier = getWeaponTier(state, familyId);
-  if (currentTier >= 3) return null;
-  const upgradeCost = getWeaponFamily(familyId).tiers[currentTier - 1].upgradeCost;
-  const nextStash = deductCostFromStash(stash, upgradeCost);
-  if (!nextStash) return null;
-  const nextTier = (currentTier + 1) as WeaponTierNumber;
+  _familyId: WeaponFamilyId,
+): { ok: boolean; state: WeaponProgressionState; stash: ResourceQuantity; message: string } {
   return {
-    nextStash,
-    nextState: {
-      ...state,
-      weaponTiers: { ...state.weaponTiers, [familyId]: nextTier },
-    },
+    ok: false,
+    state,
+    stash,
+    message: 'Weapon tier upgrades have been retired.',
   };
 }
 
@@ -208,40 +210,54 @@ export function equipWeaponForClass(
   state: WeaponProgressionState,
   classId: ClassType,
   familyId: WeaponFamilyId,
-): WeaponProgressionState | null {
+): { ok: boolean; state: WeaponProgressionState; message: string } {
+  if (!state.weaponUnlocks.includes(familyId)) {
+    return { ok: false, state, message: 'Weapon locked.' };
+  }
   const def = getWeaponFamily(familyId);
-  if (def.classId !== classId) return null;
-  if (!state.weaponUnlocks.includes(familyId)) return null;
+  if (def.classId !== classId) {
+    return { ok: false, state, message: 'Wrong class.' };
+  }
   return {
-    ...state,
-    equippedWeaponByClass: {
-      ...state.equippedWeaponByClass,
-      [classId]: familyId,
+    ok: true,
+    state: {
+      ...state,
+      equippedWeaponByClass: { ...state.equippedWeaponByClass, [classId]: familyId },
     },
+    message: `${def.name} equipped.`,
   };
 }
 
 export function listLockedWeaponsForClass(classId: ClassType, state: WeaponProgressionState) {
-  return listWeaponFamiliesForClass(classId).filter((def) => !state.weaponUnlocks.includes(def.id));
+  return listWeaponFamiliesForClass(classId).filter((d) => !state.weaponUnlocks.includes(d.id));
 }
 
 export function listUnlockedWeaponsForClass(classId: ClassType, state: WeaponProgressionState) {
-  return listWeaponFamiliesForClass(classId).filter((def) => state.weaponUnlocks.includes(def.id));
+  return listWeaponFamiliesForClass(classId).filter((d) => state.weaponUnlocks.includes(d.id));
 }
 
 export function unlockAllWeapons(): WeaponProgressionState {
-  const weaponUnlocks = [...Object.keys(WEAPON_REGISTRY)] as WeaponFamilyId[];
-  const weaponTiers: Partial<Record<WeaponFamilyId, WeaponTierNumber>> = {};
-  weaponUnlocks.forEach((id) => {
-    weaponTiers[id] = 3;
-  });
-  return {
-    weaponUnlocks,
-    weaponTiers,
-    equippedWeaponByClass: { ...STARTER_WEAPON_BY_CLASS },
+  const weaponUnlocks = [...ALL_WEAPON_FAMILY_IDS_LOCAL];
+  const equippedWeaponByClass: Partial<Record<ClassType, WeaponFamilyId>> = {
+    AEGIS: STARTER_WEAPON_BY_CLASS.AEGIS,
+    HEX_SHOT: STARTER_WEAPON_BY_CLASS.HEX_SHOT,
+    ENVOY: STARTER_WEAPON_BY_CLASS.ENVOY,
   };
+  return { weaponUnlocks, equippedWeaponByClass };
 }
 
 export function resetWeaponProgression(): WeaponProgressionState {
   return createDefaultWeaponProgression();
 }
+
+const ALL_WEAPON_FAMILY_IDS_LOCAL = Object.keys(WEAPON_REGISTRY) as WeaponFamilyId[];
+
+/** @deprecated Stage II-C — tiers removed; always returns 1 for compatibility callers. */
+export function getWeaponTier(
+  _state: WeaponProgressionState,
+  _familyId: WeaponFamilyId,
+): 1 {
+  return 1;
+}
+
+export { isWeaponFamilyId };

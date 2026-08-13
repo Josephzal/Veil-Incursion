@@ -142,13 +142,13 @@ const EXPLICIT_CONFLICTS: Record<string, LiveBoonAuditEntry['mechanicalConflicts
   ],
   ETHEREAL_MAGAZINES: [
     {
-      weaponFamilyId: 'hex-silver-core-sidearm',
+      weaponFamilyId: 'hex-revolver',
       reason: 'Reduces reload cadence that feeds Protocol Charge',
     },
   ],
   EXTENDED_MAGS: [
     {
-      weaponFamilyId: 'hex-silver-core-sidearm',
+      weaponFamilyId: 'hex-revolver',
       reason: 'Larger mag softens Perfect Reload frequency',
     },
   ],

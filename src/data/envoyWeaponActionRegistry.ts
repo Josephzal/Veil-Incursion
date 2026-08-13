@@ -15,8 +15,8 @@ import {
 import type { WeaponFamilyId } from '../types/weapon';
 
 export type EnvoyWeaponFamilyId =
-  | 'envoy-echo-lantern'
-  | 'envoy-null-conduit'
+  | 'envoy-vambrace'
+  | 'envoy-scythe'
   | 'envoy-sanguine-prism';
 
 export interface EnvoyWeaponActionSet {
@@ -37,29 +37,29 @@ export interface EnvoyWeaponActionSet {
 }
 
 const ENVOY_WEAPON_ACTION_BY_FAMILY: Record<EnvoyWeaponFamilyId, EnvoyWeaponActionSet> = {
-  'envoy-echo-lantern': {
-    familyId: 'envoy-echo-lantern',
+  'envoy-vambrace': {
+    familyId: 'envoy-vambrace',
     displayName: 'Vambrace',
     actions: ENVOY_VAMBRACE_WEAPON_ACTIONS,
     kitComplete: true,
   },
-  'envoy-null-conduit': {
-    familyId: 'envoy-null-conduit',
+  'envoy-scythe': {
+    familyId: 'envoy-scythe',
     displayName: 'Scythe',
     actions: ENVOY_SCYTHE_WEAPON_ACTIONS,
     kitComplete: true,
   },
   'envoy-sanguine-prism': {
     familyId: 'envoy-sanguine-prism',
-    displayName: "Heart's Due",
+    displayName: 'Sanguine Prism',
     actions: ENVOY_HEARTS_DUE_WEAPON_ACTIONS,
     kitComplete: true,
   },
 };
 
 export const ALL_ENVOY_WEAPON_FAMILY_IDS: readonly EnvoyWeaponFamilyId[] = [
-  'envoy-echo-lantern',
-  'envoy-null-conduit',
+  'envoy-vambrace',
+  'envoy-scythe',
   'envoy-sanguine-prism',
 ];
 
@@ -76,8 +76,8 @@ Object.freeze(ENVOY_WEAPON_ACTION_BY_FAMILY);
 export function isEnvoyWeaponFamilyId(
   id: string | null | undefined,
 ): id is EnvoyWeaponFamilyId {
-  return id === 'envoy-echo-lantern'
-    || id === 'envoy-null-conduit'
+  return id === 'envoy-vambrace'
+    || id === 'envoy-scythe'
     || id === 'envoy-sanguine-prism';
 }
 

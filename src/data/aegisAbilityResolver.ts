@@ -28,12 +28,20 @@ export function resolveHostileHpHit(
   enemy: EnemyCombatProfile,
   raw: number,
   channel: DamageChannel,
-  options?: { ignoreDefenses?: boolean; pierce?: boolean; partialPierce?: boolean },
+  options?: {
+    ignoreDefenses?: boolean;
+    pierce?: boolean;
+    partialPierce?: boolean;
+    armorPierceLayers?: 0 | 1;
+    wardPierceLayers?: 0 | 1;
+  },
 ): ResolvedHostileHit {
   const mitigation = mitigateByChannel(enemy, raw, channel, {
     ignoreDefenses: options?.ignoreDefenses,
     pierce: options?.pierce,
     partialPierce: options?.partialPierce,
+    armorPierceLayers: options?.armorPierceLayers,
+    wardPierceLayers: options?.wardPierceLayers,
   });
   const hpDamage = applyDamageWithFractureBonus(mitigation.damageAfter, mitigation.enemy);
   return {

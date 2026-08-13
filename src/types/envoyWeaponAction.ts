@@ -4,12 +4,12 @@
  */
 
 export type EnvoyWeaponActionId =
-  // Vambrace — envoy-echo-lantern
+  // Vambrace — envoy-vambrace
   | 'GRAVEWEAVE'
   | 'GRAVE_TRANSFER'
   | 'VEIL_BRAND'
   | 'ROT_KNELL'
-  // Scythe — envoy-null-conduit
+  // Scythe — envoy-scythe
   | 'NULL_ARC'
   | 'SILENT_EDGE'
   | 'VEIN_CUT'

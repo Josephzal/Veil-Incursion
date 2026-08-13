@@ -1,7 +1,7 @@
 import type { CargoItemId } from './cargoGrid';
 import type { ResourceItemId } from './resourceItem';
 
-/** One-use combat consumables and field tools — separate from Bound Requisitions and cargo grid loot. */
+/** One-use combat consumables and field tools — separate from Requisitions and cargo grid loot. */
 export type RunItemId =
   | 'standard-coagulant'
   | 'trauma-patch'
@@ -132,11 +132,6 @@ export interface RunItemDefinition {
 }
 
 /** Dedicated run-item slot inventory — never stored in the cargo grid. */
-export interface RunItemsSlotState {
-  combatSlots: [RunItemId | null, RunItemId | null];
-  fieldSlots: [RunItemId | null, RunItemId | null];
-}
-
 export type EchoTuningForkMode = 'SOOTHE' | 'LISTEN' | 'PROVOKE';
 export type AnchorNeedleMode = 'PIN' | 'PIERCE' | 'EXTRACT';
 export type RelaySpikeAction = 'BOOST_SIGNAL' | 'CACHE_ROUTE' | 'EMERGENCY_PING';
@@ -188,6 +183,14 @@ export interface RunItemRuntimeStats {
   unstablePenaltiesReducedByItems: number;
   resourceBonusRollsByItems: number;
   creditsSavedByItems: number;
+  suppliesPacked: number;
+  suppliesFound: number;
+  suppliesPurchased: number;
+  suppliesUsed: number;
+  suppliesBanked: number;
+  suppliesJettisoned: number;
+  resourcesDisplacedForSupply: number;
+  runsStartedWithoutRecoveryAccess: number;
   triggerCount: number;
 }
 
@@ -202,7 +205,6 @@ export type RunItemOfferResolution =
 export interface RunItemPendingOffer {
   itemId: RunItemId;
   source: RunItemOfferSource;
-  slotType: RunItemSlotType;
   /** Run credits already charged — refunded on cancel_purchase. */
   purchaseCost?: number;
 }
@@ -213,6 +215,8 @@ export interface RunItemRuntime {
   mirrorSaltUsedThisTurn: boolean;
   scannerNoise: number;
   messages: string[];
+  /** Canonical Supply ids consumed during this run, in use order. */
+  usedSupplyIds: CargoItemId[];
   pendingEffects: RunItemPendingEffect[];
   stats: RunItemRuntimeStats;
   /** Relay Spike — applied on next scanner generation when node mutation is deferred. */
@@ -243,7 +247,7 @@ export interface RunItemRuntime {
 export const RUN_ITEM_COMBAT_SLOT_COUNT = 2;
 export const RUN_ITEM_FIELD_SLOT_COUNT = 2;
 
-/** Bound Requisition / augment ids that must never appear in the Run Item registry. */
+/** Legacy Bound donor IDs that must never appear in the Supply registry. */
 export const FORBIDDEN_RUN_ITEM_IDS = [
   'chalk-line-ward',
   'adrenaline-primer',
@@ -298,24 +302,21 @@ export function createDefaultRunItemRuntimeStats(): RunItemRuntimeStats {
     unstablePenaltiesReducedByItems: 0,
     resourceBonusRollsByItems: 0,
     creditsSavedByItems: 0,
+    suppliesPacked: 0,
+    suppliesFound: 0,
+    suppliesPurchased: 0,
+    suppliesUsed: 0,
+    suppliesBanked: 0,
+    suppliesJettisoned: 0,
+    resourcesDisplacedForSupply: 0,
+    runsStartedWithoutRecoveryAccess: 0,
     triggerCount: 0,
   };
 }
 
-export function createDefaultRunItemsSlotState(): RunItemsSlotState {
-  return {
-    combatSlots: [null, null],
-    fieldSlots: [null, null],
-  };
-}
-
 export interface RunItemDebriefSummary {
-  itemsSlotted: RunItemId[];
-  itemsBrought: RunItemId[];
-  combatSlotted: RunItemId[];
-  fieldSlotted: RunItemId[];
-  combatBrought: RunItemId[];
-  fieldBrought: RunItemId[];
+  suppliesUsed: CargoItemId[];
+  suppliesCarriedAtEnd: CargoItemId[];
   triggered: boolean;
   triggerCount: number;
   messages: string[];
@@ -331,6 +332,7 @@ export function createDefaultRunItemRuntime(): RunItemRuntime {
     mirrorSaltUsedThisTurn: false,
     scannerNoise: 0,
     messages: [],
+    usedSupplyIds: [],
     pendingEffects: [],
     stats: createDefaultRunItemRuntimeStats(),
     pendingRelayModifier: null,

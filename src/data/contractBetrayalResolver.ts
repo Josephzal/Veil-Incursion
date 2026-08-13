@@ -28,7 +28,7 @@ import {
   resolveContractAfterRouting,
 } from './contractResolver';
 import { applyKeepsakeDeliveredQuantityBonus } from './expeditionKeepsakeCargoEngine';
-import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
+import type { RequisitionRuntime } from '../types/expeditionRequisition';
 import { getResourceDisplayName } from './resourceRegistry';
 import { sponsorDisplayName } from '../utils/contractUi';
 import type { CabalEmployerId } from '../types/worldState';
@@ -352,7 +352,7 @@ export function resolveContractAfterBetrayalRouting({
   items,
   extractedSuccessfully,
   ledger,
-  keepsakeRuntime,
+  requisitionRuntime,
 }: {
   routingState: PostRunRoutingDebriefState;
   routingResult: CargoRoutingResult | null;
@@ -360,7 +360,7 @@ export function resolveContractAfterBetrayalRouting({
   items: RoutableCargoItem[];
   extractedSuccessfully: boolean;
   ledger?: RunResourceLedger;
-  keepsakeRuntime?: KeepsakeRuntime | null;
+  requisitionRuntime?: RequisitionRuntime | null;
 }): ContractResult {
   const contract = routingState.activeContract;
   const betrayalFields = emptyBetrayalFields();
@@ -402,7 +402,7 @@ export function resolveContractAfterBetrayalRouting({
   if (!hasRoutingApplied || contractTargets.length === 0) {
     const delivered = applyKeepsakeDeliveredQuantityBonus(
       routingResult?.deliveredResourcesForContract ?? {},
-      keepsakeRuntime,
+      requisitionRuntime,
     );
     return resolveContractAfterRouting({
       contract,
@@ -420,7 +420,7 @@ export function resolveContractAfterBetrayalRouting({
 
   const delivered = applyKeepsakeDeliveredQuantityBonus(
     routingResult!.deliveredResourcesForContract,
-    keepsakeRuntime,
+    requisitionRuntime,
   );
 
   const base = resolveContractAfterRouting({

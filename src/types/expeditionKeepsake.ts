@@ -2,10 +2,9 @@ import type { ResourceItemId } from './resourceItem';
 import type { CargoItemId } from './cargoGrid';
 
 /**
- * Expedition Relic (Trinkets v2) — pre-run expedition modifiers, not combat boons.
- * Each relic defines a run intention (hunt echoes, contraband run, debt economy, etc.).
- * Type/field names retain the `Keepsake` prefix for migration continuity with the
- * v1.5 wiring; the player-facing surface calls these "Expedition Relics".
+ * @deprecated Stage III-B donor schema retained only for deterministic migration
+ * and adaptation of the nine surviving expedition definitions. Live APIs and all
+ * player-facing surfaces use Expedition Requisitions.
  */
 export type KeepsakeId =
   | 'signal_compass'
@@ -142,7 +141,7 @@ export interface KeepsakeDeploymentChoiceSpec {
   options: readonly KeepsakeDeploymentOption[];
 }
 
-/** In-run relic branch choices surfaced mid-incursion. */
+/** Legacy donor choice schema retained for the runtime adapter. */
 export type KeepsakePendingChoiceKind =
   | 'dead_drop_action'
   | 'contract_seal_clause'
@@ -170,9 +169,9 @@ export interface ExpeditionKeepsakeDefinition {
   description: string;
   flavorText: string;
   effectSummary: string;
-  /** One-line description of the run intention this relic enables. */
+  /** One-line description of the run intention this donor enables. */
   runStyle: string;
-  /** One-line description of the tradeoff/risk this relic adds. */
+  /** One-line description of the donor tradeoff/risk. */
   riskSummary: string;
   tags: readonly KeepsakeTag[];
   unlockState: KeepsakeUnlockState;
@@ -187,101 +186,4 @@ export interface ExpeditionKeepsakeDefinition {
   /** Primary once-per-run or once-per-depth guard key for validation. */
   primaryTriggerKey: string;
   primaryRuntimeGuard: KeepsakeRuntimeGuard;
-}
-
-export interface KeepsakeRuntimeStats {
-  nodeDetailsRevealed: number;
-  futureNodesPreviewed: number;
-  routeNodesLocked: number;
-  bonusResourcesGenerated: number;
-  unstablePenaltiesReduced: number;
-  creditsSaved: number;
-  creditsDeferred: number;
-  extractionDebtPaid: number;
-  cargoValueBonus: number;
-  cargoPreserved: number;
-  cargoBankedByTrinket: number;
-  operationProgressAdded: number;
-  sponsorRepBonus: number;
-  echoSignalsGenerated: number;
-  echoThreadGenerated: number;
-  echoIntelRevealed: number;
-  echoGlassBonus: number;
-  anchorSignalsGenerated: number;
-  anchorTrailCleared: number;
-  contaminationAdded: number;
-  contaminationPurged: number;
-  matchesLit: number;
-  safeExtractionsSkipped: number;
-  contrabandWrapped: number;
-  markedShelfPurchases: number;
-  debtWarningsTriggered: number;
-  rivalQuarriesCleared: number;
-  falseBeaconsPlanted: number;
-  keysUsed: number;
-  outsideCargoNodesCarried: number;
-  safehouseServiceUsed: string | null;
-  triggerCount: number;
-}
-
-export interface KeepsakeRuntime {
-  keepsakeId: KeepsakeId;
-  /** Pre-run deployment configuration copied from the account loadout. */
-  deployment: KeepsakeDeployment;
-  triggersUsed: Record<string, boolean>;
-  perDepthTriggersUsed: Record<number, Record<string, boolean>>;
-  messages: string[];
-  /** Player-facing decisions recorded for the debrief. */
-  decisions: KeepsakeDecision[];
-  /** Lightweight boolean state flags (pendingDeadDrop, deathClueAvailable, mirroredNodePlanted, ...). */
-  flags: Record<string, boolean>;
-  /** Lightweight numeric counters (contamination, matches, echoThread, scent, noise, keys, ...). */
-  counters: Record<string, number>;
-  stats: KeepsakeRuntimeStats;
-  /** Instance-level cargo tags applied by relic hooks this run. */
-  taggedCargo: KeepsakeTaggedCargoEntry[];
-  /** Fast lookup for routing value bonuses at debrief. */
-  cargoTagByResource: Partial<Record<ResourceItemId, KeepsakeCargoTagKind>>;
-  /** Ley-Siphon Needle — next harvest may overdraw the vein. */
-  leySiphonOverdrawPending: boolean;
-  /** Black Market Mark — discounted marked shelf listing id. */
-  markedShelfItemId: CargoItemId | null;
-  /** Node id corrupted after buying the marked shelf item. */
-  markedShelfCorruptedNodeId: string | null;
-  /** Null Ledger — credits owed on successful extraction (+25% surcharge). */
-  nullLedgerDebtCredits: number;
-  /** Null Ledger — item purchased on credit this run. */
-  nullLedgerCreditItemId: CargoItemId | null;
-  /** Extraction Token — first revealed safe extraction node id. */
-  stampedExtractionNodeId: string | null;
-  /** Extraction confirmed through stamped node — stable cargo bonus pending payout. */
-  stampedExtractionConfirmed: boolean;
-  /** Last Light Matchbook — greed bonus armed for next qualifying clear. */
-  overextendedActive: boolean;
-  /** Overextended bonus already consumed this run. */
-  overextendedBonusConsumed: boolean;
-  /** Overextended — next dirty extraction gains +1 threat. */
-  overextendedDirtyThreatPending: boolean;
-  /** In-run branch choice awaiting player resolution. */
-  pendingChoice: KeepsakePendingChoice | null;
-  /** Cargo Seal — dirty extraction cracked the seal dampening. */
-  cargoSealCracked: boolean;
-  /** Smuggler's Wrap — hunter mark active after double wrap. */
-  smugglersHunterMarkActive: boolean;
-  /** Extraction Token — burn count this run (escalates route risk). */
-  extractionTokenBurns: number;
-}
-
-export interface KeepsakeDebriefSummary {
-  keepsakeId: KeepsakeId;
-  name: string;
-  shortName: string;
-  effectSummary: string;
-  triggered: boolean;
-  triggerCount: number;
-  messages: string[];
-  decisionLines: string[];
-  riskLines: string[];
-  statLines: string[];
-  note: string | null;
 }
