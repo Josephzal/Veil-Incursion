@@ -1,17 +1,19 @@
 /**
  * Stage II-B — run-scoped graft socket access.
  * Capacity follows Core Loop Depth 1/2/3 (= ActiveIncursionState.currentDistrict),
- * not Class Rank. Category gates (fixed-basic / ultimate / Apex) are open for all depths;
- * non-rank compatibility (Aegis ungraftable ultimates, mechanic tags, duplicates) still applies.
+ * not Class Rank. Universal upgrades target registered actions directly.
  */
 import { getDistrictFromDepth, type DistrictId } from '../districtPacing';
 
 export type GraftSocketAccess = {
   capacity: number;
+  /** @deprecated Compatibility field; universal upgrades have no basic-action gate. */
   allowFixedBasic: boolean;
+  /** @deprecated Compatibility field; universal upgrades have no ultimate tier. */
   allowUltimate: boolean;
+  /** @deprecated Compatibility field; universal upgrades have no premium tier. */
   allowApexMasterwork: boolean;
-  /** Historical Class Rank license hooks — informational only; never gate live access. */
+  /** @deprecated Compatibility field; Class Rank never gates universal upgrades. */
   requiredLicenseHooks: readonly string[];
 };
 
@@ -41,13 +43,13 @@ export function getGraftCapacityForRunDepth(depthBand: number): number {
   return Math.min(MAX_RUN_GRAFT_CAPACITY, band);
 }
 
-/** Full socket access for the current run depth band — no Class Rank power. */
+/** Capacity for the current run depth band. Deprecated fields are neutral. */
 export function getGraftSocketAccessForRunDepth(depthBand: number): GraftSocketAccess {
   return {
     capacity: getGraftCapacityForRunDepth(depthBand),
     allowFixedBasic: true,
-    allowUltimate: true,
-    allowApexMasterwork: true,
+    allowUltimate: false,
+    allowApexMasterwork: false,
     requiredLicenseHooks: [],
   };
 }
@@ -57,7 +59,7 @@ export function describeGraftCapacityProgression(): string[] {
     'Depth 1 (district 1): capacity 1',
     'Depth 2 (district 2): capacity 2',
     'Depth 3 (district 3): capacity 3 (hard cap)',
-    'Class Rank does not grant graft capacity, tiers, ultimates, or Apex access',
+    'Class Rank does not grant action-upgrade capacity or access',
     `MAX_RUN_GRAFT_CAPACITY=${MAX_RUN_GRAFT_CAPACITY}`,
   ];
 }
@@ -71,14 +73,12 @@ export function getGraftSocketAccessForClassRank(_rank: number): GraftSocketAcce
   return getGraftSocketAccessForRunDepth(1);
 }
 
-export type LiveGraftCostTier = 'STANDARD' | 'ADVANCED' | 'SPONSOR' | 'APEX' | 'MASTERWORK';
+/** @deprecated Universal upgrades have no cost tiers. */
+export type LiveGraftCostTier = null;
 
-/** Catalog cost banding only — not a live Residue charge or rank gate. */
-export function inferGraftCostTier(cost: number): LiveGraftCostTier {
-  if (cost >= 45) return 'APEX';
-  if (cost >= 35) return 'ADVANCED';
-  if (cost >= 25) return 'ADVANCED';
-  return 'STANDARD';
+/** @deprecated Universal upgrades have no cost tiers. */
+export function inferGraftCostTier(_cost: number): LiveGraftCostTier {
+  return null;
 }
 
 export type GraftSocketCategory =

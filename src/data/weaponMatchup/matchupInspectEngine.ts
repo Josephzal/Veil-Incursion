@@ -87,8 +87,8 @@ export function inspectWeaponMatchup(input: MatchupInspectInput): MatchupInspect
     classificationReasons: reasons,
     accessibleCompensationRoutes: [
       `3H ${sample?.kind ?? 'loadout'}`,
-      `3J early: ${graftProfile.configurations[0].assignments.map((a) => a.graftId).join(',')}`,
-      `3J mature@${graftProfile.configurations[1].requiredClassRank}`,
+      `Sanctuary path: ${graftProfile.configurations[0].playerFacingSummary}`,
+      `Expanded path: ${graftProfile.configurations[1].playerFacingSummary}`,
     ],
     phase3GDrawbackGuard: drawback.compensationMustNotErase,
     enemySectorDepthLegality: enemyLegality,

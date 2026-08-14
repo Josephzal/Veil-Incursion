@@ -37,27 +37,32 @@ export function isHexH3bAssignableFlexId(id: string): id is HexShotAbilityId {
 }
 
 /** Authored Blacksite recovery before missing-HP cap. */
-export function resolveBlacksiteTriageAuthoredHeal(maxHp: number): number {
-  return Math.max(1, Math.floor(Math.max(0, maxHp) * BLACKSITE_TRIAGE_HEAL_PCT));
+export function resolveBlacksiteTriageAuthoredHeal(
+  maxHp: number,
+  healPercent = BLACKSITE_TRIAGE_HEAL_PCT * 100,
+): number {
+  return Math.max(1, Math.floor(Math.max(0, maxHp) * (healPercent / 100)));
 }
 
 /** Effective heal at current HP (0 when full). */
 export function resolveBlacksiteTriageEffectiveHeal(
   currentHp: number,
   maxHp: number,
+  healPercent = BLACKSITE_TRIAGE_HEAL_PCT * 100,
 ): number {
   const missing = Math.max(0, maxHp - currentHp);
   if (missing <= 0) return 0;
-  return Math.min(missing, resolveBlacksiteTriageAuthoredHeal(maxHp));
+  return Math.min(missing, resolveBlacksiteTriageAuthoredHeal(maxHp, healPercent));
 }
 
 export function canCastBlacksiteTriage(
   classState: Pick<ClassCombatEncounterState, 'blacksiteTriageUsed'>,
   currentHp: number,
   maxHp: number,
+  healPercent = BLACKSITE_TRIAGE_HEAL_PCT * 100,
 ): { ok: true; heal: number } | { ok: false; reason: 'USED' | 'FULL_HP' } {
   if (classState.blacksiteTriageUsed) return { ok: false, reason: 'USED' };
-  const heal = resolveBlacksiteTriageEffectiveHeal(currentHp, maxHp);
+  const heal = resolveBlacksiteTriageEffectiveHeal(currentHp, maxHp, healPercent);
   if (heal <= 0) return { ok: false, reason: 'FULL_HP' };
   return { ok: true, heal };
 }
@@ -65,8 +70,9 @@ export function canCastBlacksiteTriage(
 export function seedCinderlineHazard(
   classState: ClassCombatEncounterState,
   slot: CombatGridSlotId,
+  tickDamage = CINDERLINE_TICK_DAMAGE,
 ): void {
-  classState.cinderlineHazards[slot] = { roundsRemaining: CINDERLINE_DURATION_ROUNDS };
+  classState.cinderlineHazards[slot] = { roundsRemaining: CINDERLINE_DURATION_ROUNDS, tickDamage };
 }
 
 export function resolveCinderlineSlotForUnit(
@@ -92,7 +98,7 @@ export function resolveCinderlineTickForUnit(
   const hazard = classState.cinderlineHazards[slot];
   if (!hazard || hazard.roundsRemaining <= 0) return null;
   classState.cinderlineTickedUnitIdsThisEnemyPhase[unit.unitId] = true;
-  return { damage: CINDERLINE_TICK_DAMAGE, slot };
+  return { damage: hazard.tickDamage ?? CINDERLINE_TICK_DAMAGE, slot };
 }
 
 /** End of enemy phase — decrement hazard durations and clear per-round tick marks. */
@@ -104,7 +110,7 @@ export function advanceCinderlineHazardsAfterEnemyPhase(
     const hazard = classState.cinderlineHazards[slot];
     if (!hazard) continue;
     const remaining = hazard.roundsRemaining - 1;
-    if (remaining > 0) next[slot] = { roundsRemaining: remaining };
+    if (remaining > 0) next[slot] = { ...hazard, roundsRemaining: remaining };
   }
   classState.cinderlineHazards = next;
   classState.cinderlineTickedUnitIdsThisEnemyPhase = {};
@@ -115,19 +121,26 @@ export function clearCinderlineHazards(classState: ClassCombatEncounterState): v
   classState.cinderlineTickedUnitIdsThisEnemyPhase = {};
 }
 
-export function formatCinderlinePreview(slot: CombatGridSlotId | null): string {
+export function formatCinderlinePreview(
+  slot: CombatGridSlotId | null,
+  tickDamage = CINDERLINE_TICK_DAMAGE,
+): string {
   const where = slot ? `zone ${slot}` : 'selected position';
   return [
     'Immediate damage: 0',
-    `${CINDERLINE_TICK_DAMAGE} Occult at affected enemy turn start`,
+    `${tickDamage} Occult at affected enemy turn start`,
     `${CINDERLINE_DURATION_ROUNDS}-round positional hazard (${where})`,
     'Same-position recast refreshes — does not stack',
   ].join(' · ');
 }
 
-export function formatBlacksiteTriagePreview(currentHp: number, maxHp: number): string {
-  const authored = resolveBlacksiteTriageAuthoredHeal(maxHp);
-  const effective = resolveBlacksiteTriageEffectiveHeal(currentHp, maxHp);
+export function formatBlacksiteTriagePreview(
+  currentHp: number,
+  maxHp: number,
+  healPercent = BLACKSITE_TRIAGE_HEAL_PCT * 100,
+): string {
+  const authored = resolveBlacksiteTriageAuthoredHeal(maxHp, healPercent);
+  const effective = resolveBlacksiteTriageEffectiveHeal(currentHp, maxHp, healPercent);
   return `Authored recovery ${authored} · Effective ${effective} · Once per encounter`;
 }
 

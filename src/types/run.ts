@@ -111,6 +111,10 @@ export interface EnemyCombatProfile {
   fractureGauge?: number;
   fractureMax?: number;
   combatTags?: CombatUnitTag[];
+  /** Source-scoped BLINDED miss chance percentage (Phosphorus Hex canonical 50). */
+  blindedAccuracyPenaltyPct?: number;
+  /** Source-scoped EXPOSED defense reduction percentage (Grave Bind canonical 50). */
+  exposedDefenseReductionPct?: number;
   /** Void Contagion — Doomed applications stack up to 3. */
   doomedStacks?: number;
   enemyActionPoints?: number;

@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import RunActionRail from './runField/RunActionRail';
-import {
-  canGraftClassAbility,
-  getClassGraftDefinition,
-} from '../data/classGraftEngine';
+import { canGraftClassAbility } from '../data/classGraftEngine';
 import { resolveClassAbilityCost } from '../data/classAbilityResolver';
 import { evaluateGraftCompatibility } from '../data/graftSynergy/graftCompatibilityEngine';
 import { getGraftSocketAccessForRunDepth } from '../data/graftSynergy/graftCapacityEngine';
-import { formatAegisWeaponActionLabel } from '../data/aegisWeaponActionCatalog';
+import {
+  getUniversalGraftCardData,
+  getUniversalGraftDefinition,
+} from '../data/universalGraftRegistry';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { RUN_FIELD } from '../theme/runFieldTokens';
 import type { ClassType } from '../types/game';
@@ -21,7 +21,10 @@ import type {
 import type { AbilityGraftMap, VeilGraftId } from '../types/veilGraft';
 import type { EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import type { AegisTechniqueLoadout } from '../types/aegisCombat';
-import type { AegisGraftSurfaceRow } from '../data/aegisGraftTarget';
+import {
+  resolveSanctuaryOfferTarget,
+  type SanctuaryGraftSurfaceRow,
+} from '../data/sanctuaryFlowEngine';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 
 const WEB_NO_OUTLINE = Platform.OS === 'web'
@@ -42,8 +45,6 @@ interface ClassGraftUIProps {
   activeClass: ClassType;
   loadout: ClassLoadout;
   offers: readonly (OperativeClassGraftId | import('../types/veilGraft').VeilGraftId)[];
-  /** @deprecated Stage II-B — no longer gates selection; kept for legacy callers. */
-  residueBalance?: number;
   abilityGrafts: ClassGraftMap;
   onSelectionChange?: (selection: GraftInjectSelection) => void;
   compact?: boolean;
@@ -60,17 +61,14 @@ interface ClassGraftUIProps {
   cancelDisabled?: boolean;
   /** Run depth band (1–3) — must match apply validation. */
   runDepthBand?: number;
-  /** Phase D — Aegis 4 weapon actions + 3 techniques. */
-  aegisSurfaceRows?: readonly AegisGraftSurfaceRow[];
-  capacityUsed?: number;
-  capacityAvailable?: number;
+  /** Canonical equipped surface: four weapon actions + three Techniques/Flex abilities. */
+  surfaceRows?: readonly SanctuaryGraftSurfaceRow[];
 }
 
 export default function ClassGraftUI({
   activeClass,
   loadout,
   offers,
-  residueBalance: _residueBalance,
   abilityGrafts,
   onSelectionChange,
   compact = false,
@@ -84,16 +82,14 @@ export default function ClassGraftUI({
   injectDisabled = false,
   cancelDisabled = false,
   runDepthBand = 1,
-  aegisSurfaceRows,
-  capacityUsed,
-  capacityAvailable,
+  surfaceRows,
 }: ClassGraftUIProps): React.JSX.Element {
   const { fontScale, scaleFont, scaleSpacing } = useResponsiveLayout();
   const [selectedGraftId, setSelectedGraftId] = useState<string | null>(null);
   const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(null);
 
   const selectedGraft = selectedGraftId
-    ? getClassGraftDefinition(activeClass, selectedGraftId)
+    ? getUniversalGraftDefinition(selectedGraftId)
     : null;
 
   const access = useMemo(() => getGraftSocketAccessForRunDepth(runDepthBand), [runDepthBand]);
@@ -103,7 +99,6 @@ export default function ClassGraftUI({
   const cardGap = scaleSpacing(compact ? 8 : 12);
   const slotMinHeight = scaleSpacing(compact ? 52 : 72);
   const headerSize = scaleFont(compact ? 10 : 11);
-  const depthSize = scaleFont(compact ? 11 : 12);
   const subheaderSize = scaleFont(compact ? 9 : 10);
   const cardTitleSize = (compact ? 9 : 10) * fontScale * 1.1;
   const cardBodySize = scaleFont(compact ? 8 : 9);
@@ -112,16 +107,18 @@ export default function ClassGraftUI({
 
   const abilityRows = useMemo(
     () => {
-      if (activeClass === 'AEGIS' && aegisSurfaceRows?.length) {
-        return aegisSurfaceRows.map((row) => {
+      if (surfaceRows?.length) {
+        return surfaceRows.map((row) => {
           const graftId = (abilityGrafts as Record<string, VeilGraftId | undefined>)[row.key];
-          const socketOk = canGraftClassAbility(activeClass, row.key, {
-            allowFixedBasic: access.allowFixedBasic,
-            allowUltimate: access.allowUltimate,
-          });
+          const socketOk = canGraftClassAbility(activeClass, row.key);
           let lockReason: string | null = null;
           if (!socketOk) {
             lockReason = 'LOCKED';
+          } else if (
+            selectedGraft
+            && row.actionId !== selectedGraft.canonicalActionId
+          ) {
+            lockReason = 'OTHER ACTION';
           } else if (selectedGraftId) {
             const compat = evaluateGraftCompatibility({
               classId: 'AEGIS',
@@ -135,9 +132,7 @@ export default function ClassGraftUI({
               lockReason = compat.rejections[0] ?? 'INCOMPATIBLE';
             }
           }
-          const label = row.group === 'WEAPON_ACTION'
-            ? formatAegisWeaponActionLabel(row.actionId as never)
-            : resolveClassAbilityCost(activeClass, row.actionId).label;
+          const label = resolveClassAbilityCost(activeClass, row.actionId).label;
           return {
             abilityId: row.key,
             label,
@@ -155,10 +150,7 @@ export default function ClassGraftUI({
         : [...loadout];
       return abilityIds.map((abilityId) => {
         const cost = resolveClassAbilityCost(activeClass, abilityId);
-        const socketOk = canGraftClassAbility(activeClass, abilityId, {
-          allowFixedBasic: access.allowFixedBasic,
-          allowUltimate: access.allowUltimate,
-        });
+        const socketOk = canGraftClassAbility(activeClass, abilityId);
         let lockReason: string | null = null;
         if (!socketOk) {
           lockReason = 'LOCKED';
@@ -189,32 +181,22 @@ export default function ClassGraftUI({
     [
       abilityGrafts,
       activeClass,
-      aegisSurfaceRows,
-      access.allowFixedBasic,
-      access.allowUltimate,
+      surfaceRows,
       runDepthBand,
       loadout,
       selectedGraftId,
+      selectedGraft,
     ],
   );
 
   const weaponRows = abilityRows.filter((r) => r.group === 'WEAPON_ACTION');
   const techniqueRows = abilityRows.filter((r) => r.group !== 'WEAPON_ACTION');
 
-  const classLabel = activeClass === 'HEX_SHOT'
-    ? 'HEX-SHOT GRAFT'
-    : activeClass === 'ENVOY'
-      ? 'ENVOY GRAFT'
-      : 'VEIL-GRAFT';
-
   useEffect(() => {
     let injectOk = selectedGraftId != null
       && selectedAbilityId != null
       && selectedGraft != null
-      && canGraftClassAbility(activeClass, selectedAbilityId, {
-        allowFixedBasic: access.allowFixedBasic,
-        allowUltimate: access.allowUltimate,
-      });
+      && canGraftClassAbility(activeClass, selectedAbilityId);
     if (injectOk && selectedGraftId && selectedAbilityId) {
       const compat = evaluateGraftCompatibility({
         classId: activeClass,
@@ -234,8 +216,6 @@ export default function ClassGraftUI({
     });
   }, [
     abilityGrafts,
-    access.allowFixedBasic,
-    access.allowUltimate,
     activeClass,
     runDepthBand,
     onSelectionChange,
@@ -245,8 +225,12 @@ export default function ClassGraftUI({
   ]);
 
   const handleSelectGraft = (graftId: string) => {
+    const card = getUniversalGraftCardData(activeClass, graftId);
+    const matchingRow = surfaceRows
+      ? resolveSanctuaryOfferTarget(activeClass, surfaceRows, graftId)
+      : null;
     setSelectedGraftId(graftId);
-    setSelectedAbilityId(null);
+    setSelectedAbilityId(matchingRow?.key ?? card?.canonicalActionId ?? null);
   };
 
   const handleSelectAbility = (abilityId: string, graftable: boolean) => {
@@ -262,7 +246,7 @@ export default function ClassGraftUI({
   const resolvedFooter = footer ?? (showInjectFooter ? (
     <RunActionRail
       mode="dialog"
-      primaryLabel="INJECT GRAFT"
+      primaryLabel="APPLY UPGRADE"
       onPrimary={onInject}
       primaryDisabled={!canInject || injectDisabled}
       secondaryLabel="CANCEL"
@@ -278,7 +262,7 @@ export default function ClassGraftUI({
     graftable,
     lockReason,
   }: (typeof abilityRows)[number]) => {
-    const existing = graftId ? getClassGraftDefinition(activeClass, graftId) : null;
+    const existing = graftId ? getUniversalGraftDefinition(graftId) : null;
     const slotSelected = selectedAbilityId === abilityId;
     const canSelect = graftable
       && selectedGraftId != null
@@ -347,15 +331,15 @@ export default function ClassGraftUI({
           </Text>
         ) : existing ? (
           <Text style={[styles.slotTag, { color: existing.accentColor, fontSize: tagSize }]}>
-            {existing.name.toUpperCase()}
+            {existing.name}
           </Text>
         ) : slotSelected ? (
           <Text style={[styles.slotTag, { color: RUN_FIELD.mint, fontSize: tagSize }]}>
-            PATCH READY
+            SELECTED
           </Text>
         ) : (
           <Text style={[styles.slotTag, { color: RUN_FIELD.textDim, fontSize: tagSize }]}>
-            UNGRAFTED
+            NO UPGRADE
           </Text>
         )}
       </HapticPressable>
@@ -373,32 +357,18 @@ export default function ClassGraftUI({
         },
       ]}
     >
-      <View style={styles.headerRow}>
-        <Text
-          style={[
-            styles.headerPrefix,
-            {
-              color: RUN_FIELD.mint,
-              fontSize: headerSize,
-              lineHeight: headerSize * 1.3,
-            },
-          ]}
-        >
-          {`${classLabel} TERMINAL // DEPTH `}
-        </Text>
-        <Text
-          style={[
-            styles.headerResidue,
-            {
-              color: RUN_FIELD.text,
-              fontSize: depthSize,
-              lineHeight: depthSize * 1.25,
-            },
-          ]}
-        >
-          {runDepthBand}
-        </Text>
-      </View>
+      <Text
+        style={[
+          styles.headerPrefix,
+          {
+            color: RUN_FIELD.mint,
+            fontSize: headerSize,
+            lineHeight: headerSize * 1.3,
+          },
+        ]}
+      >
+        ACTION UPGRADES
+      </Text>
 
       <Text
         style={[
@@ -411,17 +381,13 @@ export default function ClassGraftUI({
           },
         ]}
       >
-        {activeClass === 'AEGIS'
-          ? 'Select a graft, patch a snapshotted weapon action or technique, then inject. Parry and Ultimates are ungraftable.'
-          : 'Select a graft cartridge, patch an ability slot, then inject.'}
-        {capacityUsed != null && capacityAvailable != null
-          ? ` Capacity ${capacityUsed}/${capacityUsed + capacityAvailable}.`
-          : ''}
+        Select one action upgrade. Its matching equipped action is selected automatically.
       </Text>
 
       <View style={[styles.offerCol, { gap: cardGap, marginTop: scaleSpacing(compact ? 10 : 20) }]}>
         {offers.map((graftId) => {
-          const graft = getClassGraftDefinition(activeClass, graftId);
+          const card = getUniversalGraftCardData(activeClass, graftId);
+          if (!card) return null;
           const selected = selectedGraftId === graftId;
           const dimmed = selectedGraftId != null && !selected;
 
@@ -452,7 +418,20 @@ export default function ClassGraftUI({
                   },
                 ]}
               >
-                {graft.name.toUpperCase()}
+                {card.actionName}
+              </Text>
+              <Text
+                style={[
+                  styles.offerBody,
+                  {
+                    color: RUN_FIELD.textSecondary,
+                    fontSize: cardBodySize,
+                    lineHeight: cardBodySize * 1.4,
+                    marginTop: scaleSpacing(compact ? 4 : 6),
+                  },
+                ]}
+              >
+                {`Current: ${card.currentValue}  →  Upgraded: ${card.upgradedValue}`}
               </Text>
               <Text
                 style={[
@@ -466,7 +445,7 @@ export default function ClassGraftUI({
                 ]}
                 numberOfLines={compact ? 2 : 3}
               >
-                {graft.description}
+                {card.improvedProperty}
               </Text>
             </HapticPressable>
           );
@@ -556,21 +535,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     flexShrink: 0,
   },
-  headerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    gap: 4,
-  },
   headerPrefix: {
     fontFamily: 'monospace',
     fontWeight: '800',
     letterSpacing: 0.8,
-  },
-  headerResidue: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.6,
   },
   subheader: {
     fontFamily: 'monospace',
@@ -583,23 +551,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     width: '100%',
   },
-  offerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
   offerTitle: {
     fontFamily: 'monospace',
     fontWeight: '800',
     letterSpacing: 0.5,
     flex: 1,
-  },
-  offerCost: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    flexShrink: 0,
   },
   offerBody: {
     fontFamily: 'monospace',

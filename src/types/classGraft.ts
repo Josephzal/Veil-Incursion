@@ -1,53 +1,19 @@
 import type { ClassType } from './game';
+import type {
+  UniversalCastPlanOverlay,
+  UniversalGraftDefinition,
+} from './universalGraft';
+import { emptyUniversalCastPlanOverlay } from './universalGraft';
 
-export type HexShotGraftId =
-  | 'WIDOW_CHOKE_GRAFT'
-  | 'HELL_FIRE_COMPENSATOR'
-  | 'SILENT_VOID_SUPPRESSOR'
-  | 'SPLITTER_BARREL_GRAFT'
-  | 'BLOOD_MAG_GRAFT'
-  | 'ECHO_RECEIVER_GRAFT'
-  | 'BOTTOMLESS_DRUM_GRAFT'
-  | 'SCAVENGER_BOLT_GRAFT'
-  | 'OMNI_LENS_GRAFT'
-  | 'ASTRAL_SIGHT_GRAFT'
-  | 'GHOST_BEAM_GRAFT'
-  | 'PRECOGNITIVE_SCOPE_GRAFT'
-  | 'RICOCHET_DEFLECTOR_GRAFT'
-  | 'NEUTRON_SEAR_GRAFT'
-  | 'PARASITE_GRIP_GRAFT'
-  | 'APEX_TRIGGER_GRAFT'
-  | 'DEAD_MAN_SWITCH_GRAFT';
+export type HexShotGraftId = string;
 
-export type EnvoyGraftId =
-  | 'VOID_CONDUCTOR_GRAFT'
-  | 'SPLINTER_RUNE_GRAFT'
-  | 'ECLIPSE_SIGIL_GRAFT'
-  | 'BLOOD_INK_GRAFT'
-  | 'AETHER_VALVE_GRAFT'
-  | 'SANGUINE_CHANNEL_GRAFT'
-  | 'ECHO_WEAVE_GRAFT'
-  | 'NULL_STATE_GRAFT'
-  | 'PARASITIC_SEAL_GRAFT'
-  | 'WITHER_MARK_GRAFT'
-  | 'GHOST_THREAD_GRAFT'
-  | 'CHRONO_LOCK_GRAFT'
-  | 'ANOMALY_SPARK_GRAFT'
-  | 'OVERLOAD_CATALYST_GRAFT'
-  | 'MARTYR_RUNE_GRAFT'
-  | 'APEX_CHANNEL_GRAFT';
+export type EnvoyGraftId = string;
 
 export type OperativeClassGraftId = HexShotGraftId | EnvoyGraftId;
 
 export type ClassGraftDamageScale = 'MISSING_AMMO' | 'MISSING_FLUX' | 'CURRENT_FLUX';
 
-export interface ClassGraftDefinition {
-  id: OperativeClassGraftId;
-  classId: 'HEX_SHOT' | 'ENVOY';
-  name: string;
-  cost: number;
-  description: string;
-  accentColor: string;
+export interface ClassGraftDefinition extends UniversalGraftDefinition {
   damageMultiplier?: number;
   baseDamageMultiplier?: number;
   staminaPenalty?: number;
@@ -89,7 +55,7 @@ export interface ClassGraftDefinition {
   convertToAoE?: boolean;
   dealSelfDamage?: number;
   executeThreshold?: number;
-  /** Multiplier applied to damage vs boss targets (Apex-Channel). */
+  /** Legacy cast-plan multiplier; universal upgrades leave it neutral. */
   bossDamageMultiplier?: number;
   setCritChance?: number;
   disableUltimate?: boolean;
@@ -99,15 +65,13 @@ export interface ClassGraftDefinition {
   deadMansSwitchOnReload?: boolean;
 }
 
-export type HexShotAbilityGraftMap = Partial<
-  Record<import('./operativeClass').HexShotAbilityId, HexShotGraftId>
->;
+/** Run-scoped grafts keyed by canonical weapon-action or selected Flex id. */
+export type HexShotAbilityGraftMap = Partial<Record<string, HexShotGraftId>>;
 
-export type EnvoyAbilityGraftMap = Partial<
-  Record<import('./operativeClass').EnvoyAbilityId, EnvoyGraftId>
->;
+/** Run-scoped grafts keyed by canonical weapon-action or selected Flex id. */
+export type EnvoyAbilityGraftMap = Partial<Record<string, EnvoyGraftId>>;
 
-export interface ClassGraftCastPlan {
+export interface ClassGraftCastPlan extends UniversalCastPlanOverlay {
   apCost: number;
   hpCostPct: number;
   extraStaminaCost: number;
@@ -153,6 +117,7 @@ export function defaultClassGraftCastPlan(
   tags: readonly string[],
 ): ClassGraftCastPlan {
   return {
+    ...emptyUniversalCastPlanOverlay(),
     apCost,
     hpCostPct: 0,
     extraStaminaCost: 0,

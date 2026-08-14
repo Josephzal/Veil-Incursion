@@ -293,6 +293,8 @@ export interface CombatGridUnitSnapshot {
   isDead: boolean;
   isSelected: boolean;
   isTargetable: boolean;
+  fateboundMark?: boolean;
+  fateboundObscured?: boolean;
   /**
    * Presentation-only dual-allocation badge (1 = source, 2 = destination).
    * Does not alter eligibility or dispatch.

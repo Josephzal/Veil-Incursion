@@ -162,7 +162,7 @@ export function resolveHexBasicShot(args: {
   squad: EnemyCombatProfile[];
   primaryTargetId: string;
   catalogBaseDamage: number;
-  /** When true (e.g. Widow-Choke), suppress spread. */
+  /** When true, suppress spread for a focal action. */
   forceSingleTarget?: boolean;
 }): HexBasicShotPlan {
   const { weapon, squad, primaryTargetId, catalogBaseDamage, forceSingleTarget } = args;

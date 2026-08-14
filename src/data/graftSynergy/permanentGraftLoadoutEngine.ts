@@ -7,24 +7,22 @@
 import type { ClassType } from '../../types/game';
 import type { AegisTechniqueLoadout } from '../../types/aegisCombat';
 import type { WeaponFamilyId } from '../../types/weapon';
-import { getClassGraftDefinition } from '../classGraftEngine';
 import { evaluateGraftCompatibility, isLiveGraftId } from './graftCompatibilityEngine';
 import { normalizeAegisGraftAssignmentKey } from '../aegisGraftTarget';
+import {
+  getUniversalGraftDefinition,
+  normalizeUniversalGraftId,
+  universalGraftMatchesTarget,
+} from '../universalGraftRegistry';
 
 export type RunScopedGraftMap = Readonly<Record<string, string>>;
 
 /** Sum Max HP penalties from current run-scoped graft map (reversible via baseline recompute). */
 export function computeRunScopedGraftMaxHpPenaltyPct(
-  classId: ClassType,
-  graftMap: RunScopedGraftMap,
+  _classId: ClassType,
+  _graftMap: RunScopedGraftMap,
 ): number {
-  let total = 0;
-  Object.values(graftMap).forEach((graftId) => {
-    if (!graftId) return;
-    const def = getClassGraftDefinition(classId, graftId);
-    if (def.reduceMaxHp != null) total += def.reduceMaxHp;
-  });
-  return Math.min(0.5, total);
+  return 0;
 }
 
 export function recomputeMaxSoulAnchorFromGraftBaseline(
@@ -55,12 +53,16 @@ export function validateSanctuaryGraftApplication(args: {
   currentMap: RunScopedGraftMap;
   /** True only while Sanctuary graft terminal session is active. */
   sanctuarySessionActive: boolean;
+  /** True after Attune or one graft application for this stable visit. */
+  sanctuaryServiceConsumed?: boolean;
   /**
    * @deprecated Stage II-B — ignored; grafts no longer cost Residue.
    */
   residueBalance?: number;
   /** Offered graft IDs for this Sanctuary visit (null = no session). */
   sanctuaryOffers: readonly string[] | null;
+  /** Canonical equipped 4+3 target keys for this visit. */
+  eligibleAbilityIds?: readonly string[];
   /** Aegis snapshotted surface — required to encode/validate targets. */
   aegisSurface?: {
     weaponFamilyId?: WeaponFamilyId | null;
@@ -74,6 +76,15 @@ export function validateSanctuaryGraftApplication(args: {
   cost: number;
   rejections: readonly string[];
 } {
+  if (args.sanctuaryServiceConsumed) {
+    return {
+      ok: false,
+      message: 'Sanctuary service already consumed for this visit.',
+      proposedMap: { ...args.currentMap },
+      cost: 0,
+      rejections: ['INVALID_CONTEXT'],
+    };
+  }
   if (!args.sanctuarySessionActive || args.sanctuaryOffers == null) {
     return {
       ok: false,
@@ -101,6 +112,15 @@ export function validateSanctuaryGraftApplication(args: {
       rejections: ['NOT_IN_OFFERS'],
     };
   }
+  if (args.eligibleAbilityIds && !args.eligibleAbilityIds.includes(args.abilityId)) {
+    return {
+      ok: false,
+      message: 'Target is not equipped on the current Sanctuary surface.',
+      proposedMap: { ...args.currentMap },
+      cost: 0,
+      rejections: ['UNKNOWN_ABILITY'],
+    };
+  }
 
   let assignmentKey = args.abilityId;
   if (args.classId === 'AEGIS') {
@@ -120,13 +140,22 @@ export function validateSanctuaryGraftApplication(args: {
     assignmentKey = encoded;
   }
 
-  const def = getClassGraftDefinition(args.classId, args.graftId);
-  const catalogCost = def.cost;
+  const graftId = normalizeUniversalGraftId(args.graftId);
+  if (!graftId || !universalGraftMatchesTarget(args.classId, assignmentKey, graftId)) {
+    return {
+      ok: false,
+      message: 'Upgrade does not match this action.',
+      proposedMap: { ...args.currentMap },
+      cost: 0,
+      rejections: ['SOCKET_INCOMPATIBLE'],
+    };
+  }
+  const def = getUniversalGraftDefinition(graftId)!;
 
   const compat = evaluateGraftCompatibility({
     classId: args.classId,
     abilityId: assignmentKey,
-    graftId: args.graftId,
+    graftId,
     runDepthBand: args.runDepthBand,
     equippedMap: args.currentMap,
     graftAvailable: true,
@@ -141,7 +170,7 @@ export function validateSanctuaryGraftApplication(args: {
     };
   }
 
-  // Replace any prior assignment on the same logical target (bare or encoded).
+  // Remove the old logical assignment before installing the one stable canonical ID.
   const proposedMap = { ...args.currentMap };
   if (args.classId === 'AEGIS') {
     const bare = assignmentKey.includes(':')
@@ -150,14 +179,16 @@ export function validateSanctuaryGraftApplication(args: {
     delete proposedMap[bare];
     delete proposedMap[`WA:${bare}`];
     delete proposedMap[`TECH:${bare}`];
+  } else {
+    delete proposedMap[assignmentKey];
   }
-  proposedMap[assignmentKey] = args.graftId;
+  proposedMap[assignmentKey] = graftId;
 
   return {
     ok: true,
     message: `${def.name} ready.`,
     proposedMap,
-    cost: catalogCost,
+    cost: 0,
     rejections: [],
   };
 }

@@ -16,6 +16,10 @@ import {
 import { isAegisWeaponActionCatalogId } from './aegisWeaponActionCatalog';
 import type { WeaponFamilyId } from '../types/weapon';
 import type { VeilGraftId } from '../types/veilGraft';
+import {
+  normalizeUniversalGraftId,
+  universalGraftMatchesTarget,
+} from './universalGraftRegistry';
 
 export type AegisGraftTargetKind = 'WEAPON_ACTION' | 'TECHNIQUE';
 
@@ -75,13 +79,6 @@ export function parseAegisGraftTargetKey(key: string): AegisGraftTarget | null {
 export function coerceLegacyAegisGraftKey(key: string): AegisGraftTargetKey | null {
   const parsed = parseAegisGraftTargetKey(key);
   if (parsed) return encodeAegisGraftTargetKey(parsed);
-  if (LEGACY_DROP_IDS.has(key)) return null;
-  if (isAegisTechniqueId(key)) {
-    return encodeAegisGraftTargetKey({ kind: 'TECHNIQUE', techniqueId: key });
-  }
-  if (isAegisWeaponActionCatalogId(key)) {
-    return encodeAegisGraftTargetKey({ kind: 'WEAPON_ACTION', actionId: key });
-  }
   return null;
 }
 
@@ -172,15 +169,17 @@ export function sanitizeAegisAbilityGraftMap(
     if (!graftId || typeof graftId !== 'string') continue;
     const key = coerceLegacyAegisGraftKey(rawKey);
     if (!key) continue;
+    const normalizedGraftId = normalizeUniversalGraftId(graftId);
+    if (!normalizedGraftId || !universalGraftMatchesTarget('AEGIS', key, normalizedGraftId)) continue;
     if (allowed && !allowed.has(key)) continue;
     // Other-family weapon actions: drop when family is known.
     if (key.startsWith('WA:') && args.weaponFamilyId) {
       const actionId = key.slice(3) as AegisWeaponActionId;
       if (!familyOwnsWeaponAction(args.weaponFamilyId, actionId)) continue;
     }
-    if (usedGrafts.has(graftId)) continue;
-    usedGrafts.add(graftId);
-    next[key] = graftId as VeilGraftId;
+    if (usedGrafts.has(normalizedGraftId)) continue;
+    usedGrafts.add(normalizedGraftId);
+    next[key] = normalizedGraftId as VeilGraftId;
   }
   return next;
 }
@@ -217,14 +216,14 @@ export function resolveAegisAbilityGraftId(
 ): VeilGraftId | undefined {
   if (!map) return undefined;
   if (isAegisWeaponActionCatalogId(abilityId)) {
-    return lookupWeaponActionGraft(map, abilityId) ?? (map[abilityId] as VeilGraftId | undefined);
+    return lookupWeaponActionGraft(map, abilityId);
   }
   if (isAegisTechniqueId(abilityId)) {
-    return lookupTechniqueGraft(map, abilityId) ?? (map[abilityId] as VeilGraftId | undefined);
+    return lookupTechniqueGraft(map, abilityId);
   }
   const coerced = coerceLegacyAegisGraftKey(abilityId);
   if (coerced) return map[coerced];
-  return map[abilityId] as VeilGraftId | undefined;
+  return undefined;
 }
 
 /** Normalize an incoming Sanctuary ability key to encoded form, or null if invalid. */

@@ -1,22 +1,7 @@
 import type { AegisAbilityId, AbilityTag } from './aegisCombat';
+import type { UniversalCastPlanOverlay, UniversalGraftDefinition } from './universalGraft';
 
-export type VeilGraftId =
-  | 'DENSITY_GRAFT'
-  | 'SANGUINE_GRAFT'
-  | 'ECHO_GRAFT'
-  | 'VOID_GLASS_GRAFT'
-  | 'NEUTRON_GRAFT'
-  | 'IRON_LUNG_GRAFT'
-  | 'GRID_HACKER_GRAFT'
-  | 'SCAVENGER_GRAFT'
-  | 'SHRAPNEL_GRAFT'
-  | 'SPLINTER_GRAFT'
-  | 'FLAYER_GRAFT'
-  | 'CONDUIT_GRAFT'
-  | 'MARROW_GRAFT'
-  | 'MARTYR_GRAFT'
-  | 'NULL_SPACE_GRAFT'
-  | 'APEX_GRAFT';
+export type VeilGraftId = string;
 
 /**
  * Run-scoped Aegis graft map.
@@ -27,12 +12,7 @@ export type AbilityGraftMap = Partial<Record<string, VeilGraftId>>;
 
 export type GraftDamageScale = 'RESERVE_CONSUMED';
 
-export interface VeilGraftDefinition {
-  id: VeilGraftId;
-  name: string;
-  cost: number;
-  description: string;
-  accentColor: string;
+export interface VeilGraftDefinition extends UniversalGraftDefinition {
   damageMultiplier?: number;
   /** Flat Abyssal Reserve % tax applied on cast. */
   reservePenalty?: number;
@@ -67,7 +47,7 @@ export interface VeilGraftDefinition {
   bossDamageMultiplier?: number;
 }
 
-export interface GraftCastPlan {
+export interface GraftCastPlan extends UniversalCastPlanOverlay {
   apCost: number;
   hpCostPct: number;
   reservePenalty: number;

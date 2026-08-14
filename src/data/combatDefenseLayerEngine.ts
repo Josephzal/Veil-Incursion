@@ -67,7 +67,9 @@ export function applyKineticArmorMitigation(
     : enemy;
   let reduction = kineticArmorReductionPercent(virtualEnemy);
   if (options?.partialPierce) reduction *= 0.5;
-  if (hasCombatTag(enemy, 'EXPOSED')) reduction *= 0.5;
+  if (hasCombatTag(enemy, 'EXPOSED')) {
+    reduction *= 1 - ((enemy.exposedDefenseReductionPct ?? 50) / 100);
+  }
   const damageAfter = Math.max(0, Math.floor(raw * (1 - reduction)));
   const damageReduced = Math.max(0, raw - damageAfter);
   return {
@@ -99,7 +101,9 @@ export function applyOccultWardMitigation(
     : enemy;
   let reduction = occultWardReductionPercent(virtualEnemy);
   if (options?.partialPierce) reduction *= 0.5;
-  if (hasCombatTag(enemy, 'EXPOSED')) reduction *= 0.5;
+  if (hasCombatTag(enemy, 'EXPOSED')) {
+    reduction *= 1 - ((enemy.exposedDefenseReductionPct ?? 50) / 100);
+  }
   const damageAfter = Math.max(0, Math.floor(raw * (1 - reduction)));
   const damageReduced = Math.max(0, raw - damageAfter);
   return {

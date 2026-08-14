@@ -1,157 +1,25 @@
 import type { VeilGraftDefinition, VeilGraftId } from '../types/veilGraft';
+import {
+  getUniversalGraftDefinition,
+  listUniversalGraftsForClass,
+} from './universalGraftRegistry';
 
-export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
-  DENSITY_GRAFT: {
-    id: 'DENSITY_GRAFT',
-    name: 'Density Graft',
-    cost: 15,
-    accentColor: '#f87171',
-    damageMultiplier: 2,
-    reservePenalty: 20,
-    description: 'Double damage output. Taxes 20% Abyssal Reserve on cast.',
-  },
-  SANGUINE_GRAFT: {
-    id: 'SANGUINE_GRAFT',
-    name: 'Sanguine Graft',
-    cost: 20,
-    accentColor: '#dc2626',
-    setApCost: 0,
-    addHpCost: 0.1,
-    description: 'Costs 0 AP. Drains 10% Max HP on cast. Once per turn.',
-  },
-  ECHO_GRAFT: {
-    id: 'ECHO_GRAFT',
-    name: 'Echo Graft',
-    cost: 25,
-    accentColor: '#a78bfa',
-    duplicateCast: 0.5,
-    removeTags: ['FRACTURE'],
-    description: 'Primary hit plus a 50% echo (150% combined). Removes fracture tagging.',
-  },
-  VOID_GLASS_GRAFT: {
-    id: 'VOID_GLASS_GRAFT',
-    name: 'Void-Glass Graft',
-    cost: 30,
-    accentColor: '#818cf8',
-    convertToTrueDamage: true,
-    applySelfDebuffOnSurvive: 'EXPOSED',
-    description: 'Converts damage to True. Survivors expose the operative.',
-  },
-  NEUTRON_GRAFT: {
-    id: 'NEUTRON_GRAFT',
-    name: 'Neutron Graft',
-    cost: 20,
-    accentColor: '#38bdf8',
-    setApCost: 0,
-    consumeAllReserve: true,
-    damageScale: 'RESERVE_CONSUMED',
-    description: '0 AP — detonates all Reserve. Damage scales with Reserve spent.',
-  },
-  IRON_LUNG_GRAFT: {
-    id: 'IRON_LUNG_GRAFT',
-    name: 'Iron-Lung Graft',
-    cost: 15,
-    accentColor: '#22d3ee',
-    addReserveGeneration: 30,
-    addCooldown: 2,
-    description: '+30% Abyssal Reserve on cast. Adds 2-turn cooldown.',
-  },
-  GRID_HACKER_GRAFT: {
-    id: 'GRID_HACKER_GRAFT',
-    name: 'Grid-Hacker Graft',
-    cost: 25,
-    accentColor: '#4ade80',
-    refundApOnKill: true,
-    selfDebuffOnFail: 'CONCUSSED',
-    description: 'Kill refunds AP +1. Non-lethal casts Concuss the operative.',
-  },
-  SCAVENGER_GRAFT: {
-    id: 'SCAVENGER_GRAFT',
-    name: 'Scavenger Graft',
-    cost: 15,
-    accentColor: '#fbbf24',
-    dropLootOnKill: 'LEY_SLAG',
-    addApCost: 1,
-    description: 'Kills extract Ley-Slag. +1 AP cost.',
-  },
-  SHRAPNEL_GRAFT: {
-    id: 'SHRAPNEL_GRAFT',
-    name: 'Shrapnel Graft',
-    cost: 30,
-    accentColor: '#fb923c',
-    addTag: 'AOE',
-    damageMultiplier: 0.6,
-    description: 'Grants AoE tag. Base damage −40%.',
-  },
-  SPLINTER_GRAFT: {
-    id: 'SPLINTER_GRAFT',
-    name: 'Splinter Graft',
-    cost: 20,
-    accentColor: '#f472b6',
-    hitCount: 3,
-    damageMultiplier: 0.8,
-    description: 'Splits into 3 rapid hits. Raw damage −20%.',
-  },
-  FLAYER_GRAFT: {
-    id: 'FLAYER_GRAFT',
-    name: 'Flayer Graft',
-    cost: 20,
-    accentColor: '#e11d48',
-    applyDebuffToTarget: 'BLEED_3',
-    applySelfDebuff: 'BLEED_1',
-    description: 'Inflicts 3 Bleed on target. Operative takes 1 Bleed.',
-  },
-  CONDUIT_GRAFT: {
-    id: 'CONDUIT_GRAFT',
-    name: 'Conduit Graft',
-    cost: 25,
-    accentColor: '#c084fc',
-    addTag: 'OCCULT',
-    addOccultDamage: 15,
-    brandTax: 1,
-    description: 'Adds Occult channel +15 flat. Taxes 1 Runic Brand on cast.',
-  },
-  MARROW_GRAFT: {
-    id: 'MARROW_GRAFT',
-    name: 'Marrow Graft',
-    cost: 20,
-    accentColor: '#f43f5e',
-    healPercentageOfDamage: 0.5,
-    damageMultiplier: 0.7,
-    description: 'Heal 50% of damage dealt. Raw damage −30%.',
-  },
-  MARTYR_GRAFT: {
-    id: 'MARTYR_GRAFT',
-    name: 'Martyr Graft',
-    cost: 25,
-    accentColor: '#fda4af',
-    grantShieldHits: 2,
-    reduceMaxHp: 0.05,
-    description: 'Grants 2-hit shield on cast. −5% Max HP for the run.',
-  },
-  NULL_SPACE_GRAFT: {
-    id: 'NULL_SPACE_GRAFT',
-    name: 'Null-Space Graft',
-    cost: 20,
-    accentColor: '#67e8f9',
-    addBuff: 'EVADE_30',
-    reduceReserveGeneration: 0.5,
-    description: '+30% Evade until next turn. Reserve generation halved.',
-  },
-  APEX_GRAFT: {
-    id: 'APEX_GRAFT',
-    name: 'Apex Graft',
-    cost: 45,
-    accentColor: '#fde047',
-    executeThreshold: 0.2,
-    disableUltimate: true,
-    bossDamageMultiplier: 2,
-    description: 'Executes sub-20% HP non-bosses. Double damage vs bosses. Disables Ultimate.',
-  },
-};
+/** Live Aegis compatibility view; all old mechanic graft IDs are retired. */
+export const GRAFT_DATABASE: Readonly<Record<string, VeilGraftDefinition>> =
+  Object.freeze(Object.fromEntries(
+    listUniversalGraftsForClass('AEGIS').map((definition) => [
+      definition.id,
+      definition as VeilGraftDefinition,
+    ]),
+  ));
 
-export const ALL_VEIL_GRAFT_IDS = Object.keys(GRAFT_DATABASE) as VeilGraftId[];
+export const ALL_VEIL_GRAFT_IDS =
+  Object.freeze(Object.keys(GRAFT_DATABASE)) as readonly VeilGraftId[];
 
 export function getVeilGraftDefinition(id: VeilGraftId): VeilGraftDefinition {
-  return GRAFT_DATABASE[id];
+  const definition = getUniversalGraftDefinition(id);
+  if (!definition || definition.classId !== 'AEGIS') {
+    throw new Error(`Unknown Aegis graft: ${String(id)}`);
+  }
+  return definition as VeilGraftDefinition;
 }

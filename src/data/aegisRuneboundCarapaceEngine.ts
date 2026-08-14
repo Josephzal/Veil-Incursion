@@ -13,18 +13,27 @@ export interface RuneboundCarapaceState {
   pendingAttackerId: string | null;
   /** True once an eligible hit connected; reflection fires after the action completes. */
   pendingReflect: boolean;
+  reflectDamage: number;
 }
 
 export function createRuneboundCarapaceState(): RuneboundCarapaceState {
-  return { armed: false, pendingAttackerId: null, pendingReflect: false };
+  return {
+    armed: false,
+    pendingAttackerId: null,
+    pendingReflect: false,
+    reflectDamage: RUNEBOUND_REFLECT_TRUE,
+  };
 }
 
-export function armRuneboundCarapace(state: RuneboundCarapaceState): RuneboundCarapaceState {
-  return { armed: true, pendingAttackerId: null, pendingReflect: false };
+export function armRuneboundCarapace(
+  state: RuneboundCarapaceState,
+  reflectDamage = RUNEBOUND_REFLECT_TRUE,
+): RuneboundCarapaceState {
+  return { armed: true, pendingAttackerId: null, pendingReflect: false, reflectDamage };
 }
 
 export function clearRuneboundCarapace(state: RuneboundCarapaceState): RuneboundCarapaceState {
-  return { armed: false, pendingAttackerId: null, pendingReflect: false };
+  return { ...state, armed: false, pendingAttackerId: null, pendingReflect: false };
 }
 
 export interface CarapaceInboundEligibility {
@@ -100,7 +109,7 @@ export function resolveCarapaceAfterEnemyAction(
     next: cleared,
     reflect: {
       attackerId,
-      trueDamage: RUNEBOUND_REFLECT_TRUE,
+      trueDamage: state.reflectDamage ?? RUNEBOUND_REFLECT_TRUE,
       fracture: RUNEBOUND_REFLECT_FRACTURE,
       consume: true,
     },

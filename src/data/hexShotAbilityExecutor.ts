@@ -13,6 +13,7 @@ import {
   isUnitAlive,
 } from './combatSquadEngine';
 import type { ResolvedWeaponCombatStats } from './inventory';
+import type { ClassGraftCastPlan } from '../types/classGraft';
 import { playCombatPresentationCue } from '../utils/combatPresentationAudio';
 import {
   ASH_JACKET_SALVO_PACKETS,
@@ -20,6 +21,11 @@ import {
   resolveCinderlineSlotForUnit,
   seedCinderlineHazard,
 } from './hexShotPhaseH3bEngine';
+import {
+  applyUniversalDamagePacketUpgrade,
+  getUniversalGraftDefinition,
+  readUniversalUpgradeValue,
+} from './universalGraftRegistry';
 
 export interface HexShotAbilityHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -69,7 +75,7 @@ export interface HexShotExecutionContext {
   reduceEnemyAp: (unitId: string, amount: number) => void;
   emptyMagazine: () => void;
   ultimatePerformance?: number;
-  /** Graft-modified tags for this cast (e.g. Widow-Choke AoE → single). */
+  /** Effective authored tags for this cast. */
   effectiveTags?: readonly string[];
   /** Equipped weapon — drives unique basic delivery (Phase 3D). */
   resolvedWeapon?: ResolvedWeaponState | null;
@@ -78,6 +84,7 @@ export interface HexShotExecutionContext {
   /** Operative HP for Blacksite Triage validation (H.3b). */
   operativeCurrentHp?: number;
   operativeMaxHp?: number;
+  graftPlan?: ClassGraftCastPlan | null;
 }
 
 export type HexShotExecutionResult =
@@ -117,7 +124,8 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
     apCost: ctx.apCostOverride,
     ammoCost: ctx.ammoCostOverride,
   });
-  const { apCost, ammoCost, staminaCost, staminaCostPct } = costs;
+  const { apCost, ammoCost, staminaCostPct } = costs;
+  const staminaCost = readUniversalUpgradeValue(ctx.graftPlan, 'STAMINA_COST', costs.staminaCost);
 
   if (ammoCost > 0 && !ctx.spendAmmo(ammoCost)) {
     ctx.log('[REJECTED] >> Magazine dry — insufficient rounds.');
@@ -279,7 +287,10 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         ctx.log('[REJECTED] >> Rift-Snare requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
-      ctx.classState.riftSnareUnits[unit.unitId] = def.baseDamage;
+      ctx.classState.riftSnareUnits[unit.unitId] = applyUniversalDamagePacketUpgrade(
+        { damage: def.baseDamage },
+        getUniversalGraftDefinition(ctx.graftPlan?.graftId),
+      ).damage;
       playCombatPresentationCue('sfx.hex.snare');
       ctx.log(`[RIFT-SNARE] >> Mine seeded under ${unit.designation}.`);
       return { ok: true };
@@ -296,12 +307,17 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         if (!hit.unitId) continue;
         ctx.patchUnit(hit.unitId, {
           ...addCombatTag(hit, 'BLINDED'),
+          blindedAccuracyPenaltyPct: readUniversalUpgradeValue(
+            ctx.graftPlan,
+            'ACCURACY_PENALTY',
+            50,
+          ),
           evadeChance: 0,
           evadeActive: false,
         });
       }
       ctx.log(singleTarget
-        ? '[PHOSPHORUS HEX] >> Widow-Choke focal blind — evade stripped.'
+        ? '[PHOSPHORUS HEX] >> Focal blind — evade stripped.'
         : '[PHOSPHORUS HEX] >> Grid blinded — evade stripped.');
       return { ok: true };
     }
@@ -313,7 +329,11 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
     }
 
     case 'GHOST_GRID_CAMO': {
-      ctx.classState.ghostCamoTurnsRemaining = 1;
+      ctx.classState.ghostCamoTurnsRemaining = readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'DURATION_TURNS',
+        1,
+      );
       ctx.log('[GHOST-GRID CAMO] >> Operative phased — untargetable until next turn.');
       return { ok: true };
     }
@@ -348,7 +368,7 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         ctx.patchUnit(hit.unitId, stackBleed(hit));
       }
       ctx.log(singleTarget
-        ? '[BLEEDING PAYLOAD] >> Widow-Choke slug — focal burn hazard.'
+        ? '[BLEEDING PAYLOAD] >> Focal slug — burn hazard seeded.'
         : '[BLEEDING PAYLOAD] >> Void burst — burn hazard seeded.');
       return { ok: true };
     }
@@ -403,6 +423,11 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
 
     case 'PANOPTICON_PROTOCOL': {
       ctx.classState.panopticonActive = true;
+      ctx.classState.panopticonDamagePercent = readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'DIRECT_DAMAGE',
+        100,
+      );
       ctx.log('[PANOPTICON WATCH] >> Overwatch online — next hostile action will be interrupted.');
       return { ok: true };
     }
@@ -418,15 +443,25 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         ctx.log('[REJECTED] >> Target has no stable grid position for Cinderline.');
         return { ok: false, refundAp: def.apCost };
       }
-      seedCinderlineHazard(ctx.classState, slot);
-      ctx.log(`[CINDERLINE SATURATION] >> Hazard seeded on ${slot} — 5 Occult / enemy turn · 2 rounds.`);
+      const tickDamage = readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'HAZARD_TICK_DAMAGE',
+        5,
+      );
+      seedCinderlineHazard(ctx.classState, slot, tickDamage);
+      ctx.log(`[CINDERLINE SATURATION] >> Hazard seeded on ${slot} — ${tickDamage} Occult / enemy turn · 2 rounds.`);
       return { ok: true };
     }
 
     case 'BLACKSITE_TRIAGE': {
       const currentHp = ctx.operativeCurrentHp ?? 0;
       const maxHp = ctx.operativeMaxHp ?? 0;
-      const gate = canCastBlacksiteTriage(ctx.classState, currentHp, maxHp);
+      const gate = canCastBlacksiteTriage(
+        ctx.classState,
+        currentHp,
+        maxHp,
+        readUniversalUpgradeValue(ctx.graftPlan, 'HEAL_PERCENT', 20),
+      );
       if (!gate.ok) {
         ctx.log(gate.reason === 'USED'
           ? '[REJECTED] >> Blacksite Triage already expended this encounter.'
@@ -476,6 +511,7 @@ export function isHexShotAbilityEnabled(
   classState: ClassCombatEncounterState,
   ammoCostOverride?: number,
   operativeHp?: { current: number; max: number },
+  staminaCostOverride?: number,
 ): boolean {
   const def = getHexShotAbilityDefinition(abilityId);
   const costs = resolveHexShotResourceCosts(def, { ammoCost: ammoCostOverride });
@@ -486,7 +522,8 @@ export function isHexShotAbilityEnabled(
   if (costs.staminaCostPct > 0) {
     const cost = Math.floor(stamina * (costs.staminaCostPct / 100));
     if (cost <= 0 || stamina < cost) return false;
-  } else if (costs.staminaCost > 0 && stamina < costs.staminaCost) {
+  } else if ((staminaCostOverride ?? costs.staminaCost) > 0
+    && stamina < (staminaCostOverride ?? costs.staminaCost)) {
     return false;
   }
   if (abilityId === 'PANOPTICON_PROTOCOL' && classState.panopticonActive) return false;

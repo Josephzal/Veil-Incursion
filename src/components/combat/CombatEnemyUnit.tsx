@@ -194,6 +194,11 @@ export default function CombatEnemyUnit({
         </Text>
       ) : null}
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
+      {unit.fateboundMark ? (
+        <Text style={styles.fateboundMark} numberOfLines={1}>
+          {unit.fateboundObscured ? 'FATEBOUND // OBSCURED' : 'FATEBOUND'}
+        </Text>
+      ) : null}
 
       <EnemyEntity
         showVitals={isArena}
@@ -498,6 +503,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     zIndex: 20,
+  },
+  fateboundMark: {
+    position: 'absolute',
+    top: 14,
+    left: 0,
+    zIndex: 21,
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: '#c4b5fd',
   },
   imageShell: {
     width: '100%',

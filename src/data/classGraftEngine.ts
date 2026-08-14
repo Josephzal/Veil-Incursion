@@ -19,6 +19,13 @@ import { GRAFT_DATABASE, getVeilGraftDefinition } from './veilGraftDatabase';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { VeilGraftId } from '../types/veilGraft';
 import { resolveAegisAbilityGraftId } from './aegisGraftTarget';
+import {
+  applyUniversalDamagePacketUpgrade,
+  getUniversalGraftDefinition,
+  getUniversalGraftForAction,
+  readUniversalUpgradeValue,
+  universalGraftMatchesTarget,
+} from './universalGraftRegistry';
 
 const HEX_ANCHORS: readonly HexShotAbilityId[] = ['SILVER_CORE_SIDEARM'];
 const ENVOY_ANCHORS: readonly EnvoyAbilityId[] = ['VEIL_SPLINTER'];
@@ -27,6 +34,10 @@ export function getClassGraftDefinition(
   classId: ClassType,
   graftId: string,
 ): ClassGraftDefinition | import('../types/veilGraft').VeilGraftDefinition {
+  const universal = getUniversalGraftDefinition(graftId);
+  if (universal?.classId === classId) {
+    return universal as unknown as ClassGraftDefinition;
+  }
   if (classId === 'HEX_SHOT') {
     return getHexShotGraftDefinition(graftId as HexShotGraftId);
   }
@@ -69,79 +80,22 @@ export function isSanctuaryGraftGrantEnabled(): boolean {
 }
 
 export function isDeadMansSwitchReloadGraft(
-  grafts: HexShotAbilityGraftMap,
+  _grafts: HexShotAbilityGraftMap,
 ): boolean {
-  return grafts.PHASE_SHIFT_RELOAD === 'DEAD_MAN_SWITCH_GRAFT';
+  return false;
 }
 
 export function canGraftClassAbility(
   classId: ClassType,
   abilityId: string,
-  access?: { allowFixedBasic?: boolean; allowUltimate?: boolean },
+  _access?: { allowFixedBasic?: boolean; allowUltimate?: boolean },
 ): boolean {
-  const allowBasic = access?.allowFixedBasic === true;
-  const allowUltimate = access?.allowUltimate === true;
-  if (classId === 'HEX_SHOT') {
-    if (abilityId === 'PHASE_SHIFT_RELOAD') return true;
-    if (
-      abilityId === 'SILVER_CORE_SIDEARM'
-      || abilityId === 'QUICKDRAW'
-      || abilityId === 'CENTER_MASS'
-      || abilityId === 'DOOR_KNOCKER'
-    ) {
-      return allowBasic;
-    }
-    if (abilityId === 'ZERO_PROTOCOL') return allowUltimate;
-    // WU-5: weapon ultimate IDs graft as ultimates (legacy ZERO_PROTOCOL path).
-    if (abilityId === 'SIXTH_SEAL' || abilityId === 'LAST_KNOCK') return allowUltimate;
-    return true;
-  }
-  if (classId === 'ENVOY') {
-    if (abilityId === 'VEIL_SPLINTER') return allowBasic;
-    if (abilityId === 'RIFT_WARD' || abilityId === 'CATACLYSM_SIGIL') return allowUltimate;
-    if (abilityId === 'FUNERAL_KNOT' || abilityId === 'CRIMSON_REFRACTION' || abilityId === 'NULL_CIRCUIT') {
-      return allowUltimate;
-    }
-    return true;
-  }
-  // Phase D — Aegis graftable surface is 4 family weapon actions + 3 techniques.
-  // Parry / Ultimates / legacy STRIKE / EVISCERATE / THREEFOLD_BRAND are never graftable.
-  const bare = abilityId.startsWith('WA:') || abilityId.startsWith('TECH:')
-    ? abilityId.slice(abilityId.indexOf(':') + 1)
-    : abilityId;
-  if (
-    bare === 'EVISCERATE'
-    || bare === 'WRAITH_PARRY'
-    || bare === 'ABYSSAL_VERDICT'
-    || bare === 'REND_THE_VEIL'
-    || bare === 'GRAVEFALL'
-    || bare === 'THREEFOLD_BRAND'
-    || bare === 'STRIKE'
-  ) {
-    return false;
-  }
-  if (
-    bare === 'WARDENS_STRIKE'
-    || bare === 'PAIRED_BLADES_STRIKE'
-    || bare === 'UNMAKER_STRIKE'
-  ) {
-    return allowBasic;
-  }
-  // Weapon actions (non-strike) and techniques — graftable when not Ultimate-tagged.
-  if (
-    bare === 'RUPTURE'
-    || bare === 'DREADBIND'
-    || bare === 'NO_RESPITE'
-    || bare === 'DIVERGENCE'
-    || bare === 'ECLIPSE'
-    || bare === 'SEVERANCE'
-    || bare === 'DREAD_HORIZON'
-    || bare === 'UNBOWED'
-    || bare === 'DOOMFALL'
-  ) {
-    return true;
-  }
-  return canGraftAbility(bare as AegisAbilityId);
+  const bare = abilityId.startsWith('WA:')
+    ? abilityId.slice(3)
+    : abilityId.startsWith('TECH:')
+      ? abilityId.slice(5)
+      : abilityId;
+  return getUniversalGraftForAction(classId, bare) != null;
 }
 
 function applyTagMods(
@@ -180,70 +134,17 @@ export function buildClassGraftCastPlan(
     cost.tags,
   );
 
-  if (!graftId || classId === 'AEGIS') return plan;
-
-  const graft = classId === 'HEX_SHOT'
-    ? getHexShotGraftDefinition(graftId as HexShotGraftId)
-    : getEnvoyGraftDefinition(graftId as EnvoyGraftId);
-
-  plan.effectiveTags = applyTagMods(plan.effectiveTags, graft);
+  if (!graftId || classId === 'AEGIS' || !universalGraftMatchesTarget(classId, abilityId, graftId)) {
+    return plan;
+  }
+  const graft = getUniversalGraftDefinition(graftId);
+  if (!graft) return plan;
+  plan.graftId = graft.id;
+  plan.upgradeAxis = graft.upgradeAxis;
+  plan.currentAxisValue = graft.baseValue;
+  plan.upgradedAxisValue = graft.upgradedValue;
   plan.graftName = graft.name;
-
-  if (graft.setApCost != null) plan.apCost = graft.setApCost;
-  if (graft.addApCost != null) plan.apCost += graft.addApCost;
-
-  if (graft.setAmmoCost != null) plan.ammoCost = graft.setAmmoCost;
-  if (graft.addAmmoCost != null) plan.ammoCost += graft.addAmmoCost;
-  if (graft.ammoCostMultiplier != null) plan.ammoCostMultiplier = graft.ammoCostMultiplier;
-
-  if (graft.setFluxRegen != null) {
-    plan.fluxRegen = graft.setFluxRegen;
-  }
-  if (graft.setFluxCost != null) {
-    if (graft.setFluxCost < 0) {
-      plan.fluxRegen = Math.abs(graft.setFluxCost);
-      plan.fluxCost = 0;
-    } else {
-      plan.fluxCost = graft.setFluxCost;
-    }
-  }
-  if (graft.addFluxCost != null) {
-    plan.fluxCost += graft.addFluxCost;
-  } else if (graft.addFluxGeneration != null) {
-    plan.fluxCost += graft.addFluxGeneration;
-  }
-
-  if (graft.addHpCost != null) plan.hpCostPct += graft.addHpCost * 100;
-
-  plan.extraStaminaCost = graft.staminaPenalty ?? 0;
-  plan.damageMultiplier = graft.damageMultiplier ?? (graft.reduceDamage != null ? 1 - graft.reduceDamage : 1);
-  plan.baseDamageMultiplier = graft.baseDamageMultiplier ?? 1;
-  plan.hitCount = graft.hitCount ?? 1;
-  plan.duplicateCastRatio = graft.duplicateCast ?? 0;
-  plan.forceTrueDamage = graft.convertToTrueDamage === true;
-  plan.healOnDamagePct = graft.healPercentageOfDamage ?? 0;
-  plan.refundApOnKill = graft.refundApOnKill === true;
-  plan.refundApOnCrit = graft.refundApOnCrit === true;
-  plan.refundAmmoOnKill = graft.refundAmmoOnKill === true;
-  plan.failDebuff = graft.selfDebuffOnFail ?? null;
-  plan.executeThreshold = graft.executeThreshold ?? null;
-  plan.bossDamageMultiplier = graft.bossDamageMultiplier ?? 1;
-  plan.guaranteedCrit = graft.setCritChance === 100;
-  plan.randomTarget = graft.randomTarget === true;
-  plan.consumeAllAmmo = graft.consumeAllAmmo === true;
-  plan.damageScale = graft.damageScale ?? null;
-  plan.convertToAoE = graft.convertToAoE === true;
-  plan.dealSelfDamage = graft.dealSelfDamage ?? 0;
-  plan.targetDebuff = graft.applyDebuffToTarget ?? null;
-  plan.selfDebuff = graft.applySelfDebuff ?? null;
-  plan.selfDebuffOnSurvive = graft.applySelfDebuffOnSurvive ?? null;
-  plan.evadeBuffPct = graft.addBuff === 'EVADE_20' ? 20 : graft.addBuff === 'EVADE_30' ? 30 : 0;
-  plan.untargetableBuff = graft.addBuff === 'UNTARGETABLE';
-  plan.disableUltimate = graft.disableUltimate === true;
-  plan.dropLootOnKill = graft.dropLootOnKill ?? null;
-
-  plan.apCost = Math.max(0, plan.apCost);
-  plan.ammoCost = Math.max(0, plan.ammoCost);
+  plan.fluxCost = readUniversalUpgradeValue(plan, 'FLUX_COST', plan.fluxCost);
 
   return plan;
 }
@@ -253,6 +154,10 @@ export function scaleClassGraftDamage(
   plan: ClassGraftCastPlan,
   ctx: { currentAmmo: number; maxAmmo: number; veilFlux: number; fluxMaxCap: number },
 ): number {
+  if (plan.upgradeAxis === 'DIRECT_DAMAGE') {
+    const graft = getUniversalGraftDefinition(plan.graftId);
+    return applyUniversalDamagePacketUpgrade({ damage: baseDamage }, graft).damage;
+  }
   if (plan.damageScale === 'MISSING_FLUX') {
     const missing = Math.max(0, ctx.fluxMaxCap - ctx.veilFlux);
     return Math.max(
@@ -289,22 +194,11 @@ export function formatClassGraftOfferLine(
 }
 
 export function isClassUltimateDisabledForEncounter(
-  classId: ClassType,
-  hexShotAbilityGrafts: HexShotAbilityGraftMap,
-  envoyAbilityGrafts: EnvoyAbilityGraftMap,
-  encounterUltimateDisabled: boolean,
+  _classId: ClassType,
+  _hexShotAbilityGrafts: HexShotAbilityGraftMap,
+  _envoyAbilityGrafts: EnvoyAbilityGraftMap,
+  _encounterUltimateDisabled: boolean,
 ): boolean {
-  if (encounterUltimateDisabled) return true;
-  if (classId === 'HEX_SHOT') {
-    return Object.values(hexShotAbilityGrafts).some(
-      (id) => id != null && getHexShotGraftDefinition(id).disableUltimate === true,
-    );
-  }
-  if (classId === 'ENVOY') {
-    return Object.values(envoyAbilityGrafts).some(
-      (id) => id != null && getEnvoyGraftDefinition(id).disableUltimate === true,
-    );
-  }
   return false;
 }
 

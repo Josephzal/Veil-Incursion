@@ -40,6 +40,7 @@ import type {
 } from './sector';
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from './sector';
 import { createDefaultBalanceRunStats } from '../data/balance/balanceRunStats';
+import { createDefaultNineStrainRuntimeState } from '../data/nineStrain/persistence';
 import { createDefaultEconomyRunTelemetry } from './economyRunTelemetry';
 
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
@@ -544,16 +545,20 @@ export interface ActiveIncursionState {
    * Aegis keys are encoded `WA:` / `TECH:` targets (Phase D).
    */
   abilityGrafts: import('./veilGraft').AbilityGraftMap;
-  hexShotAbilityGrafts: Partial<Record<import('./operativeClass').HexShotAbilityId, HexShotGraftId>>;
-  envoyAbilityGrafts: Partial<Record<import('./operativeClass').EnvoyAbilityId, EnvoyGraftId>>;
+  hexShotAbilityGrafts: import('./classGraft').HexShotAbilityGraftMap;
+  envoyAbilityGrafts: import('./classGraft').EnvoyAbilityGraftMap;
   /** Active Sanctuary graft offers for the current Rest visit (null when terminal closed). */
   sanctuaryGraftOffers: (VeilGraftId | HexShotGraftId | EnvoyGraftId)[] | null;
+  /** Stable visit keys that already received automatic 10% stabilization. */
+  sanctuaryStabilizedVisitIds: string[];
+  /** Stable visit keys whose Attune/Graft service has already been consumed. */
+  sanctuaryConsumedVisitIds: string[];
   /**
    * Ungrafted max Soul Anchor for this deployment — used to reapply Max HP graft taxes
    * without stacking across Sanctuary replacements or save/resume.
    */
   graftBaselineMaxSoulAnchor: number;
-  /** Set when Apex Graft disables ultimate for the active combat encounter. */
+  /** Encounter-scoped ultimate lock; never derived from action upgrades. */
   encounterUltimateDisabled: boolean;
   /** VOID'S TOLL — permanent +1 AP per ultimate kill this incursion. */
   voidsTollApBonus: number;
@@ -617,6 +622,11 @@ export interface ActiveIncursionState {
   runResourceLedger: import('../types/runResourceLedger').RunResourceLedger;
   /** Cargo supply counters, triggers, and pending effects; not an inventory. */
   supplyRuntime: import('../types/runItem').RunItemRuntime;
+  /**
+   * Versioned Nine-Strain ownership, pending effects, and trigger guards.
+   * Independent of live class catalogs (leyLineMutations / hexShotBoons / envoyBoons).
+   */
+  nineStrainRuntime: import('./nineStrain').NineStrainRuntimeState;
   /** Weapon family locked at run start (canonical ID). */
   activeWeaponFamilyId: import('./weapon').WeaponFamilyId;
   /**
@@ -718,6 +728,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     hexShotAbilityGrafts: {},
     envoyAbilityGrafts: {},
     sanctuaryGraftOffers: null,
+    sanctuaryStabilizedVisitIds: [],
+    sanctuaryConsumedVisitIds: [],
     graftBaselineMaxSoulAnchor: 100,
     encounterUltimateDisabled: false,
     voidsTollApBonus: 0,
@@ -778,6 +790,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),
     supplyRuntime: createDefaultRunItemRuntime(),
+    nineStrainRuntime: createDefaultNineStrainRuntimeState(),
     activeWeaponFamilyId: 'aegis-longsword',
     weaponRuntime: {
       riftEdgeTempoArmed: false,

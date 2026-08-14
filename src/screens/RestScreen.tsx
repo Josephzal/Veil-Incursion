@@ -4,11 +4,7 @@ import HapticPressable from '../components/HapticPressable';
 import SanctuaryBg from '../../assets/images/location images/sanctuary.png';
 import ClassGraftUI, { type GraftInjectSelection } from '../components/ClassGraftUI';
 import TerminalOverlay from '../components/TerminalOverlay';
-import { buildAegisGraftSurface } from '../data/aegisGraftTarget';
-import {
-  getGraftSocketAccessForRunDepth,
-  resolveRunGraftDepthBand,
-} from '../data/graftSynergy/graftCapacityEngine';
+import { resolveRunGraftDepthBand } from '../data/graftSynergy/graftCapacityEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -24,6 +20,10 @@ import { RUN_FIELD, type RunFieldTone } from '../theme/runFieldTokens';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { readPressableHover } from '../utils/terminalHoverStyle';
 import { sanitizeAegisTechniqueLoadout } from '../utils/aegisLoadoutUtils';
+import {
+  buildSanctuaryGraftSurface,
+  SANCTUARY_ATTUNE_HEAL_PCT,
+} from '../data/sanctuaryFlowEngine';
 
 type SanctuaryChoice = 'ATTUNE' | 'GRAFT' | null;
 
@@ -199,6 +199,7 @@ export default function RestScreen(): React.JSX.Element {
   const {
     runState,
     activeIncursion,
+    applySanctuaryStabilization,
     applySanctuaryAttune,
     openSanctuaryGraftTerminal,
     clearSanctuaryGraftSession,
@@ -232,35 +233,37 @@ export default function RestScreen(): React.JSX.Element {
   const graftOffers = activeIncursion.sanctuaryGraftOffers ?? [];
 
   const runDepthBand = resolveRunGraftDepthBand(activeIncursion);
-  const graftAccess = useMemo(
-    () => getGraftSocketAccessForRunDepth(runDepthBand),
-    [runDepthBand],
-  );
 
   const loadout = useMemo(() => {
     if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotLoadout;
     if (activeClass === 'ENVOY') return activeIncursion.envoyLoadout;
     return sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout);
   }, [activeClass, activeIncursion.aegisTechniqueLoadout, activeIncursion.envoyLoadout, activeIncursion.hexShotLoadout]);
-  const aegisSurfaceRows = useMemo(() => {
-    if (activeClass !== 'AEGIS') return undefined;
-    return buildAegisGraftSurface({
+  const sanctuarySurfaceRows = useMemo(() => (
+    buildSanctuaryGraftSurface({
+      classId: activeClass,
       weaponFamilyId: activeIncursion.activeWeaponFamilyId,
-      techniques: sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout),
-    });
-  }, [activeClass, activeIncursion.activeWeaponFamilyId, activeIncursion.aegisTechniqueLoadout]);
+      aegisTechniques: sanitizeAegisTechniqueLoadout(activeIncursion.aegisTechniqueLoadout),
+      hexFlex: activeIncursion.hexShotLoadout,
+      envoyFlex: activeIncursion.envoyLoadout,
+    })
+  ), [
+    activeClass,
+    activeIncursion.activeWeaponFamilyId,
+    activeIncursion.aegisTechniqueLoadout,
+    activeIncursion.hexShotLoadout,
+    activeIncursion.envoyLoadout,
+  ]);
+
+  useEffect(() => {
+    applySanctuaryStabilization();
+  }, [activeIncursion.currentNodeId, applySanctuaryStabilization]);
 
   const abilityGrafts = useMemo(() => {
     if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotAbilityGrafts;
     if (activeClass === 'ENVOY') return activeIncursion.envoyAbilityGrafts;
     return activeIncursion.abilityGrafts;
   }, [activeClass, activeIncursion.abilityGrafts, activeIncursion.envoyAbilityGrafts, activeIncursion.hexShotAbilityGrafts]);
-
-  const graftCapacityUsed = useMemo(
-    () => Object.values(abilityGrafts as Record<string, string | undefined>).filter(Boolean).length,
-    [abilityGrafts],
-  );
-  const graftCapacityAvailable = Math.max(0, graftAccess.capacity - graftCapacityUsed);
 
   const contentPadding = isDesktop ? scaleSpacing(graftTerminalOpen ? 12 : 16) : scaleSpacing(10);
   const contentMaxWidth = isDesktop
@@ -294,7 +297,7 @@ export default function RestScreen(): React.JSX.Element {
   const choicePrimarySize = 11 * fontScale * 1.2;
   const choiceSecondarySize = scaleFont(10);
 
-  const attuneHealAmount = Math.max(1, Math.floor(runState.maxSoulAnchor * 0.3));
+  const attuneHealAmount = Math.floor(runState.maxSoulAnchor * SANCTUARY_ATTUNE_HEAL_PCT);
   const attuneResultHp = Math.min(
     runState.maxSoulAnchor,
     runState.soulAnchorIntegrity + attuneHealAmount,
@@ -302,26 +305,22 @@ export default function RestScreen(): React.JSX.Element {
 
   const handleSelectAttune = () => {
     if (confirmed || corruptedSanctuaryPending || attuneOverlay) return;
-    const fromHp = runState.soulAnchorIntegrity;
-    const toHp = Math.min(
-      runState.maxSoulAnchor,
-      fromHp + Math.max(1, Math.floor(runState.maxSoulAnchor * 0.3)),
-    );
+    const result = applySanctuaryAttune();
+    if (!result.success) return;
     setSelectedChoice('ATTUNE');
     setGraftTerminalOpen(false);
     setGraftComplete(false);
     setConfirmed(true);
-    applySanctuaryAttune();
-    setAttuneOverlay({ fromHp, toHp });
+    setAttuneOverlay({ fromHp: result.fromHp, toHp: result.toHp });
   };
 
   const handleSelectGraft = () => {
     if (confirmed || corruptedSanctuaryPending) return;
+    if (!openSanctuaryGraftTerminal()) return;
     setSelectedChoice('GRAFT');
     setGraftComplete(false);
     setGraftSelection({ graftId: null, abilityId: null, canInject: false });
     setGraftTerminalOpen(true);
-    openSanctuaryGraftTerminal();
   };
 
   const handleApplyGraft = (abilityId: string, graftId: string) => {
@@ -360,17 +359,13 @@ export default function RestScreen(): React.JSX.Element {
     setConfirmed(true);
     clearSanctuaryGraftSession();
     if (selectedChoice === 'GRAFT' && graftComplete) {
-      setTimeout(() => completeCurrentNode('Class graft mutation secured.'), 400);
+      setTimeout(() => completeCurrentNode('Action upgrade secured.'), 400);
       return;
     }
     setTimeout(() => completeCurrentNode('Sanctuary passed — continuing descent.'), 400);
   };
 
-  const graftTerminalLabel = activeClass === 'HEX_SHOT'
-    ? 'ACCESS HEX-SHOT GRAFT'
-    : activeClass === 'ENVOY'
-      ? 'ACCESS ENVOY GRAFT'
-      : 'ACCESS VEIL-GRAFT';
+  const graftTerminalLabel = 'ACCESS ACTION UPGRADES';
 
   const leftPanelContent = (
     <>
@@ -393,9 +388,9 @@ export default function RestScreen(): React.JSX.Element {
           >
             {corruptedSanctuaryPending
               ? (activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId === 'NO_EXIT_SANCTUARY'
-                ? 'This Deep Veil chapel was not built for you. Resolve the twisted choice modal — standard attune/graft is offline.'
-                : 'This sanctuary is corrupted. Resolve the twisted choice modal — standard attune/graft is offline until the conduit answers or you leave.')
-              : 'Ley energy hums through the anchor chapel. A brief respite. Choose attunement or graft mutation.'}
+                ? 'This Deep Veil chapel was not built for you. Resolve the twisted choice modal — standard services are offline.'
+                : 'This sanctuary is corrupted. Resolve the twisted choice modal — standard services are offline until the conduit answers or you leave.')
+              : 'Ley energy hums through the anchor chapel. A brief respite. Choose attunement or one action upgrade.'}
           </Text>
         </FieldPlate>
       ) : null}
@@ -404,7 +399,11 @@ export default function RestScreen(): React.JSX.Element {
         <View style={[styles.choiceCol, { gap: choiceGap }]}>
           <SanctuaryChoiceBlock
             primaryLabel="ATTUNE"
-            secondaryLabel={corruptedSanctuaryPending ? 'OFFLINE — twisted conduit' : 'Restore 30% of Maximum Health'}
+            secondaryLabel={
+              corruptedSanctuaryPending
+                ? 'OFFLINE — twisted conduit'
+                : `Restore ${Math.round(SANCTUARY_ATTUNE_HEAL_PCT * 100)}% Maximum Health and cleanse ordinary ailments`
+            }
             selected={selectedChoice === 'ATTUNE'}
             dimmed={selectedChoice === 'GRAFT' || (confirmed && selectedChoice !== 'ATTUNE') || corruptedSanctuaryPending}
             locked={corruptedSanctuaryPending}
@@ -422,7 +421,7 @@ export default function RestScreen(): React.JSX.Element {
             secondaryLabel={
               corruptedSanctuaryPending
                 ? 'OFFLINE — twisted conduit'
-                : 'Patch a graft onto an equipped ability'
+                : 'Improve one of seven equipped actions'
             }
             selected={selectedChoice === 'GRAFT'}
             dimmed={selectedChoice === 'ATTUNE' || (confirmed && selectedChoice !== 'GRAFT') || corruptedSanctuaryPending}
@@ -456,9 +455,7 @@ export default function RestScreen(): React.JSX.Element {
             injectDisabled={confirmed}
             cancelDisabled={confirmed}
             runDepthBand={runDepthBand}
-            aegisSurfaceRows={aegisSurfaceRows}
-            capacityUsed={graftCapacityUsed}
-            capacityAvailable={graftCapacityAvailable}
+            surfaceRows={sanctuarySurfaceRows}
           />
         </View>
       ) : null}
@@ -483,9 +480,9 @@ export default function RestScreen(): React.JSX.Element {
               />
             ) : (
               <RunEventNodeHeader
-                eyebrow="VEIL-GRAFT TERMINAL"
+                eyebrow="SANCTUARY ACTION UPGRADES"
                 title={graftTerminalLabel}
-                subtitle={`Depth ${runDepthBand} · capacity ${graftCapacityUsed}/${graftAccess.capacity}`}
+                subtitle="Choose one action improvement for this visit"
                 fontScale={fontScale}
                 showRunChrome
               />

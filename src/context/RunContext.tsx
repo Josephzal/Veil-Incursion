@@ -4,11 +4,8 @@ import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
 import { anomalyResolutionLogLine, resolveAnomalyNode } from '../data/anomalyResolver';
 import {
   canGraftClassAbility,
-  getClassGraftDefinition,
-  rollClassGraftOffers,
 } from '../data/classGraftEngine';
 import {
-  filterGraftOffersForRunDepth,
   recomputeMaxSoulAnchorFromGraftBaseline,
   validateSanctuaryGraftApplication,
 } from '../data/graftSynergy/permanentGraftLoadoutEngine';
@@ -17,6 +14,17 @@ import {
   resolveRunGraftDepthBand,
 } from '../data/graftSynergy/graftCapacityEngine';
 import { sanitizeAegisAbilityGrafts } from '../data/graftSynergy/graftSanitizationEngine';
+import {
+  buildDeterministicSanctuaryGraftOffers,
+  buildSanctuaryGraftSurface,
+  resolveSanctuaryAttune,
+  resolveSanctuaryStabilization,
+  sanitizeSanctuaryGraftMap,
+  sanctuaryVisitId,
+} from '../data/sanctuaryFlowEngine';
+import { hydrateGraftIncursionFields } from '../data/graftRunState';
+import { hydrateNineStrainIncursionFields } from '../data/nineStrainRunState';
+import { getUniversalGraftDefinition } from '../data/universalGraftRegistry';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { resolveStartingRunCanisterResidue } from '../data/veilResidueRunEngine';
 import {
@@ -652,8 +660,20 @@ interface RunContextType {
   useResonanceBribeFromCargo: () => boolean;
   useDeadDropTokenFromCargo: () => boolean;
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
-  applySanctuaryAttune: () => void;
-  openSanctuaryGraftTerminal: () => void;
+  applySanctuaryStabilization: () => {
+    applied: boolean;
+    healed: number;
+    cleansedEffectId: string | null;
+  };
+  applySanctuaryAttune: () => {
+    success: boolean;
+    fromHp: number;
+    toHp: number;
+    healed: number;
+    cleansedEffectIds: string[];
+    message: string;
+  };
+  openSanctuaryGraftTerminal: () => boolean;
   /** Clears staged Sanctuary graft offers for this visit (terminal cancel / node exit). */
   clearSanctuaryGraftSession: () => void;
   applyClassGraftToAbility: (abilityId: string, graftId: string) => { success: boolean; message: string };
@@ -686,6 +706,7 @@ interface RunContextType {
   activeIncursion: ActiveIncursionState;
   /** Sync peek of the latest activeIncursion ref (survives mid-event setState). */
   peekActiveIncursion: () => ActiveIncursionState;
+  persistNineStrainRuntime: (state: import('../types/nineStrain').NineStrainRuntimeState) => void;
   getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
   stageEncounterClear: (message: string) => {
     route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY';
@@ -933,6 +954,12 @@ function resolveActiveVectorNode(inc: ActiveIncursionState): IncursionNode | nul
   return inc.encounterPath[inc.nodesCleared] ?? inc.encounterPath[inc.currentEncounterIndex] ?? null;
 }
 
+function hydrateIncursionRuntimeFields<T extends Parameters<typeof hydrateGraftIncursionFields>[0]>(
+  incursion: T,
+) {
+  return hydrateNineStrainIncursionFields(hydrateGraftIncursionFields(incursion));
+}
+
 export function RunProvider({ children }: { children: React.ReactNode }) {
   const { transferVeilResidueIntoRun, restoreVeilResidueBaseline, persistRunBankedSnapshot, account } = usePlayerAccount();
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
@@ -947,7 +974,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const pocketResonanceAccumRef = useRef(0);
   const [postCombatMutationChoices, setPostCombatMutationChoices] = useState<PostCombatBoonOffer[]>([]);
   const [activeIncursion, setActiveIncursion] = useState<ActiveIncursionState>(
-    createDefaultActiveIncursionState,
+    () => hydrateIncursionRuntimeFields(createDefaultActiveIncursionState()) as ActiveIncursionState,
   );
   const activeIncursionRef = useRef<ActiveIncursionState>(activeIncursion);
   const narrativeNodeRef = useRef<NarrativeEventNode | null>(null);
@@ -963,6 +990,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   activeIncursionRef.current = activeIncursion;
 
   const peekActiveIncursion = useCallback(() => activeIncursionRef.current, []);
+
+  const persistNineStrainRuntime = useCallback((
+    state: import('../types/nineStrain').NineStrainRuntimeState,
+  ) => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, nineStrainRuntime: state };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const setCombatLogActive = useCallback((active: boolean) => {
     combatLogActiveRef.current = active;
@@ -1402,6 +1439,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyLeyLineMutation = useCallback((mutationId: LeyLineMutationId) => {
     const inc = activeIncursionRef.current;
+    if (inc.nineStrainRuntime.boonSystemMode === 'NINE_STRAIN') {
+      appendRunLog('>> LEGACY CLASS BOONS LOCKED — this run uses Nine-Strain acquisition.');
+      return;
+    }
+    if (inc.nineStrainRuntime.boonSystemConflict) {
+      appendRunLog(`>> BOON SYSTEM CONFLICT — ${inc.nineStrainRuntime.boonSystemConflict}`);
+      return;
+    }
     if (inc.leyLineMutations.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -1436,6 +1481,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyHexShotBoon = useCallback((boonId: HexShotBoonId) => {
     const inc = activeIncursionRef.current;
+    if (inc.nineStrainRuntime.boonSystemMode === 'NINE_STRAIN') {
+      appendRunLog('>> LEGACY CLASS BOONS LOCKED — this run uses Nine-Strain acquisition.');
+      return;
+    }
+    if (inc.nineStrainRuntime.boonSystemConflict) {
+      appendRunLog(`>> BOON SYSTEM CONFLICT — ${inc.nineStrainRuntime.boonSystemConflict}`);
+      return;
+    }
     if (inc.hexShotBoons.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -1464,6 +1517,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyEnvoyBoon = useCallback((boonId: EnvoyBoonId) => {
     const inc = activeIncursionRef.current;
+    if (inc.nineStrainRuntime.boonSystemMode === 'NINE_STRAIN') {
+      appendRunLog('>> LEGACY CLASS BOONS LOCKED — this run uses Nine-Strain acquisition.');
+      return;
+    }
+    if (inc.nineStrainRuntime.boonSystemConflict) {
+      appendRunLog(`>> BOON SYSTEM CONFLICT — ${inc.nineStrainRuntime.boonSystemConflict}`);
+      return;
+    }
     if (inc.envoyBoons.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -1562,12 +1623,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return [];
     }
     const classId = inc.activeClass;
-    const equipped =
-      classId === 'HEX_SHOT'
-        ? inc.hexShotLoadout
-        : classId === 'ENVOY'
-          ? inc.envoyLoadout
-          : sanitizeAegisTechniqueLoadout(inc.aegisTechniqueLoadout);
+    const equipped = buildSanctuaryGraftSurface({
+      classId,
+      weaponFamilyId: inc.activeWeaponFamilyId,
+      aegisTechniques: sanitizeAegisTechniqueLoadout(inc.aegisTechniqueLoadout),
+      hexFlex: inc.hexShotLoadout,
+      envoyFlex: inc.envoyLoadout,
+    }).map((row) => row.actionId);
     const ownedCount =
       classId === 'HEX_SHOT'
         ? inc.hexShotBoons.length
@@ -1614,32 +1676,91 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(logLine);
   }, [appendRunLog]);
 
-  const applySanctuaryAttune = useCallback(() => {
-    setRunState((prev) => {
-      const inc = activeIncursionRef.current;
-      const survivalist = inc.activeClass === 'HEX_SHOT'
-        && inc.hexShotBoons.includes('SURVIVALIST');
-      const boonMultiplier = survivalist ? 1.5 : 1;
-      const restore = Math.floor(
-        prev.maxSoulAnchor * 0.30 * boonMultiplier * resolveCargoHealReceivedMultiplier(
-          inc.cargo,
-          inc.requisitionRuntime,
-        ),
-      );
-      const next = {
-        ...prev,
-        soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity + restore, prev.maxSoulAnchor),
-      };
-      runStateRef.current = next;
-      return next;
+  const applySanctuaryStabilization = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const run = runStateRef.current;
+    const visitId = sanctuaryVisitId(inc);
+    const outcome = resolveSanctuaryStabilization({
+      currentHp: run.soulAnchorIntegrity,
+      maxHp: run.maxSoulAnchor,
+      statusEffects: inc.runStatusEffects,
+      alreadyApplied: (inc.sanctuaryStabilizedVisitIds ?? []).includes(visitId),
     });
-    const survivalist = activeIncursionRef.current.activeClass === 'HEX_SHOT'
-      && activeIncursionRef.current.hexShotBoons.includes('SURVIVALIST');
+    if (!outcome.applied) {
+      return { applied: false, healed: 0, cleansedEffectId: null };
+    }
+    const nextRun = { ...run, soulAnchorIntegrity: outcome.currentHp };
+    const nextInc = {
+      ...inc,
+      runStatusEffects: outcome.statusEffects,
+      sanctuaryStabilizedVisitIds: [
+        ...(inc.sanctuaryStabilizedVisitIds ?? []),
+        visitId,
+      ],
+    };
+    runStateRef.current = nextRun;
+    activeIncursionRef.current = nextInc;
+    setRunState(nextRun);
+    setActiveIncursion(nextInc);
     appendRunLog(
-      survivalist
-        ? '>> SANCTUARY ATTUNE — 30% soul anchor restored (+50% Survivalist).'
-        : '>> SANCTUARY ATTUNE — 30% soul anchor integrity restored.',
+      outcome.cleansedEffectId
+        ? '>> SANCTUARY STABILIZATION — minor ailment purged.'
+        : `>> SANCTUARY STABILIZATION — ${outcome.healed} soul anchor restored.`,
     );
+    return {
+      applied: true,
+      healed: outcome.healed,
+      cleansedEffectId: outcome.cleansedEffectId,
+    };
+  }, [appendRunLog]);
+
+  const applySanctuaryAttune = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const run = runStateRef.current;
+    const visitId = sanctuaryVisitId(inc);
+    if ((inc.sanctuaryConsumedVisitIds ?? []).includes(visitId)) {
+      return {
+        success: false,
+        fromHp: run.soulAnchorIntegrity,
+        toHp: run.soulAnchorIntegrity,
+        healed: 0,
+        cleansedEffectIds: [],
+        message: 'Sanctuary service already consumed for this visit.',
+      };
+    }
+    const survivalist = inc.activeClass === 'HEX_SHOT'
+      && inc.hexShotBoons.includes('SURVIVALIST');
+    const outcome = resolveSanctuaryAttune({
+      currentHp: run.soulAnchorIntegrity,
+      maxHp: run.maxSoulAnchor,
+      healReceivedMultiplier: (survivalist ? 1.5 : 1) * resolveCargoHealReceivedMultiplier(
+        inc.cargo,
+        inc.requisitionRuntime,
+      ),
+      statusEffects: inc.runStatusEffects,
+    });
+    const nextRun = { ...run, soulAnchorIntegrity: outcome.currentHp };
+    const nextInc = {
+      ...inc,
+      runStatusEffects: outcome.statusEffects,
+      sanctuaryConsumedVisitIds: [...(inc.sanctuaryConsumedVisitIds ?? []), visitId],
+    };
+    runStateRef.current = nextRun;
+    activeIncursionRef.current = nextInc;
+    setRunState(nextRun);
+    setActiveIncursion(nextInc);
+    appendRunLog(
+      `>> SANCTUARY ATTUNE — ${outcome.healed} soul anchor restored; `
+      + `${outcome.cleansedEffectIds.length} ordinary ailment(s) cleansed.`,
+    );
+    return {
+      success: true,
+      fromHp: run.soulAnchorIntegrity,
+      toHp: outcome.currentHp,
+      healed: outcome.healed,
+      cleansedEffectIds: outcome.cleansedEffectIds,
+      message: 'Sanctuary service consumed.',
+    };
   }, [appendRunLog]);
 
   const getVeilResidueBalance = useCallback((): number => {
@@ -1647,33 +1768,88 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openSanctuaryGraftTerminal = useCallback(() => {
-    const inc = activeIncursionRef.current;
+    const inc = hydrateIncursionRuntimeFields(activeIncursionRef.current) as ActiveIncursionState;
     const classId = inc.activeClass ?? 'AEGIS';
+    const visitId = sanctuaryVisitId(inc);
+    if ((inc.sanctuaryConsumedVisitIds ?? []).includes(visitId)) {
+      appendRunLog('>> ACTION UPGRADES LOCKED — Sanctuary service already consumed.');
+      return false;
+    }
     const runDepthBand = resolveRunGraftDepthBand(inc);
-    const rolled = rollClassGraftOffers(classId, 3);
-    const offers = filterGraftOffersForRunDepth(classId, rolled as string[], runDepthBand);
-    const staged = offers.slice(0, 3);
-    setActiveIncursion((prev) => {
-      let abilityGrafts = prev.abilityGrafts;
-      if (classId === 'AEGIS') {
-        abilityGrafts = sanitizeAegisAbilityGrafts(prev.abilityGrafts, runDepthBand, {
-          weaponFamilyId: prev.activeWeaponFamilyId,
-          techniques: prev.aegisTechniqueLoadout,
-        }).map;
-      }
+    const surface = buildSanctuaryGraftSurface({
+      classId,
+      weaponFamilyId: inc.activeWeaponFamilyId,
+      aegisTechniques: inc.aegisTechniqueLoadout,
+      hexFlex: inc.hexShotLoadout,
+      envoyFlex: inc.envoyLoadout,
+    });
+    const rawCurrentMap = classId === 'HEX_SHOT'
+      ? inc.hexShotAbilityGrafts as Record<string, string>
+      : classId === 'ENVOY'
+        ? inc.envoyAbilityGrafts as Record<string, string>
+        : sanitizeAegisAbilityGrafts(inc.abilityGrafts, runDepthBand, {
+          weaponFamilyId: inc.activeWeaponFamilyId,
+          techniques: inc.aegisTechniqueLoadout,
+        }).map as Record<string, string>;
+    const currentMap = sanitizeSanctuaryGraftMap(rawCurrentMap, surface);
+    const preservedOffers = inc.sanctuaryGraftOffers?.length === 3
+      && inc.sanctuaryGraftOffers.every((graftId) => {
+        const graft = getUniversalGraftDefinition(graftId);
+        const target = graft
+          ? surface.find((row) => row.actionId === graft.canonicalActionId)
+          : null;
+        return graft?.classId === classId
+          && target != null
+          && currentMap[target.key] !== graft.id;
+      })
+      ? inc.sanctuaryGraftOffers
+      : null;
+    if (preservedOffers) {
       const next = {
-        ...prev,
-        abilityGrafts,
+        ...inc,
+        sanctuaryGraftOffers: preservedOffers,
+      };
+      activeIncursionRef.current = next;
+      setActiveIncursion(next);
+      return true;
+    }
+    const staged = buildDeterministicSanctuaryGraftOffers({
+      classId,
+      seed: `${visitId}:${classId}:${inc.activeWeaponFamilyId ?? 'none'}`,
+      runDepthBand,
+      surface,
+      currentMap,
+    });
+    if (surface.length !== 7 || staged.length !== 3) {
+      appendRunLog(
+        `>> ACTION UPGRADES BLOCKED — expected 7 equipped actions and 3 matching offers; `
+        + `resolved ${surface.length}/${staged.length}.`,
+      );
+      return false;
+    }
+    setActiveIncursion(() => {
+      const next = {
+        ...inc,
+        abilityGrafts: classId === 'AEGIS'
+          ? currentMap as ActiveIncursionState['abilityGrafts']
+          : inc.abilityGrafts,
+        hexShotAbilityGrafts: classId === 'HEX_SHOT'
+          ? currentMap as ActiveIncursionState['hexShotAbilityGrafts']
+          : inc.hexShotAbilityGrafts,
+        envoyAbilityGrafts: classId === 'ENVOY'
+          ? currentMap as ActiveIncursionState['envoyAbilityGrafts']
+          : inc.envoyAbilityGrafts,
         sanctuaryGraftOffers: staged as ActiveIncursionState['sanctuaryGraftOffers'],
       };
       activeIncursionRef.current = next;
       return next;
     });
-    appendRunLog(`>> ${classId} GRAFT TERMINAL ONLINE — three volatile mutations staged.`);
+    appendRunLog('>> SANCTUARY ACTION UPGRADES — three actions available.');
     staged.forEach((graftId) => {
-      const graft = getClassGraftDefinition(classId, graftId);
-      appendRunLog(`>> — OFFER: ${graft.name.toUpperCase()}`);
+      const graft = getUniversalGraftDefinition(graftId)!;
+      appendRunLog(`>> — ${graft.name}`);
     });
+    return true;
   }, [appendRunLog]);
 
   const clearSanctuaryGraftSession = useCallback(() => {
@@ -1689,18 +1865,31 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     abilityId: string,
     graftId: string,
   ): { success: boolean; message: string } => {
-    const inc = activeIncursionRef.current;
+    const inc = hydrateIncursionRuntimeFields(activeIncursionRef.current) as ActiveIncursionState;
     const classId = inc.activeClass ?? 'AEGIS';
+    const visitId = sanctuaryVisitId(inc);
+    if ((inc.sanctuaryConsumedVisitIds ?? []).includes(visitId)) {
+      const message = 'Sanctuary service already consumed for this visit.';
+      appendRunLog(`>> ACTION UPGRADE REJECTED — ${message}`);
+      return { success: false, message };
+    }
     const runDepthBand = resolveRunGraftDepthBand(inc);
     const access = getGraftSocketAccessForRunDepth(runDepthBand);
-    const currentMap =
+    const surface = buildSanctuaryGraftSurface({
+      classId,
+      weaponFamilyId: inc.activeWeaponFamilyId,
+      aegisTechniques: inc.aegisTechniqueLoadout,
+      hexFlex: inc.hexShotLoadout,
+      envoyFlex: inc.envoyLoadout,
+    });
+    const rawCurrentMap =
       classId === 'HEX_SHOT'
         ? (inc.hexShotAbilityGrafts as Record<string, string>)
         : classId === 'ENVOY'
           ? (inc.envoyAbilityGrafts as Record<string, string>)
           : (inc.abilityGrafts as Record<string, string>);
+    const currentMap = sanitizeSanctuaryGraftMap(rawCurrentMap, surface);
 
-    const previousMap = { ...currentMap };
     const validation = validateSanctuaryGraftApplication({
       classId,
       abilityId,
@@ -1708,7 +1897,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runDepthBand,
       currentMap,
       sanctuarySessionActive: inc.sanctuaryGraftOffers != null,
+      sanctuaryServiceConsumed: (inc.sanctuaryConsumedVisitIds ?? []).includes(visitId),
       sanctuaryOffers: inc.sanctuaryGraftOffers,
+      eligibleAbilityIds: surface.map((row) => row.key),
       aegisSurface: classId === 'AEGIS'
         ? {
           weaponFamilyId: inc.activeWeaponFamilyId,
@@ -1718,23 +1909,27 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!validation.ok) {
-      appendRunLog(`>> GRAFT REJECTED — ${validation.message}`);
+      appendRunLog(`>> ACTION UPGRADE REJECTED — ${validation.message}`);
       return { success: false, message: validation.message };
     }
 
     if (!canGraftClassAbility(classId, abilityId, {
       allowFixedBasic: access.allowFixedBasic,
-      allowUltimate: access.allowUltimate,
+      allowUltimate: false,
     })) {
-      appendRunLog('>> GRAFT REJECTED — ability socket cannot accept grafts.');
-      return { success: false, message: 'This ability slot cannot be grafted.' };
+      appendRunLog('>> ACTION UPGRADE REJECTED — action cannot accept this upgrade.');
+      return { success: false, message: 'This action cannot accept this upgrade.' };
     }
 
-    const graft = getClassGraftDefinition(classId, graftId);
+    const graft = getUniversalGraftDefinition(graftId);
+    if (!graft) {
+      return { success: false, message: 'Unknown action upgrade.' };
+    }
     const proposedMap = validation.proposedMap;
 
-    // Atomic commit: assignment only — no Residue debit (Stage II-B).
+    // Atomic commit: replace the target assignment with its stable canonical ID.
     setActiveIncursion((prev) => {
+      const normalizedPrev = hydrateIncursionRuntimeFields(prev) as ActiveIncursionState;
       const graftPatch = classId === 'HEX_SHOT'
         ? { hexShotAbilityGrafts: proposedMap as ActiveIncursionState['hexShotAbilityGrafts'] }
         : classId === 'ENVOY'
@@ -1742,11 +1937,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           : { abilityGrafts: proposedMap as ActiveIncursionState['abilityGrafts'] };
 
       const next = {
-        ...prev,
+        ...normalizedPrev,
         ...graftPatch,
-        encounterUltimateDisabled: graft.disableUltimate === true
-          ? true
-          : prev.encounterUltimateDisabled,
+        sanctuaryConsumedVisitIds: [
+          ...(normalizedPrev.sanctuaryConsumedVisitIds ?? []),
+          visitId,
+        ],
       };
       activeIncursionRef.current = next;
       return next;
@@ -1767,16 +1963,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return runNext;
     });
 
-    void previousMap;
-    const abilityLabel = abilityId.replace(/_/g, ' ');
-    appendRunLog(`>> GRAFT APPLIED — ${graft.name.toUpperCase()} fused to ${abilityLabel}.`);
-    if (graft.reduceMaxHp != null) {
-      appendRunLog(`>> MARTYR TAX — max soul anchor recalculated (−${Math.round(graft.reduceMaxHp * 100)}% graft tax).`);
-    }
-    if (graft.disableUltimate) {
-      appendRunLog('>> APEX MUTATION — ultimate channel sealed for next combat encounter.');
-    }
-
+    appendRunLog(`>> ACTION UPGRADE APPLIED — ${graft.name}.`);
     return { success: true, message: `${graft.name} applied.` };
   }, [appendRunLog]);
 
@@ -4014,7 +4201,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         activeIncursionRef.current = next;
         return next;
       });
-      appendRunLog('>> SANCTUARY NODE — ATTUNE OR GRAFT PREVIEW.');
+      appendRunLog('>> SANCTUARY NODE — ATTUNE OR ACTION UPGRADE PREVIEW.');
       return;
     }
 
@@ -7036,6 +7223,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useResonanceBribeFromCargo,
       useDeadDropTokenFromCargo,
       applySkillCheckTier,
+      applySanctuaryStabilization,
       applySanctuaryAttune,
       openSanctuaryGraftTerminal,
       clearSanctuaryGraftSession,
@@ -7056,6 +7244,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       abortNarrativeEncounter,
       activeIncursion,
       peekActiveIncursion,
+      persistNineStrainRuntime,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
       syncProceduralScannerTypes,
@@ -7227,6 +7416,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useResonanceBribeFromCargo,
       useDeadDropTokenFromCargo,
       applySkillCheckTier,
+      applySanctuaryStabilization,
       applySanctuaryAttune,
       openSanctuaryGraftTerminal,
       clearSanctuaryGraftSession,
@@ -7247,6 +7437,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       abortNarrativeEncounter,
       activeIncursion,
       peekActiveIncursion,
+      persistNineStrainRuntime,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
       syncProceduralScannerTypes,

@@ -9,10 +9,18 @@ import {
 } from './aegisWeaponActionCatalog';
 import { getVeilGraftDefinition } from './veilGraftDatabase';
 import type { AegisWeaponActionPlan, WeaponHitPlan } from './aegisWeaponActionResolveEngine';
+import { emptyUniversalCastPlanOverlay } from '../types/universalGraft';
+import type { UniversalGraftId } from '../types/universalGraft';
+import {
+  getUniversalGraftDefinition,
+  universalGraftMatchesTarget,
+  upgradeDamagePacketValue,
+} from './universalGraftRegistry';
 
 export type GraftTaggedWeaponHit = WeaponHitPlan & {
   /** Graft-added echo/splinter hit — not mastery / Crimson / Riposte / Brand-eligible. */
   graftAdded?: boolean;
+  appliedGraftIds?: readonly UniversalGraftId[];
 };
 
 export function buildWeaponActionGraftCastPlan(
@@ -29,6 +37,7 @@ export function buildWeaponActionGraftCastPlan(
 
   if (!graftId) {
     return {
+      ...emptyUniversalCastPlanOverlay(),
       apCost,
       hpCostPct: 0,
       reservePenalty: 0,
@@ -57,6 +66,9 @@ export function buildWeaponActionGraftCastPlan(
     };
   }
 
+  if (!universalGraftMatchesTarget('AEGIS', actionId, graftId)) {
+    return buildWeaponActionGraftCastPlan(actionId, undefined, opts);
+  }
   const graft = getVeilGraftDefinition(graftId);
   let effectiveTags = [...baseTags];
   if (graft.removeTags?.length) {
@@ -71,6 +83,10 @@ export function buildWeaponActionGraftCastPlan(
   if (graft.addApCost != null) nextAp += graft.addApCost;
 
   return {
+    graftId: graft.id,
+    upgradeAxis: graft.upgradeAxis,
+    currentAxisValue: graft.baseValue,
+    upgradedAxisValue: graft.upgradedValue,
     apCost: Math.max(0, nextAp),
     hpCostPct: graft.addHpCost != null ? graft.addHpCost * 100 : 0,
     reservePenalty: graft.reservePenalty ?? 0,
@@ -81,7 +97,7 @@ export function buildWeaponActionGraftCastPlan(
     hitCount: graft.hitCount ?? 1,
     duplicateCastRatio: graft.duplicateCast ?? 0,
     forceTrueDamage: graft.convertToTrueDamage === true,
-    effectiveTags,
+    effectiveTags: baseTags,
     reserveGenerationBonus: graft.addReserveGeneration ?? 0,
     cooldownTurns: graft.addCooldown ?? 0,
     healOnDamagePct: graft.healPercentageOfDamage ?? 0,
@@ -109,6 +125,28 @@ function scaleHit(hit: WeaponHitPlan, mult: number, occultFlat: number): WeaponH
   };
 }
 
+function applyUniversalHitOverlay(
+  hit: GraftTaggedWeaponHit,
+  graftPlan: GraftCastPlan,
+): GraftTaggedWeaponHit {
+  if (graftPlan.upgradeAxis !== 'DIRECT_DAMAGE' || !graftPlan.graftId) return { ...hit };
+  if (hit.appliedGraftIds?.includes(graftPlan.graftId)) return { ...hit };
+  return {
+    ...hit,
+    kineticDamage: upgradeDamagePacketValue(
+      hit.kineticDamage,
+      graftPlan.currentAxisValue ?? 100,
+      graftPlan.upgradedAxisValue ?? 110,
+    ),
+    occultDamage: upgradeDamagePacketValue(
+      hit.occultDamage,
+      graftPlan.currentAxisValue ?? 100,
+      graftPlan.upgradedAxisValue ?? 110,
+    ),
+    appliedGraftIds: [...(hit.appliedGraftIds ?? []), graftPlan.graftId],
+  };
+}
+
 /**
  * Apply Echo / Splinter / damage grafts to an authored weapon-action plan.
  * Graft-added hits never copy secondary action state (mastery / Brand / Tempo consume).
@@ -126,7 +164,10 @@ export function applyGraftTransformToWeaponPlan(
     && !graftPlan.effectiveTags.includes('FRACTURE');
 
   let hits: GraftTaggedWeaponHit[] = plan.hits.map((h) => {
-    const scaled = scaleHit(h, graftPlan.damageMultiplier, 0);
+    const scaled = applyUniversalHitOverlay(
+      scaleHit(h, graftPlan.damageMultiplier, 0),
+      graftPlan,
+    );
     return {
       ...scaled,
       fractureGain: stripFracture ? 0 : scaled.fractureGain,

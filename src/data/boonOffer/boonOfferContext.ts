@@ -1,91 +1,29 @@
 import type { ClassType } from '../../types/game';
 import type { WeaponFamilyId } from '../../types/weapon';
 import type { WeaponAbilityInteractionHook } from '../../types/weaponLoadoutRecommendation';
-import type { ClassGraftDefinition } from '../../types/classGraft';
 import { getWeaponIdentityProfile } from '../weaponIdentityProfiles';
 import {
-  applyGraftTagMods,
   inspectWeaponBasicTagLayers,
 } from '../weaponTagResolutionEngine';
-import { getAbilityTags as getAegisAbilityTags } from '../aegisAbilities';
-import { getHexShotAbilityTags } from '../hexShotAbilities';
-import { getEnvoyAbilityTags } from '../envoyAbilities';
-import { AEGIS_ANCHOR } from '../../utils/aegisLoadoutUtils';
 import { HEX_SHOT_ANCHOR, ENVOY_ANCHOR } from '../classAbilityUnlockEngine';
 import { isFrozenInteractionHook } from './weaponInteractionHookContract';
-import { getClassGraftDefinition } from '../classGraftEngine';
-import { resolveAegisAbilityGraftId } from '../aegisGraftTarget';
-import { aegisWeaponActionTags, isAegisWeaponActionCatalogId } from '../aegisWeaponActionCatalog';
 import type { BoonOfferContext, TagLayerSnapshot } from './boonOfferTypes';
-
-function aegisFamilyStrikeId(weaponFamilyId: WeaponFamilyId): string {
-  if (weaponFamilyId === 'aegis-paired-blades') return 'PAIRED_BLADES_STRIKE';
-  if (weaponFamilyId === 'aegis-claymore') return 'UNMAKER_STRIKE';
-  return 'WARDENS_STRIKE';
-}
+import { resolveClassAbilityCost } from '../classAbilityResolver';
 
 function abilityTags(classId: ClassType, abilityId: string): readonly string[] {
-  if (classId === 'AEGIS') {
-    if (isAegisWeaponActionCatalogId(abilityId)) {
-      return [...aegisWeaponActionTags(abilityId)];
-    }
-    return getAegisAbilityTags(abilityId as never);
-  }
-  if (classId === 'HEX_SHOT') return getHexShotAbilityTags(abilityId as never);
-  return getEnvoyAbilityTags(abilityId as never);
+  return resolveClassAbilityCost(classId, abilityId).tags;
 }
 
-function lookupEquippedGraftId(
-  classId: ClassType,
-  abilityId: string,
-  abilityGrafts?: Readonly<Record<string, string>>,
-): string | undefined {
-  if (!abilityGrafts) return undefined;
-  if (classId === 'AEGIS') {
-    return resolveAegisAbilityGraftId(
-      abilityGrafts as Partial<Record<string, import('../../types/veilGraft').VeilGraftId>>,
-      abilityId,
-    ) ?? abilityGrafts[abilityId];
-  }
-  return abilityGrafts[abilityId];
-}
-
-type GraftTagMods = Pick<
-  ClassGraftDefinition,
-  'addTag' | 'removeTags' | 'modifyTagFrom' | 'modifyTagTo'
->;
-
-function resolveGraftTagMods(
-  classId: ClassType,
-  graftId: string | undefined,
-): GraftTagMods | null {
-  if (!graftId) return null;
-  const def = getClassGraftDefinition(classId, graftId) as GraftTagMods & { addTag?: string };
-  return {
-    addTag: def.addTag,
-    removeTags: def.removeTags,
-    modifyTagFrom: 'modifyTagFrom' in def ? (def as ClassGraftDefinition).modifyTagFrom : undefined,
-    modifyTagTo: 'modifyTagTo' in def ? (def as ClassGraftDefinition).modifyTagTo : undefined,
-  };
-}
-
-function transformAbilityTags(
-  classId: ClassType,
-  abilityId: string,
-  graftId: string | undefined,
-): { base: readonly string[]; final: readonly string[]; added: readonly string[]; removed: readonly string[] } {
-  const base = [...abilityTags(classId, abilityId)];
-  const mods = resolveGraftTagMods(classId, graftId);
-  if (!mods) {
-    return { base, final: base, added: [], removed: [] };
-  }
-  const result = applyGraftTagMods(base, mods);
-  return { base, final: result.next, added: result.added, removed: result.removed };
-}
+type GraftTagMods = {
+  addTag?: string;
+  removeTags?: readonly string[];
+  modifyTagFrom?: string;
+  modifyTagTo?: string;
+};
 
 /**
- * Build final transformed tag layers for the equipped loadout + weapon basic.
- * Applies per-ability equipped grafts. Affinity remains a separate soft layer.
+ * Build authored tag layers for the equipped loadout + weapon basic.
+ * Universal action upgrades never alter tags. Affinity remains a separate soft layer.
  */
 export function buildLoadoutTagLayers(args: {
   classId: ClassType;
@@ -98,22 +36,13 @@ export function buildLoadoutTagLayers(args: {
   abilityGrafts?: Readonly<Record<string, string>>;
 }): TagLayerSnapshot {
   const profile = getWeaponIdentityProfile(args.weaponFamilyId);
-  const anchor =
-    args.classId === 'AEGIS'
-      ? aegisFamilyStrikeId(args.weaponFamilyId)
-      : args.classId === 'HEX_SHOT'
-        ? HEX_SHOT_ANCHOR
-        : ENVOY_ANCHOR;
-  void AEGIS_ANCHOR;
-  const basicGraftId = lookupEquippedGraftId(args.classId, anchor, args.abilityGrafts);
-  const basicGraftMods =
-    args.graft
-    ?? (basicGraftId ? resolveGraftTagMods(args.classId, basicGraftId) : null);
-
+  // Stage V-B: universal action upgrades never add/remove tags. `graft` is ignored.
+  void args.graft;
+  void args.abilityGrafts;
   const basic = inspectWeaponBasicTagLayers({
     familyId: args.weaponFamilyId,
     basicActionRuntimeTags: args.basicActionRuntimeTags ?? profile.mechanicalTags,
-    graft: basicGraftMods,
+    graft: null,
   });
 
   const baseUnion = new Set<string>(basic.baseWeaponTags);
@@ -122,40 +51,9 @@ export function buildLoadoutTagLayers(args: {
   const graftRemoved = new Set<string>(basic.graftRemovedTags);
 
   args.equippedAbilityIds.forEach((id) => {
-    const graftId = lookupEquippedGraftId(args.classId, id, args.abilityGrafts);
-    // Anchor uses weapon-basic graft mods when provided via `graft` or abilityGrafts.
-    const modsForAbility: GraftTagMods | null =
-      id === anchor && args.graft
-        ? args.graft
-        : resolveGraftTagMods(args.classId, graftId);
     const base = [...abilityTags(args.classId, id)];
-    let final = base;
-    let added: readonly string[] = [];
-    let removed: readonly string[] = [];
-    if (modsForAbility) {
-      const result = applyGraftTagMods(base, modsForAbility);
-      final = [...result.next];
-      added = result.added;
-      removed = result.removed;
-    } else if (id === anchor && basicGraftMods) {
-      const result = applyGraftTagMods(base, basicGraftMods);
-      final = [...result.next];
-      added = result.added;
-      removed = result.removed;
-    }
     base.forEach((t) => baseUnion.add(t));
-    final.forEach((t) => finalUnion.add(t));
-    added.forEach((t) => graftAdded.add(t));
-    removed.forEach((t) => graftRemoved.add(t));
-  });
-
-  // Ensure removed tags do not leak from base registry unless another action still has them.
-  graftRemoved.forEach((t) => {
-    const stillPresent = args.equippedAbilityIds.some((id) => {
-      const graftId = lookupEquippedGraftId(args.classId, id, args.abilityGrafts);
-      return transformAbilityTags(args.classId, id, graftId).final.includes(t);
-    }) || basic.finalTransformedTags.includes(t);
-    if (!stillPresent) finalUnion.delete(t);
+    base.forEach((t) => finalUnion.add(t));
   });
 
   if (args.classId === 'HEX_SHOT') {
@@ -226,8 +124,7 @@ export function resolveReachableInteractionHooks(args: {
       ...abilityReachableHooks(args.classId, args.equippedAbilityIds, args.abilityGrafts),
     ]),
   ];
-  // If Echo graft on STRIKE removes FRACTURE and no other ability supplies it, drop FRACTURE_SETUP
-  // from soft weight signals — hard eligibility uses final tags.
+  // Reachability follows authored action tags.
   const layers = buildLoadoutTagLayers({
     classId: args.classId,
     weaponFamilyId: args.weaponFamilyId,
@@ -236,20 +133,6 @@ export function resolveReachableInteractionHooks(args: {
   });
   if (!layers.finalTransformedTags.includes('FRACTURE')) {
     hooks = hooks.filter((h) => h !== 'FRACTURE_SETUP' && h !== 'FRACTURE_BREAK');
-  }
-  if (
-    args.weaponFamilyId === 'hex-carbine'
-    && args.abilityGrafts
-    && Object.values(args.abilityGrafts).includes('WIDOW_CHOKE_GRAFT')
-  ) {
-    // Widow-Choke on a spread ability removes AoE — SPREAD_CLUSTER may still exist on basic.
-    const basicGraft = args.abilityGrafts['CENTER_MASS']
-      ?? args.abilityGrafts['QUICKDRAW']
-      ?? args.abilityGrafts['DOOR_KNOCKER']
-      ?? args.abilityGrafts['SILVER_CORE_SIDEARM'];
-    if (basicGraft === 'WIDOW_CHOKE_GRAFT') {
-      hooks = hooks.filter((h) => h !== 'SPREAD_CLUSTER');
-    }
   }
   return hooks;
 }

@@ -23,6 +23,8 @@ import { resolveLanternFluxPurgePayoff } from './weaponLanternRotPayoff';
 import type { CombatSessionExtras } from '../types/combatHooks';
 import { executeEnvoyActionOneFromCompat } from './envoyWeaponActionExecutor';
 import type { WeaponFamilyId } from '../types/weapon';
+import type { ClassGraftCastPlan } from '../types/classGraft';
+import { readUniversalUpgradeValue } from './universalGraftRegistry';
 
 export interface EnvoyAbilityHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -66,6 +68,7 @@ export interface EnvoyExecutionContext {
   applyVeilFluxBonus?: (delta: number) => void;
   applyHpSacrifice?: (amount: number) => void;
   sessionExtras?: CombatSessionExtras;
+  graftPlan?: ClassGraftCastPlan | null;
 }
 
 export type EnvoyExecutionResult =
@@ -253,7 +256,8 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'AETHERIC_TRANSFUSION': {
-      const heal = Math.floor(ctx.maxSoulAnchor * 0.25);
+      const healPct = readUniversalUpgradeValue(ctx.graftPlan, 'HEAL_PERCENT', 25);
+      const heal = Math.floor(ctx.maxSoulAnchor * (healPct / 100));
       ctx.healOperative(heal);
       ctx.log(`[AETHERIC TRANSFUSION] >> ${heal} HP restored via flux tithe.`);
       return { ok: true, fluxDelta: netFlux };
@@ -266,6 +270,11 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         return { ok: false, refundAp: def.apCost };
       }
       ctx.classState.soulTetherUnitId = unit.unitId;
+      ctx.classState.soulTetherReflectPercent = readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'REFLECT_PERCENT',
+        50,
+      );
       ctx.log(`[SOUL-TETHER] >> Mirrored pain linked to ${unit.designation}.`);
       return { ok: true, fluxDelta: netFlux };
     }
@@ -294,14 +303,19 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         return { ok: false, refundAp: def.apCost };
       }
       const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
-      const reducedMax = Math.max(1, Math.floor(unit.maxHp * 0.85));
+      const reductionPct = readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'MAX_HP_REDUCTION',
+        15,
+      );
+      const reducedMax = Math.max(1, Math.floor(unit.maxHp * (1 - reductionPct / 100)));
       ctx.classState.fleshWarpUnits[unit.unitId] = true;
       ctx.patchUnit(unit.unitId, {
         maxHp: reducedMax,
         currentHp: Math.min(unit.currentHp, reducedMax),
       });
       infectVeilRot(ctx.classState, unit, 1, ctx.log);
-      ctx.log('[FLESH-WARP] >> Anatomy warped — max HP −15%, healing blocked.');
+      ctx.log(`[FLESH-WARP] >> Anatomy warped — max HP −${reductionPct}%, healing blocked.`);
       return { ok: true, fluxDelta: netFlux };
     }
 

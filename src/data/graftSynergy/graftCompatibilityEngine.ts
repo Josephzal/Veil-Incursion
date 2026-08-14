@@ -11,16 +11,13 @@ import {
   type GraftSocketAccess,
   type GraftSocketCategory,
 } from './graftCapacityEngine';
-import { canGraftClassAbility, getClassGraftDefinition } from '../classGraftEngine';
-import { ALL_HEX_SHOT_GRAFT_IDS } from '../hexShotGrafts';
-import { ALL_ENVOY_GRAFT_IDS } from '../envoyGrafts';
-import { ALL_VEIL_GRAFT_IDS } from '../veilGraftDatabase';
-import {
-  evaluateAegisGraftCompatibility,
-  resolveAegisGraftTargetFromAbilityId,
-} from '../aegisGraftCompatibility';
+import { canGraftClassAbility } from '../classGraftEngine';
 import { parseAegisGraftTargetKey } from '../aegisGraftTarget';
-import type { VeilGraftId } from '../../types/veilGraft';
+import {
+  getUniversalGraftDefinition,
+  getUniversalGraftForAction,
+  universalGraftMatchesTarget,
+} from '../universalGraftRegistry';
 
 export type GraftCompatibilityRejection =
   | 'UNKNOWN_GRAFT'
@@ -45,13 +42,8 @@ export type GraftCompatibilityResult = {
   costTier: ReturnType<typeof inferGraftCostTier> | null;
 };
 
-/** Safety: Hex fixed basic must never receive zero-ammo grafts that erase reload. */
-const HEX_BASIC_AMMO_BYPASS_GRAFTS = new Set(['BLOOD_MAG_GRAFT']);
-
 export function isLiveGraftId(classId: ClassType, graftId: string): boolean {
-  if (classId === 'HEX_SHOT') return (ALL_HEX_SHOT_GRAFT_IDS as readonly string[]).includes(graftId);
-  if (classId === 'ENVOY') return (ALL_ENVOY_GRAFT_IDS as readonly string[]).includes(graftId);
-  return (ALL_VEIL_GRAFT_IDS as readonly string[]).includes(graftId);
+  return getUniversalGraftDefinition(graftId)?.classId === classId;
 }
 
 function resolveAccess(args: {
@@ -82,12 +74,11 @@ export function evaluateGraftCompatibility(args: {
 }): GraftCompatibilityResult {
   const rejections: GraftCompatibilityRejection[] = [];
   const socket = classifyAbilitySocket(args.classId, args.abilityId);
-  if (!isLiveGraftId(args.classId, args.graftId)) {
+  const graft = getUniversalGraftDefinition(args.graftId);
+  if (!graft) {
     return { ok: false, rejections: ['UNKNOWN_GRAFT'], socket, costTier: null };
   }
-  const def = getClassGraftDefinition(args.classId, args.graftId);
-  const costTier = inferGraftCostTier(def.cost);
-  if ('classId' in def && def.classId && def.classId !== args.classId) {
+  if (graft.classId !== args.classId) {
     rejections.push('CLASS_MISMATCH');
   }
   if (!args.graftAvailable) rejections.push('NOT_OWNED_OR_UNAVAILABLE');
@@ -101,56 +92,22 @@ export function evaluateGraftCompatibility(args: {
 
   if (countIfNew > access.capacity) rejections.push('CAPACITY_EXCEEDED');
 
-  const duplicateElsewhere = equippedEntries.some(
-    ([ability, g]) => ability !== args.abilityId && g === args.graftId,
-  );
-  if (duplicateElsewhere) rejections.push('DUPLICATE_GRAFT_ID');
-
-  if (!canGraftClassAbility(args.classId, args.abilityId, {
-    allowFixedBasic: access.allowFixedBasic,
-    allowUltimate: access.allowUltimate,
-  })) {
-    if (socket === 'FIXED_BASIC_SIGNATURE' && !access.allowFixedBasic) {
-      rejections.push('FIXED_BASIC_LOCKED');
-    } else if (socket === 'ULTIMATE' && !access.allowUltimate) {
-      rejections.push('ULTIMATE_LOCKED');
-    } else if (socket !== 'STANDARD_ABILITY') {
-      rejections.push('SOCKET_INCOMPATIBLE');
-    }
+  const canonicalActionId = args.abilityId.startsWith('WA:')
+    ? args.abilityId.slice(3)
+    : args.abilityId.startsWith('TECH:')
+      ? args.abilityId.slice(5)
+      : args.abilityId;
+  if (!getUniversalGraftForAction(args.classId, canonicalActionId)) {
+    rejections.push('UNKNOWN_ABILITY');
+  } else if (!universalGraftMatchesTarget(args.classId, args.abilityId, args.graftId)) {
+    rejections.push('SOCKET_INCOMPATIBLE');
   }
-
-  // Apex catalog band is no longer Class-Rank gated (Stage II-B).
-
-  if (
-    args.classId === 'HEX_SHOT'
-    && args.abilityId === 'SILVER_CORE_SIDEARM'
-    && HEX_BASIC_AMMO_BYPASS_GRAFTS.has(args.graftId)
-  ) {
-    rejections.push('SAFETY_INVARIANT');
-  }
-
   if (args.classId === 'AEGIS') {
-    const target = parseAegisGraftTargetKey(args.abilityId)
-      ?? resolveAegisGraftTargetFromAbilityId(args.abilityId);
-    if (!target) {
-      rejections.push('UNKNOWN_ABILITY');
-    } else {
-      const mechanic = evaluateAegisGraftCompatibility({
-        target,
-        graftId: args.graftId as VeilGraftId,
-        allowFixedBasic: access.allowFixedBasic,
-      });
-      if (!mechanic.ok) {
-        if (mechanic.reason === 'FIXED_BASIC_LOCKED') {
-          if (!rejections.includes('FIXED_BASIC_LOCKED')) rejections.push('FIXED_BASIC_LOCKED');
-        } else if (mechanic.reason === 'ULTIMATE_OR_PARRY') {
-          rejections.push('SOCKET_INCOMPATIBLE');
-        } else {
-          rejections.push('MECHANIC_INCOMPATIBLE');
-        }
-      }
+    const encoded = parseAegisGraftTargetKey(args.abilityId);
+    if (!encoded) {
+      if (!rejections.includes('UNKNOWN_ABILITY')) rejections.push('UNKNOWN_ABILITY');
     }
   }
 
-  return { ok: rejections.length === 0, rejections, socket, costTier };
+  return { ok: rejections.length === 0, rejections, socket, costTier: null };
 }

@@ -34,6 +34,7 @@ import { ruinFracturePerBrand } from './aegisResourceEngine';
 import {
   ASHEN_MANTLE_DURATION_TURNS,
   DEVASTATE_KINETIC_DAMAGE,
+  RUNEBOUND_REFLECT_TRUE,
   devastateTrueDamage,
   finalMercyTrueDamage,
   isFinalMercyEligible,
@@ -47,6 +48,7 @@ import {
 import { canAffordGraftResources } from './veilGraftEngine';
 import type { GraftCastPlan } from '../types/veilGraft';
 import { isAegisTechniqueId } from './aegisTechniqueCatalog';
+import { readUniversalUpgradeValue } from './universalGraftRegistry';
 
 export interface PlayerCombatBuffState {
   demonLungCooldown: number;
@@ -119,9 +121,10 @@ export interface AbilityExecutionContext {
   setBloodTitheCooldown: (turns: number) => void;
   setAshenMantleCooldown: (turns: number) => void;
   setVeilTarTurns?: (turns: number) => void;
-  activateRuneboundCarapace?: () => void;
+  activateRuneboundCarapace?: (reflectDamage: number) => void;
   applyReaveBleed?: (unitId: string, turns: number) => void;
   setAshenMantleActive?: (turns: number) => void;
+  graftPlan?: GraftCastPlan | null;
 }
 
 export type AbilityExecutionResult =
@@ -238,7 +241,11 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
           def.apCost,
         );
       }
-      const duration = ASHEN_MANTLE_DURATION_TURNS;
+      const duration = readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'DURATION_TURNS',
+        ASHEN_MANTLE_DURATION_TURNS,
+      );
       ctx.buffState.ashenMantleTurnsRemaining = duration;
       ctx.setAshenMantleActive?.(duration);
       if (freeWard) {
@@ -259,7 +266,14 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       const pulled = pullBacklineToFrontline(ctx.squad, unit.unitId);
       const pulledUnit = getUnitById(pulled, unit.unitId);
       if (pulledUnit?.unitId) {
-        let exposed = addCombatTag(pulledUnit, 'EXPOSED');
+        let exposed = {
+          ...addCombatTag(pulledUnit, 'EXPOSED'),
+          exposedDefenseReductionPct: readUniversalUpgradeValue(
+            ctx.graftPlan,
+            'EXPOSED_DEFENSE_REDUCTION',
+            50,
+          ),
+        };
         if (
           boonMatchesAction(ctx.ownedBoons, 'EXECUTIONERS_GRIP', ctx.abilityId)
           && ctx.mutationMods.graveBindArmorShred > 0
@@ -325,7 +339,10 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       if (!unit?.unitId) {
         return rejectPreResolution(ctx, 'Nail to Grid requires a target.', def.apCost);
       }
-      ctx.reduceEnemyAp(unit.unitId, ctx.mutationMods.nailApDrain);
+      ctx.reduceEnemyAp(
+        unit.unitId,
+        readUniversalUpgradeValue(ctx.graftPlan, 'AP_DRAIN', ctx.mutationMods.nailApDrain),
+      );
       ctx.patchUnit(unit.unitId, stackDoomedTag(unit));
       if (
         boonMatchesAction(ctx.ownedBoons, 'NECROTIC_ATROPHY', ctx.abilityId)
@@ -352,7 +369,11 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         );
       }
       applyDeepLungsOnRestore(ctx.ownedBoons, ctx.abilityId, ctx.chargeAr, ctx.log);
-      ctx.chargeAr(def.reserveGain ?? 30);
+      ctx.chargeAr(readUniversalUpgradeValue(
+        ctx.graftPlan,
+        'RESERVE_GAIN',
+        def.reserveGain ?? 30,
+      ));
       ctx.setAegisOvercharged(true);
       ctx.grantBonusApNextTurn(1);
       ctx.buffState.demonLungCooldown = def.cooldownTurns ?? 3;
@@ -363,7 +384,11 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
     case 'CRIMSON_PACT': {
       // HP already committed atomically when costsCommitted.
       if (!ctx.costsCommitted) {
-        const hpPct = ctx.mutationMods.crimsonPactHpCostPct ?? def.hpCostPct ?? 12;
+        const hpPct = readUniversalUpgradeValue(
+          ctx.graftPlan,
+          'HP_COST_PERCENT',
+          ctx.mutationMods.crimsonPactHpCostPct ?? def.hpCostPct ?? 12,
+        );
         if (!ctx.sacrificeHpPct(hpPct)) {
           return rejectPreResolution(ctx, 'Insufficient soul anchor for pact.', def.apCost);
         }
@@ -432,7 +457,8 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ignoreDefenses: true,
       }, unit.unitId);
       if (eradicated) {
-        const heal = Math.floor(ctx.maxSoulAnchor * 0.10);
+        const healPct = readUniversalUpgradeValue(ctx.graftPlan, 'HEAL_PERCENT', 10);
+        const heal = Math.floor(ctx.maxSoulAnchor * (healPct / 100));
         if (heal > 0) ctx.healOperative(heal);
         ctx.log(
           unit.isBoss
@@ -450,7 +476,9 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
     }
 
     case 'RUNEBOUND_CARAPACE': {
-      ctx.activateRuneboundCarapace?.();
+      ctx.activateRuneboundCarapace?.(
+        readUniversalUpgradeValue(ctx.graftPlan, 'REFLECT_DAMAGE', RUNEBOUND_REFLECT_TRUE),
+      );
       playCombatPresentationCue('sfx.aegis.player_buff');
       ctx.log(
         '[RUNEBOUND CARAPACE] >> Carapace armed — reflect after the first blockable melee hit that damages you.',
@@ -655,7 +683,7 @@ export function getAegisAbilityDisableReason(
     return 'Wait for your combat phase.';
   }
   if (ctx.encounterUltimateDisabled && getAbilityTags(abilityId).includes('ULTIMATE')) {
-    return 'Ultimate channel sealed by Apex Graft.';
+    return 'Ultimate channel unavailable for this encounter.';
   }
   if (ctx.rooted && (abilityId === 'WRAITH_PARRY' || abilityId === 'SHADOW_STEP')) {
     return 'Rooted — parry and mobility blocked.';

@@ -1,7 +1,7 @@
 /**
  * Progression Spine — Class Rank XP / mastery history (ranks 1–20).
- * Reward table hooks are flavor/history only. Stage II-B: Class Rank does not
- * grant graft capacity, socket quality, ultimates, Apex access, or combat power.
+ * Reward table hooks are flavor/history only. Class Rank does not grant
+ * action-upgrade capacity, access, or combat power.
  */
 import type { ClassType } from '../types/game';
 import type { BreachGradeId, ProgressionProfile } from '../types/progression';
@@ -12,7 +12,7 @@ export const CLASS_RANK_MAX = 20;
 
 export type ClassRankHookKind =
   | 'ABILITY_RECIPE'
-  | 'GRAFT_LICENSE'
+  | 'RESERVED_MILESTONE'
   | 'BOON_POOL'
   | 'WEAPON_FRAME'
   | 'TRINKET_REQUISITION'
@@ -41,9 +41,8 @@ export const CLASS_RANK_REWARD_TABLE: readonly ClassRankRewardHooks[] = [
   },
   {
     rank: 3,
-    label: 'Basic graft license',
-    kind: 'GRAFT_LICENSE',
-    graftHooks: ['hook.graft.basic'],
+    label: 'Reserved class milestone I',
+    kind: 'RESERVED_MILESTONE',
   },
   {
     rank: 4,
@@ -65,9 +64,8 @@ export const CLASS_RANK_REWARD_TABLE: readonly ClassRankRewardHooks[] = [
   },
   {
     rank: 7,
-    label: 'Advanced graft license',
-    kind: 'GRAFT_LICENSE',
-    graftHooks: ['hook.graft.advanced'],
+    label: 'Reserved class milestone II',
+    kind: 'RESERVED_MILESTONE',
   },
   {
     rank: 8,
@@ -87,30 +85,26 @@ export const CLASS_RANK_REWARD_TABLE: readonly ClassRankRewardHooks[] = [
     kind: 'ALTERNATE_ULTIMATE',
     flagHooks: ['hook.class.alternate_ultimate'],
   },
-  // Ranks 11–20: graft-capacity axis extension. Non-graft rewards deferred (report gaps).
+  // Ranks 11–20: reserved progression milestones; rewards deferred.
   {
     rank: 12,
-    label: 'Third graft capacity',
-    kind: 'GRAFT_LICENSE',
-    graftHooks: ['hook.graft.capacity_3'],
+    label: 'Reserved class milestone III',
+    kind: 'RESERVED_MILESTONE',
   },
   {
     rank: 15,
-    label: 'Ultimate graft socket',
-    kind: 'GRAFT_LICENSE',
-    graftHooks: ['hook.graft.ultimate'],
+    label: 'Reserved class milestone IV',
+    kind: 'RESERVED_MILESTONE',
   },
   {
     rank: 17,
-    label: 'Fourth graft capacity',
-    kind: 'GRAFT_LICENSE',
-    graftHooks: ['hook.graft.capacity_4'],
+    label: 'Reserved class milestone V',
+    kind: 'RESERVED_MILESTONE',
   },
   {
     rank: 20,
-    label: 'Apex / Masterwork graft access',
-    kind: 'GRAFT_LICENSE',
-    graftHooks: ['hook.graft.apex_masterwork'],
+    label: 'Reserved class milestone VI',
+    kind: 'RESERVED_MILESTONE',
   },
 ];
 

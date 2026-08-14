@@ -42,7 +42,9 @@ export function getEnemyAccuracyPenalty(
 ): number {
   const blindedTurns = extras.enemyStatusTurns[unit.unitId ?? '']?.BLINDED ?? 0;
   if (blindedTurns > 0 || hasCombatTag(unit, 'BLINDED')) {
-    return 0.3;
+    return unit.blindedAccuracyPenaltyPct != null
+      ? unit.blindedAccuracyPenaltyPct / 100
+      : 0.3;
   }
   return 0;
 }

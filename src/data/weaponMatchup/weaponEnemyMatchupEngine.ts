@@ -71,7 +71,7 @@ function classifyWeaponEnemy(
                 qualifiers.push('TARGET_DEPENDENT');
         qualifiers.push('DEFENSE_LAYER_PRESSURE');
         mechanicalReason = 'Single-target melee lacks crowd/backline reach.';
-        accessibleCompensation = 'Phase 3H flex pierce/control abilities; Rank-3 Neutron graft';
+        accessibleCompensation = 'Flex pierce/control abilities; a matching Action Name+ upgrade';
         compensationSource = 'MIXED';
       } else if (isDurableArmor && armor.kinetic >= 10) {
         classification = 'EVEN';
@@ -143,7 +143,7 @@ function classifyWeaponEnemy(
                 qualifiers.push('DEFENSE_LAYER_PRESSURE');
         qualifiers.push('AMMO_DEPENDENT');
         mechanicalReason = 'Limited innate armor pressure vs heavy Kinetic stacks.';
-        accessibleCompensation = 'Pierce ammo/grafts; Ghost-Beam style transforms — Nullbreach remains specialist';
+        accessibleCompensation = 'Pierce ammo and matching Action Name+ upgrades — Nullbreach remains specialist';
       } else {
         classification = 'EVEN';
         mechanicalReason = 'Reload / Perfect Reload / Protocol loop handles varied mid threats.';

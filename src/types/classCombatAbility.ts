@@ -68,8 +68,12 @@ export type OperativeLoadout = readonly [string, string, string, string];
 export interface ClassCombatEncounterState {
   riftSnareUnits: Record<string, number>;
   panopticonActive: boolean;
+  /** Snapshotted direct-damage overlay percent for the delayed interrupt packet. */
+  panopticonDamagePercent: number;
   astralLockUnitId: string | null;
   soulTetherUnitId: string | null;
+  /** Source-scoped Soul Tether reflection percentage (canonical 50). */
+  soulTetherReflectPercent: number;
   ghostCamoTurnsRemaining: number;
   enemyApDrainNextTurn: Record<string, number>;
   entropyHexTurns: Record<string, number>;
@@ -83,7 +87,11 @@ export interface ClassCombatEncounterState {
    * H.3b — Cinderline Saturation positional hazards keyed by CombatGridSlotId.
    * roundsRemaining counts enemy phases remaining; ticks deal Occult at unit turn start.
    */
-  cinderlineHazards: Partial<Record<CombatGridSlotId, { roundsRemaining: number }>>;
+  cinderlineHazards: Partial<Record<CombatGridSlotId, {
+    roundsRemaining: number;
+    /** Snapshotted authored tick packet (canonical 5). */
+    tickDamage?: number;
+  }>>;
   /** Unit IDs already ticked by Cinderline this enemy phase (max one tick / unit / round). */
   cinderlineTickedUnitIdsThisEnemyPhase: Record<string, boolean>;
   /** H.3b — Blacksite Triage once-per-encounter charge. */
@@ -156,8 +164,10 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
   return {
     riftSnareUnits: {},
     panopticonActive: false,
+    panopticonDamagePercent: 100,
     astralLockUnitId: null,
     soulTetherUnitId: null,
+    soulTetherReflectPercent: 50,
     ghostCamoTurnsRemaining: 0,
     enemyApDrainNextTurn: {},
     entropyHexTurns: {},

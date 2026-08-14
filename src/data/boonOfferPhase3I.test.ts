@@ -110,7 +110,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
   assert.equal(evaluateHardEligibility('FAKE_ABILITY_GATED', withRuin, entry as never).eligible, true);
 }
 
-// --- Graft tag layers change eligibility ---
+// --- Universal grafts do not strip native tags (Stage V-B) ---
 {
   const base = buildLoadoutTagLayers({
     classId: 'AEGIS',
@@ -126,8 +126,8 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
     basicActionRuntimeTags: ['MELEE', 'KINETIC', 'FRACTURE', 'HEAVY'],
     graft: { removeTags: ['FRACTURE'] },
   });
-  assert.ok(removed.graftRemovedTags.includes('FRACTURE'));
-  assert.ok(!removed.finalTransformedTags.includes('FRACTURE'));
+  assert.deepEqual(removed.graftRemovedTags, []);
+  assert.ok(removed.finalTransformedTags.includes('FRACTURE'));
 
   const added = buildLoadoutTagLayers({
     classId: 'HEX_SHOT',
@@ -135,7 +135,7 @@ function sampleSlots(weaponId: (typeof ALL_WEAPON_FAMILY_IDS)[number], kind: 0 |
     equippedAbilityIds: ['SILVER_CORE_SIDEARM', 'REVENANTS_ECHO', 'RIFT_SNARE', 'ASTRAL_TARGET_LOCK'],
     graft: { addTag: 'ARMOR_PIERCE' },
   });
-  assert.ok(added.finalTransformedTags.includes('ARMOR_PIERCE'));
+  assert.equal(added.graftAddedTags.includes('ARMOR_PIERCE'), false);
   assert.ok(added.finalTransformedTags.includes('VOID_AMMO'));
 }
 

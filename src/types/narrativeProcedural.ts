@@ -103,4 +103,10 @@ export interface RunStatusEffect {
   source: 'NARRATIVE' | 'BOON' | 'HAZARD' | 'ENVIRONMENT';
   expiresAtNodesCleared?: number;
   expiresAtSafehouse?: boolean;
+  /** Explicit Sanctuary cleanse contract; omitted effects are never inferred removable. */
+  sanctuaryAilment?: {
+    severity: 'MINOR' | 'ORDINARY' | 'MAJOR';
+    priority: number;
+    removable: boolean;
+  };
 }

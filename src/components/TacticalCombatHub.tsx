@@ -93,22 +93,18 @@ import type { AegisControlInterruptReason } from '../data/aegisDoomfallInterrupt
 import { isAegisTechniqueId } from '../data/aegisTechniqueCatalog';
 import { getAbilityDefinition } from '../data/aegisAbilities';
 import { buildGraftCastPlan, canAffordGraftResources, scaleGraftDamage } from '../data/veilGraftEngine';
-import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
+import {
+  getUniversalGraftDefinition,
+  readUniversalUpgradeValue,
+  upgradeDamagePacketValue,
+} from '../data/universalGraftRegistry';
 import type { GraftCastPlan } from '../types/veilGraft';
 import { resolveAegisAbilityGraftId } from '../data/aegisGraftTarget';
 import {
   buildWeaponActionGraftCastPlan,
 } from '../data/aegisWeaponActionGraftEngine';
 import {
-  applyApexBossPacketScale,
   applyMasochistsJoyAmplification,
-  canActivateSanguineThisTurn,
-  clearNeutronOnceLedger,
-  clearSanguineTurnGuard,
-  createNeutronOnceLedger,
-  createSanguineTurnGuard,
-  markSanguineActivatedThisTurn,
-  restoreSanguineTurnAvailability,
 } from '../data/aegisGraftPhaseE1e1Engine';
 import {
   absorbHitAbsorbProtection,
@@ -120,15 +116,6 @@ import {
   writeHitAbsorbProtectionToBoonEncounter,
   type HitAbsorbProtectionSource,
 } from '../data/hitAbsorbProtectionEngine';
-import {
-  APEX_TRIGGER_AP_REFUND_CAP_PER_ENCOUNTER,
-  accrueGraftSalvageCredits,
-  canRefundApexTriggerAp,
-  canRefundGridHackerAp,
-  createDefaultGraftEncounterSafetyState,
-  recordApexTriggerApRefund,
-  recordGridHackerApRefund,
-} from '../data/graftSynergy/graftEncounterSafety';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { stripKineticArmor, stripOccultWards } from '../data/combatDefenseLayerEngine';
 import { DEFENSE_TELEGRAPH_PROFILES } from '../data/combatArenaDefenseTelegraphEngine';
@@ -803,6 +790,8 @@ import type { CombatPlayerViewportRef } from './combat/CombatPlayerViewport';
 import type { CombatOperativeTelemetry } from './combat/CombatOperativeHud';
 import CombatCommandDeck from './CombatCommandDeck';
 import CombatHostileTurnPanel from './combat/CombatHostileTurnPanel';
+import CounterfateHudStrip from './combat/CounterfateHudStrip';
+import RitualCadenceHudStrip from './combat/RitualCadenceHudStrip';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from './combat/ParrySuccessBurstOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
@@ -876,6 +865,9 @@ import {
   type ParryArenaLayout,
 } from '../utils/parryCollision';
 import { useRun } from '../context/RunContext';
+import { createNineStrainCombatBridge } from '../data/nineStrain/combatBridge';
+import { hostileSnapshotInput } from '../data/nineStrain/hostileField';
+import { normalizeWeaponFamilyId } from '../data/weaponFamilyIdNormalize';
 import { tryNormalizeRunItemId } from '../data/runItemIdAliases';
 import { hasSupplyInstance } from '../data/cargoSupplyEngine';
 import { getRunItemDefinition } from '../data/runItemRegistry';
@@ -1025,7 +1017,7 @@ interface TacticalCombatHubProps {
   abilityGrafts?: import('../types/veilGraft').AbilityGraftMap;
   hexShotAbilityGrafts?: HexShotAbilityGraftMap;
   envoyAbilityGrafts?: EnvoyAbilityGraftMap;
-  /** Apex Graft — disables ultimate abilities for this encounter. */
+  /** Encounter-scoped override that disables ultimate abilities. */
   encounterUltimateDisabled?: boolean;
   /** Graft kill loot — e.g. Scavenger Bolt credits. */
   onGraftLootDrop?: (kind: string) => void;
@@ -1119,7 +1111,6 @@ export default function TacticalCombatHub({
   hexShotAbilityGrafts = {},
   envoyAbilityGrafts = {},
   encounterUltimateDisabled = false,
-  onGraftLootDrop,
   operativeClass = 'AEGIS',
   cargoHealReceivedMultiplier = 1,
   encounterModifier = null,
@@ -1129,6 +1120,7 @@ export default function TacticalCombatHub({
     notifyRunItemCombatStart,
     activeIncursion,
     peekActiveIncursion,
+    persistNineStrainRuntime,
     beginRequisitionCombatEncounter,
     resolveRequisitionFirstTurnAp,
     resolveRequisitionDirectHostileDamage,
@@ -1137,6 +1129,10 @@ export default function TacticalCombatHub({
   } = useRun();
   const activeIncursionRefLocal = useRef(activeIncursion);
   activeIncursionRefLocal.current = activeIncursion;
+  const nineStrainBridgeRef = useRef(createNineStrainCombatBridge({
+    initialState: activeIncursion.nineStrainRuntime,
+  }));
+  const [counterfateHudNonce, setCounterfateHudNonce] = useState(0);
   const runItemCombatFlagsRef = useRef({
     bloodwireActive: false,
     bloodwireSpent: false,
@@ -1358,7 +1354,6 @@ export default function TacticalCombatHub({
   const envoyCombatStateRef = useRef(envoyCombatState);
   const voidSiphonedEnteredRef = useRef(false);
   const sessionExtrasRef = useRef<CombatSessionExtras>(createDefaultCombatSessionExtras());
-  const graftEncounterSafetyRef = useRef(createDefaultGraftEncounterSafetyState());
   const [playerMaxAnchorDebt, setPlayerMaxAnchorDebt] = useState(0);
   const combatChanceRef = useRef<CombatChanceEncounterState>(createDefaultCombatChanceState());
   const [combatFeedback, setCombatFeedback] = useState<{
@@ -1594,10 +1589,6 @@ export default function TacticalCombatHub({
   const doomfallGraftPlanRef = useRef<GraftCastPlan | null>(null);
   /** Unmaker T3 — once-per-authored-action Fracture-break Reserve grant key. */
   const unmakerT3FractureBreakGrantedActionRef = useRef<string | null>(null);
-  /** E.1e.1 — Neutron reserve-add once per playerActionId. */
-  const neutronOnceLedgerRef = useRef(createNeutronOnceLedger());
-  /** E.1e.1 — Sanguine one successful activation per player turn. */
-  const sanguineTurnGuardRef = useRef(createSanguineTurnGuard());
   const graftCooldownsRef = useRef<Partial<Record<AegisAbilityId, number>>>({});
   const abilityGraftsRef = useRef(abilityGrafts);
   abilityGraftsRef.current = abilityGrafts;
@@ -1717,6 +1708,32 @@ export default function TacticalCombatHub({
       return;
     }
     terminalLogRef.current?.(t);
+  };
+  const syncNineStrainPlayerTurn = () => {
+    const jammed = hasStructuredDebuff(sessionExtrasRef.current, 'SENSORY_JAMMED');
+    const living = squadRef.current.filter((unit) => isUnitAlive(unit) && unit.unitId);
+    nineStrainBridgeRef.current.syncHostileIntents(
+      living.map((unit, index) => hostileSnapshotInput({
+        unitId: unit.unitId as string,
+        intentKind: String(unit.intent),
+        countdown: estimateTurnsRemaining(unit.intent, unit),
+        hostileTurnOrder: index,
+        slot: unit.gridSlot,
+        concealed: jammed,
+        hp: unit.currentHp,
+        maxHp: unit.maxHp,
+        severity: jammed ? 'MODERATE' : getIntentSeverity(unit.intent),
+        protectedPhase: unit.isBoss === true,
+        designation: unit.designation,
+      })),
+      jammed,
+    );
+    nineStrainBridgeRef.current.runPlayerTurnStart();
+    const presentation = nineStrainBridgeRef.current.presentation();
+    if (presentation.lastRelease && presentation.lastRelease.packet > 0) {
+      log(`>> COUNTERFATE RELEASE // ${Math.round(presentation.lastRelease.multiplier * 100)}% // ${presentation.lastRelease.packet}`);
+    }
+    setCounterfateHudNonce((value) => value + 1);
   };
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
@@ -1948,6 +1965,12 @@ export default function TacticalCombatHub({
     if (amount <= 0) return true;
     if (currentAmmoRef.current < amount) return false;
     setMagazineAmmo(currentAmmoRef.current - amount);
+    nineStrainBridgeRef.current.markCommitted();
+    nineStrainBridgeRef.current.noteCurrent({
+      classId: 'HEX_SHOT',
+      ammoSpent: true,
+      magazineEmptyOrFull: currentAmmoRef.current === 0,
+    });
     return true;
   };
 
@@ -2293,6 +2316,14 @@ export default function TacticalCombatHub({
       delta,
       masochisticChannel: envoyBoonModsRef.current.masochisticChannel,
     });
+    if (delta !== 0) {
+      nineStrainBridgeRef.current.noteCurrent({
+        classId: 'ENVOY',
+        ordinaryGain: delta > 0,
+        ordinarySpend: delta < 0,
+        brinkEntered: !prev.isVoidSiphoned && next.veilFlux > 0 && next.veilFlux <= 25 && prev.veilFlux > 25,
+      });
+    }
     if (!prev.isVoidSiphoned && next.isVoidSiphoned) {
       if (!voidSiphonedEnteredRef.current) {
         voidSiphonedEnteredRef.current = true;
@@ -2676,6 +2707,8 @@ export default function TacticalCombatHub({
             && u.unitId != null
             && classCombatRef.current.carbineSuppressedUnitId === u.unitId,
           isTargetable: targetable,
+          fateboundMark: nineStrainBridgeRef.current.presentation().fateboundUnitId === unitId,
+          fateboundObscured: nineStrainBridgeRef.current.presentation().concealed,
           isAoeAffected: targetMode === 'ALL' && targetable,
           abyssalVerdictTargetable: abyssalEligible === true,
           abyssalVerdictDimmed: abyssalTargeting && !abyssalEligible,
@@ -3175,6 +3208,11 @@ export default function TacticalCombatHub({
     const scaled = amt;
     if (scaled > 0) {
       runOnReserveGenerate(buildAegisBoonHookCtx(), scaled);
+      nineStrainBridgeRef.current.noteCurrent({
+        classId: 'AEGIS',
+        ordinaryGain: true,
+        reserveEntered50: abyssalRef.current < 50 && (abyssalRef.current + scaled) >= 50,
+      });
     }
     setAbyssalReserve((p) => {
       const n = Math.min(p + scaled, mutationModsRef.current.abyssalCap);
@@ -3252,16 +3290,6 @@ export default function TacticalCombatHub({
       chargeAr(amount);
     },
   });
-
-  const resolveAegisGraftDropLoot = (abilityId?: string | null): string | null => {
-    const active = activeGraftPlanRef.current?.dropLootOnKill;
-    if (active) return active;
-    const resolved = (abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
-    if (!resolved) return null;
-    const graftId = resolveAegisAbilityGraftId(abilityGraftsRef.current, resolved);
-    if (!graftId) return null;
-    return getVeilGraftDefinition(graftId).dropLootOnKill ?? null;
-  };
 
   const triggerSpallShatterBurst = (blockedDamage: number) => {
     if (blockedDamage <= 0 || !hasMutation(leyLineMutations, 'SPALL_SHATTER')) return;
@@ -3530,6 +3558,7 @@ export default function TacticalCombatHub({
       log('[CRITICAL] >> Operative soul anchor severed. Veil sync lost.');
       flash(P.defeat);
     }
+    persistNineStrainRuntime(nineStrainBridgeRef.current.serialize());
   };
 
   const syncObjectiveHud = () => {
@@ -4192,6 +4221,11 @@ export default function TacticalCombatHub({
       applyVeilFlux(15);
       runEnvoyRiftWardSuccessBoons(wardBoonCtx);
       log('[RIFT-WARD] >> Intrinsic ward flares — hit absorbed, pain mirrored.');
+      nineStrainBridgeRef.current.noteInstinct({
+        classId: 'ENVOY',
+        riftPreventedDamage: raw,
+        riftWouldReachHp: raw,
+      });
       return;
     }
     if (mutationEncounterRef.current.juggernautShieldHits > 0 && raw > 0) {
@@ -4487,7 +4521,8 @@ export default function TacticalCombatHub({
     if (dmg > 0 && classCombatRef.current.soulTetherUnitId) {
       const tetherId = classCombatRef.current.soulTetherUnitId;
       classCombatRef.current.soulTetherUnitId = null;
-      const mirror = Math.floor(dmg * 0.5);
+      const mirrorPct = classCombatRef.current.soulTetherReflectPercent ?? 50;
+      const mirror = Math.floor(dmg * (mirrorPct / 100));
       if (mirror > 0) {
         hurtEnemy(mirror, '[SOUL-TETHER]', 'STRIKE', {
           channel: 'TRUE',
@@ -4655,6 +4690,16 @@ export default function TacticalCombatHub({
     const e = targetId
       ? getUnitById(squadRef.current, targetId)
       : enemyRef.current;
+    if (
+      e
+      && options?.indirectDamage !== true
+      && options?.isDirectDamage !== false
+    ) {
+      nineStrainBridgeRef.current.recordNativeHit({
+        targetId: e.unitId ?? targetId ?? 'unknown',
+        damage: Math.max(0, raw),
+      });
+    }
     if (!e || !e.unitId) return false;
     const requisitionEncounter = activeIncursionRefLocal.current.activeCombatEncounter;
     const requisitionDirectActionEligible = Boolean(
@@ -5353,25 +5398,12 @@ export default function TacticalCombatHub({
       : activeClassGraftPlanRef.current;
     if (graftPlan && dmg > 0) {
       if (operativeClass === 'AEGIS') {
-        const neutronActionId = options?.playerActionId
-          ?? wardenPlayerActionIdRef.current
-          ?? null;
         dmg = scaleGraftDamage(
           dmg,
           graftPlan as GraftCastPlan,
           activeGraftReserveSpentRef.current,
           Boolean(working.isBoss),
-          {
-            ...(options?.graftDamagePreScaled ? { damageAlreadyScaled: true } : {}),
-            ...(neutronActionId
-              ? {
-                neutronOnce: {
-                  playerActionId: neutronActionId,
-                  ledger: neutronOnceLedgerRef.current,
-                },
-              }
-              : {}),
-          },
+          options?.graftDamagePreScaled ? { damageAlreadyScaled: true } : undefined,
         );
       }
       if (graftPlan.forceTrueDamage) {
@@ -5520,18 +5552,6 @@ export default function TacticalCombatHub({
         if (volatileBonus > 0) {
           dmg = Math.floor(dmg * (1 + volatileBonus));
           log('[VOLATILE MAGIC] >> AoE critical rupture amplified.');
-        }
-      }
-      const classGraftCrit = activeClassGraftPlanRef.current;
-      if (classGraftCrit?.refundApOnCrit && operativeClass !== 'AEGIS') {
-        const safety = graftEncounterSafetyRef.current;
-        if (canRefundApexTriggerAp(safety)) {
-          graftEncounterSafetyRef.current = recordApexTriggerApRefund(safety);
-          playerApRef.current += 1;
-          setPlayerActionPoints(playerApRef.current);
-          log(`>> [${classGraftCrit.graftName.toUpperCase()}] — critical hit refunds 1 AP (${graftEncounterSafetyRef.current.apexTriggerApRefunds}/${APEX_TRIGGER_AP_REFUND_CAP_PER_ENCOUNTER} encounter cap).`);
-        } else {
-          log(`>> [${classGraftCrit.graftName.toUpperCase()}] — AP refund blocked (encounter cap reached).`);
         }
       }
       const critChannel = options?.abilityId === 'VEIL_PIERCER'
@@ -5779,50 +5799,6 @@ export default function TacticalCombatHub({
     }
 
     if (hp <= 0 && e.unitId && source && options?.channel) {
-      const killGraft = operativeClass === 'AEGIS'
-        ? activeGraftPlanRef.current
-        : activeClassGraftPlanRef.current;
-      const dropLootKind = operativeClass === 'AEGIS'
-        ? resolveAegisGraftDropLoot(options?.abilityId)
-        : killGraft?.dropLootOnKill ?? null;
-      if (killGraft?.refundApOnKill && operativeClass === 'AEGIS') {
-        if (canRefundGridHackerAp(graftEncounterSafetyRef.current)) {
-          graftEncounterSafetyRef.current = recordGridHackerApRefund(graftEncounterSafetyRef.current);
-          const refund = activeGraftApCostRef.current + 1;
-          playerApRef.current += refund;
-          setPlayerActionPoints(playerApRef.current);
-          log(`>> [${killGraft.graftName.toUpperCase()}] — kill confirmed, AP refunded (+${refund}).`);
-        } else {
-          log(`>> [${killGraft.graftName.toUpperCase()}] — Grid-Hacker refund already spent this encounter.`);
-        }
-      }
-      if (dropLootKind) {
-        if (dropLootKind === 'CREDITS') {
-          const { next, granted } = accrueGraftSalvageCredits(graftEncounterSafetyRef.current);
-          graftEncounterSafetyRef.current = next;
-          if (granted > 0) {
-            onGraftLootDrop?.(`CREDITS:${granted}`);
-            const resolvedAbility = (options?.abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
-            const fallbackGraftId = resolvedAbility
-              ? resolveAegisAbilityGraftId(abilityGraftsRef.current, resolvedAbility)
-              : undefined;
-            const graftLabel = killGraft?.graftName
-              ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
-            log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${granted} credits (salvage cap).`);
-          } else {
-            log('>> GRAFT SALVAGE — credit cap reached for this encounter.');
-          }
-        } else {
-          onGraftLootDrop?.(dropLootKind);
-          const resolvedAbility = (options?.abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
-          const fallbackGraftId = resolvedAbility
-            ? resolveAegisAbilityGraftId(abilityGraftsRef.current, resolvedAbility)
-            : undefined;
-          const graftLabel = killGraft?.graftName
-            ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
-          log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${dropLootKind.toLowerCase()}.`);
-        }
-      }
       const abilityTags = options?.abilityTags?.length
         ? options.abilityTags
         : resolveOperativeAbilityTags(options?.abilityId ?? lastPlayerAbilityRef.current);
@@ -6788,6 +6764,9 @@ export default function TacticalCombatHub({
     const next = playerApRef.current - cost;
     playerApRef.current = next;
     setPlayerActionPoints(next);
+    nineStrainBridgeRef.current.markCommitted({
+      actualCostsPaid: { ap: cost },
+    });
     return true;
   };
 
@@ -7687,6 +7666,7 @@ export default function TacticalCombatHub({
       classBoonEncounterRef.current.voidsBargainFirstStrike = true;
     }
     setIsPlayerTurn(true);
+    syncNineStrainPlayerTurn();
     if (!skipRegenRef.current) {
       applyStamina(staminaRef.current + COMBAT_ACTION.STAMINA_REGEN);
     } else if (staminaRef.current === 0) {
@@ -7883,7 +7863,11 @@ export default function TacticalCombatHub({
       });
       interrupted = addCombatTag(interrupted, 'CONCUSSED');
       patchUnit(enemyId, interrupted);
-      const panopticonDmg = overwatchMastery ? 16 : 8;
+      const panopticonDmg = upgradeDamagePacketValue(
+        overwatchMastery ? 16 : 8,
+        100,
+        classCombatRef.current.panopticonDamagePercent ?? 100,
+      );
       hurtEnemy(panopticonDmg, '[PANOPTICON]', 'STRIKE', {
         channel: 'KINETIC',
         targetId: enemyId,
@@ -8595,14 +8579,12 @@ export default function TacticalCombatHub({
       activeCombatEncounter: requisitionEncounter,
     };
     weaponRuntimeRef.current = createDefaultWeaponRuntime();
+    nineStrainBridgeRef.current.hydrate(peekActiveIncursion().nineStrainRuntime);
     aegisWeaponCombatRef.current = createDefaultAegisWeaponCombatState();
     doomfallGraftPlanRef.current = null;
     aegisControlPipelineRef.current = createAegisControlPipelineSession();
     clearAegisDualTargets();
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
-    graftEncounterSafetyRef.current = createDefaultGraftEncounterSafetyState();
-    clearNeutronOnceLedger(neutronOnceLedgerRef.current);
-    clearSanguineTurnGuard(sanguineTurnGuardRef.current);
     initPlayerMaxHpDebtTracking(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
     setPlayerMaxAnchorDebt(0);
     requisitionBatteryConsumedEncounterIdsRef.current = new Set();
@@ -8714,6 +8696,7 @@ export default function TacticalCombatHub({
     setSelectedAbility(null);
     setResolutionOutcome(null);
     setIsPlayerTurn(true);
+    syncNineStrainPlayerTurn();
     // Combat opens on the operative's first turn without calling startPlayerTurn.
     balanceEncounterRef.current.playerTurns = 1;
     setCycleState('TEXT_COMBAT');
@@ -9099,16 +9082,6 @@ export default function TacticalCombatHub({
     return true;
   };
 
-  const applyClassGraftLootDrop = (kind: string) => {
-    if (kind === 'CREDITS') {
-      const { next, granted } = accrueGraftSalvageCredits(graftEncounterSafetyRef.current);
-      graftEncounterSafetyRef.current = next;
-      if (granted > 0) onGraftLootDrop?.(`CREDITS:${granted}`);
-      return;
-    }
-    onGraftLootDrop?.(kind);
-  };
-
   const finalizeHexShotAbilityResult = (
     result: import('../data/hexShotAbilityExecutor').HexShotExecutionResult,
     graftPlan: ClassGraftCastPlan,
@@ -9132,7 +9105,7 @@ export default function TacticalCombatHub({
             playerApRef.current += 1;
             setPlayerActionPoints(playerApRef.current);
           },
-          dropLoot: applyClassGraftLootDrop,
+          dropLoot: () => {},
         },
       );
     }
@@ -9195,7 +9168,7 @@ export default function TacticalCombatHub({
     const ultimateSealed = encounterUltimateDisabled
       || isClassUltimateDisabledForEncounter('HEX_SHOT', hexShotAbilityGraftsRef.current, {}, false);
     if (ultimateSealed && cost.isUltimate) {
-      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      log('[REJECTED] >> Ultimate channel unavailable for this encounter.');
       activeClassGraftPlanRef.current = null;
       return;
     }
@@ -9240,6 +9213,7 @@ export default function TacticalCombatHub({
         maxAmmo,
         maxSoulAnchor,
         classState: classCombatRef.current,
+        graftPlan,
         effectiveTags: graftPlan.effectiveTags,
         resolvedWeapon,
         onMagazineEmptied: () => {
@@ -9315,7 +9289,7 @@ export default function TacticalCombatHub({
     const ultimateSealed = encounterUltimateDisabled
       || isClassUltimateDisabledForEncounter('ENVOY', {}, envoyAbilityGraftsRef.current, false);
     if (ultimateSealed && cost.isUltimate) {
-      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      log('[REJECTED] >> Ultimate channel unavailable for this encounter.');
       activeClassGraftPlanRef.current = null;
       return;
     }
@@ -9374,6 +9348,7 @@ export default function TacticalCombatHub({
         veilFlux: veilFluxRef.current,
         maxSoulAnchor,
         classState: classCombatRef.current,
+        graftPlan,
         log,
         apCostOverride: graftPlan.apCost,
         fluxRegenOverride: graftPlan.fluxRegen,
@@ -9516,7 +9491,7 @@ export default function TacticalCombatHub({
               playerApRef.current += 1;
               setPlayerActionPoints(playerApRef.current);
             },
-            dropLoot: applyClassGraftLootDrop,
+            dropLoot: () => {},
           },
         );
       }
@@ -9550,7 +9525,6 @@ export default function TacticalCombatHub({
     ripostePrimaryTargetIdRef.current = null;
     riposteCashedActionIdRef.current = null;
     unmakerT3FractureBreakGrantedActionRef.current = null;
-    clearNeutronOnceLedger(neutronOnceLedgerRef.current);
 
     const ws = aegisWeaponCombatRef.current;
     const releaseAvailable = ws.doomfallReleaseAvailable;
@@ -9620,7 +9594,6 @@ export default function TacticalCombatHub({
     let reservedBrand = 0;
     let reservedReserve = 0;
     let reservedHp = 0;
-    let sanguineMarkedThisCommit = false;
     if (graftPlan?.graftName && !isDoomfallRelease) {
       const graftAfford = canAffordGraftResources(
         graftPlan,
@@ -9630,14 +9603,6 @@ export default function TacticalCombatHub({
       if (!graftAfford.ok) {
         log(`[REJECTED] >> Graft ${graftAfford.reason}.`);
         return;
-      }
-      if (graftId === 'SANGUINE_GRAFT') {
-        const turn = Math.max(1, balanceEncounterRef.current.playerTurns);
-        const sanguineGate = canActivateSanguineThisTurn(sanguineTurnGuardRef.current, turn);
-        if (!sanguineGate.ok) {
-          log(`[REJECTED] >> Sanguine Graft ${sanguineGate.reason}.`);
-          return;
-        }
       }
       if (graftPlan.hpCostPct > 0) {
         const hpCost = Math.ceil(maxSoulAnchor * (graftPlan.hpCostPct / 100));
@@ -9694,20 +9659,6 @@ export default function TacticalCombatHub({
         });
         log(`>> [${graftPlan.graftName.toUpperCase()}] — ${reservedHp} HP tithe on cast.`);
       }
-      if (graftPlan.grantShieldHits > 0) {
-        const { applied, next } = armHitAbsorbOnEncounter('MARTYR_GRAFT', graftPlan.grantShieldHits);
-        if (applied) {
-          log(formatHitAbsorbProtectionArmedLog('MARTYR_GRAFT', next.hitsRemaining));
-        }
-      }
-      // Mark only after the full graft commitment succeeds (cancel/fail before this do not consume).
-      if (graftId === 'SANGUINE_GRAFT') {
-        markSanguineActivatedThisTurn(
-          sanguineTurnGuardRef.current,
-          Math.max(1, balanceEncounterRef.current.playerTurns),
-        );
-        sanguineMarkedThisCommit = true;
-      }
     } else if (!graftPlan?.graftName) {
       // Ungrafted path — executor spends catalog AP.
       graftPlan = null;
@@ -9759,17 +9710,7 @@ export default function TacticalCombatHub({
           ) {
             ripostePrimaryTargetIdRef.current = args.targetId;
           }
-          // E.1e.1 — Apex boss ×2 once at WA delivery; pre-scaled path must not reapply.
-          let deliveryDamage = args.damage;
-          if (graftPlan && graftPlan.bossDamageMultiplier > 1 && deliveryDamage > 0) {
-            const apexTarget = getUnitById(squadRef.current, args.targetId);
-            deliveryDamage = applyApexBossPacketScale(
-              deliveryDamage,
-              graftPlan.bossDamageMultiplier,
-              Boolean(apexTarget?.isBoss),
-            );
-          }
-          const eradicated = hurtEnemy(deliveryDamage, args.tag, 'STRIKE', {
+          const eradicated = hurtEnemy(args.damage, args.tag, 'STRIKE', {
             channel: args.channel,
             fractureGain: args.fractureGain,
             abilityId: args.abilityId,
@@ -9780,7 +9721,6 @@ export default function TacticalCombatHub({
             accuracyBonusPct: args.accuracyBonusPct,
             echoHit: args.echoHit,
             // Transformed WA plan owns damageMultiplier; hub must not square it.
-            // Apex already applied above when eligible.
             graftDamagePreScaled: true,
           });
           if (args.consumeFractured && args.targetId && !args.echoHit) {
@@ -9834,13 +9774,9 @@ export default function TacticalCombatHub({
             return n;
           });
         }
-        if (sanguineMarkedThisCommit) {
-          restoreSanguineTurnAvailability(sanguineTurnGuardRef.current);
-        }
       }
       activeGraftPlanRef.current = null;
       activeGraftReserveSpentRef.current = 0;
-      clearNeutronOnceLedger(neutronOnceLedgerRef.current);
       return;
     }
 
@@ -9858,7 +9794,6 @@ export default function TacticalCombatHub({
     setSelectedAbility(null);
     activeGraftPlanRef.current = null;
     activeGraftReserveSpentRef.current = 0;
-    clearNeutronOnceLedger(neutronOnceLedgerRef.current);
     publishSquadUi(squadRef.current);
   };
 
@@ -10091,6 +10026,7 @@ export default function TacticalCombatHub({
         maxHp: maxSoulAnchor,
         operativeHp: operativeHpRef.current,
         classState: classCombatRef.current,
+        graftPlan,
         log,
         resolvedWeapon,
         weaponRuntime: weaponRuntimeRef.current,
@@ -10205,27 +10141,37 @@ export default function TacticalCombatHub({
   };
 
   const executeOperativeAbility = (abilityId: string) => {
-    if (operativeClass === 'HEX_SHOT') {
-      if (isDefinedHexWeaponActionId(abilityId)) {
-        executeHexWeaponActionClassAbility(abilityId);
+    const familyId = normalizeWeaponFamilyId(activeWeaponFamilyId) ?? 'aegis-longsword';
+    nineStrainBridgeRef.current.beginRootAttempt({
+      actionId: abilityId,
+      classId: operativeClass,
+      weaponFamilyId: familyId,
+    });
+    try {
+      if (operativeClass === 'HEX_SHOT') {
+        if (isDefinedHexWeaponActionId(abilityId)) {
+          executeHexWeaponActionClassAbility(abilityId);
+          return;
+        }
+        executeHexShotClassAbility(abilityId as HexShotAbilityId);
         return;
       }
-      executeHexShotClassAbility(abilityId as HexShotAbilityId);
-      return;
-    }
-    if (operativeClass === 'ENVOY') {
-      if (isEnvoyWeaponActionId(abilityId)) {
-        executeEnvoyWeaponActionClassAbility(abilityId);
+      if (operativeClass === 'ENVOY') {
+        if (isEnvoyWeaponActionId(abilityId)) {
+          executeEnvoyWeaponActionClassAbility(abilityId);
+          return;
+        }
+        executeEnvoyClassAbility(abilityId as EnvoyAbilityId);
         return;
       }
-      executeEnvoyClassAbility(abilityId as EnvoyAbilityId);
-      return;
+      if (isAegisWeaponActionCatalogId(abilityId)) {
+        executeAegisWeaponAction(abilityId);
+        return;
+      }
+      executeAbility(abilityId as AegisAbilityId);
+    } finally {
+      nineStrainBridgeRef.current.finishRootAttempt();
     }
-    if (isAegisWeaponActionCatalogId(abilityId)) {
-      executeAegisWeaponAction(abilityId);
-      return;
-    }
-    executeAbility(abilityId as AegisAbilityId);
   };
   executeOperativeAbilityRef.current = executeOperativeAbility;
 
@@ -10247,7 +10193,7 @@ export default function TacticalCombatHub({
       encounterUltimateDisabled
       && getAbilityTags(execAbilityId).includes('ULTIMATE')
     ) {
-      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      log('[REJECTED] >> Ultimate channel unavailable for this encounter.');
       return;
     }
     if (
@@ -10281,16 +10227,6 @@ export default function TacticalCombatHub({
       activeGraftPlanRef.current = null;
       return;
     }
-    if (graftId === 'SANGUINE_GRAFT') {
-      const turn = Math.max(1, balanceEncounterRef.current.playerTurns);
-      const sanguineGate = canActivateSanguineThisTurn(sanguineTurnGuardRef.current, turn);
-      if (!sanguineGate.ok) {
-        log(`[REJECTED] >> Sanguine Graft ${sanguineGate.reason}.`);
-        activeGraftPlanRef.current = null;
-        return;
-      }
-    }
-    clearNeutronOnceLedger(neutronOnceLedgerRef.current);
 
     let apCost = graftPlan.apCost;
     if (
@@ -10319,7 +10255,11 @@ export default function TacticalCombatHub({
         target: target ?? null,
         demonLungCooldown: combatBuffRef.current.demonLungCooldown,
         hpCostPctOverride: execAbilityId === 'CRIMSON_PACT'
-          ? mutationModsRef.current.crimsonPactHpCostPct
+          ? readUniversalUpgradeValue(
+            graftPlan,
+            'HP_COST_PERCENT',
+            mutationModsRef.current.crimsonPactHpCostPct ?? def.hpCostPct ?? 12,
+          )
           : undefined,
       });
       if (!earlyValidate.ok) {
@@ -10344,8 +10284,6 @@ export default function TacticalCombatHub({
       activeGraftPlanRef.current = null;
       return;
     }
-    let sanguineMarkedThisCommit = false;
-
     if (graftPlan.hpCostPct > (def.hpCostPct ?? 0)) {
       const extraHpPct = graftPlan.hpCostPct - (def.hpCostPct ?? 0);
       const hpCost = Math.ceil(maxSoulAnchor * (extraHpPct / 100));
@@ -10396,27 +10334,12 @@ export default function TacticalCombatHub({
       log(`>> [${graftPlan.graftName.toUpperCase()}] — ${graftPlan.reservePenalty}% Reserve taxed.`);
     }
 
-    if (graftPlan.grantShieldHits > 0) {
-      const { applied, next } = armHitAbsorbOnEncounter('MARTYR_GRAFT', graftPlan.grantShieldHits);
-      if (applied) {
-        log(formatHitAbsorbProtectionArmedLog('MARTYR_GRAFT', next.hitsRemaining));
-      }
-    }
     if (graftPlan.evadeBuffPct > 0) {
       combatChanceRef.current.shadowStepEvadeActive = true;
       log(`>> [${graftPlan.graftName.toUpperCase()}] — +${graftPlan.evadeBuffPct}% evade until next turn.`);
     }
     if (graftPlan.cooldownTurns > 0) {
       graftCooldownsRef.current[abilityId] = graftPlan.cooldownTurns;
-    }
-
-    // Mark only after graft commitment succeeds (AP/HP/Brand/Reserve).
-    if (graftId === 'SANGUINE_GRAFT') {
-      markSanguineActivatedThisTurn(
-        sanguineTurnGuardRef.current,
-        Math.max(1, balanceEncounterRef.current.playerTurns),
-      );
-      sanguineMarkedThisCommit = true;
     }
 
     const squadBeforeAbility = squadRef.current.map((unit) => ({ ...unit, currentHp: unit.currentHp }));
@@ -10436,10 +10359,6 @@ export default function TacticalCombatHub({
           operativeHpRef.current = snapshot.hpBefore;
           return snapshot.hpBefore;
         });
-      }
-      if (sanguineMarkedThisCommit) {
-        restoreSanguineTurnAvailability(sanguineTurnGuardRef.current);
-        sanguineMarkedThisCommit = false;
       }
     };
 
@@ -10533,7 +10452,11 @@ export default function TacticalCombatHub({
           ? getUnitById(squadRef.current, selectedTargetIdRef.current)
           : null;
         const hpCostOverride = execAbilityId === 'CRIMSON_PACT'
-          ? mutationModsRef.current.crimsonPactHpCostPct
+          ? readUniversalUpgradeValue(
+            graftPlan,
+            'HP_COST_PERCENT',
+            mutationModsRef.current.crimsonPactHpCostPct ?? def.hpCostPct ?? 12,
+          )
           : undefined;
         // AP already spent above — validate remaining Brand/HP/target gates against pre-AP brand pool.
         // Brands/HP commit happens here as one transaction with the already-spent AP.
@@ -10604,6 +10527,7 @@ export default function TacticalCombatHub({
           committedBrandsSpent: committed.snapshot.brandsSpent,
           costsCommitted: true,
           buffState: combatBuffRef.current,
+          graftPlan,
           log,
           spendStamina: (cost) => spendStam(cost),
           spendStaminaPct: (pct) => {
@@ -10681,8 +10605,11 @@ export default function TacticalCombatHub({
           setVeilTarTurns: (turns) => {
             mutationEncounterRef.current.veilTarTurnsRemaining = turns;
           },
-          activateRuneboundCarapace: () => {
-            runeboundCarapaceRef.current = armRuneboundCarapace(runeboundCarapaceRef.current);
+          activateRuneboundCarapace: (reflectDamage) => {
+            runeboundCarapaceRef.current = armRuneboundCarapace(
+              runeboundCarapaceRef.current,
+              reflectDamage,
+            );
             markPlayerDefendedRef.current();
           },
           applyReaveBleed: (unitId, turns) => {
@@ -10758,7 +10685,6 @@ export default function TacticalCombatHub({
 
     activeGraftPlanRef.current = null;
     activeGraftReserveSpentRef.current = 0;
-    clearNeutronOnceLedger(neutronOnceLedgerRef.current);
   };
 
   const onInitiativeProcComplete = useCallback(() => {
@@ -10841,7 +10767,7 @@ export default function TacticalCombatHub({
   const onUltimatePing = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (encounterUltimateDisabled) {
-      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      log('[REJECTED] >> Ultimate channel unavailable for this encounter.');
       return;
     }
     const activationToken = createUltimateActivationToken();
@@ -10941,6 +10867,7 @@ export default function TacticalCombatHub({
   };
 
   const cancelWeaponUltimateInteraction = () => {
+    nineStrainBridgeRef.current.noteEvent('ULTIMATE_CANCELED', { familyId: activeWeaponFamilyId ?? 'none' });
     // Free cancel — never spends Protocol / Rot / Abyssal Reserve.
     if (abyssalVerdictPrimedRef.current) {
       setAbyssalVerdictPrimed(false);
@@ -11182,6 +11109,7 @@ export default function TacticalCombatHub({
       });
       const ammoType = hexShotStateRef.current.currentAmmoType;
       dispatchHexShot({ type: 'HEX_ULTIMATE_OWNED_MAGAZINE_REFILL' });
+      nineStrainBridgeRef.current.markUltimateOwnedRefill();
       log(`>> ${tag} >> Cylinder sealed — ultimate-owned ${plan.reloadQuality.toLowerCase()} refill (${ammoType}).`);
       const shotDamage = Math.max(
         4,
@@ -11574,7 +11502,7 @@ export default function TacticalCombatHub({
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (encounterUltimateDisabled) {
-      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      log('[REJECTED] >> Ultimate channel unavailable for this encounter.');
       return;
     }
     if (!canFireLegacyClassUltimate('EVISCERATE', activeWeaponFamilyId)) {
@@ -11715,6 +11643,16 @@ export default function TacticalCombatHub({
       encounter: classCombatRef.current,
       squad: squadRef.current,
       deadMansSwitchBlocksOvercharge: deadMansBlocksOvercharge,
+    });
+    nineStrainBridgeRef.current.noteInstinct({
+      classId: 'HEX_SHOT',
+      reloadQuality: quality === 'PERFECT' ? 'PERFECT' : quality === 'CLEAN' ? 'CLEAN' : 'FAILED',
+    });
+    nineStrainBridgeRef.current.noteCurrent({
+      classId: 'HEX_SHOT',
+      reloadRestoredRounds: true,
+      ammoCycleCompleted: true,
+      perfectReload: quality === 'PERFECT',
     });
     // W.4 — Deadbolt opportunity arms only after completed Phase-Shift Reload restores rounds.
     {
@@ -11922,6 +11860,11 @@ export default function TacticalCombatHub({
         classLoopTelemetryRef.current.damagePreventedByParry += pendingWeight;
         classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
         emitJuice('PERFECT_PARRY', { text: 'PERFECT PARRY — RIPOSTE READY' });
+        nineStrainBridgeRef.current.noteInstinct({
+          classId: 'AEGIS',
+          perfectParry: true,
+          parryAttempted: true,
+        });
         playCombatPresentationCue('sfx.aegis.parry');
         emitJuice('FRACTURE_APPLIED', { text: 'Fracture from Perfect Parry' });
         if (counter.cancelTelegraph) {
@@ -11960,6 +11903,10 @@ export default function TacticalCombatHub({
     }
     hideParryOverlay();
     runOnParryFail(buildAegisBoonHookCtx());
+    nineStrainBridgeRef.current.noteInstinct({
+      classId: 'AEGIS',
+      parryAttempted: true,
+    });
     const pending = preAppliedHpStrikeRef.current > 0
       ? preAppliedHpStrikeRef.current
       : pendingDmgRef.current;
@@ -12683,6 +12630,7 @@ export default function TacticalCombatHub({
         classCombatRef.current,
         effectiveGraftAmmoCost(graftPlan, currentAmmo),
         { current: operativeHpRef.current, max: getEffectiveMaxSoulAnchor() },
+        readUniversalUpgradeValue(graftPlan, 'STAMINA_COST', cost.staminaCost),
       );
     }
     if (operativeClass === 'ENVOY') {
@@ -12755,7 +12703,7 @@ export default function TacticalCombatHub({
           ? isClassUltimateDisabledForEncounter('ENVOY', {}, envoyAbilityGraftsRef.current, false)
           : false);
     if (ultimateSealed && cost.isUltimate) {
-      return 'Ultimate channel sealed by Apex Graft.';
+      return 'Ultimate channel unavailable for this encounter.';
     }
     if (operativeClass === 'HEX_SHOT') {
       const graftPlan = buildClassGraftCastPlan(
@@ -12836,7 +12784,11 @@ export default function TacticalCombatHub({
         ? getUnitById(squadRef.current, selectedTargetIdRef.current)
         : (enemyRef.current ?? null),
       hpCostPct: abilityId === 'CRIMSON_PACT'
-        ? mutationModsRef.current.crimsonPactHpCostPct
+        ? readUniversalUpgradeValue(
+          graftPlan,
+          'HP_COST_PERCENT',
+          mutationModsRef.current.crimsonPactHpCostPct ?? 12,
+        )
         : undefined,
     });
   };
@@ -12861,11 +12813,6 @@ export default function TacticalCombatHub({
       if (playerActionPoints < waAp) return false;
       if (waGraft?.graftName && !(abilityId === 'DOOMFALL' && ws.doomfallReleaseAvailable)) {
         if (!canAffordGraftResources(waGraft, abyssalReserve, runicBrands).ok) return false;
-        const waGraftId = resolveAegisAbilityGraftId(abilityGraftsRef.current, abilityId);
-        if (waGraftId === 'SANGUINE_GRAFT') {
-          const turn = Math.max(1, balanceEncounterRef.current.playerTurns);
-          if (!canActivateSanguineThisTurn(sanguineTurnGuardRef.current, turn).ok) return false;
-        }
       }
       if (abilityId === 'DOOMFALL') {
         if (ws.committed && !ws.doomfallReleaseAvailable) return false;
@@ -12902,13 +12849,6 @@ export default function TacticalCombatHub({
     if (playerActionPoints < graftPlan.apCost) return false;
     const graftAfford = canAffordGraftResources(graftPlan, abyssalReserve, runicBrands);
     if (!graftAfford.ok) return false;
-    {
-      const techGraftId = resolveAegisAbilityGraftId(abilityGraftsRef.current, abilityId);
-      if (techGraftId === 'SANGUINE_GRAFT') {
-        const turn = Math.max(1, balanceEncounterRef.current.playerTurns);
-        if (!canActivateSanguineThisTurn(sanguineTurnGuardRef.current, turn).ok) return false;
-      }
-    }
     const focusedTarget = selectedTargetIdRef.current
       ? getUnitById(squadRef.current, selectedTargetIdRef.current)
       : (enemyRef.current ?? null);
@@ -12942,7 +12882,11 @@ export default function TacticalCombatHub({
             ashenMantleFree: mutationModsRef.current.ashenMantleFree,
             target: focusedTarget,
             hpCostPct: abilityId === 'CRIMSON_PACT'
-              ? mutationModsRef.current.crimsonPactHpCostPct
+              ? readUniversalUpgradeValue(
+                graftPlan,
+                'HP_COST_PERCENT',
+                mutationModsRef.current.crimsonPactHpCostPct ?? 12,
+              )
               : undefined,
           },
         );
@@ -12955,25 +12899,53 @@ export default function TacticalCombatHub({
     if (operativeClass !== 'AEGIS') return undefined;
     const aegisId = abilityId as AegisAbilityId;
     const graftId = resolveAegisAbilityGraftId(abilityGraftsRef.current, abilityId);
-    if (graftId) return getVeilGraftDefinition(graftId).accentColor;
+    if (graftId) return getUniversalGraftDefinition(graftId)?.accentColor;
     if (aegisId === 'WRAITH_PARRY' && voidWardPrimed) return P.parry;
     if (aegisId === 'ASHEN_MANTLE' && combatBuffRef.current.ashenMantleTurnsRemaining > 0) return WARD_STRIKE_ACCENT;
     return undefined;
   };
 
   const getStagedCostImpact = (abilityId: string): string => {
-    return `COST: ${formatClassAbilityCostLine(operativeClass, abilityId)}`;
+    const canonical = resolveClassAbilityCost(operativeClass, abilityId);
+    const canonicalHpCostPct = operativeClass === 'AEGIS'
+      ? getAbilityDefinition(abilityId as AegisAbilityId).hpCostPct ?? 0
+      : 0;
+    const plan = operativeClass === 'AEGIS' && isAegisTechniqueId(abilityId)
+      ? buildGraftCastPlan(
+        abilityId,
+        resolveAegisAbilityGraftId(abilityGraftsRef.current, abilityId),
+      )
+      : operativeClass === 'HEX_SHOT' || operativeClass === 'ENVOY'
+        ? buildClassGraftCastPlan(
+          operativeClass,
+          abilityId,
+          operativeClass === 'HEX_SHOT'
+            ? resolveHexShotAbilityGraftId(
+              hexShotAbilityGraftsRef.current,
+              abilityId as HexShotAbilityId,
+            )
+            : envoyAbilityGraftsRef.current[abilityId as EnvoyAbilityId],
+        )
+        : null;
+    return `COST: ${formatClassAbilityCostLine(operativeClass, abilityId, {
+      staminaCost: readUniversalUpgradeValue(plan, 'STAMINA_COST', canonical.staminaCost),
+      fluxCost: readUniversalUpgradeValue(plan, 'FLUX_COST', canonical.fluxCost),
+      hpCostPct: readUniversalUpgradeValue(plan, 'HP_COST_PERCENT', canonicalHpCostPct),
+    })}`;
   };
 
   const getStagedAbilityDescription = (abilityId: string): string => {
     const cost = resolveClassAbilityCost(operativeClass, abilityId);
     const isHexWa = operativeClass === 'HEX_SHOT' && isDefinedHexWeaponActionId(abilityId);
-    const graftTags = operativeClass === 'HEX_SHOT' && !isHexWa
+    const hexPreviewPlan = operativeClass === 'HEX_SHOT' && !isHexWa
       ? buildClassGraftCastPlan(
         'HEX_SHOT',
         abilityId as HexShotAbilityId,
         resolveHexShotAbilityGraftId(hexShotAbilityGraftsRef.current, abilityId as HexShotAbilityId),
-      ).effectiveTags
+      )
+      : null;
+    const graftTags = hexPreviewPlan
+      ? hexPreviewPlan.effectiveTags
       : isHexWa
         ? getHexWeaponActionDefinition(abilityId)?.tags
         : undefined;
@@ -13019,11 +12991,13 @@ export default function TacticalCombatHub({
         const focal = tid ? getUnitById(squadRef.current, tid) : null;
         h3bContractLine = formatCinderlinePreview(
           focal ? resolveCinderlineSlotForUnit(focal) : null,
+          readUniversalUpgradeValue(hexPreviewPlan, 'HAZARD_TICK_DAMAGE', 5),
         );
       } else if (abilityId === 'BLACKSITE_TRIAGE') {
         h3bContractLine = formatBlacksiteTriagePreview(
           operativeHpRef.current,
           getEffectiveMaxSoulAnchor(),
+          readUniversalUpgradeValue(hexPreviewPlan, 'HEAL_PERCENT', 20),
         );
       } else if (abilityId === 'SIX_BELLS') {
         const rounds = previewSixBellsRounds(currentAmmoRef.current, maxAmmo);
@@ -13782,6 +13756,23 @@ export default function TacticalCombatHub({
 
   const renderCommandDeckSlot = () => (
     <View style={styles.commandDeckAnchor}>
+      {showCommandDeck ? (
+        <CounterfateHudStrip
+          key={counterfateHudNonce}
+          presentation={nineStrainBridgeRef.current.presentation()}
+          onPreviewChosenFate={(id) => nineStrainBridgeRef.current.previewChosenFate(id)}
+          onConfirmChosenFate={(id) => {
+            const result = nineStrainBridgeRef.current.confirmChosenFate(id);
+            setCounterfateHudNonce((value) => value + 1);
+            return result.preview;
+          }}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <RitualCadenceHudStrip
+          presentation={nineStrainBridgeRef.current.ritualPresentation()}
+        />
+      ) : null}
       {showCommandDeck ? commandDeck : null}
       {showEnemyTurnPanel ? renderEnemyTurnPanel() : null}
     </View>

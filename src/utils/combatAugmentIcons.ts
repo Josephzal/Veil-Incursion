@@ -1,4 +1,4 @@
-import { getClassGraftDefinition } from '../data/classGraftEngine';
+import { getUniversalGraftDefinition } from '../data/universalGraftRegistry';
 import { ENVOY_BOON_CATALOG } from '../data/envoyBoons';
 import { HEX_SHOT_BOON_CATALOG } from '../data/hexShotBoons';
 import { LEY_LINE_MUTATION_CATALOG } from '../data/leyLineMutations';
@@ -111,7 +111,8 @@ export function buildCombatAugmentIcons(input: {
   for (const abilityId of loadout) {
     const graftId = graftMap[abilityId as keyof typeof graftMap];
     if (!graftId) continue;
-    const graft = getClassGraftDefinition(operativeClass, graftId);
+    const graft = getUniversalGraftDefinition(graftId);
+    if (!graft || graft.classId !== operativeClass) continue;
     pushUnique(icons, seen, {
       id: `graft-${graftId}`,
       kind: 'graft',

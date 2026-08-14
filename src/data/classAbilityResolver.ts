@@ -204,15 +204,21 @@ export function resolveClassAbilityCost(
   };
 }
 
-export function formatClassAbilityCostLine(classId: ClassType, abilityId: string): string {
+export function formatClassAbilityCostLine(
+  classId: ClassType,
+  abilityId: string,
+  overrides?: { staminaCost?: number; fluxCost?: number; hpCostPct?: number },
+): string {
   const cost = resolveClassAbilityCost(classId, abilityId);
+  const staminaCost = overrides?.staminaCost ?? cost.staminaCost;
+  const fluxCost = overrides?.fluxCost ?? cost.fluxCost;
   const parts: string[] = [`${cost.apCost} AP`];
   if (classId === 'HEX_SHOT' && cost.ammoCost > 0) {
     parts.push(`${cost.ammoCost} AMMO`);
   }
   if (classId === 'ENVOY') {
-    if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
-    if (cost.fluxCost > 0) parts.push(`−${cost.fluxCost}% FLUX`);
+    if (staminaCost > 0) parts.push(`${staminaCost} STAM`);
+    if (fluxCost > 0) parts.push(`−${fluxCost}% FLUX`);
     else if (cost.fluxRegen > 0) parts.push(`+${cost.fluxRegen}% FLUX`);
     if (isEnvoyWeaponActionId(abilityId)) {
       const wa = getEnvoyWeaponActionDefinition(abilityId);
@@ -238,8 +244,9 @@ export function formatClassAbilityCostLine(classId: ClassType, abilityId: string
         if (def.brandsConsumed === 'ALL') parts.push('−ALL BRANDS');
         else parts.push(`−${def.brandsConsumed} BRAND`);
       }
-      if (def.hpCostPct && def.hpCostPct > 0) {
-        parts.push(`−${def.hpCostPct}% HP`);
+      const hpCostPct = overrides?.hpCostPct ?? def.hpCostPct;
+      if (hpCostPct && hpCostPct > 0) {
+        parts.push(`−${hpCostPct}% HP`);
       }
       return parts.join(' // ');
     }
@@ -248,7 +255,7 @@ export function formatClassAbilityCostLine(classId: ClassType, abilityId: string
     else if (cost.reserveCostPct > 0) parts.push(`−${cost.reserveCostPct}% AR`);
     if (cost.minReservePct > 0) parts.push(`≥${cost.minReservePct}% AR`);
   } else {
-    if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
+    if (staminaCost > 0) parts.push(`${staminaCost} STAM`);
     else if (cost.staminaCostPct > 0) parts.push(`${cost.staminaCostPct}% STAM`);
   }
   return parts.join(' // ');

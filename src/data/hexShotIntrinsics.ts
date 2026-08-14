@@ -22,7 +22,7 @@ export function shouldApplyPhantomFeed(
   return tags.includes('TACTICAL') && !tags.includes('RELOAD');
 }
 
-/** Widow-Choke and similar grafts collapse AoE to a single focal target. */
+/** True when authored tags define a single focal target. */
 export function graftForcesSingleTarget(effectiveTags: readonly string[] | undefined): boolean {
   if (!effectiveTags?.length) return false;
   return effectiveTags.includes('SINGLE_TARGET') && !effectiveTags.includes('AOE');

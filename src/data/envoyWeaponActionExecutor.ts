@@ -42,6 +42,8 @@ import {
   runWeaponOnSacrificeHpHooks,
 } from './weaponCombatEngine';
 import type { WeaponFamilyId } from '../types/weapon';
+import type { ClassGraftCastPlan } from '../types/classGraft';
+import { readUniversalUpgradeValue } from './universalGraftRegistry';
 
 export interface EnvoyWeaponActionHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -83,6 +85,7 @@ export interface EnvoyWeaponActionExecutionContext {
   applyPlayerShield?: (amount: number) => void;
   /** When false, caller handles Catalyst (legacy Hub flex path). Default true for WA. */
   resolveCatalyst?: boolean;
+  graftPlan?: ClassGraftCastPlan | null;
 }
 
 export type EnvoyWeaponActionExecutionResult =
@@ -367,7 +370,9 @@ export function executeEnvoyWeaponAction(
   return {
     ok: true,
     plan,
-    fluxDelta: plan.fluxDelta,
+    fluxDelta: plan.actionId === 'CRIMSON_VENT'
+      ? readUniversalUpgradeValue(ctx.graftPlan, 'RESOURCE_GAIN', plan.fluxDelta)
+      : plan.fluxDelta,
     provenanceActionId: plan.provenanceActionId,
     historicalSourceId: canon.historicalSourceId ?? ctx.historicalSourceId ?? null,
     catalyst,

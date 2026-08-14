@@ -13,6 +13,7 @@ import { getGraftSocketAccessForRunDepth } from './graftCapacityEngine';
 import { canGraftClassAbility } from '../classGraftEngine';
 import { migrateHexShotAbilityId } from '../hexShotMigration';
 import { sanitizeAegisAbilityGraftMap } from '../aegisGraftTarget';
+import { universalGraftMatchesTarget } from '../universalGraftRegistry';
 
 export type GraftSanitizeReport = {
   kept: Record<string, string>;
@@ -32,16 +33,16 @@ function sanitizeMap(
 
   Object.entries(raw).forEach(([abilityId, graftId]) => {
     if (!graftId) return;
-    const resolvedAbility =
-      classId === 'HEX_SHOT' ? migrateHexShotAbilityId(abilityId) : abilityId;
+    const resolvedAbility = abilityId;
     if (!isLiveGraftId(classId, graftId)) {
       removed.push({ abilityId, graftId, reason: 'UNKNOWN_OR_RETIRED_GRAFT' });
       return;
     }
-    if (!canGraftClassAbility(classId, resolvedAbility, {
-      allowFixedBasic: access.allowFixedBasic,
-      allowUltimate: access.allowUltimate,
-    })) {
+    if (!universalGraftMatchesTarget(classId, resolvedAbility, graftId)) {
+      removed.push({ abilityId, graftId, reason: 'CANONICAL_ACTION_MISMATCH' });
+      return;
+    }
+    if (!canGraftClassAbility(classId, resolvedAbility)) {
       removed.push({ abilityId, graftId, reason: 'INCOMPATIBLE_SOCKET' });
       return;
     }
