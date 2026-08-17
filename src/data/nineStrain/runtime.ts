@@ -43,14 +43,17 @@ import {
   storeRefusalPattern,
   storeSecondReflex,
   storeSeveredOutcome,
+  storeReversal,
   syncIntentIdentities,
   retireUnitIntentIdentity,
   withCounterfate,
 } from './counterfateEngine';
-import { reversalCapForDepth } from './counterfateMath';
+import { reversalCapForDepth, roundCounterfateAmount } from './counterfateMath';
 import {
   applyMeasureStep,
   applyNativeDamageModifier,
+  applyScheduledBeatII,
+  advanceMeasureWithoutFinale,
   classifyQualifyingSurface,
   createDefaultRitualCadenceState,
   evaluateDownbeat,
@@ -65,10 +68,136 @@ import {
   resolvePostFinale,
 } from './ritualCadenceEngine';
 import type { QualifyingSurface } from '../../types/ritualCadence';
+import {
+  AFTERIMAGE_CORE_IDS,
+  AFTERIMAGE_VERDICT_ID,
+} from '../../types/afterimage';
+import type { ScheduledTrace, TraceProvenance } from '../../types/afterimage';
+import {
+  applyDeferredDelay,
+  armCrossfade,
+  beginPlayerTurn,
+  clearEncounterAfterimage,
+  consumeCrossfade,
+  createDefaultAfterimageState,
+  deferredExposureOptions,
+  dueActionTraces,
+  dueTurnStartTraces,
+  effectiveTracePower,
+  expireUnusedCrossfade,
+  legalHostileFallback,
+  markActionTracesReady,
+  markTraceResolved,
+  retargetPortions,
+  schedulePersistentSecondary,
+  tryMintLingering,
+  tryMintPhantom,
+  tryMintRecurrent,
+  tryMintReflex,
+  tryMintSecondEnding,
+  tryMintConvergenceReleaseTrace,
+} from './afterimageEngine';
+import { CONVERGENCE_IDS } from '../../types/convergence';
+import {
+  createDefaultConvergenceState,
+  isCanonicalPlayerCounteredRelease,
+  resetConvergenceCombatCycle,
+  resetConvergenceEnemyCycle,
+  resetConvergencePlayerTurn,
+} from './convergenceEngine';
+import {
+  applyQueuedTurnStartRefund,
+  applyReturnStroke,
+  applyStillpointEndTurn,
+  applyZeroHour,
+  beginStillpointEnemyCycle,
+  beginStillpointPlayerTurn,
+  clearEncounterStillpoint,
+  condensedImpactFromRoot,
+  consumeFocusForRoot,
+  createDefaultStillpointState,
+  endStillpointEnemyCycle,
+  grantFleetingStillness as mintFleetingStillness,
+  matchingStillpointSurfaces,
+  previewNativeStillnessGain,
+  previewPatientInvocationAp,
+  promoteQuietReflexGrade,
+  resolveCondensedImpactTarget,
+  returnStrokeQualifies,
+  scalePerfectNumeric,
+  silentReservoirGainBonus,
+  silentReservoirReloadBonus,
+  silentReservoirSpendPreserve,
+  stillpointPresentation as composeStillpointPresentation,
+  stillnessProducerBlocked,
+  tickIntentCountdowns,
+  usablePlayerAp,
+  noteHostileApDisruption,
+} from './stillpointEngine';
+import type { PlayerTurnEndReason } from '../../types/stillpoint';
+import { STILLPOINT_CORE_IDS } from '../../types/stillpoint';
+import { SELF_LINK_STRENGTH } from '../../types/woundweave';
+import {
+  armTightenedThread,
+  applyWoundweavePacketsToIntents,
+  beginWoundweavePlayerTurn,
+  clearEncounterWoundweave,
+  createDefaultWoundweaveState,
+  emitReflexiveAgony,
+  endpointBadgeForUnit,
+  hasPrimaryPair,
+  isLinkedWoundweaveEndpoint,
+  isPrimaryEndpoint,
+  processWoundweaveRoot,
+  reformWoundlinkPair,
+  seedEntangledFateEndpoint,
+  setWoundweavePhaseSuccessor,
+  woundweavePresentation as composeWoundweavePresentation,
+} from './woundweaveEngine';
+import {
+  beginFaultlineCombatCycle,
+  beginFaultlinePlayerTurn,
+  clearEncounterFaultline,
+  createDefaultFaultlineState,
+  faultlinePresentation as composeFaultlinePresentation,
+  faultPipsForUnit,
+  previewFaultlineRoot,
+  processFaultlineCurrent,
+  processFaultlineInstinct,
+  processFaultlineRoot,
+  pruneFaultlineTargets,
+  setFaultlinePhaseSuccessor,
+} from './faultlineEngine';
+import {
+  activateRecordedWake,
+  applyLastHeartbeatOverdraw,
+  applyNativeHpCost,
+  applyQualifyingLoss,
+  beginSoulwakeEnemyCycle,
+  beginSoulwakePlayerTurn,
+  commitOrdinaryOverdraw,
+  completeSoulwakeEncounter,
+  createDefaultSoulwakeState,
+  expireSoulwakeAtEnemyCycleEnd,
+  ordinaryOverdrawAvailable,
+  previewOrdinaryOverdraw,
+  previewSoulwakeRoot,
+  processSoulwakeCurrent,
+  processSoulwakeInstinct,
+  processSoulwakeRoot,
+  resolveLastHeartbeatPackets,
+  setLastHeartbeatSelected,
+  snapshotWakePowered,
+  soulwakePresentation as composeSoulwakePresentation,
+  syncSoulwakeVitals,
+} from './soulwakeEngine';
+import { SOULWAKE_CORE_IDS, SOULWAKE_VERDICT_ID } from '../../types/soulwake';
+import { directlyAffectedTargetIds } from './rootAction';
 
 export interface NineStrainRuntimeOptions {
   definitions: readonly UniversalBoonDefinition[];
   allowTestOffers?: boolean;
+  allowSector2Wave?: boolean;
 }
 
 function slotOwnedDefinitionIds(state: NineStrainRuntimeState): string[] {
@@ -122,6 +251,202 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     state = { ...state, ritualCadence: next };
   }
 
+  function ai() {
+    return state.afterimage ?? createDefaultAfterimageState();
+  }
+
+  function setAi(next: ReturnType<typeof ai>): void {
+    state = { ...state, afterimage: next };
+  }
+
+  function cv() {
+    return state.convergence ?? createDefaultConvergenceState();
+  }
+
+  function setCv(next: ReturnType<typeof cv>): void {
+    state = { ...state, convergence: next };
+  }
+
+  function sp() {
+    return state.stillpoint ?? createDefaultStillpointState();
+  }
+
+  function setSp(next: ReturnType<typeof sp>): void {
+    state = { ...state, stillpoint: next };
+  }
+
+  function ww() {
+    return state.woundweave ?? createDefaultWoundweaveState();
+  }
+
+  function setWw(next: ReturnType<typeof ww>): void {
+    state = { ...state, woundweave: next };
+  }
+
+  function fl() {
+    return state.faultline ?? createDefaultFaultlineState();
+  }
+
+  function setFl(next: ReturnType<typeof fl>): void {
+    state = { ...state, faultline: next };
+  }
+
+  function sw() {
+    return state.soulwake ?? createDefaultSoulwakeState();
+  }
+
+  function setSw(next: ReturnType<typeof sw>): void {
+    state = { ...state, soulwake: next };
+  }
+
+  function hasLiveSoulwake(): boolean {
+    return ownedDefinitionIds().some((id) => {
+      const def = definitions.get(id);
+      return def?.strainId === 'SOULWAKE' && !def.testOnly;
+    }) || ownedDefinitionIds().some((id) => id.startsWith('SW_'));
+  }
+
+  function applySoulwakePackets(
+    result: ReturnType<typeof processSoulwakeRoot>,
+    prepared: CanonicalRootActionContext,
+    sourceId: string,
+  ): CanonicalRootActionContext {
+    setSw(result.state);
+    hostileIntents = result.intents;
+    for (const packet of result.packets) {
+      dispatch({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId,
+        lineage: [prepared.rootActionId, sourceId, 'SOULWAKE'],
+        rootActionId: prepared.rootActionId,
+        targetId: packet.targetId,
+        payload: {
+          damage: packet.damage,
+          killed: packet.killed,
+          fizzled: packet.fizzled,
+          classification: 'DERIVATIVE',
+        },
+      }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth) });
+    }
+    if (result.apRefund > 0) {
+      state.metrics.ap_refund = (state.metrics.ap_refund ?? 0) + result.apRefund;
+    }
+    if (result.cooldownAdvanced) {
+      state.metrics.cooldown_advanced = (state.metrics.cooldown_advanced ?? 0) + 1;
+    }
+    return {
+      ...result.ctx,
+      nativeByTarget: result.nativeByTarget,
+      kills: prepared.kills + result.nativeByTarget.filter((row) => row.killed).length - prepared.nativeByTarget.filter((row) => row.killed).length,
+    };
+  }
+
+  function hasLiveFaultline(): boolean {
+    return ownedDefinitionIds().some((id) => {
+      const def = definitions.get(id);
+      return def?.strainId === 'FAULTLINE' && !def.testOnly;
+    }) || ownedDefinitionIds().some((id) => id.startsWith('FL_'));
+  }
+
+  function applyFaultlineResult(
+    result: ReturnType<typeof processFaultlineRoot>,
+    prepared: CanonicalRootActionContext,
+  ): CanonicalRootActionContext {
+    setFl(result.state);
+    hostileIntents = result.intents;
+    for (const addition of result.additions) {
+      dispatch({
+        type: 'FAULT_APPLIED',
+        sourceId: addition.sourceDefinitionId,
+        lineage: [prepared.rootActionId, addition.sourceDefinitionId],
+        rootActionId: prepared.rootActionId,
+        targetId: addition.targetId,
+        payload: {
+          amount: addition.amountApplied,
+          before: addition.amountBefore,
+          after: addition.amountAfter,
+          origin: addition.origin,
+          classification: 'DERIVATIVE',
+        },
+      }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth) });
+    }
+    for (const rupture of result.ruptures) {
+      dispatch({
+        type: 'RUPTURE_RESOLVED',
+        sourceId: rupture.sourceDefinitionId,
+        lineage: [prepared.rootActionId, rupture.sourceDefinitionId, 'RUPTURE'],
+        rootActionId: prepared.rootActionId,
+        targetId: rupture.targetId,
+        payload: {
+          route: rupture.route,
+          damage: rupture.damage,
+          fullBreak: rupture.fullBreak,
+          killed: rupture.killed,
+          classification: 'DERIVATIVE',
+        },
+      }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth) });
+    }
+    if (result.ruptures.length > 0) {
+      state.metrics.faultline_ruptures = (state.metrics.faultline_ruptures ?? 0) + result.ruptures.length;
+    }
+    return {
+      ...prepared,
+      nativeByTarget: result.nativeByTarget,
+      intentCountered: result.intentCountered,
+      objectiveProgress: result.objectiveProgress,
+      kills: prepared.kills + result.nativeByTarget.filter((row) => row.killed).length - prepared.nativeByTarget.filter((row) => row.killed).length,
+    };
+  }
+
+  function hasLiveWoundweave(): boolean {
+    return ownedDefinitionIds().some((id) => {
+      const def = definitions.get(id);
+      return def?.strainId === 'WOUNDWEAVE' && !def.testOnly;
+    }) || ownedDefinitionIds().some((id) => id.startsWith('WW_'));
+  }
+
+  function emitWoundweavePackets(
+    packets: ReturnType<typeof processWoundweaveRoot>['packets'],
+    prepared: CanonicalRootActionContext,
+  ): void {
+    for (const packet of packets) {
+      if (packet.fizzled || packet.occultDamage <= 0) continue;
+      dispatch({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId: packet.lineage[1] ?? 'WOUNDWEAVE',
+        lineage: [...packet.lineage, 'WOUNDWEAVE'],
+        rootActionId: prepared.rootActionId,
+        targetId: packet.targetId,
+        payload: {
+          damage: packet.occultDamage,
+          occult: packet.occultDamage,
+          kind: packet.kind,
+          classification: 'DERIVATIVE',
+        },
+      }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth + 1) });
+    }
+  }
+
+  function hasLiveStillpoint(): boolean {
+    return ownedDefinitionIds().some((id) => {
+      const def = definitions.get(id);
+      return def?.strainId === 'STILLPOINT' && !def.testOnly;
+    }) || ownedDefinitionIds().some((id) => id.startsWith('SP_'));
+  }
+
+  let holdFateboundRelease = false;
+
+  function hasLiveAfterimage(): boolean {
+    return ownedDefinitionIds().some((id) => {
+      const def = definitions.get(id);
+      return def?.strainId === 'AFTERIMAGE' && !def.testOnly;
+    });
+  }
+
+  function delayedLineage(extra: readonly string[] = []): string[] {
+    return ['AFTERIMAGE_TRACE', ...extra];
+  }
+
   function hasLiveRitual(): boolean {
     return ownedDefinitionIds().some((id) => {
       const def = definitions.get(id);
@@ -145,6 +470,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
   }
 
   function downbeatFrom(ctx: CanonicalRootActionContext): boolean {
+    if (ctx.delayedOrigin === true) return false;
     const killed = ctx.nativeByTarget.some((row) => row.killed) || ctx.kills > 0;
     return evaluateDownbeat({
       killed,
@@ -183,6 +509,32 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     });
   }
 
+  function applyFatedRefrainFinaleStore(): void {
+    if (!ownedHasKind('FATED_REFRAIN') || cv().fatedRefrainStoreUsedThisCombatCycle) return;
+    const stored = storeReversal(cf(), 8);
+    setCf(stored.cf);
+    setCv({ ...cv(), fatedRefrainStoreUsedThisCombatCycle: true });
+  }
+
+  function armEchoedRite(rootActionId: string): void {
+    if (!ownedHasKind('ECHOED_RITE')) return;
+    setCv({
+      ...cv(),
+      echoedEmpowerment: {
+        sourceFinaleRootId: rootActionId,
+        armedPlayerTurn: ai().playerTurnIndex,
+        expireOnPlayerTurnIndex: ai().playerTurnIndex + 1,
+      },
+    });
+  }
+
+  function expireEchoedIfDue(): void {
+    const emp = cv().echoedEmpowerment;
+    if (!emp) return;
+    if (ai().playerTurnIndex >= emp.expireOnPlayerTurnIndex) {
+      setCv({ ...cv(), echoedEmpowerment: null });
+    }
+  }
   function completePendingFinale(ctx: CanonicalRootActionContext, surface: QualifyingSurface): void {
     if (ownedHasKind('MEASURE_DISCIPLINE_FINALE') && surface === 'DISCIPLINE' && ctx.startsCooldown) {
       setRc({ ...rc(), cooldownAdvanced: true });
@@ -197,6 +549,278 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       heldResonanceOwned: ownedHasKind('MEASURE_HELD_RESONANCE'),
       ammoType: ctx.selectedAmmoType ?? null,
     }));
+  }
+
+  function noteOrdinaryTraceResolved(trace: ScheduledTrace): void {
+    if (trace.provenance !== 'CORE') return;
+    if (trace.originImprint === 'VERDICT') return;
+    if (ownedHasKind('CROSSFADE')) {
+      setAi(armCrossfade(ai(), trace.originImprint, true));
+    }
+    if (ownedHasKind('PERSISTENT_FORM')) {
+      setAi(schedulePersistentSecondary(ai(), trace, true));
+    }
+  }
+
+  function resolveOneTrace(trace: ScheduledTrace, hostRoot: CanonicalRootActionContext | null): void {
+    let resolving = trace;
+    let restoredOutcome = false;
+    if (trace.provenance === 'CORE' && cv().echoedEmpowerment) {
+      resolving = { ...trace, powerMultiplier: trace.powerMultiplier * 1.5 };
+      setCv({ ...cv(), echoedEmpowerment: null });
+    }
+    const echoedMul = resolving.powerMultiplier !== trace.powerMultiplier ? 1.5 : 1;
+    const retargeted = retargetPortions(resolving.targetAndDamageMap, hostileIntents, jammed);
+    const power = effectiveTracePower(resolving);
+    const lineage = delayedLineage([
+      trace.traceId,
+      trace.originRootActionId ?? 'none',
+      ...(trace.provenance === 'CONVERGENCE' ? [CONVERGENCE_IDS.SECOND_OUTCOME] : []),
+    ]);
+    if (ownedHasKind('SECOND_OUTCOME') && trace.provenance === 'CORE' && !cv().secondOutcomeStoreUsedThisCombatCycle) {
+      const stored = storeReversal(cf(), 8);
+      setCf(stored.cf);
+      setCv({ ...cv(), secondOutcomeStoreUsedThisCombatCycle: true });
+    }
+    if (trace.payloadKind === 'PER_TARGET_DAMAGE' || trace.payloadKind === 'OCCULT_ACTION_BUDGET') {
+      for (const portion of retargeted) {
+        const amount = portion.fizzled ? 0 : roundTrace(
+          (trace.delayCount > 0 && trace.payloadKind === 'PER_TARGET_DAMAGE'
+            ? portion.nativeDirectDamage * 1.5
+            : portion.nativeDirectDamage) * echoedMul,
+        );
+        if (amount <= 0 || !portion.assignedTargetId) {
+          emit({
+            type: 'DERIVATIVE_RESOLVED',
+            sourceId: trace.originDefinitionId,
+            lineage,
+            rootActionId: hostRoot?.rootActionId ?? trace.originRootActionId,
+            targetId: portion.assignedTargetId,
+            payload: { damage: 0, delayedOrigin: true, fizzled: true, classification: 'DERIVATIVE' },
+          });
+          continue;
+        }
+        const target = hostileIntents.find((row) => row.unitId === portion.assignedTargetId);
+        emit({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: trace.originDefinitionId,
+          lineage,
+          rootActionId: hostRoot?.rootActionId ?? trace.originRootActionId,
+          targetId: portion.assignedTargetId,
+          payload: {
+            damage: amount,
+            delayedOrigin: true,
+            classification: 'DERIVATIVE',
+            kinetic: portion.kineticNativeDamage,
+            occult: portion.occultNativeDamage,
+          },
+        });
+        if (target && amount >= target.hp && target.alive) {
+          const bound = cf().fateboundUnitId === target.unitId;
+          hostileIntents = hostileIntents.map((row) => (
+            row.unitId === target.unitId ? { ...row, hp: 0, alive: false } : row
+          ));
+          restoredOutcome = true;
+          if (bound && !holdFateboundRelease) {
+            const released = releaseFatebound(cf(), hostileIntents, 'PLAYER_PREVENTED', lineage, {
+              ownsNoFuture: ownedHasKind('NO_FUTURE_CHAIN'),
+            });
+            setCf(released.cf);
+            if (released.release.countered) restoredOutcome = true;
+            emitRelease(released.release, hostRoot);
+          }
+        }
+      }
+    } else if (trace.payloadKind === 'FLAT_OCCULT') {
+      const primary = hostRoot?.lockedTargetIds[0]
+        ?? hostRoot?.nativeByTarget.find((row) => row.nativeDirectDamage > 0 || row.hits > 0)?.targetId
+        ?? legalHostileFallback(hostileIntents, jammed)?.unitId
+        ?? null;
+      if (!primary) {
+        emit({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: trace.originDefinitionId,
+          lineage,
+          rootActionId: hostRoot?.rootActionId ?? null,
+          targetId: null,
+          payload: { damage: 0, delayedOrigin: true, fizzled: true, classification: 'DERIVATIVE' },
+        });
+      } else {
+        emit({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: trace.originDefinitionId,
+          lineage,
+          rootActionId: hostRoot?.rootActionId ?? null,
+          targetId: primary,
+          payload: { damage: power, delayedOrigin: true, classification: 'DERIVATIVE', channel: 'OCCULT' },
+        });
+        const target = hostileIntents.find((row) => row.unitId === primary);
+        if (target && power >= target.hp && target.alive) {
+          const bound = cf().fateboundUnitId === target.unitId;
+          hostileIntents = hostileIntents.map((row) => (
+            row.unitId === target.unitId ? { ...row, hp: 0, alive: false } : row
+          ));
+          restoredOutcome = true;
+          if (bound && !holdFateboundRelease) {
+            const released = releaseFatebound(cf(), hostileIntents, 'PLAYER_PREVENTED', lineage, {
+              ownsNoFuture: ownedHasKind('NO_FUTURE_CHAIN'),
+            });
+            setCf(released.cf);
+            if (released.release.countered) restoredOutcome = true;
+            emitRelease(released.release, hostRoot);
+          }
+        }
+      }
+    } else if (trace.payloadKind === 'BARRIER') {
+      emit({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId: trace.originDefinitionId,
+        lineage,
+        rootActionId: trace.originRootActionId,
+        targetId: 'runner',
+        payload: { barrier: power, delayedOrigin: true, classification: 'DERIVATIVE' },
+      });
+    } else if (trace.payloadKind === 'RESERVE_RESTORE' || trace.payloadKind === 'FLUX_RESTORE') {
+      const cap = trace.payloadKind === 'FLUX_RESTORE' ? ai().capacity.flux : ai().capacity.reserve;
+      const restored = Math.min(power, cap);
+      emit({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId: trace.originDefinitionId,
+        lineage,
+        rootActionId: trace.originRootActionId,
+        targetId: null,
+        payload: {
+          restored,
+          delayedOrigin: true,
+          delayedRestore: true,
+          kind: 'PRESERVED',
+          classification: 'DERIVATIVE',
+        },
+      });
+    } else if (trace.payloadKind === 'MATCHING_AMMO') {
+      const restored = ai().capacity.ammo > 0 ? 1 : 0;
+      if (restored > 0) {
+        setAi({ ...ai(), capacity: { ...ai().capacity, ammo: ai().capacity.ammo - 1 } });
+      }
+      emit({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId: trace.originDefinitionId,
+        lineage,
+        rootActionId: trace.originRootActionId,
+        targetId: null,
+        payload: {
+          restored,
+          ammoType: trace.ammoType,
+          delayedOrigin: true,
+          delayedRestore: true,
+          classification: 'DERIVATIVE',
+        },
+      });
+    }
+    setAi(markTraceResolved(ai(), trace.traceId));
+    if (trace.provenance === 'CORE') {
+      applySuspendedEchoRestore(trace, restoredOutcome);
+      applyGhostThreadResolution(trace);
+    }
+    if (ownedHasKind('ECHOED_RITE') && trace.provenance === 'CORE' && !cv().echoedMeasureUsedThisPlayerTurn) {
+      setRc(advanceMeasureWithoutFinale(rc()));
+      setCv({ ...cv(), echoedMeasureUsedThisPlayerTurn: true });
+    }
+    noteOrdinaryTraceResolved(trace);
+  }
+
+  function roundTrace(value: number): number {
+    return value > 0 ? Math.floor(value) : 0;
+  }
+
+  function resolveDueTurnStartTraces(): void {
+    const due = dueTurnStartTraces(ai());
+    for (const trace of due) {
+      resolveOneTrace(trace, null);
+    }
+    setAi(markActionTracesReady(ai()));
+  }
+
+  function mintOrdinaryFromRoot(ctx: CanonicalRootActionContext, provenance: TraceProvenance, multiplier: number): boolean {
+    let created = false;
+    if (ownedHasKind('TRACE_PHANTOM_IMPACT') && (ctx.actionSurface === 'WEAPON' || ctx.actionSurface === 'BASIC')) {
+      const result = tryMintPhantom(ai(), ctx, AFTERIMAGE_CORE_IDS.PHANTOM_IMPACT, provenance, multiplier);
+      setAi(result.state);
+      created = created || result.created;
+    }
+    if (ownedHasKind('TRACE_LINGERING_INVOCATION') && (ctx.actionSurface === 'TECHNIQUE' || ctx.actionSurface === 'FLEX')) {
+      const result = tryMintLingering(ai(), ctx, AFTERIMAGE_CORE_IDS.LINGERING_INVOCATION, provenance, multiplier);
+      setAi(result.state);
+      created = created || result.created;
+    }
+    if (ownedHasKind('TRACE_RECURRENT_CHARGE') && ctx.primaryResource.gained > 0) {
+      const result = tryMintRecurrent(ai(), {
+        classId: ctx.classId,
+        actualGained: ctx.primaryResource.gained,
+        reloadRestoredCount: 0,
+        selectedAmmoType: ctx.selectedAmmoType ?? null,
+        ultimateOwnedRefill: ctx.ultimateOwnedRefill,
+        delayedRestore: false,
+        definitionId: AFTERIMAGE_CORE_IDS.RECURRENT_CHARGE,
+        provenance,
+        powerMultiplier: multiplier,
+        originRootActionId: ctx.rootActionId,
+      });
+      setAi(result.state);
+      created = created || result.created;
+    }
+    return created;
+  }
+
+  function mintCrossfadeFromRoot(ctx: CanonicalRootActionContext, originImprint: Exclude<ScheduledTrace['originImprint'], 'VERDICT'>): void {
+    if (!ownedHasKind('CROSSFADE') || ai().crossfadeUsedThisPlayerTurn) return;
+    const surface = classifyQualifyingSurface({
+      actionSurface: ctx.actionSurface,
+      sourceKind: ctx.sourceKind,
+      classification: ctx.classification,
+      grandCadenceOwned: false,
+      measure: 'EMPTY',
+    });
+    const trySurface = (imprint: typeof originImprint) => {
+      if (imprint === originImprint) return false;
+      if (imprint === 'ARMAMENT') {
+        const result = tryMintPhantom(ai(), ctx, AFTERIMAGE_CORE_IDS.PHANTOM_IMPACT, 'CROSSFADE_BONUS', 0.5);
+        setAi(result.state);
+        return result.created;
+      }
+      if (imprint === 'DISCIPLINE') {
+        const result = tryMintLingering(ai(), ctx, AFTERIMAGE_CORE_IDS.LINGERING_INVOCATION, 'CROSSFADE_BONUS', 0.5);
+        setAi(result.state);
+        return result.created;
+      }
+      if (imprint === 'CURRENT' && ctx.primaryResource.gained > 0) {
+        const result = tryMintRecurrent(ai(), {
+          classId: ctx.classId,
+          actualGained: ctx.primaryResource.gained,
+          reloadRestoredCount: 0,
+          selectedAmmoType: ctx.selectedAmmoType ?? null,
+          ultimateOwnedRefill: ctx.ultimateOwnedRefill,
+          delayedRestore: false,
+          definitionId: AFTERIMAGE_CORE_IDS.RECURRENT_CHARGE,
+          provenance: 'CROSSFADE_BONUS',
+          powerMultiplier: 0.5,
+          originRootActionId: ctx.rootActionId,
+        });
+        setAi(result.state);
+        return result.created;
+      }
+      return false;
+    };
+    const primary: typeof originImprint | null = surface === 'ARMAMENT' || surface === 'DISCIPLINE' || surface === 'INSTINCT'
+      ? surface
+      : null;
+    if (primary && trySurface(primary)) {
+      setAi(consumeCrossfade(ai()));
+      return;
+    }
+    if (trySurface('CURRENT')) {
+      setAi(consumeCrossfade(ai()));
+    }
   }
 
   function emitRelease(release: ReversalReleaseResult, ctx: CanonicalRootActionContext | null): void {
@@ -221,6 +845,340 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       },
     });
     runOwned(event, ctx);
+    if (ownedHasKind('FATED_REFRAIN') && isCanonicalPlayerCounteredRelease(release) && !cv().fatedRefrainBeatIiUsedThisCombatCycle) {
+      setCv({ ...cv(), pendingBeatII: true, fatedRefrainBeatIiUsedThisCombatCycle: true });
+    }
+    if (
+      ownedHasKind('SECOND_OUTCOME')
+      && release.packet > 0
+      && !release.lineage.includes(CONVERGENCE_IDS.SECOND_OUTCOME)
+    ) {
+      const minted = tryMintConvergenceReleaseTrace(ai(), {
+        definitionId: CONVERGENCE_IDS.SECOND_OUTCOME,
+        packet: release.packet,
+        originalTargetId: release.targetUnitId,
+        originRootActionId: ctx?.rootActionId ?? null,
+      });
+      setAi(minted.state);
+    }
+    applyStayedSentenceInstinct(release, ctx);
+    applyEntangledFateMirror(release);
+  }
+
+  function applyStayedSentenceInstinct(release: ReversalReleaseResult, ctx: CanonicalRootActionContext | null): void {
+    if (!ownedHasKind('STAYED_SENTENCE')) return;
+    if (cv().stayedSentenceInstinctUsedThisEnemyCycle) return;
+    if (!isCanonicalPlayerCounteredRelease(release)) return;
+    if (ctx?.classId === 'HEX_SHOT' && ctx.actionSurface === 'INSTINCT' && ctx.intentCountered !== true) return;
+    if (sp().focusedRoot?.chargeSource === 'STAYED_SENTENCE_FREE') return;
+    setSp({ ...sp(), stayedSentenceFreeFocus: true });
+    setCv({ ...cv(), stayedSentenceInstinctUsedThisEnemyCycle: true });
+  }
+
+  function applyEntangledFateMirror(release: ReversalReleaseResult): void {
+    if (!ownedHasKind('ENTANGLED_FATE')) return;
+    if (release.packet <= 0) return;
+    if (release.lineage.includes(CONVERGENCE_IDS.ENTANGLED_FATE)) return;
+    const current = ww();
+    if (!hasPrimaryPair(current)) return;
+    const source = release.targetUnitId;
+    if (!source || !isPrimaryEndpoint(current, source)) return;
+    const partner = current.selfLink ? source : (current.endpointA === source ? current.endpointB : current.endpointA);
+    if (!partner || (!current.selfLink && partner === source)) return;
+    const live = hostileIntents.find((row) => row.unitId === partner);
+    if (!live || !live.alive || live.phased || live.invulnerable) return;
+    let amount = roundCounterfateAmount(release.packet * 0.3);
+    if (current.selfLink) amount = roundCounterfateAmount(amount * SELF_LINK_STRENGTH);
+    if (amount <= 0) return;
+    hostileIntents = hostileIntents.map((row) => (
+      row.unitId === partner
+        ? { ...row, hp: Math.max(0, row.hp - amount), alive: row.hp - amount > 0 && row.alive }
+        : row
+    ));
+    emit({
+      type: 'DERIVATIVE_RESOLVED',
+      sourceId: CONVERGENCE_IDS.ENTANGLED_FATE,
+      lineage: [...release.lineage, CONVERGENCE_IDS.ENTANGLED_FATE],
+      rootActionId: lastRootContext?.rootActionId ?? null,
+      targetId: partner,
+      payload: {
+        damage: amount,
+        occult: amount,
+        classification: 'DERIVATIVE',
+        channel: 'OCCULT',
+        convergence: CONVERGENCE_IDS.ENTANGLED_FATE,
+      },
+    });
+  }
+
+  function tryGrantFleeting(
+    sourceDefinitionId: string,
+    extra: {
+      blocked?: boolean;
+      phase?: import('../../types/stillpoint').FleetingCreationPhase;
+      sourceRootId?: string | null;
+    } = {},
+  ): boolean {
+    if (extra.blocked) return false;
+    const result = mintFleetingStillness(sp(), sourceDefinitionId, extra);
+    setSp(result.state);
+    return result.granted || result.refreshed;
+  }
+
+  function applyStayedSentenceNativeGain(): void {
+    if (!ownedHasKind('STAYED_SENTENCE')) return;
+    if (cv().stayedSentenceNativeUsedThisCombatCycle) return;
+    const stored = storeReversal(cf(), 10);
+    setCf(stored.cf);
+    setCv({ ...cv(), stayedSentenceNativeUsedThisCombatCycle: true });
+  }
+
+  function applyMeasuredSilenceAdvance(): void {
+    if (!ownedHasKind('MEASURED_SILENCE')) return;
+    if (cv().measuredSilenceAdvanceUsedThisPlayerTurn) return;
+    if (!hasLiveRitual()) return;
+    setRc(advanceMeasureWithoutFinale(rc()));
+    setCv({ ...cv(), measuredSilenceAdvanceUsedThisPlayerTurn: true });
+  }
+
+  function applyMeasuredSilenceRetain(ctx: CanonicalRootActionContext): void {
+    if (!ownedHasKind('MEASURED_SILENCE')) return;
+    if (cv().measuredSilenceRetainUsedThisPlayerTurn) return;
+    const focused = sp().focusedRoot;
+    const source = focused?.rootActionId === ctx.rootActionId
+      ? focused?.chargeSource
+      : sp().lastSpendSource;
+    setCv({ ...cv(), measuredSilenceRetainUsedThisPlayerTurn: true });
+    if (source !== 'NATIVE') return;
+    tryGrantFleeting(CONVERGENCE_IDS.MEASURED_SILENCE, {
+      phase: 'PLAYER_CONTROL',
+      sourceRootId: ctx.rootActionId,
+    });
+  }
+
+  function applyTwofoldFormation(): void {
+    if (!ownedHasKind('TWOFOLD_RITE')) return;
+    if (cv().twofoldFormationUsedThisPlayerTurn) return;
+    if (!ww().lastTwofoldFormation) return;
+    if (rc().pendingFinaleRootId) return;
+    setRc(advanceMeasureWithoutFinale(rc()));
+    setCv({ ...cv(), twofoldFormationUsedThisPlayerTurn: true });
+  }
+
+  function applyTwofoldFinaleArm(ctx: CanonicalRootActionContext): void {
+    if (!ownedHasKind('TWOFOLD_RITE')) return;
+    const affected = ctx.directlyAffectedTargetIds ?? directlyAffectedTargetIds(ctx);
+    const hit = affected.some((id) => isLinkedWoundweaveEndpoint(ww(), id));
+    if (!hit) return;
+    setCv({
+      ...cv(),
+      twofoldEmpowerment: { sourceFinaleRootId: ctx.rootActionId, armed: true },
+    });
+  }
+
+  function applySuspendedEchoAndGhostCapture(ctx: CanonicalRootActionContext, beforeSeq: number): void {
+    const created = ai().pending
+      .filter((row) => (
+        row.provenance === 'CORE'
+        && row.originImprint !== 'VERDICT'
+        && row.originRootActionId === ctx.rootActionId
+        && row.creationSequence >= beforeSeq
+      ))
+      .sort((a, b) => a.creationSequence - b.creationSequence);
+    if (ownedHasKind('SUSPENDED_ECHO') && !cv().suspendedEchoUsedThisCombatCycle) {
+      const focused = sp().focusedRoot;
+      const first = created.find((row) => (
+        row.payloadKind === 'PER_TARGET_DAMAGE'
+        || row.payloadKind === 'OCCULT_ACTION_BUDGET'
+        || row.payloadKind === 'FLAT_OCCULT'
+      ));
+      if (focused?.rootActionId === ctx.rootActionId && first) {
+        const scaled = {
+          ...first,
+          basePayload: roundCounterfateAmount(first.basePayload * 1.5),
+          targetAndDamageMap: first.targetAndDamageMap.map((portion) => ({
+            ...portion,
+            nativeDirectDamage: roundCounterfateAmount(portion.nativeDirectDamage * 1.5),
+            kineticNativeDamage: roundCounterfateAmount(portion.kineticNativeDamage * 1.5),
+            occultNativeDamage: roundCounterfateAmount(portion.occultNativeDamage * 1.5),
+          })),
+        };
+        setAi({
+          ...ai(),
+          pending: ai().pending.map((row) => (row.traceId === first.traceId ? scaled : row)),
+        });
+        setCv({
+          ...cv(),
+          suspendedEchoUsedThisCombatCycle: true,
+          suspendedEchoLineages: [
+            ...cv().suspendedEchoLineages,
+            {
+              traceId: first.traceId,
+              sourceCycle: sp().combatCycleIndex,
+              chargeSource: focused.chargeSource,
+              restored: false,
+            },
+          ],
+        });
+      }
+    }
+    if (!ownedHasKind('GHOST_THREAD') || cv().ghostThreadUsedThisPlayerTurn) return;
+    if (!hasPrimaryPair(ww())) return;
+    const firstHostile = created.find((row) => (
+      row.payloadKind === 'PER_TARGET_DAMAGE' || row.payloadKind === 'OCCULT_ACTION_BUDGET' || row.payloadKind === 'FLAT_OCCULT'
+    ));
+    if (!firstHostile) return;
+    const current = ww();
+    const portions = firstHostile.targetAndDamageMap.flatMap((portion) => {
+      const origin = portion.originalTargetId;
+      if (current.selfLink) {
+        if (!isPrimaryEndpoint(current, origin)) return [];
+        return [{ originalTargetId: origin, partnerId: origin, amount: portion.nativeDirectDamage }];
+      }
+      const partner = origin === current.endpointA ? current.endpointB : origin === current.endpointB ? current.endpointA : null;
+      if (!partner) return [];
+      return [{ originalTargetId: origin, partnerId: partner, amount: portion.nativeDirectDamage }];
+    });
+    if (portions.length === 0) return;
+    setCv({
+      ...cv(),
+      ghostThreadUsedThisPlayerTurn: true,
+      ghostThreadCapture: {
+        traceId: firstHostile.traceId,
+        linkGeneration: current.linkGeneration,
+        endpointA: current.endpointA,
+        endpointB: current.endpointB,
+        selfLink: current.selfLink,
+        portions,
+      },
+    });
+  }
+
+  function applySuspendedEchoRestore(trace: ScheduledTrace, restoredOutcome: boolean): void {
+    if (!restoredOutcome) return;
+    const lineage = cv().suspendedEchoLineages.find((row) => row.traceId === trace.traceId);
+    if (!lineage || lineage.restored) return;
+    setCv({
+      ...cv(),
+      suspendedEchoLineages: cv().suspendedEchoLineages.map((row) => (
+        row.traceId === trace.traceId ? { ...row, restored: true } : row
+      )),
+    });
+    if (lineage.chargeSource !== 'NATIVE') return;
+    tryGrantFleeting(CONVERGENCE_IDS.SUSPENDED_ECHO, {
+      phase: sp().playerTurnOpen ? 'PLAYER_CONTROL' : 'ENEMY_CYCLE',
+      sourceRootId: trace.originRootActionId,
+    });
+  }
+
+  function applyGhostThreadResolution(trace: ScheduledTrace): void {
+    const capture = cv().ghostThreadCapture;
+    if (!ownedHasKind('GHOST_THREAD') || !capture || capture.traceId !== trace.traceId) return;
+    const seen = new Set<string>();
+    for (const portion of capture.portions) {
+      if (capture.selfLink && seen.has(portion.partnerId)) continue;
+      seen.add(portion.partnerId);
+      const partner = hostileIntents.find((row) => row.unitId === portion.partnerId);
+      if (!partner || !partner.alive || partner.phased) continue;
+      const amount = roundCounterfateAmount((
+        trace.targetAndDamageMap.find((row) => row.originalTargetId === portion.originalTargetId)?.nativeDirectDamage
+        ?? portion.amount
+      ) * 0.4);
+      if (amount <= 0) continue;
+      hostileIntents = hostileIntents.map((row) => (
+        row.unitId === partner.unitId
+          ? { ...row, hp: Math.max(0, row.hp - amount), alive: row.hp - amount > 0 && row.alive }
+          : row
+      ));
+      emit({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId: CONVERGENCE_IDS.GHOST_THREAD,
+        lineage: [trace.originRootActionId ?? 'none', CONVERGENCE_IDS.GHOST_THREAD],
+        rootActionId: trace.originRootActionId,
+        targetId: partner.unitId,
+        payload: {
+          damage: amount,
+          occult: amount,
+          classification: 'DERIVATIVE',
+          channel: 'OCCULT',
+          convergence: CONVERGENCE_IDS.GHOST_THREAD,
+        },
+      });
+    }
+    const aLive = capture.endpointA && hostileIntents.some((row) => row.unitId === capture.endpointA && row.alive && !row.phased);
+    const bLive = capture.endpointB && hostileIntents.some((row) => row.unitId === capture.endpointB && row.alive && !row.phased);
+    if (capture.selfLink) {
+      setWw(reformWoundlinkPair(
+        ww(),
+        ownedDefinitionIds(),
+        hostileIntents,
+        aLive ? capture.endpointA : null,
+        null,
+        Boolean(aLive),
+      ));
+    } else {
+      setWw(reformWoundlinkPair(
+        ww(),
+        ownedDefinitionIds(),
+        hostileIntents,
+        aLive ? capture.endpointA : (bLive ? capture.endpointB : null),
+        aLive && bLive ? capture.endpointB : null,
+        false,
+      ));
+    }
+    applyTwofoldFormation();
+    setCv({ ...cv(), ghostThreadCapture: null });
+  }
+
+  function applyDrawnTensionFleeting(
+    ctx: CanonicalRootActionContext,
+    before: readonly import('../../types/counterfate').HostileIntentSnapshot[],
+    after: readonly import('../../types/counterfate').HostileIntentSnapshot[],
+    linkedBefore: ReadonlySet<string>,
+  ): void {
+    if (!ownedHasKind('DRAWN_TENSION')) return;
+    if (cv().drawnTensionFleetingUsedThisPlayerTurn) return;
+    if (stillnessProducerBlocked(sp().focusedRoot?.rootActionId === ctx.rootActionId ? sp().focusedRoot?.chargeSource : null)) return;
+    const linked = new Set([
+      ...linkedBefore,
+      ww().endpointA,
+      ww().endpointB,
+      ...ww().secondaryEndpointIds,
+    ].filter((id): id is string => Boolean(id)));
+    const triggered = [...linked].some((id) => {
+      const prev = before.find((row) => row.unitId === id);
+      const next = after.find((row) => row.unitId === id);
+      const native = ctx.nativeByTarget.find((row) => row.targetId === id);
+      const died = Boolean(prev?.alive) && next && !next.alive;
+      const broke = (native?.defenseBreaks ?? 0) > 0;
+      return died || broke;
+    });
+    if (!triggered) return;
+    setCv({ ...cv(), drawnTensionFleetingUsedThisPlayerTurn: true });
+    tryGrantFleeting(CONVERGENCE_IDS.DRAWN_TENSION, {
+      phase: sp().playerTurnOpen ? 'PLAYER_CONTROL' : 'ENEMY_CYCLE',
+      sourceRootId: ctx.rootActionId,
+    });
+  }
+
+  function applyEntangledFateStore(ctx: CanonicalRootActionContext): void {
+    if (!ownedHasKind('ENTANGLED_FATE')) return;
+    if (cv().entangledFateStoredRootId === ctx.rootActionId) return;
+    if (!hasPrimaryPair(ww())) return;
+    const current = ww();
+    const ids = current.selfLink
+      ? [current.endpointA]
+      : [current.endpointA, current.endpointB];
+    let total = 0;
+    for (const id of ids) {
+      if (!id) continue;
+      const native = ctx.nativeByTarget.find((row) => row.targetId === id)?.nativeDirectDamage ?? 0;
+      if (native > 0) total += 6;
+    }
+    if (total <= 0) return;
+    const stored = storeReversal(cf(), total);
+    setCf(stored.cf);
+    setCv({ ...cv(), entangledFateStoredRootId: ctx.rootActionId });
   }
 
   function skipOrdinaryRelease(): boolean {
@@ -429,17 +1387,80 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     if (full.type === 'PLAYER_TURN_STARTED') {
       resetWindow('PLAYER_TURN');
       resetWindow('COMBAT_CYCLE');
+      setWw(beginWoundweavePlayerTurn(ww()));
+      setFl(beginFaultlinePlayerTurn(fl()));
+      setSw(beginSoulwakePlayerTurn(sw()));
+      if (hasLiveSoulwake()) {
+        const before = sw();
+        setSw(activateRecordedWake(sw(), ownedDefinitionIds()));
+        if (sw().activeWake > 0 && sw().recordedWake === 0 && before.recordedWake > 0) {
+          dispatch({
+            type: 'WAKE_ACTIVATED',
+            sourceId: 'soulwake',
+            lineage: [],
+            rootActionId: null,
+            targetId: null,
+            payload: { wake: sw().activeWake, kind: sw().activeWakeKind },
+          });
+        }
+      }
       if (hasLiveRitual()) {
         setRc(resetCombatCycleRitualCadence(resetPlayerTurnRitualCadence(rc())));
       }
+      setCv(resetConvergencePlayerTurn(resetConvergenceCombatCycle(cv())));
+      if (hasLiveRitual() && cv().pendingBeatII) {
+        setRc(applyScheduledBeatII(rc()));
+        setCv({ ...cv(), pendingBeatII: false });
+      }
+      if (hasLiveAfterimage()) {
+        setAi(beginPlayerTurn(ai()));
+      }
+      if (hasLiveStillpoint()) {
+        setSp(beginStillpointPlayerTurn(sp(), ownedDefinitionIds()));
+        const refunded = applyQueuedTurnStartRefund(sp());
+        setSp(refunded.state);
+        if (refunded.refund > 0) {
+          state.metrics.ap_refund = (state.metrics.ap_refund ?? 0) + refunded.refund;
+        }
+      }
+    }
+    if (full.type === 'PLAYER_TURN_ENDED') {
+      if (hasLiveAfterimage()) setAi(expireUnusedCrossfade(ai()));
+      expireEchoedIfDue();
     }
     if (full.type === 'ENEMY_CYCLE_STARTED') {
       resetWindow('ENEMY_CYCLE');
+      setFl(beginFaultlineCombatCycle(fl()));
+      setSw(beginSoulwakeEnemyCycle(sw()));
+      if (hasLiveAfterimage()) setAi(expireUnusedCrossfade(ai()));
+      expireEchoedIfDue();
       const liveCounterfate = ownedDefinitionIds().some((id) => {
         const def = definitions.get(id);
         return def?.strainId === 'COUNTERFATE' && !def.testOnly;
       });
       if (liveCounterfate) setCf(resetEnemyCycleCounterfate(cf()));
+      if (hasLiveStillpoint()) {
+        setSp(beginStillpointEnemyCycle(sp()));
+        hostileIntents = tickIntentCountdowns(hostileIntents, sp().zeroHourPause, sp().enemyCycleIndex);
+      }
+      setCv(resetConvergenceEnemyCycle(cv()));
+    }
+    if (full.type === 'ENEMY_CYCLE_ENDED') {
+      if (hasLiveStillpoint()) setSp(endStillpointEnemyCycle(sp()));
+      if (hasLiveSoulwake()) {
+        const before = sw();
+        setSw(expireSoulwakeAtEnemyCycleEnd(sw(), ownedDefinitionIds()));
+        if (before.activeWakeKind === 'NORMAL' && sw().activeWakeKind === 'RESIDUAL') {
+          dispatch({
+            type: 'WAKE_RESIDUAL',
+            sourceId: 'soulwake',
+            lineage: [],
+            rootActionId: null,
+            targetId: null,
+            payload: { wake: sw().activeWake },
+          });
+        }
+      }
     }
     runOwned(full, ctx);
     return full;
@@ -459,6 +1480,29 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       return [...emitted];
     }
     let prepared = ctx;
+    if (hasLiveStillpoint() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const authored = prepared.authoredCosts.ap ?? prepared.actualCostsPaid.ap ?? 0;
+      const discounted = previewPatientInvocationAp(authored, prepared, ownedDefinitionIds(), sp());
+      if (discounted !== (prepared.actualCostsPaid.ap ?? authored)) {
+        prepared = {
+          ...prepared,
+          actualCostsPaid: { ...prepared.actualCostsPaid, ap: discounted },
+        };
+      }
+      if (prepared.sourceKind === 'ULTIMATE' || prepared.actionSurface === 'ULTIMATE') {
+        const zero = applyZeroHour(sp(), ownedDefinitionIds(), hostileIntents, prepared.nativeByTarget);
+        setSp(zero.state);
+        if (zero.consumed > 0) {
+          prepared = {
+            ...prepared,
+            nativeByTarget: zero.modified,
+            totalNativeDirectDamage: zero.modified.reduce((sum, row) => sum + row.nativeDirectDamage, 0),
+          };
+          state.metrics.zero_hour_charges = zero.consumed;
+          state.metrics.zero_hour_bonus_percent = roundTrace(zero.bonusPercent * 100);
+        }
+      }
+    }
     const ritualActive = hasLiveRitual() && ctx.classification === 'NATIVE_DIRECT';
     const preview = ritualActive ? measurePreviewFor(ctx) : null;
     if (preview?.finale && preview.surface === 'ARMAMENT' && ownedHasKind('MEASURE_ARMAMENT_FINALE')) {
@@ -487,7 +1531,25 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         },
       };
     }
+    if (hasLiveSoulwake() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const nativeHp = applyNativeHpCost(sw(), ownedDefinitionIds(), prepared);
+      setSw(nativeHp.state);
+      if (prepared.sourceKind === 'ULTIMATE' || prepared.actionSurface === 'ULTIMATE') {
+        setSw(applyLastHeartbeatOverdraw(sw(), ownedDefinitionIds(), prepared));
+      }
+      prepared = snapshotWakePowered(sw(), prepared, nativeHp.paidQualifying);
+    }
     lastRootContext = prepared;
+    if (hasLiveStillpoint() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const surfaces = matchingStillpointSurfaces(prepared, ownedDefinitionIds(), false);
+      if (surfaces.length > 0) {
+        const focused = consumeFocusForRoot(sp(), prepared, ownedDefinitionIds(), false);
+        setSp(focused.state);
+      } else if (ownedHasKind('STILLPOINT_SILENT_RESERVOIR')) {
+        setSp({ ...sp(), pendingCurrentFocusRootId: prepared.rootActionId });
+      }
+    }
+    consumeHeldResonance(prepared);
     if (ritualActive && preview && preview.surface && preview.surface !== 'INSTINCT') {
       let next = applyMeasureStep(rc(), preview);
       if (preview.finale) {
@@ -549,7 +1611,144 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         procDepth: prepared.procDepth,
       },
     }, prepared);
-    maybeReleaseAfterRoot(prepared);
+    if (hasLiveFaultline() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      prepared = applyFaultlineResult(processFaultlineRoot({
+        state: fl(),
+        ctx: prepared,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        sourceEventId: prepared.rootActionId,
+      }), prepared);
+    }
+    if (hasLiveSoulwake() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      prepared = applySoulwakePackets(processSoulwakeRoot({
+        state: sw(),
+        ctx: prepared,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        depth: cf().combatDepth,
+        skipPayment: true,
+      }), prepared, SOULWAKE_CORE_IDS.HOLLOW_EDGE);
+      if (prepared.sourceKind === 'ULTIMATE' || prepared.actionSurface === 'ULTIMATE') {
+        prepared = applySoulwakePackets(resolveLastHeartbeatPackets({
+          state: sw(),
+          ctx: prepared,
+          ownedIds: ownedDefinitionIds(),
+          intents: hostileIntents,
+        }), prepared, SOULWAKE_VERDICT_ID);
+      }
+    }
+    if (hasLiveStillpoint() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const focused = sp().focusedRoot;
+      if (focused?.rootActionId === prepared.rootActionId && focused.surfaces.includes('ARMAMENT')) {
+        const packet = condensedImpactFromRoot(prepared, cf().combatDepth);
+        if (packet) {
+          const resolved = resolveCondensedImpactTarget(packet, hostileIntents);
+          setSp({ ...sp(), lastCondensedImpact: resolved.damage });
+          state.metrics.condensed_impact = (state.metrics.condensed_impact ?? 0) + resolved.damage;
+          if (!resolved.fizzled && resolved.damage > 0) {
+            dispatch({
+              type: 'DERIVATIVE_RESOLVED',
+              sourceId: STILLPOINT_CORE_IDS.STORED_FORCE,
+              lineage: [prepared.rootActionId, 'CONDENSED_IMPACT'],
+              rootActionId: prepared.rootActionId,
+              targetId: resolved.targetId,
+              payload: {
+                damage: resolved.damage,
+                kinetic: resolved.kinetic,
+                occult: resolved.occult,
+                classification: 'DERIVATIVE',
+              },
+            }, { ...prepared, classification: 'DERIVATIVE', procDepth: 1 });
+          }
+          prepared = {
+            ...prepared,
+            nativeByTarget: prepared.nativeByTarget.map((row) => (
+              row.targetId === resolved.targetId && !resolved.fizzled
+                ? { ...row, killed: row.killed || resolved.damage >= (hostileIntents.find((intent) => intent.unitId === row.targetId)?.hp ?? 9999) }
+                : row
+            )),
+          };
+        }
+      }
+      if (focused?.rootActionId === prepared.rootActionId && focused.surfaces.includes('DISCIPLINE') && prepared.startsCooldown) {
+        setSp({ ...sp(), lastCooldownAdvanced: true });
+        state.metrics.stillpoint_cooldown_advance = (state.metrics.stillpoint_cooldown_advance ?? 0) + 1;
+      }
+      const condensedKilled = (sp().lastCondensedImpact ?? 0) > 0 && prepared.nativeByTarget.some((row) => row.killed);
+      if (focused?.rootActionId === prepared.rootActionId && returnStrokeQualifies(prepared, condensedKilled)) {
+        const refund = applyReturnStroke(sp(), ownedDefinitionIds(), sp().playerTurnOpen);
+        setSp(refund.state);
+        if (refund.refundNow > 0) state.metrics.ap_refund = (state.metrics.ap_refund ?? 0) + refund.refundNow;
+        if (refund.queued > 0) state.metrics.ap_refund_queued = (state.metrics.ap_refund_queued ?? 0) + refund.queued;
+      }
+    }
+    if (hasLiveWoundweave() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const withAffected = {
+        ...prepared,
+        directlyAffectedTargetIds: prepared.directlyAffectedTargetIds ?? directlyAffectedTargetIds(prepared),
+      };
+      const focused = sp().focusedRoot;
+      const affected = withAffected.directlyAffectedTargetIds ?? [];
+      const linkedHit = affected.some((id) => (
+        isLinkedWoundweaveEndpoint(ww(), id)
+        || ww().pendingEndpoint === id
+        || ww().entangledSeededUnitId === id
+      ));
+      const willPair = !hasPrimaryPair(ww()) && affected.length >= 2;
+      const familyScale = ownedHasKind('DRAWN_TENSION')
+        && focused?.rootActionId === prepared.rootActionId
+        && (linkedHit || willPair)
+        ? 1.5
+        : 1;
+      const emp = cv().twofoldEmpowerment;
+      const twofoldScale = emp?.armed && emp.sourceFinaleRootId !== prepared.rootActionId ? 1.5 : 1;
+      const beforeIntents = hostileIntents.slice();
+      const linkedBefore = new Set(
+        beforeIntents
+          .map((row) => row.unitId)
+          .filter((id) => isLinkedWoundweaveEndpoint(ww(), id) || isPrimaryEndpoint(ww(), id) || ww().pendingEndpoint === id),
+      );
+      const resolved = processWoundweaveRoot({
+        state: ww(),
+        ctx: withAffected,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        depth: cf().combatDepth,
+        jammed,
+        familyScale,
+        twofoldScale,
+      });
+      setWw(resolved.state);
+      hostileIntents = resolved.intents;
+      if (resolved.consumedTwofold) {
+        setCv({ ...cv(), twofoldEmpowerment: null });
+      }
+      emitWoundweavePackets(resolved.packets, prepared);
+      applyTwofoldFormation();
+      applyEntangledFateStore(withAffected);
+      applyDrawnTensionFleeting(withAffected, beforeIntents, hostileIntents, linkedBefore);
+      const occult = resolved.packets.reduce((sum, row) => sum + (row.fizzled ? 0 : row.occultDamage), 0);
+      if (occult > 0) state.metrics.woundweave_occult = (state.metrics.woundweave_occult ?? 0) + occult;
+      const wwKilled = resolved.packets.some((packet) => {
+        const row = hostileIntents.find((intent) => intent.unitId === packet.targetId);
+        return Boolean(row && !row.alive);
+      });
+      if (hasLiveStillpoint()) {
+        const focused = sp().focusedRoot;
+        if (focused?.rootActionId === prepared.rootActionId && !sp().returnStrokeUsedThisPlayerTurn
+          && returnStrokeQualifies(prepared, wwKilled)) {
+          const refund = applyReturnStroke(sp(), ownedDefinitionIds(), sp().playerTurnOpen);
+          setSp(refund.state);
+          if (refund.refundNow > 0) state.metrics.ap_refund = (state.metrics.ap_refund ?? 0) + refund.refundNow;
+          if (refund.queued > 0) state.metrics.ap_refund_queued = (state.metrics.ap_refund_queued ?? 0) + refund.queued;
+        }
+      }
+    }
+    holdFateboundRelease = Boolean(preview?.finale);
+    if (!holdFateboundRelease) maybeReleaseAfterRoot(prepared);
     if (prepared.sourceKind === 'ULTIMATE') {
       dispatch({
         type: 'ULTIMATE_RESOLVED',
@@ -563,17 +1762,55 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       setCf(revision.cf);
       if (revision.release) emitRelease(revision.release, prepared);
     }
-    consumeHeldResonance(prepared);
+    const crossfadeOrigin = ai().crossfadeArmedImprint;
+    if (hasLiveAfterimage() && prepared.classification === 'NATIVE_DIRECT') {
+      const beforeSeq = ai().nextTraceSequence;
+      mintOrdinaryFromRoot(prepared, 'CORE', 1);
+      applySuspendedEchoAndGhostCapture(prepared, beforeSeq);
+      if (ownedHasKind('SECOND_ENDING') && prepared.sourceKind === 'ULTIMATE') {
+        const minted = tryMintSecondEnding(ai(), prepared, AFTERIMAGE_VERDICT_ID);
+        setAi(minted.state);
+      }
+      const ready = dueActionTraces(ai()).filter((row) => row.status === 'READY');
+      for (const trace of ready) {
+        resolveOneTrace(trace, prepared);
+      }
+      if (crossfadeOrigin) {
+        mintCrossfadeFromRoot(prepared, crossfadeOrigin);
+      }
+    }
     if (preview?.finale && preview.surface) {
+      const originalBound = cf().fateboundUnitId;
+      applyFatedRefrainFinaleStore();
+      holdFateboundRelease = false;
+      maybeReleaseAfterRoot(prepared);
+      if (
+        originalBound
+        && cf().fateboundUnitId === originalBound
+        && hostileIntents.some((row) => row.unitId === originalBound && !row.alive)
+        && !skipOrdinaryRelease()
+      ) {
+        maybeReleaseAfterRoot({
+          ...prepared,
+          nativeByTarget: prepared.nativeByTarget.map((row) => (
+            row.targetId === originalBound ? { ...row, killed: true } : row
+          )),
+        });
+      }
       const release = cf().lastRelease;
+      const delayedRelease = Boolean(release?.lineage?.includes('AFTERIMAGE_TRACE'));
       const targetHp = hostileIntents.find((row) => row.unitId === release?.targetUnitId)?.hp ?? 0;
-      const descendantKill = Boolean(release && release.packet > 0 && targetHp > 0 && release.packet >= targetHp);
+      const descendantKill = !delayedRelease && Boolean(release && release.packet > 0 && targetHp > 0 && release.packet >= targetHp);
       completePendingFinale({
         ...prepared,
         kills: prepared.kills + (descendantKill ? 1 : 0),
-        intentCountered: prepared.intentCountered === true || release?.countered === true,
+        intentCountered: !delayedRelease && (prepared.intentCountered === true || release?.countered === true),
       }, preview.surface);
+      applyMeasuredSilenceRetain(prepared);
+      applyTwofoldFinaleArm(prepared);
+      armEchoedRite(prepared.rootActionId);
     }
+    holdFateboundRelease = false;
     return [...emitted];
   }
 
@@ -595,28 +1832,80 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     events: NormalizedBoonEvent[];
     counterfate: ReturnType<typeof cf>;
     ritualCadence: ReturnType<typeof rc>;
+    afterimage: ReturnType<typeof ai>;
+    stillpoint: ReturnType<typeof sp>;
+    woundweave: ReturnType<typeof ww>;
+    faultline: ReturnType<typeof fl>;
+    soulwake: ReturnType<typeof sw>;
   } {
     const snapshot = cloneNineStrainRuntimeState(state);
     const orderSnapshot = eventOrder;
     const emittedLen = emitted.length;
     const releaseLen = pendingReleases.length;
     const contextSnapshot = lastRootContext;
+    const intentSnapshot = hostileIntents.slice();
     commitRootAction(ctx);
     const metrics = { ...state.metrics };
     const events = emitted.slice(emittedLen);
     const counterfate = cloneNineStrainRuntimeState({ ...state, counterfate: cf() }).counterfate;
     const ritualCadence = structuredClone(rc());
+    const afterimage = structuredClone(ai());
+    const stillpoint = structuredClone(sp());
+    const woundweave = structuredClone(ww());
+    const faultline = structuredClone(fl());
+    const soulwake = structuredClone(sw());
     state = snapshot;
     lastRootContext = contextSnapshot;
     eventOrder = orderSnapshot;
     emitted.length = emittedLen;
     pendingReleases.length = releaseLen;
-    return { metrics, events, counterfate, ritualCadence };
+    hostileIntents = intentSnapshot;
+    return { metrics, events, counterfate, ritualCadence, afterimage, stillpoint, woundweave, faultline, soulwake };
   }
 
   function resolveInstinct(input: InstinctAdapterInput): InstinctGradeWrap {
-    const grade = resolveInstinctGrade(input);
+    let grade = resolveInstinctGrade(input);
     const rootActionId = `instinct:${input.classId}:${eventOrder + 1}`;
+    let instinctCtx: CanonicalRootActionContext = {
+      ...weaponFamilyExecutionContext(lastRootContext?.weaponFamilyId ?? 'aegis-longsword', {
+        actionId: `instinct:${input.classId}`,
+        sourceKind: 'INSTINCT' as const,
+        actionSurface: 'INSTINCT' as const,
+        rootActionId,
+        committed: true,
+        classId: input.classId,
+        nativeByTarget: [],
+        totalNativeDirectDamage: 0,
+      }),
+      classId: input.classId,
+      intentCountered: input.preventedFateboundIntentDamage === true,
+    };
+    let focused = false;
+    if (hasLiveStillpoint() && ownedHasKind('STILLPOINT_QUIET_REFLEX')) {
+      const result = consumeFocusForRoot(sp(), instinctCtx, ownedDefinitionIds(), false);
+      setSp(result.state);
+      focused = Boolean(result.focused);
+    }
+    const originalGrade = grade;
+    if (focused && ownedHasKind('STILLPOINT_QUIET_REFLEX')) {
+      const allowPositive = !sp().quietReflexSuccessUsedThisCombatCycle;
+      if (allowPositive && grade !== 'FAILED') {
+        grade = promoteQuietReflexGrade(grade);
+        if (originalGrade === 'PERFECT') {
+          const numeric = input.primaryNumeric ?? input.riftPreventedDamage ?? 0;
+          if (numeric > 0) {
+            state.metrics.quiet_reflex_numeric = scalePerfectNumeric(numeric);
+          }
+        }
+        setSp({
+          ...sp(),
+          quietReflexSuccessUsedThisCombatCycle: true,
+          lastQuietReflexGrade: grade,
+        });
+      } else {
+        setSp({ ...sp(), lastQuietReflexGrade: grade });
+      }
+    }
     dispatch({
       type: grade === 'FAILED' ? 'INSTINCT_FAILED' : 'INSTINCT_COMMITTED',
       sourceId: `instinct:${input.classId}`,
@@ -638,7 +1927,41 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         preventedFateboundIntentDamage: input.preventedFateboundIntentDamage === true,
       },
     });
-    if (hasLiveRitual() && ownedHasKind('MEASURE_INSTINCT') && !rc().instinctCommitmentUsedThisCombatCycle) {
+    if (hasLiveFaultline()) {
+      instinctCtx = applyFaultlineResult(processFaultlineInstinct({
+        state: fl(),
+        ctx: instinctCtx,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        grade,
+        associatedHostileUnitId: input.associatedHostileUnitId,
+        sourceEventId: rootActionId,
+      }), instinctCtx);
+    }
+    if (hasLiveSoulwake()) {
+      const reflex = processSoulwakeInstinct({
+        state: sw(),
+        ownedIds: ownedDefinitionIds(),
+        grade,
+      });
+      setSw(reflex.state);
+      if (reflex.barrier > 0) {
+        state.metrics.soulwake_barrier = (state.metrics.soulwake_barrier ?? 0) + reflex.barrier;
+      }
+    }
+    if (hasLiveWoundweave() && ownedHasKind('WOUNDWEAVE_REFLEXIVE_AGONY')) {
+      const pulse = emitReflexiveAgony(ww(), ownedDefinitionIds(), hostileIntents, grade, rootActionId);
+      setWw(pulse.state);
+      if (pulse.packets.length > 0) {
+        hostileIntents = applyWoundweavePacketsToIntents(hostileIntents, pulse.packets);
+        emitWoundweavePackets(pulse.packets, instinctCtx);
+        const occult = pulse.packets.reduce((sum, row) => sum + row.occultDamage, 0);
+        state.metrics.woundweave_occult = (state.metrics.woundweave_occult ?? 0) + occult;
+      }
+    }
+    if (hasLiveRitual() && !rc().instinctCommitmentUsedThisCombatCycle) {
       const before = rc();
       const preview = measurePreviewFor({
         actionSurface: 'INSTINCT',
@@ -653,13 +1976,14 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         instinctCommitmentRootId: rootActionId,
       };
       let finale = preview.finale;
-      if (instinctBonusEligible(grade, different, finale) && preview.surface) {
+      if (ownedHasKind('MEASURE_INSTINCT') && instinctBonusEligible(grade, different, finale) && preview.surface) {
         const bonus = forceAdvance(next, preview.surface);
         next = bonus.state;
         finale = finale || bonus.finale;
       }
       setRc(next);
       if (finale && preview.surface) {
+        applyFatedRefrainFinaleStore();
         completePendingFinale({
           actionId: `instinct:${input.classId}`,
           sourceKind: 'INSTINCT',
@@ -687,7 +2011,47 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
           actionSurface: 'INSTINCT',
           intentCountered: input.preventedFateboundIntentDamage === true,
         }, preview.surface);
+        applyMeasuredSilenceRetain({
+          actionId: `instinct:${input.classId}`,
+          sourceKind: 'INSTINCT',
+          finalMechanicalTags: [],
+          damageChannels: [],
+          defenseRoutingTags: [],
+          lockedTargetIds: [],
+          targetPattern: 'SELF',
+          authoredCosts: {},
+          actualCostsPaid: {},
+          nativeByTarget: [],
+          totalNativeDirectDamage: 0,
+          kills: 0,
+          healing: 0,
+          movement: 0,
+          primaryResource: { gained: 0, spent: 0, preserved: 0, converted: 0 },
+          rootActionId,
+          triggerSourceId: null,
+          procDepth: 0,
+          classification: 'NATIVE_DIRECT',
+          classId: input.classId,
+          weaponFamilyId: 'aegis-longsword',
+          committed: true,
+          ultimateOwnedRefill: false,
+          actionSurface: 'INSTINCT',
+          intentCountered: input.preventedFateboundIntentDamage === true,
+        });
+        armEchoedRite(rootActionId);
       }
+    }
+    if (ownedHasKind('TRACE_REFLEX_REMNANT')) {
+      const beforeSeq = ai().nextTraceSequence;
+      const result = tryMintReflex(ai(), {
+        grade,
+        rootActionId,
+        definitionId: AFTERIMAGE_CORE_IDS.REFLEX_REMNANT,
+        provenance: 'CORE',
+        powerMultiplier: 1,
+      });
+      setAi(result.state);
+      applySuspendedEchoAndGhostCapture(instinctCtx, beforeSeq);
     }
     return { grade, positiveActivated: isPositiveInstinctGrade(grade) && state.triggerGuards.instinctPositiveUsedThisCombatCycle };
   }
@@ -703,8 +2067,124 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       lineage: lastRootContext ? [lastRootContext.rootActionId] : [],
       rootActionId: lastRootContext?.rootActionId ?? null,
       targetId: null,
-      payload: { signal: resolved.signal, kind: resolved.kind, classId: input.classId },
+      payload: {
+        signal: resolved.signal,
+        kind: resolved.kind,
+        classId: input.classId,
+        actualGained: input.actualGained ?? 0,
+        reloadRestoredCount: input.reloadRestoredCount ?? 0,
+        ammoType: input.selectedAmmoType ?? null,
+      },
     });
+    if (hasLiveFaultline() && lastRootContext) {
+      applyFaultlineResult(processFaultlineCurrent({
+        state: fl(),
+        ctx: lastRootContext,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        signal: resolved.signal,
+        associatedHostileUnitId: input.associatedHostileUnitId,
+        sourceEventId: lastRootContext.rootActionId,
+      }), lastRootContext);
+    }
+    if (hasLiveSoulwake() && lastRootContext) {
+      const conduit = processSoulwakeCurrent({
+        state: sw(),
+        ctx: lastRootContext,
+        ownedIds: ownedDefinitionIds(),
+        input,
+      });
+      setSw(conduit.state);
+      if (conduit.gained > 0) {
+        state.metrics.soulwake_current_gain = (state.metrics.soulwake_current_gain ?? 0) + conduit.gained;
+      }
+      if (conduit.preserved > 0) {
+        state.metrics.soulwake_current_preserved = (state.metrics.soulwake_current_preserved ?? 0) + conduit.preserved;
+        dispatch({
+          type: 'CURRENT_PRESERVED',
+          sourceId: SOULWAKE_CORE_IDS.OPEN_CONDUIT,
+          lineage: [lastRootContext.rootActionId, SOULWAKE_CORE_IDS.OPEN_CONDUIT],
+          rootActionId: lastRootContext.rootActionId,
+          targetId: null,
+          payload: { preserved: conduit.preserved, classification: 'DERIVATIVE' },
+        });
+      }
+    }
+    if (hasLiveStillpoint() && ownedHasKind('STILLPOINT_SILENT_RESERVOIR') && !sp().silentReservoirUsedThisPlayerTurn && lastRootContext) {
+      let focused = sp().focusedRoot?.rootActionId === lastRootContext.rootActionId
+        && sp().focusedRoot?.consumed;
+      if (!focused && sp().pendingCurrentFocusRootId === lastRootContext.rootActionId) {
+        const result = consumeFocusForRoot(sp(), lastRootContext, ownedDefinitionIds(), true);
+        setSp(result.state);
+        focused = Boolean(result.focused);
+      }
+      if (focused) {
+        let preserved = 0;
+        let gainBonus = 0;
+        let reloadBonus = 0;
+        if (input.ammoSpent) {
+          preserved = 1;
+        } else if (input.ordinarySpend || resolved.kind === 'SPENT') {
+          preserved = silentReservoirSpendPreserve(input.actualSpent ?? 1);
+        } else if (input.reloadRestoredRounds || (input.reloadRestoredCount ?? 0) > 0) {
+          reloadBonus = silentReservoirReloadBonus(
+            input.reloadRestoredCount ?? 3,
+            input.magazineSpace ?? 99,
+          );
+        } else if (input.ordinaryGain || resolved.kind === 'GAINED') {
+          gainBonus = silentReservoirGainBonus(input.actualGained ?? 0);
+        }
+        setSp({
+          ...sp(),
+          silentReservoirUsedThisPlayerTurn: true,
+          pendingCurrentFocusRootId: null,
+          lastPreserved: preserved,
+          lastReloadBonus: reloadBonus,
+        });
+        if (preserved > 0) {
+          state.metrics.current_preserved = (state.metrics.current_preserved ?? 0) + preserved;
+          dispatch({
+            type: 'CURRENT_PRESERVED',
+            sourceId: STILLPOINT_CORE_IDS.SILENT_RESERVOIR,
+            lineage: [lastRootContext.rootActionId],
+            rootActionId: lastRootContext.rootActionId,
+            targetId: null,
+            payload: { preserved, ammoType: input.selectedAmmoType ?? null },
+          });
+        }
+        if (gainBonus > 0) {
+          state.metrics.silent_reservoir_gain = gainBonus;
+        }
+        if (reloadBonus > 0) {
+          state.metrics.silent_reservoir_reload = reloadBonus;
+        }
+      }
+    }
+    if (hasLiveWoundweave() && ownedHasKind('WOUNDWEAVE_TIGHTENED_THREAD') && lastRootContext && !resolved.excluded) {
+      setWw(armTightenedThread(
+        ww(),
+        ownedDefinitionIds(),
+        lastRootContext.rootActionId,
+        resolved.signal === 'MAJOR' ? 'MAJOR' : 'ORDINARY',
+      ));
+    }
+    if (ownedHasKind('TRACE_RECURRENT_CHARGE') && resolved.kind === 'GAINED') {
+      const result = tryMintRecurrent(ai(), {
+        classId: input.classId,
+        actualGained: input.actualGained ?? 0,
+        reloadRestoredCount: input.reloadRestoredCount ?? (input.reloadRestoredRounds ? 3 : 0),
+        selectedAmmoType: input.selectedAmmoType ?? lastRootContext?.selectedAmmoType ?? null,
+        ultimateOwnedRefill: input.ultimateOwnedRefill === true,
+        delayedRestore: input.delayedRestore === true,
+        definitionId: AFTERIMAGE_CORE_IDS.RECURRENT_CHARGE,
+        provenance: 'CORE',
+        powerMultiplier: 1,
+        originRootActionId: lastRootContext?.rootActionId ?? null,
+      });
+      setAi(result.state);
+    }
     return resolved;
   }
 
@@ -724,6 +2204,23 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     if (liveCounterfate) {
       setCf(selectFateboundAtPlayerTurn(cf(), hostileIntents, jammed, cf().combatDepth));
     }
+    if (ownedHasKind('ENTANGLED_FATE') && hasLiveWoundweave()) {
+      setWw(seedEntangledFateEndpoint(ww(), cf().fateboundUnitId, hostileIntents, ownedDefinitionIds()));
+    }
+    if (hasLiveAfterimage() && ownedHasKind('DEFERRED_EXPOSURE')) {
+      const options = deferredExposureOptions(ai(), true);
+      if (options.length > 0) {
+        setAi({ ...ai(), deferredChoicePending: true });
+        const orderedEarly = orderPendingTurnStartEffects(state.pendingEffects);
+        state.pendingEffects = [];
+        for (const pending of orderedEarly) {
+          const key = pending.kind === 'TRACE' ? 'traces_resolved' : 'other_queued_resolved';
+          state.metrics[key] = (state.metrics[key] ?? 0) + 1;
+        }
+        return TURN_START_PHASES.slice();
+      }
+    }
+    if (hasLiveAfterimage()) resolveDueTurnStartTraces();
     const ordered = orderPendingTurnStartEffects(state.pendingEffects);
     state.pendingEffects = [];
     for (const pending of ordered) {
@@ -733,17 +2230,19 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     return TURN_START_PHASES.slice();
   }
 
-  function preview(definitionId: string, extra: { premiumVerdictSource?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string } = {}): OwnershipPreview {
+  function     preview(definitionId: string, extra: { premiumVerdictSource?: boolean; allowVerdictReplace?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string; allowSector2Wave?: boolean; maxAcquisitionWave?: 1 | 2 | 3 } = {}): OwnershipPreview {
     return previewAcquire(state, definitions, definitionId, {
       allowTestOffers: options.allowTestOffers,
+      allowSector2Wave: extra.allowSector2Wave ?? options.allowSector2Wave,
       combatDepth: extra.combatDepth ?? cf().combatDepth,
       ...extra,
     });
   }
 
-  function commit(definitionId: string, extra: { premiumVerdictSource?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string } = {}): OwnershipPreview {
+  function commit(definitionId: string, extra: { premiumVerdictSource?: boolean; allowVerdictReplace?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string; allowSector2Wave?: boolean; maxAcquisitionWave?: 1 | 2 | 3 } = {}): OwnershipPreview {
     const result = applyAcquire(state, definitions, definitionId, {
       allowTestOffers: options.allowTestOffers,
+      allowSector2Wave: extra.allowSector2Wave ?? options.allowSector2Wave,
       combatDepth: extra.combatDepth ?? cf().combatDepth,
       ...extra,
     });
@@ -793,6 +2292,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       const synced = syncIntentIdentities(cf(), rows);
       setCf(synced.cf);
       hostileIntents = synced.snapshots;
+      setFl(pruneFaultlineTargets(fl(), hostileIntents));
       const liveCounterfate = ownedDefinitionIds().some((id) => {
         const def = definitions.get(id);
         return def?.strainId === 'COUNTERFATE' && !def.testOnly;
@@ -859,6 +2359,97 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     resetEncounterCadence() {
       setRc(resetEncounterRitualCadence());
     },
+    completeCombat(outcome: 'VICTORY' | 'ESCAPE' | 'FAILURE' = 'VICTORY') {
+      if (hasLiveSoulwake()) setSw(completeSoulwakeEncounter(sw(), ownedDefinitionIds(), outcome));
+      setRc(resetEncounterRitualCadence());
+      setAi(clearEncounterAfterimage());
+      setCv(createDefaultConvergenceState());
+      setSp(clearEncounterStillpoint());
+      setWw(clearEncounterWoundweave());
+      setFl(clearEncounterFaultline());
+    },
+    endPlayerTurn(input: { reason?: PlayerTurnEndReason; usableAp?: number; apDisabledByEnemy?: boolean; apRemovedByEnemy?: boolean } = {}) {
+      const reason = input.reason ?? 'VOLUNTARY';
+      if (hasLiveStillpoint() && (input.apDisabledByEnemy || input.apRemovedByEnemy)) {
+        setSp(noteHostileApDisruption(sp()));
+      }
+      const usable = input.usableAp ?? usablePlayerAp({
+        remainingAp: 0,
+        apDisabledByEnemy: input.apDisabledByEnemy,
+        apRemovedByEnemy: input.apRemovedByEnemy,
+      });
+      if (hasLiveStillpoint()) {
+        const ended = applyStillpointEndTurn(sp(), ownedDefinitionIds(), { reason, usableAp: usable });
+        setSp(ended.state);
+        if (ended.nativeEvent) {
+          state.metrics.native_stillness_gained = (state.metrics.native_stillness_gained ?? 0) + 1;
+          dispatch({
+            type: 'NATIVE_STILLNESS_GAINED',
+            sourceId: 'stillpoint',
+            lineage: [],
+            rootActionId: null,
+            targetId: null,
+            payload: { usableAp: usable, reason },
+          });
+          applyStayedSentenceNativeGain();
+          applyMeasuredSilenceAdvance();
+        }
+        if (ended.barrier > 0) {
+          state.metrics.sheltered_pause_barrier = ended.barrier;
+        }
+      }
+      dispatch({
+        type: 'PLAYER_TURN_ENDED',
+        sourceId: 'turn',
+        lineage: [],
+        rootActionId: null,
+        targetId: null,
+        payload: { reason, usableAp: usable },
+      });
+    },
+    deferredExposureOptions: () => deferredExposureOptions(ai(), ownedHasKind('DEFERRED_EXPOSURE')),
+    confirmDeferredExposure(traceId: string | null) {
+      setAi(applyDeferredDelay(ai(), traceId));
+      resolveDueTurnStartTraces();
+      return ai();
+    },
+    setAfterimageCapacity(capacity: Partial<ReturnType<typeof ai>['capacity']>) {
+      setAi({ ...ai(), capacity: { ...ai().capacity, ...capacity } });
+    },
+    afterimagePresentation() {
+      const current = ai();
+      const pending = current.pending.filter((row) => row.status === 'PENDING' || row.status === 'READY');
+      return {
+        pendingCount: pending.length,
+        queue: pending.map((row) => ({
+          origin: row.originImprint === 'ARMAMENT'
+            ? 'Weapon echo'
+            : row.originImprint === 'DISCIPLINE'
+              ? 'Discipline echo'
+              : row.originImprint === 'INSTINCT'
+                ? 'Instinct echo'
+                : row.originImprint === 'CURRENT'
+                  ? 'Current echo'
+                  : 'Ultimate echo',
+          due: row.duePlayerTurn,
+          payload: row.payloadKind === 'MATCHING_AMMO' ? 1 : effectiveTracePower(row),
+          provenance: row.provenance === 'CORE'
+            ? 'Core'
+            : row.provenance === 'CROSSFADE_BONUS'
+              ? 'Crossfade'
+              : row.provenance === 'PERSISTENT_SECONDARY'
+                ? 'Persistent'
+                : row.provenance === 'VERDICT'
+                  ? 'Verdict'
+                  : 'Convergence',
+          ammoType: row.ammoType,
+        })),
+        deferredAvailable: current.deferredChoicePending,
+        deferredOptions: deferredExposureOptions(current, ownedHasKind('DEFERRED_EXPOSURE')),
+        crossfadeArmed: current.crossfadeArmedImprint != null && !current.crossfadeUsedThisPlayerTurn,
+        reflexReady: pending.some((row) => row.resolutionMode === 'NEXT_COMMITTED_ACTION' && row.status === 'READY'),
+      };
+    },
     ritualPresentation() {
       const current = rc();
       const beatLabel = current.measure === 'BEAT_I' ? 'BEAT I' : current.measure === 'BEAT_II' ? 'BEAT II' : 'EMPTY';
@@ -899,6 +2490,124 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
           ? 'Obscured future'
           : (bound?.designation ?? null),
       };
+    },
+    stillpointPresentation() {
+      return composeStillpointPresentation(sp(), ownedDefinitionIds());
+    },
+    woundweavePresentation() {
+      return {
+        ...composeWoundweavePresentation(ww(), hostileIntents),
+        endpointAId: ww().endpointA,
+        endpointBId: ww().endpointB,
+        pendingId: ww().pendingEndpoint,
+        badgeFor: (unitId: string) => endpointBadgeForUnit(ww(), unitId),
+      };
+    },
+    faultlinePresentation() {
+      return {
+        ...composeFaultlinePresentation(fl()),
+        pipsFor: (unitId: string) => faultPipsForUnit(fl(), unitId),
+      };
+    },
+    soulwakePresentation() {
+      return {
+        ...composeSoulwakePresentation(sw()),
+        overdrawAvailable: ordinaryOverdrawAvailable(sw(), ownedDefinitionIds()),
+        lastHeartbeatSelected: sw().lastHeartbeatSelected,
+      };
+    },
+    previewFaultline(ctx: CanonicalRootActionContext) {
+      const snapshot = cloneNineStrainRuntimeState(state);
+      const intents = hostileIntents.slice();
+      const preview = previewFaultlineRoot({
+        state: fl(),
+        ctx,
+        ownedIds: ownedDefinitionIds(),
+        intents,
+        jammed,
+        depth: cf().combatDepth,
+        sourceEventId: ctx.rootActionId,
+      });
+      state = snapshot;
+      hostileIntents = intents;
+      return preview;
+    },
+    previewSoulwake(ctx: CanonicalRootActionContext) {
+      return previewSoulwakeRoot({
+        state: sw(),
+        ctx,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        depth: cf().combatDepth,
+      });
+    },
+    previewOverdraw() {
+      return previewOrdinaryOverdraw(sw(), ownedDefinitionIds());
+    },
+    commitOverdraw(lossEventId = `overdraw:${sw().playerTurnIndex}`) {
+      const result = commitOrdinaryOverdraw(sw(), ownedDefinitionIds(), lossEventId);
+      setSw(result.state);
+      if (!result.invalid && result.paid > 0) {
+        dispatch({
+          type: 'OVERDRAW_COMMITTED',
+          sourceId: 'soulwake',
+          lineage: [],
+          rootActionId: null,
+          targetId: null,
+          payload: { paid: result.paid, requested: result.state.lastOverdrawRequested },
+        });
+      }
+      return result;
+    },
+    setLastHeartbeatOverdraw(selected: boolean) {
+      setSw(setLastHeartbeatSelected(sw(), selected));
+    },
+    syncPlayerVitals(vitals: { hp?: number; maxHp?: number }) {
+      setSw(syncSoulwakeVitals(sw(), vitals));
+    },
+    recordHpLoss(event: Parameters<typeof applyQualifyingLoss>[2]) {
+      const result = applyQualifyingLoss(sw(), ownedDefinitionIds(), event);
+      setSw(result.state);
+      dispatch({
+        type: event.provenance === 'HOSTILE' ? 'HP_LOSS_HOSTILE' : 'HP_LOSS_VOLUNTARY',
+        sourceId: event.rootActionId ?? 'hp',
+        lineage: event.rootActionId ? [event.rootActionId] : [],
+        rootActionId: event.rootActionId,
+        targetId: null,
+        payload: {
+          paid: event.actualHpRemoved,
+          provenance: event.provenance,
+          classified: result.classified,
+        },
+      });
+      if (result.classified && result.applied > 0) {
+        dispatch({
+          type: 'WAKE_RECORDED',
+          sourceId: 'soulwake',
+          lineage: event.rootActionId ? [event.rootActionId] : [],
+          rootActionId: event.rootActionId ?? null,
+          targetId: null,
+          payload: { applied: result.applied, provenance: event.provenance },
+        });
+      }
+      return result;
+    },
+    noteHostileApDisruption() {
+      setSp(noteHostileApDisruption(sp()));
+    },
+    setWoundweavePhaseSuccessor(fromUnitId: string, toUnitId: string) {
+      setWw(setWoundweavePhaseSuccessor(ww(), fromUnitId, toUnitId));
+      setFl(setFaultlinePhaseSuccessor(fl(), fromUnitId, toUnitId));
+    },
+    grantFleetingStillness(sourceDefinitionId: string | null = 'TEST_FLEETING') {
+      return tryGrantFleeting(sourceDefinitionId ?? 'TEST_FLEETING');
+    },
+    previewEndTurn(input: { reason: PlayerTurnEndReason; usableAp: number }) {
+      return previewNativeStillnessGain(sp(), {
+        reason: input.reason,
+        usableAp: input.usableAp,
+        stillpointOwned: hasLiveStillpoint(),
+      });
     },
   };
 }
@@ -960,6 +2669,20 @@ export function weaponFamilyExecutionContext(
     intentCountered: extras.intentCountered,
     bossThresholdReached: extras.bossThresholdReached,
     objectiveProgress: extras.objectiveProgress,
+    lingeringRole: extras.lingeringRole,
+    delayedOrigin: extras.delayedOrigin,
+    instinctGrade: extras.instinctGrade,
+    hpLossKind: extras.hpLossKind,
+    wakePowered: extras.wakePowered,
+    wakeValueAtCommit: extras.wakeValueAtCommit,
+    wakeGenerationId: extras.wakeGenerationId,
+    wakeKindAtCommit: extras.wakeKindAtCommit,
+    wakePaidQualifyingHp: extras.wakePaidQualifyingHp,
+    directlyAffectedTargetIds: extras.directlyAffectedTargetIds ?? directlyAffectedTargetIds({
+      ...extras,
+      nativeByTarget,
+      lockedTargetIds: extras.lockedTargetIds ?? nativeByTarget.map((row) => row.targetId),
+    } as CanonicalRootActionContext),
   };
 }
 

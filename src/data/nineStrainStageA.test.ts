@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CORE_IMPRINTS, NINE_STRAIN_IDS, MAX_NATURAL_CONTACTED_STRAINS } from './nineStrain/strainRegistry';
-import { getLiveUniversalBoonDefinitions, indexDefinitions } from './nineStrain/definitionCatalog';
+import { getLiveUniversalBoonDefinitions, getSector1ProductionDefinitions, indexDefinitions } from './nineStrain/definitionCatalog';
 import { TEST_ONLY_UNIVERSAL_BOON_DEFINITIONS, isTestOnlyBoonId } from './nineStrain/testDefinitions';
 import { createNineStrainRuntime, weaponFamilyExecutionContext, instinctInputForClass, ordinaryCurrentInput, majorCurrentInput } from './nineStrain/runtime';
 import { NINE_PERMANENT_WEAPON_FAMILIES, classIdForWeaponFamily } from './nineStrain/classWeaponAdapter';
@@ -34,7 +34,8 @@ assert.equal(verdict.imprint, undefined);
 
 indexDefinitions(catalog);
 indexDefinitions(getLiveUniversalBoonDefinitions());
-assert.equal(getLiveUniversalBoonDefinitions().length, 16);
+assert.equal(getSector1ProductionDefinitions().length, 27);
+assert.equal(getLiveUniversalBoonDefinitions().length, 66);
 
 const ids = catalog.map((row) => row.id);
 assert.equal(new Set(ids).size, ids.length);
@@ -240,14 +241,14 @@ const migrated = hydrateNineStrainRuntimeState({
   cores: { ARMAMENT: 'TEST_STRAIN_CORE_ARMAMENT', VERDICT: 'TEST_STRAIN_VERDICT' },
   contactedStrains: ['COUNTERFATE'],
 });
-assert.equal(migrated.schemaVersion, 4);
+assert.equal(migrated.schemaVersion, 11);
 assert.ok(migrated.manifestations.includes('legacy-revelation'));
 assert.equal(migrated.boundVerdict, 'TEST_STRAIN_VERDICT');
 assert.equal(migrated.cores.ARMAMENT, 'TEST_STRAIN_CORE_ARMAMENT');
 assert.equal('VERDICT' in migrated.cores, false);
 
 const incursion = hydrateNineStrainIncursionFields(createDefaultActiveIncursionState());
-assert.equal(incursion.nineStrainRuntime.schemaVersion, 4);
+assert.equal(incursion.nineStrainRuntime.schemaVersion, 11);
 assert.equal(incursion.nineStrainRuntime.boonSystemMode, 'LEGACY_CLASS_CATALOG');
 assert.equal(incursion.leyLineMutations.length, 0);
 

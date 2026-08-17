@@ -24,6 +24,20 @@ import {
 } from '../data/sanctuaryFlowEngine';
 import { hydrateGraftIncursionFields } from '../data/graftRunState';
 import { hydrateNineStrainIncursionFields } from '../data/nineStrainRunState';
+import { createLiveNineStrainRuntimeState } from '../data/nineStrain/persistence';
+import { getLiveUniversalBoonDefinitions, indexDefinitions } from '../data/nineStrain/definitionCatalog';
+import { applyAcquire } from '../data/nineStrain/ownership';
+import {
+  markRewardConsumed,
+  noteCombatVictory,
+  parseContactStrainOfferId,
+  resolveNineStrainRewardTrigger,
+  sealPendingOffer,
+  selectPendingStrain,
+  shouldPresentNineStrainReward,
+  toNineStrainOffers,
+} from '../data/nineStrain/acquisitionDirector';
+import type { StrainId } from '../types/nineStrain';
 import { getUniversalGraftDefinition } from '../data/universalGraftRegistry';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { resolveStartingRunCanisterResidue } from '../data/veilResidueRunEngine';
@@ -649,6 +663,7 @@ interface RunContextType {
   commitRadarDot: (dot: RadarDot) => EncounterNode;
   advanceNode: () => { hasNext: boolean; completedCount: number };
   completeNodeAfterMutation: (boonId: string) => void;
+  selectNineStrainContactStrain: (strainId: import('../types/nineStrain').StrainId) => PostCombatBoonOffer[];
   incrementCombatNodesCleared: () => void;
   syncAfterCombat: (remainingHp: number, remainingStamina: number) => void;
   refillStaminaAfterCombat: () => void;
@@ -709,10 +724,10 @@ interface RunContextType {
   persistNineStrainRuntime: (state: import('../types/nineStrain').NineStrainRuntimeState) => void;
   getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
   stageEncounterClear: (message: string) => {
-    route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY';
+    route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY' | 'NINE_STRAIN_OFFER';
   };
   continueFromProgressCheckpoint: () => {
-    route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY';
+    route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY' | 'NINE_STRAIN_OFFER';
   };
   transitionToNextDistrict: () => void;
   acknowledgeDepthIdentityReveal: () => void;
@@ -1249,6 +1264,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       requisitionStampedExtractionNodeId: null,
       activeCombatEncounter: null,
       pendingExtractionNodeId: null,
+      nineStrainRuntime: createLiveNineStrainRuntimeState(),
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
     activeIncursionRef.current = expandedIncursion;
@@ -1361,6 +1377,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const isPostCombatBoonBlocked = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
     const node = resolveActiveVectorNode(inc);
+    if (inc.nineStrainRuntime.boonSystemMode === 'NINE_STRAIN' && !inc.nineStrainRuntime.boonSystemConflict) {
+      const depth = Math.min(3, Math.max(1, inc.currentDepth ?? 1));
+      const isBoss = node?.type === 'BOSS_COMBAT' || Boolean(inc.bossProfile);
+      return !shouldPresentNineStrainReward(inc.nineStrainRuntime, {
+        nodeType: node?.type ?? 'STANDARD_COMBAT',
+        nodeId: node?.id ?? inc.currentNodeId ?? 'unknown',
+        depth,
+        nodesCleared: inc.nodesCleared,
+        isBoss,
+        combatVictory: node?.type === 'STANDARD_COMBAT'
+          || node?.type === 'ELITE_COMBAT'
+          || node?.type === 'BOSS_COMBAT',
+      });
+    }
     return node?.type !== 'ELITE_COMBAT';
   }, []);
 
@@ -1553,6 +1583,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const completeNodeAfterMutation = useCallback((boonId: string) => {
     const inc = activeIncursionRef.current;
+    if (inc.nineStrainRuntime.boonSystemMode === 'NINE_STRAIN') {
+      const defs = indexDefinitions(getLiveUniversalBoonDefinitions());
+      const pending = inc.nineStrainRuntime.acquisition.pendingOffer;
+      const preview = applyAcquire(inc.nineStrainRuntime, defs, boonId, {
+        premiumVerdictSource: pending?.kind === 'BOSS_PREMIUM',
+        allowVerdictReplace: pending?.kind === 'BOSS_PREMIUM',
+        combatDepth: pending?.depth ?? inc.currentDepth ?? 1,
+        equippedWeaponFamilyId: inc.activeWeaponFamilyId,
+      });
+      if (!preview.eligible) {
+        appendRunLog(`>> NINE-STRAIN ACCEPTANCE REJECTED — ${preview.rejectionReasons.join(', ') || 'ineligible'}. Reward retained.`);
+        return;
+      }
+      persistNineStrainRuntime(markRewardConsumed(preview.after));
+      setPostCombatMutationChoices([]);
+      return;
+    }
     if (inc.activeClass === 'HEX_SHOT') {
       applyHexShotBoon(boonId as HexShotBoonId);
     } else if (inc.activeClass === 'ENVOY') {
@@ -1561,7 +1608,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyLeyLineMutation(boonId as LeyLineMutationId);
     }
     setPostCombatMutationChoices([]);
-  }, [applyEnvoyBoon, applyHexShotBoon, applyLeyLineMutation]);
+  }, [appendRunLog, applyEnvoyBoon, applyHexShotBoon, applyLeyLineMutation, persistNineStrainRuntime]);
+
+  const selectNineStrainContactStrain = useCallback((strainId: StrainId): PostCombatBoonOffer[] => {
+    const inc = activeIncursionRef.current;
+    const next = selectPendingStrain(inc.nineStrainRuntime, strainId, inc.activeWeaponFamilyId);
+    persistNineStrainRuntime(next);
+    const pending = next.acquisition.pendingOffer;
+    if (!pending || pending.cardIds.length !== 3) {
+      if (pending?.failClosedDiagnostic) appendRunLog(`>> ${pending.failClosedDiagnostic}`);
+      setPostCombatMutationChoices([]);
+      return [];
+    }
+    const choices = toNineStrainOffers(next, inc.activeClass, pending.cardIds, {
+      strainId: pending.strainId,
+      kind: pending.kind,
+      replacementPreview: pending.replacementPreview,
+    });
+    setPostCombatMutationChoices(choices);
+    return choices;
+  }, [appendRunLog, persistNineStrainRuntime]);
 
   const rollBlackMarketStockForNode = useCallback(() => {
     const inc = activeIncursionRef.current;
@@ -1618,6 +1684,47 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const preparePostCombatMutations = useCallback((): PostCombatBoonOffer[] => {
     const inc = activeIncursionRef.current;
     const node = resolveActiveVectorNode(inc);
+    if (inc.nineStrainRuntime.boonSystemMode === 'NINE_STRAIN' && !inc.nineStrainRuntime.boonSystemConflict) {
+      const depth = Math.min(3, Math.max(1, inc.currentDepth ?? 1));
+      const combatVictory = node?.type === 'STANDARD_COMBAT'
+        || node?.type === 'ELITE_COMBAT'
+        || node?.type === 'BOSS_COMBAT';
+      const input = {
+        nodeType: node?.type ?? 'STANDARD_COMBAT',
+        nodeId: node?.id ?? inc.currentNodeId ?? 'unknown',
+        depth,
+        nodesCleared: inc.nodesCleared,
+        isBoss: node?.type === 'BOSS_COMBAT' || Boolean(inc.bossProfile),
+        combatVictory,
+      };
+      let runtime = inc.nineStrainRuntime;
+      const trigger = resolveNineStrainRewardTrigger(runtime, input);
+      if (combatVictory && !runtime.acquisition.pendingOffer) runtime = noteCombatVictory(runtime);
+      if (!trigger.offer || !trigger.kind) {
+        setPostCombatMutationChoices([]);
+        persistNineStrainRuntime(runtime);
+        return [];
+      }
+      if (!runtime.acquisition.pendingOffer) {
+        runtime = sealPendingOffer(runtime, input, trigger.kind, inc.activeWeaponFamilyId);
+      }
+      const pending = runtime.acquisition.pendingOffer;
+      if (!pending || pending.failClosedDiagnostic || pending.cardIds.length === 0) {
+        const diagnostic = pending?.failClosedDiagnostic ?? runtime.acquisition.lastFailClosedDiagnostic;
+        if (diagnostic) appendRunLog(`>> ${diagnostic}`);
+        persistNineStrainRuntime(runtime);
+        setPostCombatMutationChoices([]);
+        return [];
+      }
+      const choices = toNineStrainOffers(runtime, inc.activeClass, pending.cardIds, {
+        strainId: pending.strainId,
+        kind: pending.kind,
+        replacementPreview: pending.replacementPreview,
+      });
+      persistNineStrainRuntime(runtime);
+      setPostCombatMutationChoices(choices);
+      return choices;
+    }
     if (node?.type !== 'ELITE_COMBAT') {
       setPostCombatMutationChoices([]);
       return [];
@@ -4666,6 +4773,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       economyTelemetry = recordEconomyNodeWithUnstable(economyTelemetry);
     }
 
+    let nineStrainRuntime = inc.nineStrainRuntime;
+    const completedIsCombat = completedNode?.type === 'STANDARD_COMBAT'
+      || completedNode?.type === 'ELITE_COMBAT'
+      || completedNode?.type === 'BOSS_COMBAT';
+    if (
+      nineStrainRuntime.boonSystemMode === 'NINE_STRAIN'
+      && !nineStrainRuntime.boonSystemConflict
+      && completedNode
+    ) {
+      const input = {
+        nodeType: completedNode.type,
+        nodeId: completedNode.id,
+        depth: Math.min(3, Math.max(1, clearedDepth)),
+        nodesCleared: completedIndex,
+        isBoss: completedNode.type === 'BOSS_COMBAT' || completedNode.isAnomalyNest === true,
+        combatVictory: completedIsCombat,
+      };
+      const trigger = resolveNineStrainRewardTrigger(nineStrainRuntime, input);
+      if (trigger.offer && trigger.kind && !nineStrainRuntime.acquisition.pendingOffer) {
+        nineStrainRuntime = sealPendingOffer(nineStrainRuntime, input, trigger.kind, inc.activeWeaponFamilyId);
+      }
+    }
+
     const incAfterClear: ActiveIncursionState = {
       ...expandedInc,
       sectorGraph: nextSectorGraph,
@@ -4721,6 +4851,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runCredits: inc.runCredits + runItemCreditsDelta,
       supplyRuntime,
       economyRunTelemetry: economyTelemetry,
+      nineStrainRuntime,
     };
 
     setRunState((prev) => {
@@ -4784,6 +4915,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     if (enteringSafehouse) {
       return { route: 'SAFEHOUSE' as const };
+    }
+    if (nineStrainRuntime.acquisition.pendingOffer && !completedIsCombat) {
+      return { route: 'NINE_STRAIN_OFFER' as const };
     }
 
     return { route: 'NEXT_NODE' as const };
@@ -7212,6 +7346,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       commitRadarDot,
       advanceNode,
       completeNodeAfterMutation,
+      selectNineStrainContactStrain,
       incrementCombatNodesCleared,
       syncAfterCombat,
       refillStaminaAfterCombat,
@@ -7405,6 +7540,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       commitRadarDot,
       advanceNode,
       completeNodeAfterMutation,
+      selectNineStrainContactStrain,
       incrementCombatNodesCleared,
       syncAfterCombat,
       refillStaminaAfterCombat,

@@ -28,6 +28,7 @@ export interface RootAttemptMeta {
   lockedTargetIds?: readonly string[];
   ultimateOwnedRefill?: boolean;
   actionSurface?: CanonicalRootActionContext['actionSurface'];
+  hpLossKind?: CanonicalRootActionContext['hpLossKind'];
 }
 
 interface OpenAttempt extends RootAttemptMeta {
@@ -58,12 +59,26 @@ export interface NineStrainCombatBridge {
   lastRootContext(): CanonicalRootActionContext | null;
   syncHostileIntents: NineStrainRuntime['syncHostileIntents'];
   runPlayerTurnStart: () => readonly string[];
+  endPlayerTurn: NineStrainRuntime['endPlayerTurn'];
   beginFateboundResolution: NineStrainRuntime['beginFateboundResolution'];
   completeFateboundIntent: NineStrainRuntime['completeFateboundIntent'];
   confirmChosenFate: NineStrainRuntime['confirmChosenFate'];
   previewChosenFate: NineStrainRuntime['previewChosenFate'];
   presentation: NineStrainRuntime['presentation'];
   ritualPresentation: NineStrainRuntime['ritualPresentation'];
+  afterimagePresentation: NineStrainRuntime['afterimagePresentation'];
+  stillpointPresentation: NineStrainRuntime['stillpointPresentation'];
+  woundweavePresentation: NineStrainRuntime['woundweavePresentation'];
+  faultlinePresentation: NineStrainRuntime['faultlinePresentation'];
+  soulwakePresentation: NineStrainRuntime['soulwakePresentation'];
+  previewOverdraw: NineStrainRuntime['previewOverdraw'];
+  commitOverdraw: NineStrainRuntime['commitOverdraw'];
+  setLastHeartbeatOverdraw: NineStrainRuntime['setLastHeartbeatOverdraw'];
+  syncPlayerVitals: NineStrainRuntime['syncPlayerVitals'];
+  recordHpLoss: NineStrainRuntime['recordHpLoss'];
+  noteHostileApDisruption: NineStrainRuntime['noteHostileApDisruption'];
+  confirmDeferredExposure: NineStrainRuntime['confirmDeferredExposure'];
+  completeCombat: NineStrainRuntime['completeCombat'];
   noteIntentEnded: NineStrainRuntime['noteIntentEnded'];
 }
 
@@ -117,6 +132,7 @@ export function createNineStrainCombatBridge(args: {
     if (patch.sourceKind) attempt.sourceKind = patch.sourceKind;
     if (patch.ultimateOwnedRefill) attempt.ultimateOwnedRefill = true;
     if (patch.actionSurface) attempt.actionSurface = patch.actionSurface;
+    if (patch.hpLossKind) attempt.hpLossKind = patch.hpLossKind;
   }
 
   function recordNativeHit(hit: { targetId: string; damage: number; miss?: boolean; crit?: boolean }): void {
@@ -153,6 +169,10 @@ export function createNineStrainCombatBridge(args: {
       committed,
       ultimateOwnedRefill: attempt.ultimateOwnedRefill ?? false,
       actionSurface: attempt.actionSurface,
+      hpLossKind: attempt.hpLossKind,
+      directlyAffectedTargetIds: nativeByTarget
+        .filter((row) => row.hits > 0 || row.nativeDirectDamage > 0 || row.killed || row.statusesApplied > 0 || row.movement > 0 || row.defenseDamage > 0 || row.defenseBreaks > 0 || row.fractures > 0 || row.kineticArmorBroken || row.occultWardBroken)
+        .map((row) => row.targetId),
     };
   }
 
@@ -204,12 +224,26 @@ export function createNineStrainCombatBridge(args: {
     lastRootContext: () => runtime.lastRootContext(),
     syncHostileIntents: (...args) => runtime.syncHostileIntents(...args),
     runPlayerTurnStart: () => runtime.runTurnStart(),
+    endPlayerTurn: (input) => runtime.endPlayerTurn(input),
     beginFateboundResolution: (...args) => runtime.beginFateboundResolution(...args),
     completeFateboundIntent: (...args) => runtime.completeFateboundIntent(...args),
     confirmChosenFate: (...args) => runtime.confirmChosenFate(...args),
     previewChosenFate: (...args) => runtime.previewChosenFate(...args),
     presentation: () => runtime.presentation(),
     ritualPresentation: () => runtime.ritualPresentation(),
+    afterimagePresentation: () => runtime.afterimagePresentation(),
+    stillpointPresentation: () => runtime.stillpointPresentation(),
+    woundweavePresentation: () => runtime.woundweavePresentation(),
+    faultlinePresentation: () => runtime.faultlinePresentation(),
+    soulwakePresentation: () => runtime.soulwakePresentation(),
+    previewOverdraw: () => runtime.previewOverdraw(),
+    commitOverdraw: (id?: string) => runtime.commitOverdraw(id),
+    setLastHeartbeatOverdraw: (selected: boolean) => runtime.setLastHeartbeatOverdraw(selected),
+    syncPlayerVitals: (vitals) => runtime.syncPlayerVitals(vitals),
+    recordHpLoss: (event) => runtime.recordHpLoss(event),
+    noteHostileApDisruption: () => runtime.noteHostileApDisruption(),
+    confirmDeferredExposure: (traceId: string | null) => runtime.confirmDeferredExposure(traceId),
+    completeCombat: (outcome?: 'VICTORY' | 'ESCAPE' | 'FAILURE') => runtime.completeCombat(outcome),
     noteIntentEnded: (unitId: string) => runtime.noteIntentEnded(unitId),
   };
 }

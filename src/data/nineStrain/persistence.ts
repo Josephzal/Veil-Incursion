@@ -6,6 +6,14 @@ import type {
 import { CORE_IMPRINTS, NINE_STRAIN_SCHEMA_VERSION, isStrainId } from './strainRegistry';
 import { createDefaultCounterfateState, hydrateCounterfateState } from './counterfateEngine';
 import { createDefaultRitualCadenceState, hydrateRitualCadenceState } from './ritualCadenceEngine';
+import { createDefaultAfterimageState, hydrateAfterimageState } from './afterimageEngine';
+import { createDefaultConvergenceState, hydrateConvergenceState } from './convergenceEngine';
+import { createDefaultStillpointState, hydrateStillpointState } from './stillpointEngine';
+import { createDefaultWoundweaveState, hydrateWoundweaveState } from './woundweaveEngine';
+import { createDefaultFaultlineState, hydrateFaultlineState } from './faultlineEngine';
+import { createDefaultSoulwakeState, hydrateSoulwakeState } from './soulwakeEngine';
+import { createDefaultAcquisitionState, hydrateAcquisitionState } from './acquisitionState';
+import { NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE } from './contentConfiguration';
 
 export function emptyTriggerGuards(): TriggerGuardState {
   return {
@@ -46,7 +54,33 @@ export function createDefaultNineStrainRuntimeState(): NineStrainRuntimeState {
     nextPendingOrder: 1,
     counterfate: createDefaultCounterfateState(),
     ritualCadence: createDefaultRitualCadenceState(),
+    afterimage: createDefaultAfterimageState(),
+    convergence: createDefaultConvergenceState(),
+    stillpoint: createDefaultStillpointState(),
+    woundweave: createDefaultWoundweaveState(),
+    faultline: createDefaultFaultlineState(),
+    soulwake: createDefaultSoulwakeState(),
+    acquisition: createDefaultAcquisitionState(),
+    maxAcquisitionWave: 1,
   };
+}
+
+/** Brand-new live deployment only. Hydrate fallbacks stay legacy. */
+export function createLiveNineStrainRuntimeState(): NineStrainRuntimeState {
+  return {
+    ...createDefaultNineStrainRuntimeState(),
+    boonSystemMode: 'NINE_STRAIN',
+    boonSystemConflict: null,
+    maxAcquisitionWave: NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE,
+  };
+}
+
+function resolveMaxAcquisitionWave(row: Record<string, unknown>): 1 | 2 | 3 {
+  const storedSchema = typeof row.schemaVersion === 'number' ? row.schemaVersion : 0;
+  const raw = row.maxAcquisitionWave;
+  if (storedSchema < 9) return 1;
+  if (raw === 2 || raw === 3 || raw === 1) return raw;
+  return 1;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -195,6 +229,14 @@ export function hydrateNineStrainRuntimeState(raw: unknown): NineStrainRuntimeSt
     nextPendingOrder: typeof row.nextPendingOrder === 'number' ? row.nextPendingOrder : 1,
     counterfate: hydrateCounterfateState(row.counterfate),
     ritualCadence: hydrateRitualCadenceState(row.ritualCadence),
+    afterimage: hydrateAfterimageState(row.afterimage),
+    convergence: hydrateConvergenceState(row.convergence),
+    stillpoint: hydrateStillpointState(row.stillpoint),
+    woundweave: hydrateWoundweaveState(row.woundweave),
+    faultline: hydrateFaultlineState(row.faultline),
+    soulwake: hydrateSoulwakeState(row.soulwake),
+    acquisition: hydrateAcquisitionState(row.acquisition),
+    maxAcquisitionWave: resolveMaxAcquisitionWave(row),
   };
 }
 

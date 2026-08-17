@@ -114,6 +114,14 @@ export interface PostCombatBoonOffer {
   tierLabel: string;
   description: string;
   effect: string;
+  catalog?: 'LEGACY_CLASS' | 'NINE_STRAIN' | 'STRAIN_CONTACT';
+  strainLabel?: string;
+  roleLabel?: string;
+  imprintLabel?: string;
+  overwritePreview?: string;
+  verdictPreview?: string;
+  prerequisiteHint?: string;
+  contactedPoolLabel?: string;
 }
 
 export interface HexShotBoonCombatModifiers {

@@ -792,6 +792,11 @@ import CombatCommandDeck from './CombatCommandDeck';
 import CombatHostileTurnPanel from './combat/CombatHostileTurnPanel';
 import CounterfateHudStrip from './combat/CounterfateHudStrip';
 import RitualCadenceHudStrip from './combat/RitualCadenceHudStrip';
+import AfterimageHudStrip from './combat/AfterimageHudStrip';
+import StillpointHudStrip from './combat/StillpointHudStrip';
+import WoundweaveHudStrip from './combat/WoundweaveHudStrip';
+import FaultlineHudStrip from './combat/FaultlineHudStrip';
+import SoulwakeHudStrip from './combat/SoulwakeHudStrip';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from './combat/ParrySuccessBurstOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
@@ -1665,6 +1670,19 @@ export default function TacticalCombatHub({
         combatMaxSoulAnchorRef.current,
       );
       operativeHpRef.current = next;
+      if (delta < 0 && prev - next > 0) {
+        nineStrainBridgeRef.current.recordHpLoss({
+          lossEventId: `hostile:${balanceEncounterRef.current.playerTurns}:${prev}:${next}`,
+          rootActionId: null,
+          actualHpRemoved: prev - next,
+          currentHpBefore: prev,
+          currentHpAfter: next,
+          maxHpBefore: effectiveMax,
+          maxHpAfter: effectiveMax,
+          provenance: 'HOSTILE',
+          overdrawKind: 'NONE',
+        });
+      }
       return next;
     });
   };
@@ -2709,6 +2727,8 @@ export default function TacticalCombatHub({
           isTargetable: targetable,
           fateboundMark: nineStrainBridgeRef.current.presentation().fateboundUnitId === unitId,
           fateboundObscured: nineStrainBridgeRef.current.presentation().concealed,
+          woundlinkMark: nineStrainBridgeRef.current.woundweavePresentation().badgeFor(unitId),
+          faultPips: nineStrainBridgeRef.current.faultlinePresentation().pipsFor(unitId),
           isAoeAffected: targetMode === 'ALL' && targetable,
           abyssalVerdictTargetable: abyssalEligible === true,
           abyssalVerdictDimmed: abyssalTargeting && !abyssalEligible,
@@ -3557,6 +3577,12 @@ export default function TacticalCombatHub({
       setResolutionOutcome('DEFEAT');
       log('[CRITICAL] >> Operative soul anchor severed. Veil sync lost.');
       flash(P.defeat);
+    }
+    nineStrainBridgeRef.current.completeCombat(victory ? 'VICTORY' : 'FAILURE');
+    const afterWake = nineStrainBridgeRef.current.serialize().soulwake;
+    if (afterWake.playerHp !== operativeHpRef.current) {
+      operativeHpRef.current = afterWake.playerHp;
+      setOperativeHp(afterWake.playerHp);
     }
     persistNineStrainRuntime(nineStrainBridgeRef.current.serialize());
   };
@@ -7457,6 +7483,13 @@ export default function TacticalCombatHub({
     }
     const nextTarget = nextDefaultTarget(squadRef.current);
     if (nextTarget) selectTarget(nextTarget);
+    nineStrainBridgeRef.current.noteEvent('ENEMY_CYCLE_ENDED');
+    const afterCycle = nineStrainBridgeRef.current.serialize().soulwake;
+    if (afterCycle.lastDividendHealed > 0) {
+      operativeHpRef.current = afterCycle.playerHp;
+      setOperativeHp(afterCycle.playerHp);
+      log(`>> DIVIDEND // +${afterCycle.lastDividendHealed} HP`);
+    }
     if (hollowLungsActive(squadRef.current)) {
       const breath = applyAshenBreathDebt(
         sessionExtrasRef.current,
@@ -7667,6 +7700,11 @@ export default function TacticalCombatHub({
     }
     setIsPlayerTurn(true);
     syncNineStrainPlayerTurn();
+    const stillpointTurn = nineStrainBridgeRef.current.stillpointPresentation();
+    if (stillpointTurn.lastApRefund > 0) {
+      playerApRef.current += stillpointTurn.lastApRefund;
+      setPlayerActionPoints(playerApRef.current);
+    }
     if (!skipRegenRef.current) {
       applyStamina(staminaRef.current + COMBAT_ACTION.STAMINA_REGEN);
     } else if (staminaRef.current === 0) {
@@ -8316,7 +8354,7 @@ export default function TacticalCombatHub({
     log('[SUPPRESSED] >> Expired unused.');
   };
 
-  const passToEnemy = (countering = false) => {
+  const passToEnemy = (countering = false, turnEndReason: 'VOLUNTARY' | 'FORCED' = 'FORCED') => {
     if (isCombatTerminal()) return;
     if (operativeClass === 'AEGIS') {
       const endingTurn = Math.max(1, balanceEncounterRef.current.playerTurns);
@@ -8390,6 +8428,11 @@ export default function TacticalCombatHub({
       log('>> HEXED — curse fades at turn end.');
     }
     resolvePlayerTurnEndDebuffsRef.current();
+    nineStrainBridgeRef.current.endPlayerTurn({
+      reason: turnEndReason,
+      usableAp: Math.max(0, playerApRef.current),
+    });
+    nineStrainBridgeRef.current.noteEvent('ENEMY_CYCLE_STARTED');
     tickCombatSessionExtras(sessionExtrasRef.current);
     setSelectedAbility(null);
     syncSquad(squadRef.current.map((unit) => {
@@ -10147,6 +10190,10 @@ export default function TacticalCombatHub({
       classId: operativeClass,
       weaponFamilyId: familyId,
     });
+    nineStrainBridgeRef.current.syncPlayerVitals({
+      hp: operativeHpRef.current,
+      maxHp: combatMaxSoulAnchorRef.current,
+    });
     try {
       if (operativeClass === 'HEX_SHOT') {
         if (isDefinedHexWeaponActionId(abilityId)) {
@@ -10171,6 +10218,34 @@ export default function TacticalCombatHub({
       executeAbility(abilityId as AegisAbilityId);
     } finally {
       nineStrainBridgeRef.current.finishRootAttempt();
+      const stillpoint = nineStrainBridgeRef.current.stillpointPresentation();
+      const woundweave = nineStrainBridgeRef.current.woundweavePresentation();
+      if (woundweave.lastLog) {
+        log(`>> ${woundweave.lastLog}`);
+      }
+      if (stillpoint.lastApRefund > 0 && isPlayerTurn) {
+        playerApRef.current += stillpoint.lastApRefund;
+        setPlayerActionPoints(playerApRef.current);
+      } else if (stillpoint.lastApRefund > 0) {
+        combatBuffRef.current.bonusApNextTurn += stillpoint.lastApRefund;
+      }
+      if (stillpoint.lastBarrier > 0) {
+        sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + stillpoint.lastBarrier;
+      }
+      const soulwake = nineStrainBridgeRef.current.serialize().soulwake;
+      if (soulwake.lastApRefund > 0 && isPlayerTurn) {
+        playerApRef.current += soulwake.lastApRefund;
+        setPlayerActionPoints(playerApRef.current);
+      }
+      if (soulwake.lastBarrierGranted > 0) {
+        sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + soulwake.lastBarrierGranted;
+      }
+      if (soulwake.playerHp < operativeHpRef.current) {
+        operativeHpRef.current = soulwake.playerHp;
+        setOperativeHp(soulwake.playerHp);
+      }
+      if (soulwake.lastLog) log(`>> ${soulwake.lastLog}`);
+      setCounterfateHudNonce((value) => value + 1);
     }
   };
   executeOperativeAbilityRef.current = executeOperativeAbility;
@@ -10761,7 +10836,7 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.momentumShiftPending = true;
       combatChanceRef.current.momentumShiftEvadeDisabled = true;
     }
-    passToEnemy(voidWardPrimedRef.current);
+    passToEnemy(voidWardPrimedRef.current, 'VOLUNTARY');
   };
 
   const onUltimatePing = () => {
@@ -10867,6 +10942,7 @@ export default function TacticalCombatHub({
   };
 
   const cancelWeaponUltimateInteraction = () => {
+    nineStrainBridgeRef.current.setLastHeartbeatOverdraw(false);
     nineStrainBridgeRef.current.noteEvent('ULTIMATE_CANCELED', { familyId: activeWeaponFamilyId ?? 'none' });
     // Free cancel — never spends Protocol / Rot / Abyssal Reserve.
     if (abyssalVerdictPrimedRef.current) {
@@ -12908,7 +12984,7 @@ export default function TacticalCombatHub({
   const getStagedCostImpact = (abilityId: string): string => {
     const canonical = resolveClassAbilityCost(operativeClass, abilityId);
     const canonicalHpCostPct = operativeClass === 'AEGIS'
-      ? getAbilityDefinition(abilityId as AegisAbilityId).hpCostPct ?? 0
+      ? getAbilityDefinition(abilityId as AegisAbilityId)?.hpCostPct ?? 0
       : 0;
     const plan = operativeClass === 'AEGIS' && isAegisTechniqueId(abilityId)
       ? buildGraftCastPlan(
@@ -13773,6 +13849,50 @@ export default function TacticalCombatHub({
           presentation={nineStrainBridgeRef.current.ritualPresentation()}
         />
       ) : null}
+      {showCommandDeck ? (
+        <AfterimageHudStrip
+          presentation={nineStrainBridgeRef.current.afterimagePresentation()}
+          onConfirmDeferred={(id) => {
+            nineStrainBridgeRef.current.confirmDeferredExposure(id);
+            setCounterfateHudNonce((value) => value + 1);
+          }}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <StillpointHudStrip
+          presentation={nineStrainBridgeRef.current.stillpointPresentation()}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <WoundweaveHudStrip
+          presentation={nineStrainBridgeRef.current.woundweavePresentation()}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <FaultlineHudStrip
+          presentation={nineStrainBridgeRef.current.faultlinePresentation()}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <SoulwakeHudStrip
+          presentation={nineStrainBridgeRef.current.soulwakePresentation()}
+          overdrawPreview={nineStrainBridgeRef.current.previewOverdraw()}
+          onOverdraw={() => {
+            const preview = nineStrainBridgeRef.current.previewOverdraw();
+            if (preview.actualHp <= 0) return;
+            const result = nineStrainBridgeRef.current.commitOverdraw();
+            if (!result.invalid && result.paid > 0) {
+              setOperativeHp((prev) => {
+                const next = Math.max(1, prev - result.paid);
+                operativeHpRef.current = next;
+                return next;
+              });
+              log(`>> OVERDRAW // ${result.paid} HP`);
+              setCounterfateHudNonce((value) => value + 1);
+            }
+          }}
+        />
+      ) : null}
       {showCommandDeck ? commandDeck : null}
       {showEnemyTurnPanel ? renderEnemyTurnPanel() : null}
     </View>
@@ -13880,6 +14000,18 @@ export default function TacticalCombatHub({
         }
         onCancel={cancelWeaponUltimateInteraction}
         simplified={simplifiedUltimateInputs === true}
+        lastHeartbeat={
+          nineStrainBridgeRef.current.serialize().boundVerdict === 'SW_VERDICT_LAST_HEARTBEAT'
+            ? {
+              selected: nineStrainBridgeRef.current.soulwakePresentation().lastHeartbeatSelected,
+              costHp: Math.max(1, Math.floor((combatMaxSoulAnchorRef.current || 100) * 0.1)),
+              onToggle: (selected) => {
+                nineStrainBridgeRef.current.setLastHeartbeatOverdraw(selected);
+                setCounterfateHudNonce((value) => value + 1);
+              },
+            }
+            : null
+        }
       >
         <ZeroProtocolGridOverlay
           visible={zeroProtocolVisible}

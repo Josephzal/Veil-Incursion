@@ -295,6 +295,8 @@ export interface CombatGridUnitSnapshot {
   isTargetable: boolean;
   fateboundMark?: boolean;
   fateboundObscured?: boolean;
+  woundlinkMark?: 'PRIMARY' | 'SECONDARY' | 'SELF' | null;
+  faultPips?: number;
   /**
    * Presentation-only dual-allocation badge (1 = source, 2 = destination).
    * Does not alter eligibility or dispatch.

@@ -8,13 +8,18 @@ import { MAX_NATURAL_CONTACTED_STRAINS } from './strainRegistry';
 import { cloneNineStrainRuntimeState } from './persistence';
 import { canFireWeaponUltimate } from '../weaponUltimateRegistry';
 import type { WeaponFamilyId } from '../../types/weapon';
+import { definitionAcquisitionWave } from './definitionCatalog';
 
 export interface EligibilityOptions {
   allowTestOffers?: boolean;
   premiumVerdictSource?: boolean;
+  allowVerdictReplace?: boolean;
   exceptionalSourceId?: string;
   combatDepth?: number;
   equippedWeaponFamilyId?: string;
+  /** Test/dev only. Production acquisition never sets this. */
+  allowSector2Wave?: boolean;
+  maxAcquisitionWave?: 1 | 2 | 3;
 }
 
 function ownedIds(state: NineStrainRuntimeState): string[] {
@@ -103,6 +108,19 @@ function naturalContactCount(state: NineStrainRuntimeState): number {
   return state.contactedStrains.filter((row) => !row.exceptional).length;
 }
 
+function effectiveAcquisitionWave(
+  state: NineStrainRuntimeState,
+  options: EligibilityOptions,
+): 1 | 2 | 3 {
+  if (options.maxAcquisitionWave === 1 || options.maxAcquisitionWave === 2 || options.maxAcquisitionWave === 3) {
+    return options.maxAcquisitionWave;
+  }
+  if (options.allowSector2Wave) return 2;
+  const stored = state.maxAcquisitionWave;
+  if (stored === 1 || stored === 2 || stored === 3) return stored;
+  return 1;
+}
+
 export function evaluateEligibility(
   state: NineStrainRuntimeState,
   definitions: Map<string, UniversalBoonDefinition>,
@@ -113,6 +131,9 @@ export function evaluateEligibility(
   if (!def) return ['UNKNOWN_DEFINITION'];
   const reasons: EligibilityRejection[] = [];
   if (def.testOnly && !options.allowTestOffers) reasons.push('TEST_ONLY_BLOCKED');
+  if (definitionAcquisitionWave(def) > effectiveAcquisitionWave(state, options) && !def.testOnly) {
+    reasons.push('WAVE_LOCKED');
+  }
   if (!def.testOnly && state.boonSystemMode !== 'NINE_STRAIN') {
     reasons.push('BOON_SYSTEM_INACTIVE');
   }
@@ -168,14 +189,25 @@ export function evaluateEligibility(
     const extraBeyondOneCore = owned.filter((row) => row.role === 'CORE' || row.role === 'SUPPORT').length >= 2 && hasCore;
     if (!hasCore || !extra || !extraBeyondOneCore) reasons.push('MISSING_PARENT');
   }
+  if (def.prerequisites.minOwnedCoresFromStrain) {
+    const cores = ownedStrainProducers(state, definitions, def.strainId);
+    if (cores.length < def.prerequisites.minOwnedCoresFromStrain) reasons.push('MISSING_PRODUCER');
+  }
   if (def.role === 'CONVERGENCE') {
+    const parentStrains = def.prerequisites.parentStrainIds
+      ?? ([def.strainId, def.secondaryStrainId].filter((id): id is NonNullable<typeof id> => Boolean(id)));
+    if (parentStrains.some((strainId) => ownedStrainProducers(state, definitions, strainId).length === 0)) {
+      reasons.push('CONVERGENCE_PARENTS');
+    }
     const parents = def.prerequisites.parentCoreIds ?? [];
     if (parents.some((parentId) => !parentProducerLive(state, definitions, parentId))) {
       reasons.push('CONVERGENCE_PARENTS');
     }
   }
   if (def.role === 'VERDICT') {
-    if (state.boundVerdict) reasons.push('VERDICT_OCCUPIED');
+    if (state.boundVerdict && state.boundVerdict !== def.id && !options.allowVerdictReplace) {
+      reasons.push('VERDICT_OCCUPIED');
+    }
     if (!options.premiumVerdictSource) reasons.push('WRONG_ROLE');
     if (def.prerequisites.producerRoles?.length && !producerRoleSatisfied(state, definitions, def)) {
       reasons.push('MISSING_PRODUCER');
@@ -204,6 +236,21 @@ export function dependencyProtectionBlocks(
   const remainingProducers = ownedStrainProducers(state, definitions, outgoing.strainId)
     .filter((id) => id !== outgoingCoreId);
   const incomingKeepsProducer = incoming.role === 'CORE' && incoming.strainId === outgoing.strainId;
+  const remainingAfter = remainingProducers.length + (incomingKeepsProducer ? 1 : 0);
+  for (const id of ownedIds(state)) {
+    const owned = definitions.get(id);
+    const need = owned?.prerequisites.minOwnedCoresFromStrain;
+    if (owned && owned.strainId === outgoing.strainId && need && remainingAfter < need) {
+      return true;
+    }
+    if (
+      owned?.role === 'CONVERGENCE'
+      && remainingAfter === 0
+      && (owned.strainId === outgoing.strainId || owned.secondaryStrainId === outgoing.strainId)
+    ) {
+      return true;
+    }
+  }
   if (lastProducerDependents.length > 0 && remainingProducers.length === 0 && !incomingKeepsProducer) {
     return true;
   }
@@ -229,6 +276,13 @@ function applyContact(
   ];
 }
 
+function displayNames(
+  definitions: Map<string, UniversalBoonDefinition>,
+  ids: readonly string[],
+): string[] {
+  return ids.map((id) => definitions.get(id)?.displayName ?? id);
+}
+
 export function applyAcquire(
   state: NineStrainRuntimeState,
   definitions: Map<string, UniversalBoonDefinition>,
@@ -243,11 +297,26 @@ export function applyAcquire(
     }
   const def = definitions.get(definitionId);
   if (!def || reasons.length > 0) {
+    const occupant = def?.role === 'CORE' && def.imprint ? state.cores[def.imprint] : null;
+    const blockedDependents = occupant
+      ? [
+        ...dependentsOfCore(state, definitions, occupant),
+        ...ownedIds(state).filter((id) => {
+          const owned = definitions.get(id);
+          return owned?.role === 'CONVERGENCE'
+            && (owned.strainId === definitions.get(occupant)?.strainId
+              || owned.secondaryStrainId === definitions.get(occupant)?.strainId);
+        }),
+      ]
+      : [];
+    const unique = [...new Set(blockedDependents)];
     return {
       before,
       after: cloneNineStrainRuntimeState(state),
-      overwrittenCoreId: null,
-      dependentEffects: [],
+      overwrittenCoreId: occupant,
+      overwrittenVerdictId: null,
+      dependentEffects: unique,
+      dependentDisplayNames: displayNames(definitions, unique),
       rejectionReasons: reasons,
       eligible: false,
     };
@@ -261,11 +330,24 @@ export function applyAcquire(
   if (def.secondaryStrainId) applyContact(after, def.secondaryStrainId, false);
 
   let overwrittenCoreId: string | null = null;
+  let overwrittenVerdictId: string | null = null;
   const dependentEffects: string[] = [];
   if (def.role === 'CORE' && def.imprint) {
     overwrittenCoreId = after.cores[def.imprint];
     if (overwrittenCoreId) {
       dependentEffects.push(...dependentsOfCore(after, definitions, overwrittenCoreId));
+      for (const ownedId of [
+        ...after.convergences,
+      ]) {
+        const owned = definitions.get(ownedId);
+        if (
+          owned?.role === 'CONVERGENCE'
+          && (owned.strainId === definitions.get(overwrittenCoreId)?.strainId
+            || owned.secondaryStrainId === definitions.get(overwrittenCoreId)?.strainId)
+        ) {
+          if (!dependentEffects.includes(ownedId)) dependentEffects.push(ownedId);
+        }
+      }
       after.overwriteHistory.push({
         imprint: def.imprint,
         outgoingId: overwrittenCoreId,
@@ -282,6 +364,8 @@ export function applyAcquire(
   } else if (def.role === 'CONVERGENCE') {
     after.convergences = [...after.convergences, def.id];
   } else if (def.role === 'VERDICT') {
+    overwrittenVerdictId = after.boundVerdict && after.boundVerdict !== def.id ? after.boundVerdict : null;
+    if (overwrittenVerdictId) dependentEffects.push(overwrittenVerdictId);
     after.boundVerdict = def.id;
   }
   after.definitionOwnedState[def.id] = after.definitionOwnedState[def.id] ?? {};
@@ -289,7 +373,9 @@ export function applyAcquire(
     before,
     after,
     overwrittenCoreId,
+    overwrittenVerdictId,
     dependentEffects,
+    dependentDisplayNames: displayNames(definitions, dependentEffects),
     rejectionReasons: [],
     eligible: true,
   };

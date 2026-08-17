@@ -5,7 +5,7 @@ import { CANONICAL_WEAPON_FAMILY_IDS } from './weaponFamilyIdNormalize';
 import { createNineStrainCombatBridge } from './nineStrain/combatBridge';
 import { dispatchLiveWeaponFamilyBasic, makeLiveDispatchSquad } from './nineStrain/liveWeaponDispatch';
 import { TEST_ONLY_UNIVERSAL_BOON_DEFINITIONS } from './nineStrain/testDefinitions';
-import { getLiveUniversalBoonDefinitions } from './nineStrain/definitionCatalog';
+import { getLiveUniversalBoonDefinitions, getSector1ProductionDefinitions } from './nineStrain/definitionCatalog';
 import { classIdForWeaponFamily } from './nineStrain/classWeaponAdapter';
 import { instinctInputForClass, ordinaryCurrentInput, majorCurrentInput } from './nineStrain/runtime';
 import { hydrateNineStrainIncursionFields } from './nineStrainRunState';
@@ -15,7 +15,8 @@ import { createDefaultNineStrainRuntimeState } from './nineStrain/persistence';
 
 console.log('Stage A.1 — live Hub integration and boon-system mode');
 
-assert.equal(getLiveUniversalBoonDefinitions().length, 16);
+assert.equal(getSector1ProductionDefinitions().length, 27);
+assert.equal(getLiveUniversalBoonDefinitions().length, 66);
 
 const liveBridge = createNineStrainCombatBridge();
 const beforeMetrics = { ...liveBridge.serialize().metrics };

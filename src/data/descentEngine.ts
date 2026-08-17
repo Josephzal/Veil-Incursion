@@ -18,7 +18,7 @@ import {
 } from './scannerNodeLayout';
 import { INITIAL_SECTOR_POOL } from './regions';
 import { createDistrictGateBossProfile } from './districtBosses';
-import { getDepthScale } from './descentScaling';
+import { eliteStrainIntelLine } from './nineStrain/acquisitionDirector';
 
 export { getDepthScale } from './descentScaling';
 
@@ -412,6 +412,16 @@ export function formatScannerNodeIntel(
   if (signalLines.length > 0) {
     lines.push(...signalLines);
   }
+
+  const eliteLine = eliteStrainIntelLine({
+    nodeType: node.type,
+    certainty: node.scannerLabelCorrupt
+      ? (node.scannerLabelCertainty ?? 'DEGRADED')
+      : (node.scannerLabelCertainty ?? 'RELIABLE'),
+    nodeId: node.id,
+    seed: node.id,
+  });
+  if (eliteLine) lines.push(eliteLine);
 
   return lines;
 }

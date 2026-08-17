@@ -17,6 +17,7 @@ import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import type { ClassType } from '../types/game';
+import { parseContactStrainOfferId } from '../data/nineStrain/acquisitionDirector';
 import { MAX_LEY_MUTATIONS } from '../types/overworldFeatures';
 import { VEIL } from '../theme/veilTerminalTokens';
 import { RUN_FIELD } from '../theme/runFieldTokens';
@@ -38,6 +39,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     postCombatMutationChoices,
     preparePostCombatMutations,
     completeNodeAfterMutation,
+    selectNineStrainContactStrain,
     swapClassBoon,
     cancelClassBoonSwap,
   } = useRun();
@@ -69,11 +71,16 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
   const cardPadding = isDesktop ? scaleSpacing(14) : scaleSpacing(10);
   const canContinue = selectedBoonId != null && !selectingRef.current && postCombatMutationChoices.length > 0;
 
+  const nineStrainOffer = postCombatMutationChoices.some((row) => row.catalog === 'NINE_STRAIN' || row.catalog === 'STRAIN_CONTACT');
   const headerSubtitle = useMemo(() => {
+    if (nineStrainOffer) {
+      const sample = postCombatMutationChoices[0];
+      return sample?.contactedPoolLabel ?? 'Strain Contact';
+    }
     const ownedCount = ownedClassBoons.length;
     const cap = MAX_LEY_MUTATIONS;
     return `Elite node cleared · Loadout ${ownedCount}/${cap}`;
-  }, [ownedClassBoons.length]);
+  }, [nineStrainOffer, ownedClassBoons.length, postCombatMutationChoices]);
 
   const advanceAfterBoon = useCallback((message: string) => {
     if (activeIncursion.pendingHarvestReturn === 'POST_COMBAT') {
@@ -128,13 +135,24 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     }
 
     const picked = postCombatMutationChoices.find((m) => m.id === selectedBoonId);
-    const atClassBoonCap = activeClass !== 'AEGIS' && ownedClassBoons.length >= MAX_LEY_MUTATIONS;
+    const strainPick = selectedBoonId ? parseContactStrainOfferId(selectedBoonId) : null;
+    if (strainPick) {
+      selectNineStrainContactStrain(strainPick);
+      selectingRef.current = false;
+      setSelectedBoonId(null);
+      return;
+    }
+    const atClassBoonCap = !nineStrainOffer && activeClass !== 'AEGIS' && ownedClassBoons.length >= MAX_LEY_MUTATIONS;
     completeNodeAfterMutation(selectedBoonId);
     if (atClassBoonCap) {
       swapAdvancePendingRef.current = true;
       return;
     }
-    advanceAfterBoon(`Class boon secured: ${picked?.name ?? selectedBoonId}.`);
+    advanceAfterBoon(
+      nineStrainOffer
+        ? `Strain card secured: ${picked?.name ?? selectedBoonId}.`
+        : `Class boon secured: ${picked?.name ?? selectedBoonId}.`,
+    );
   };
 
   return (
@@ -149,7 +167,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
           <View style={styles.masterStage}>
             <RunEventNodeHeader
               eyebrow="VEIL RESPONSE"
-              title={HEADER_TITLE[activeClass]}
+              title={nineStrainOffer ? 'STRAIN CONTACT' : HEADER_TITLE[activeClass]}
               subtitle={headerSubtitle}
               fontScale={fontScale}
             />
@@ -170,9 +188,9 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
                     style={isDesktop ? styles.cardSlotDesktop : styles.cardSlotMobile}
                   >
                     <RunEventChoiceCard
-                      tierTag={`VEIL BOON // ${String(offer.tierLabel ?? offer.tier).toUpperCase()}`}
+                      tierTag={`${(offer.roleLabel ?? offer.tierLabel ?? 'VEIL BOON').toUpperCase()}${offer.imprintLabel ? ` // ${offer.imprintLabel.toUpperCase()}` : ''}`}
                       name={offer.name}
-                      tagline={offer.effect}
+                      tagline={[offer.effect, offer.overwritePreview, offer.verdictPreview, offer.prerequisiteHint].filter(Boolean).join(' ')}
                       effectSummary={offer.description}
                       cardWidth="100%"
                       cardPadding={cardPadding}
@@ -195,7 +213,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
 
             <RunActionRail
               mode="screen"
-              primaryLabel="SECURE BOON"
+              primaryLabel={nineStrainOffer ? 'ACCEPT' : 'SECURE BOON'}
               onPrimary={handleContinue}
               primaryDisabled={!canContinue}
             />

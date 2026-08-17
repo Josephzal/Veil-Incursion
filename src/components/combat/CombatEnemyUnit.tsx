@@ -199,6 +199,16 @@ export default function CombatEnemyUnit({
           {unit.fateboundObscured ? 'FATEBOUND // OBSCURED' : 'FATEBOUND'}
         </Text>
       ) : null}
+      {unit.woundlinkMark ? (
+        <Text style={styles.woundlinkMark} numberOfLines={1}>
+          {unit.woundlinkMark === 'SELF' ? 'SELF-LINK' : unit.woundlinkMark === 'SECONDARY' ? 'BODY' : 'WOUNDLINK'}
+        </Text>
+      ) : null}
+      {unit.faultPips && unit.faultPips > 0 ? (
+        <Text style={styles.faultMark} numberOfLines={1}>
+          {`FAULT ${'•'.repeat(Math.min(3, unit.faultPips))}`}
+        </Text>
+      ) : null}
 
       <EnemyEntity
         showVitals={isArena}
@@ -514,6 +524,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     color: '#c4b5fd',
+  },
+  woundlinkMark: {
+    position: 'absolute',
+    top: 24,
+    left: 0,
+    zIndex: 21,
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: '#fecaca',
+  },
+  faultMark: {
+    position: 'absolute',
+    top: 34,
+    left: 0,
+    zIndex: 21,
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: '#fdba74',
   },
   imageShell: {
     width: '100%',

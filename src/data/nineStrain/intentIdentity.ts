@@ -59,6 +59,21 @@ export function compareFateboundCandidates(
   return a.positionRank - b.positionRank;
 }
 
+export function compareTraceFallback(
+  a: HostileIntentSnapshot,
+  b: HostileIntentSnapshot,
+  jammed: boolean,
+): number {
+  if (jammed) {
+    if (a.hostileTurnOrder !== b.hostileTurnOrder) return a.hostileTurnOrder - b.hostileTurnOrder;
+    if (a.positionRank !== b.positionRank) return a.positionRank - b.positionRank;
+    return a.unitId.localeCompare(b.unitId);
+  }
+  const ranked = compareFateboundCandidates(a, b, false);
+  if (ranked !== 0) return ranked;
+  return a.unitId.localeCompare(b.unitId);
+}
+
 export function selectFateboundCandidate(
   intents: readonly HostileIntentSnapshot[],
   jammed: boolean,

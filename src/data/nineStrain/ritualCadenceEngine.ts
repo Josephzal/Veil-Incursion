@@ -135,10 +135,14 @@ export function applyMeasureStep(
   };
 }
 
-export function measuredInvocationPaidAp(authored: number, finale: boolean, owned: boolean): number {
-  if (!owned || !finale) return authored;
+export function discountApByOneMinOne(authored: number): number {
   if (authored <= 0) return authored;
   return Math.max(1, authored - 1);
+}
+
+export function measuredInvocationPaidAp(authored: number, finale: boolean, owned: boolean): number {
+  if (!owned || !finale) return authored;
+  return discountApByOneMinOne(authored);
 }
 
 export function applyNativeDamageModifier(
@@ -281,6 +285,22 @@ export function hydrateRitualCadenceState(raw: unknown): RitualCadenceRuntimeSta
       : null,
     lastOutcome: typeof row.lastOutcome === 'string' ? row.lastOutcome as MeasureOutcomeKind : null,
     cooldownAdvanced: row.cooldownAdvanced === true,
+  };
+}
+
+export function advanceMeasureWithoutFinale(state: RitualCadenceRuntimeState): RitualCadenceRuntimeState {
+  const next: MeasureBeat = state.measure === 'EMPTY' ? 'BEAT_I' : 'BEAT_II';
+  return {
+    ...state,
+    measure: next,
+    lastOutcome: 'ADVANCE',
+  };
+}
+
+export function applyScheduledBeatII(state: RitualCadenceRuntimeState): RitualCadenceRuntimeState {
+  return {
+    ...state,
+    measure: 'BEAT_II',
   };
 }
 

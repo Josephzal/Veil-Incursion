@@ -284,10 +284,14 @@ export function useDescentNavigator() {
         startSafehouse();
         return result;
       }
+      if (result.route === 'NINE_STRAIN_OFFER') {
+        startPostCombatBoon();
+        return result;
+      }
       startScanning();
       return result;
     },
-    [stageEncounterClear, startScanning, startSafehouse],
+    [stageEncounterClear, startScanning, startSafehouse, startPostCombatBoon],
   );
 
   const continueOperation = useCallback(() => {

@@ -8,7 +8,7 @@ import {
   RITUAL_CADENCE_SUPPORT_IDS,
   RITUAL_CADENCE_VERDICT_ID,
 } from '../types/ritualCadence';
-import { getLiveUniversalBoonDefinitions } from './nineStrain/definitionCatalog';
+import { getLiveUniversalBoonDefinitions, getSector1ProductionDefinitions } from './nineStrain/definitionCatalog';
 import { createNineStrainRuntime, weaponFamilyExecutionContext } from './nineStrain/runtime';
 import { createDefaultNineStrainRuntimeState } from './nineStrain/persistence';
 import { activateNineStrainAcquisition } from './nineStrain/boonSystemMode';
@@ -23,15 +23,16 @@ import { COUNTERFATE_SUPPORT_IDS } from '../types/counterfate';
 
 console.log('Stage B.2 — Ritual Cadence vertical slice');
 
-const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 16);
-assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE').length, 8);
-assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE').length, 8);
+const live = getSector1ProductionDefinitions();
+assert.equal(live.length, 27);
+assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE' && row.role !== 'CONVERGENCE').length, 8);
 assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE' && row.role === 'CORE').length, 4);
 assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE' && row.role === 'SUPPORT').length, 2);
 assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE' && row.role === 'MANIFESTATION').length, 1);
 assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE' && row.role === 'VERDICT').length, 1);
-assert.equal(live.some((row) => row.strainId === 'AFTERIMAGE' || row.role === 'CONVERGENCE'), false);
+assert.equal(live.filter((row) => row.role === 'CONVERGENCE').length, 3);
 
 function strainRuntime() {
   const rt = createNineStrainRuntime({ definitions: live });
@@ -109,6 +110,31 @@ function disc(rt: ReturnType<typeof strainRuntime>, extras: Parameters<typeof we
   arm(rt);
   assert.equal(rt.getState().ritualCadence.measure, 'EMPTY');
   assert.equal(rt.getState().ritualCadence.previousSurface, 'ARMAMENT');
+}
+
+{
+  const rt = strainRuntime();
+  grant(rt, RITUAL_CADENCE_CORE_IDS.CLOSING_STRIKE);
+  arm(rt);
+  rt.resolveInstinct({ classId: 'AEGIS', parryAttempted: true });
+  assert.equal(rt.getState().ritualCadence.measure, 'BEAT_II');
+  arm(rt);
+  assert.equal(rt.getState().ritualCadence.lastOutcome, 'FINALE');
+}
+
+{
+  const rt = strainRuntime();
+  grant(rt, RITUAL_CADENCE_CORE_IDS.CLOSING_STRIKE);
+  grant(rt, RITUAL_CADENCE_CORE_IDS.HELD_RESONANCE);
+  arm(rt);
+  disc(rt);
+  arm(rt, { primaryResource: { gained: 0, spent: 8, preserved: 0, converted: 0 } });
+  assert.equal(rt.getState().ritualCadence.heldResonance.armed, true);
+  disc(rt);
+  arm(rt);
+  disc(rt, { primaryResource: { gained: 0, spent: 9, preserved: 0, converted: 0 }, actualCostsPaid: { ap: 2, reserve: 9 } });
+  assert.equal(rt.events().some((event) => event.type === 'CURRENT_PRESERVED' && event.payload.preserved === 9), true);
+  assert.equal(rt.getState().ritualCadence.heldResonance.armed, true);
 }
 
 {
@@ -421,7 +447,7 @@ for (const familyId of CANONICAL_WEAPON_FAMILY_IDS) {
   const fresh = hydrateNineStrainIncursionFields(createDefaultActiveIncursionState());
   assert.equal(fresh.nineStrainRuntime.boonSystemMode, 'LEGACY_CLASS_CATALOG');
   const migrated = hydrateNineStrainRuntimeState({ schemaVersion: 3, counterfate: { rawReversal: 4 } });
-  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.schemaVersion, 11);
   assert.equal(migrated.counterfate.rawReversal, 4);
   assert.equal(migrated.ritualCadence.measure, 'EMPTY');
 }

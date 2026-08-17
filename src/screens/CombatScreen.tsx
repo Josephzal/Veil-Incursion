@@ -830,6 +830,10 @@ export default function CombatScreen(): React.JSX.Element {
     refillStaminaAfterCombat();
 
     if (isBossEncounter) {
+      if (!isPostCombatBoonBlocked()) {
+        startPostCombatBoon();
+        return;
+      }
       completeCurrentNode('Region-Prime checkpoint cleared.', result.remainingHp);
       return;
     }

@@ -82,7 +82,14 @@ export type NormalizedBoonEventType =
   | 'ULTIMATE_RESOLVED'
   | 'OBJECTIVE_PROGRESS'
   | 'PROTECTED_PHASE_THRESHOLD'
-  | 'DERIVATIVE_RESOLVED';
+  | 'DERIVATIVE_RESOLVED'
+  | 'NATIVE_STILLNESS_GAINED'
+  | 'FAULT_APPLIED'
+  | 'RUPTURE_RESOLVED'
+  | 'OVERDRAW_COMMITTED'
+  | 'WAKE_RECORDED'
+  | 'WAKE_ACTIVATED'
+  | 'WAKE_RESIDUAL';
 
 export type InstinctGrade = 'FAILED' | 'STANDARD' | 'CLEAN' | 'PERFECT';
 
@@ -119,7 +126,57 @@ export type EffectPrimitiveKind =
   | 'IMPROVISED_MEASURE'
   | 'DOWNBEAT'
   | 'UNBROKEN_RITE'
-  | 'GRAND_CADENCE';
+  | 'GRAND_CADENCE'
+  | 'TRACE_PHANTOM_IMPACT'
+  | 'TRACE_LINGERING_INVOCATION'
+  | 'TRACE_REFLEX_REMNANT'
+  | 'TRACE_RECURRENT_CHARGE'
+  | 'DEFERRED_EXPOSURE'
+  | 'CROSSFADE'
+  | 'PERSISTENT_FORM'
+  | 'SECOND_ENDING'
+  | 'FATED_REFRAIN'
+  | 'SECOND_OUTCOME'
+  | 'ECHOED_RITE'
+  | 'STAYED_SENTENCE'
+  | 'MEASURED_SILENCE'
+  | 'SUSPENDED_ECHO'
+  | 'ENTANGLED_FATE'
+  | 'TWOFOLD_RITE'
+  | 'GHOST_THREAD'
+  | 'DRAWN_TENSION'
+  | 'STILLPOINT_STORED_FORCE'
+  | 'STILLPOINT_PATIENT_INVOCATION'
+  | 'STILLPOINT_QUIET_REFLEX'
+  | 'STILLPOINT_SILENT_RESERVOIR'
+  | 'STILLPOINT_SHELTERED_PAUSE'
+  | 'STILLPOINT_RETURN_STROKE'
+  | 'STILLPOINT_MOTIONLESS_STORM'
+  | 'STILLPOINT_ZERO_HOUR'
+  | 'WOUNDWEAVE_SHARED_WOUND'
+  | 'WOUNDWEAVE_CROSSED_HEX'
+  | 'WOUNDWEAVE_REFLEXIVE_AGONY'
+  | 'WOUNDWEAVE_TIGHTENED_THREAD'
+  | 'WOUNDWEAVE_PERSISTENT_STITCH'
+  | 'WOUNDWEAVE_CASCADING_TEAR'
+  | 'WOUNDWEAVE_ONE_BODY'
+  | 'WOUNDWEAVE_COMMON_GRAVE'
+  | 'FAULTLINE_STRESS_PATTERN'
+  | 'FAULTLINE_APPLIED_FRACTURE'
+  | 'FAULTLINE_COUNTERPRESSURE'
+  | 'FAULTLINE_LOAD_LIMIT'
+  | 'FAULTLINE_HAIRLINE_CASCADE'
+  | 'FAULTLINE_RESIDUAL_STRESS'
+  | 'FAULTLINE_CHAIN_FAILURE'
+  | 'FAULTLINE_TERMINAL_FAILURE'
+  | 'SOULWAKE_HOLLOW_EDGE'
+  | 'SOULWAKE_BORROWED_NERVE'
+  | 'SOULWAKE_PAIN_REFLEX'
+  | 'SOULWAKE_OPEN_CONDUIT'
+  | 'SOULWAKE_OPEN_NERVE'
+  | 'SOULWAKE_PAIN_DIVIDEND'
+  | 'SOULWAKE_LIVING_BREACH'
+  | 'SOULWAKE_LAST_HEARTBEAT';
 
 export interface EffectPrimitive {
   kind: EffectPrimitiveKind;
@@ -136,6 +193,7 @@ export interface UniversalBoonPrerequisites {
   producerRoles?: readonly UniversalBoonRole[];
   minOwnedFromStrain?: number;
   requireCorePlusExtraFromStrain?: boolean;
+  minOwnedCoresFromStrain?: number;
 }
 
 export interface UniversalBoonDefinition {
@@ -160,6 +218,8 @@ export interface UniversalBoonDefinition {
   persistenceSchema: string;
   refinementHooks: readonly string[];
   playerFacingSummary: string;
+  /** Production acquisition wave. Sector 1 remains 1; Stillpoint is 2. */
+  acquisitionWave?: 1 | 2 | 3;
   /** Test-only definitions never enter live offers. */
   testOnly?: boolean;
 }
@@ -224,6 +284,15 @@ export interface NineStrainRuntimeState {
   nextPendingOrder: number;
   counterfate: import('./counterfate').CounterfateRuntimeState;
   ritualCadence: import('./ritualCadence').RitualCadenceRuntimeState;
+  afterimage: import('./afterimage').AfterimageRuntimeState;
+  convergence: import('./convergence').Sector1ConvergenceRuntimeState;
+  stillpoint: import('./stillpoint').StillpointRuntimeState;
+  woundweave: import('./woundweave').WoundweaveRuntimeState;
+  faultline: import('./faultline').FaultlineRuntimeState;
+  soulwake: import('./soulwake').SoulwakeRuntimeState;
+  acquisition: import('./convergence').NineStrainAcquisitionState;
+  /** Fixed for the incursion. Schema 8 and earlier hydrate as 1. */
+  maxAcquisitionWave: 1 | 2 | 3;
 }
 
 export interface TargetNativeResult {
@@ -282,6 +351,16 @@ export interface CanonicalRootActionContext {
   intentCountered?: boolean;
   bossThresholdReached?: boolean;
   objectiveProgress?: boolean;
+  lingeringRole?: 'HOSTILE' | 'UTILITY';
+  delayedOrigin?: boolean;
+  instinctGrade?: InstinctGrade;
+  directlyAffectedTargetIds?: readonly string[];
+  hpLossKind?: 'NATIVE_ACTION' | 'PRISM_SACRIFICE' | 'BOON' | 'GRAFT';
+  wakePowered?: boolean;
+  wakeValueAtCommit?: number;
+  wakeGenerationId?: number;
+  wakeKindAtCommit?: 'NONE' | 'NORMAL' | 'RESIDUAL';
+  wakePaidQualifyingHp?: boolean;
 }
 
 export interface NormalizedBoonEvent {
@@ -304,6 +383,8 @@ export interface InstinctAdapterInput {
   riftPreventedDamage?: number;
   riftWouldReachHp?: number;
   preventedFateboundIntentDamage?: boolean;
+  primaryNumeric?: number;
+  associatedHostileUnitId?: string | null;
 }
 
 export interface CurrentAdapterInput {
@@ -318,6 +399,11 @@ export interface CurrentAdapterInput {
   brandCycleCompleted?: boolean;
   ammoSpent?: boolean;
   reloadRestoredRounds?: boolean;
+  actualGained?: number;
+  actualSpent?: number;
+  reloadRestoredCount?: number;
+  selectedAmmoType?: string;
+  magazineSpace?: number;
   magazineEmptyOrFull?: boolean;
   ammoCycleCompleted?: boolean;
   perfectReload?: boolean;
@@ -325,6 +411,7 @@ export interface CurrentAdapterInput {
   brinkEntered?: boolean;
   catalystResolved?: boolean;
   cleanCycleCompleted?: boolean;
+  associatedHostileUnitId?: string | null;
 }
 
 export type EligibilityRejection =
@@ -342,13 +429,16 @@ export type EligibilityRejection =
   | 'BOON_SYSTEM_CONFLICT'
   | 'DEPTH_GATE'
   | 'MISSING_PRODUCER'
-  | 'ULTIMATE_INCOMPATIBLE';
+  | 'ULTIMATE_INCOMPATIBLE'
+  | 'WAVE_LOCKED';
 
 export interface OwnershipPreview {
   before: NineStrainRuntimeState;
   after: NineStrainRuntimeState;
   overwrittenCoreId: string | null;
+  overwrittenVerdictId: string | null;
   dependentEffects: readonly string[];
+  dependentDisplayNames: readonly string[];
   rejectionReasons: readonly EligibilityRejection[];
   eligible: boolean;
 }

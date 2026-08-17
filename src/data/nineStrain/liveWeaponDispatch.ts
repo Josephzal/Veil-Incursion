@@ -178,6 +178,7 @@ export function dispatchLiveWeaponFamilyBasic(
     actualCostsPaid: { flux: plan.fluxCost, hp: plan.hpSacrifice, ap: 1 },
     lockedTargetIds: ['e1'],
     targetPattern: 'SINGLE',
+    hpLossKind: plan.hpSacrifice > 0 ? 'PRISM_SACRIFICE' : undefined,
   });
     bridge.recordNativeHit({ targetId: 'e1', damage: plan.occultDamage });
   bridge.finishRootAttempt();
@@ -186,6 +187,17 @@ export function dispatchLiveWeaponFamilyBasic(
   }
   if (plan.hpSacrifice > 0) {
     bridge.noteEvent('HP_LOSS_VOLUNTARY', { paid: plan.hpSacrifice, classId });
+    bridge.recordHpLoss({
+      lossEventId: `${bridge.lastRootContext()?.rootActionId ?? 'prism'}:hp`,
+      rootActionId: bridge.lastRootContext()?.rootActionId ?? null,
+      actualHpRemoved: plan.hpSacrifice,
+      currentHpBefore: 80,
+      currentHpAfter: 80 - plan.hpSacrifice,
+      maxHpBefore: 80,
+      maxHpAfter: 80,
+      provenance: 'PRISM_SACRIFICE',
+      overdrawKind: 'NONE',
+    });
   }
   return {
     familyId,

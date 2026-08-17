@@ -7,7 +7,7 @@ import {
   COUNTERFATE_SUPPORT_IDS,
   COUNTERFATE_VERDICT_ID,
 } from '../types/counterfate';
-import { getLiveUniversalBoonDefinitions } from './nineStrain/definitionCatalog';
+import { getSector1ProductionDefinitions } from './nineStrain/definitionCatalog';
 import {
   createNineStrainRuntime,
   weaponFamilyExecutionContext,
@@ -28,16 +28,17 @@ import { TEST_ONLY_UNIVERSAL_BOON_DEFINITIONS } from './nineStrain/testDefinitio
 
 console.log('Stage B.1 — Counterfate vertical slice');
 
-const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 16);
-assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE').length, 8);
-assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE').length, 8);
+const live = getSector1ProductionDefinitions();
+assert.equal(live.length, 27);
+assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'RITUAL_CADENCE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE' && row.role !== 'CONVERGENCE').length, 8);
 assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE' && row.role === 'CORE').length, 4);
 assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE' && row.role === 'SUPPORT').length, 2);
 assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE' && row.role === 'MANIFESTATION').length, 1);
 assert.equal(live.filter((row) => row.strainId === 'COUNTERFATE' && row.role === 'VERDICT').length, 1);
-assert.equal(new Set(live.map((row) => row.id)).size, 16);
-assert.equal(live.some((row) => row.strainId === 'AFTERIMAGE' || row.role === 'CONVERGENCE'), false);
+assert.equal(new Set(live.map((row) => row.id)).size, 27);
+assert.equal(live.some((row) => row.role === 'CONVERGENCE'), true);
 assert.deepEqual(
   live.filter((row) => row.strainId === 'COUNTERFATE' && row.role === 'CORE').map((row) => row.imprint).sort(),
   ['ARMAMENT', 'CURRENT', 'DISCIPLINE', 'INSTINCT'],
@@ -537,7 +538,7 @@ for (const familyId of CANONICAL_WEAPON_FAMILY_IDS) {
   const fresh = hydrateNineStrainIncursionFields(createDefaultActiveIncursionState());
   assert.equal(fresh.nineStrainRuntime.boonSystemMode, 'LEGACY_CLASS_CATALOG');
   const migrated = hydrateNineStrainRuntimeState({ schemaVersion: 2, cores: { ARMAMENT: null } });
-  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.schemaVersion, 11);
   assert.equal(migrated.counterfate.rawReversal, 0);
 }
 

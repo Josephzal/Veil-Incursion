@@ -10,6 +10,11 @@ interface WeaponUltimateHostChromeProps {
   onCancel: () => void;
   gradeHint?: WeaponUltimateGrade | null;
   simplified?: boolean;
+  lastHeartbeat?: {
+    selected: boolean;
+    costHp: number;
+    onToggle: (selected: boolean) => void;
+  } | null;
   children: React.ReactNode;
 }
 
@@ -23,6 +28,7 @@ export default function WeaponUltimateHostChrome({
   onCancel,
   gradeHint = null,
   simplified = false,
+  lastHeartbeat = null,
   children,
 }: WeaponUltimateHostChromeProps): React.JSX.Element {
   return (
@@ -46,6 +52,19 @@ export default function WeaponUltimateHostChrome({
           >
             <Text style={styles.cancelLabel}>[ CANCEL — FREE ]</Text>
           </HapticPressable>
+          {lastHeartbeat ? (
+            <HapticPressable
+              style={styles.cancelBtn}
+              onPress={() => lastHeartbeat.onToggle(!lastHeartbeat.selected)}
+              accessibilityLabel="Last Heartbeat optional HP cost"
+            >
+              <Text style={styles.cancelLabel}>
+                {lastHeartbeat.selected
+                  ? `[ LAST HEARTBEAT — ${lastHeartbeat.costHp} HP ]`
+                  : `[ LAST HEARTBEAT — OFF ]`}
+              </Text>
+            </HapticPressable>
+          ) : null}
         </View>
       ) : null}
     </View>

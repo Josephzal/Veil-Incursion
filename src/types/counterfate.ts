@@ -27,9 +27,16 @@ export interface HostileIntentSnapshot {
   hp: number;
   maxHp: number;
   alive: boolean;
+  phased?: boolean;
   protectedPhase?: boolean;
   authoredCounter?: boolean;
   designation?: string;
+  invulnerable?: boolean;
+  kineticArmor?: number;
+  occultWards?: number;
+  kineticArmorBrokenThisCombat?: boolean;
+  occultWardsBrokenThisCombat?: boolean;
+  combatTags?: readonly string[];
 }
 
 export interface ReversalStoreResult {
