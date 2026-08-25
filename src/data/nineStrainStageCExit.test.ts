@@ -24,9 +24,9 @@ import { NINE_STRAIN_SCHEMA_VERSION } from './nineStrain/strainRegistry';
 console.log('Stage C exit gate');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getProductionOfferDefinitions(2).length, 50);
-assert.equal(NINE_STRAIN_SCHEMA_VERSION, 11);
+assert.equal(NINE_STRAIN_SCHEMA_VERSION, 15);
 
 const CORES = [
   ...Object.values(COUNTERFATE_CORE_IDS),
@@ -240,7 +240,7 @@ for (const family of CANONICAL_WEAPON_FAMILY_IDS) {
   const snap = rt.serialize();
   const resumed = hydrateNineStrainRuntimeState(snap);
   assert.equal(resumed.stillpoint.nativeStillness, snap.stillpoint.nativeStillness);
-  assert.equal(resumed.schemaVersion, 11);
+  assert.equal(resumed.schemaVersion, 15);
 }
 
 console.log('Stage C exit gate passed');

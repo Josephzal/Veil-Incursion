@@ -1,0 +1,1162 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn exec The following package was not found and will be installed: tsx@4.23.12
+Phase E.1d.1 — ABYSSAL VERDICT aftermath + grade reachability
+Phase E.1d.1 ABYSSAL VERDICT OK
+ABYSSAL VERDICT lifecycle suite
+ABYSSAL VERDICT lifecycle suite — ok
+ABYSSAL VERDICT ready UI suite
+ABYSSAL VERDICT ready UI suite — ok
+Phase A — Aegis technique migration + derivation
+Phase A Aegis migration OK
+[aegis riposte] redesign tests passed
+Phase C — native Aegis technique runtime
+Phase C Aegis technique runtime OK
+Phase E.1c.1 — DEVASTATE + technique power
+Phase E.1c.1 OK
+loadout default RUIN,GRAVE_BIND,RUNEBOUND_CARAPACE
+Phase E.1d.1 — ultimate scaling ownership
+Phase E.1d.1 ultimate scaling OK
+{"pairedPower":14,"unmakerPower":17,"rendTempoPerfect":32,"graveStd":22,"gravePerfectAgg3":45}
+Phase B — Aegis weapon-action runtime
+Phase B Aegis weapon-action OK
+Phase B.1 — Doomfall interrupt + Rupture accuracy + hub runtime
+Phase B.1 OK
+Stage B.3 — Afterimage vertical slice
+Stage B.3 — Afterimage vertical slice passed
+boonOfferPhase3I.test.ts: OK
+sim panels=72 neverOffered≈37
+top offered=ECHOING_VOID:6, SUPPRESSIVE_FIRE:6, KINETIC_CONVERSION:6, EXECUTIONERS_HIGH:5, LEY_LINE_TAP:5
+cabalRepProgress.test.ts: all assertions passed
+Stage IV-A — Cargo Supply proof
+Stage IV-A Cargo Supply proof passed
+Stage IV-B — Cargo Supply closure proof
+Stage IV-B Cargo Supply closure proof passed.
+Stage V-B — Class Rank remains decoupled from action upgrades
+Stage V-B Class Rank decoupling passed.
+combatCommandRailLayout.test.ts: ok
+[longsword pose] AFTER Δfoot=(0.00, 0.00) bodyΔ=-3.00%  (legacy ≈ ΔfootX -25.2, body -10.3%)
+[longsword pose] idle 123.4x361.4 attack 238.3x297.3 box 304.5x320
+combatPoseRegistration.test.ts: OK
+Combat requisition integration tests passed.
+Stage B.1 — Counterfate vertical slice
+Stage B.1 — Counterfate vertical slice passed
+Envoy Weapon-Kit Phase E.3
+Envoy Weapon-Kit Phase E.3 OK
+Envoy Weapon-Kit Phase E.4
+Envoy Weapon-Kit Phase E.4 OK
+Envoy Weapon-Kit Phase E.5
+Envoy Weapon-Kit Phase E.5 OK
+Stage III-B — finite Combat Preparation runtime
+✓ Stage III-B finite Combat Preparation checks passed.
+Stage III-B — Expedition Requisition registry and account migration
+✓ Stage III-B registry and account migration checks passed.
+✓ Stage III-B Expedition Requisition proof suite passed.
+Stage D.1 — Faultline boss translation
+Stage D.1 — Faultline boss translation passed
+Stage D.1 — Faultline compatibility
+Stage D.1 — Faultline compatibility passed
+Stage D.1 — Faultline
+Stage D.1 — Faultline passed
+Stage E.1 — Gravemark boss & movement
+Stage E.1 — Gravemark boss & movement passed
+Stage E.1 — Gravemark compatibility
+Stage E.1 — Gravemark compatibility passed
+Stage E.1 — Gravemark Hub integration
+Stage E.1 — Gravemark Hub integration passed
+Stage E.1 — Gravemark
+Stage E.1 — Gravemark passed
+Phase H.1a — Hex Shot chassis authority normalization
+Phase H.1a — all assertions passed
+Phase H.2a — Hex fixed-basic scaling + ammo delivery
+Phase H.2a — all assertions passed
+Phase H.2c — Hex authored retunes + corrected-baseline verification
+Phase H.2c — all assertions passed
+  wraithglassFlatOccult = 3
+  Sidearm baseline ballisticDamagePct = 0
+  Sidearm baseline 10 · Wraith T1 agg 13/22/10 · backline 14
+Phase H.3b — Hex eleven-flex roster + repairs
+Phase H.3b — all assertions passed
+  assignable flex = 11
+  Panopticon label = [ PANOPTICON WATCH ]
+  Salvo packets = 7+7+8
+Phase W.2 — Hex 4+3 scaffold + Revolver
+  flex triples validated: 165/165
+Phase W.2 — all assertions passed
+Phase W.3 — Hex Carbine kit + Firing Solution
+  flex triples validated: 165/165
+Phase W.3 — all assertions passed
+Phase W.4 — Hex Black Door kit + Threshold + Deadbolt
+  flex triples validated: 165/165
+Phase W.4 — all assertions passed
+Phase W.5 — Hex Shot weapon-kit closeout
+  flex triples validated: 165/165
+Phase W.5 — all assertions passed
+hitAbsorbProtectionEngine.test.ts: all assertions passed
+Stage II-A — legacy combat-trinket retirement
+legacyCombatTrinketRetirement.test.ts — all assertions passed
+Stage B.4 — Nine-Strain acquisition
+Stage B.4 — Nine-Strain acquisition passed
+Stage B.4 — pacing simulation
+aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "aegis-longsword": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "aegis-paired-blades": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "aegis-claymore": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "hex-revolver": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "hex-carbine": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "hex-shotgun": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "envoy-vambrace": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "envoy-scythe": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  },
+  "envoy-sanguine-prism": {
+    "firstOmen": 1000,
+    "capFail": 0,
+    "illegal": 0,
+    "twoCores": 1000,
+    "engineD1": 1000,
+    "developedD2": 1000,
+    "acceptSum": 10000,
+    "acceptMin": 10,
+    "acceptMax": 10,
+    "noEliteEngine": 1000,
+    "noEliteDeveloped": 1000
+  }
+}
+Stage B.4 — pacing simulation passed
+Stage C.3 — Sector 2 acquisition
+Stage C.3 — Sector 2 acquisition passed
+Stage C.3 — Sector 2 pacing
+wave1 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 1,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "COUNTERFATE",
+    "RITUAL_CADENCE",
+    "AFTERIMAGE"
+  ],
+  "reachableCv": [
+    "CV_FATED_REFRAIN",
+    "CV_SECOND_OUTCOME",
+    "CV_ECHOED_RITE"
+  ]
+}
+wave2 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 2,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "STILLPOINT",
+    "COUNTERFATE",
+    "RITUAL_CADENCE",
+    "AFTERIMAGE",
+    "WOUNDWEAVE"
+  ],
+  "reachableCv": [
+    "CV_STAYED_SENTENCE",
+    "CV_MEASURED_SILENCE",
+    "CV_FATED_REFRAIN",
+    "CV_SUSPENDED_ECHO",
+    "CV_GHOST_THREAD",
+    "CV_DRAWN_TENSION",
+    "CV_ENTANGLED_FATE",
+    "CV_TWOFOLD_RITE",
+    "CV_ECHOED_RITE",
+    "CV_SECOND_OUTCOME"
+  ]
+}
+Stage C.3 — Sector 2 pacing passed
+Stage D.3 — Sector 3 acquisition
+Stage D.3 — Sector 3 acquisition passed
+Stage D.3 — Sector 3 pacing
+wave1 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 1,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "COUNTERFATE",
+    "RITUAL_CADENCE",
+    "AFTERIMAGE"
+  ],
+  "reachableCv": [
+    "CV_FATED_REFRAIN",
+    "CV_SECOND_OUTCOME",
+    "CV_ECHOED_RITE"
+  ]
+}
+wave2 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 2,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "STILLPOINT",
+    "COUNTERFATE",
+    "RITUAL_CADENCE",
+    "AFTERIMAGE",
+    "WOUNDWEAVE"
+  ],
+  "reachableCv": [
+    "CV_STAYED_SENTENCE",
+    "CV_MEASURED_SILENCE",
+    "CV_FATED_REFRAIN",
+    "CV_SUSPENDED_ECHO",
+    "CV_GHOST_THREAD",
+    "CV_DRAWN_TENSION",
+    "CV_ENTANGLED_FATE",
+    "CV_TWOFOLD_RITE",
+    "CV_ECHOED_RITE",
+    "CV_SECOND_OUTCOME"
+  ]
+}
+wave3 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave3 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 3,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "COUNTERFATE",
+    "FAULTLINE",
+    "AFTERIMAGE",
+    "RITUAL_CADENCE",
+    "WOUNDWEAVE",
+    "STILLPOINT",
+    "SOULWAKE"
+  ],
+  "reachableCv": [
+    "CV_SECOND_OUTCOME",
+    "CV_BROKEN_OUTCOME",
+    "CV_ECHOED_RITE",
+    "CV_ECHOED_FAULT",
+    "CV_BREAKING_MEASURE",
+    "CV_SPLIT_SEAM",
+    "CV_GHOST_THREAD",
+    "CV_CRITICAL_PRESSURE",
+    "CV_LIVING_FAULT",
+    "CV_ENTANGLED_FATE",
+    "CV_FATED_REFRAIN",
+    "CV_PULSE_RITE",
+    "CV_PAIN_FORETOLD",
+    "CV_MEASURED_SILENCE",
+    "CV_HELD_BREATH",
+    "CV_PHANTOM_PAIN",
+    "CV_SYMPATHETIC_WOUND",
+    "CV_SUSPENDED_ECHO",
+    "CV_STAYED_SENTENCE",
+    "CV_TWOFOLD_RITE",
+    "CV_DRAWN_TENSION"
+  ]
+}
+Stage D.3 — Sector 3 pacing passed
+Stage C.1 — Sector wave gate
+Stage C.1 — Sector wave gate passed
+Stage D.1 — Sector wave gate (post D.3 cutover)
+Stage D.1 — Sector wave gate passed
+Stage D.2 — Sector wave gate (post D.3 cutover)
+Stage D.2 — Sector wave gate passed
+Stage E.1 — Nine-Strain sector/wave regression
+Stage E.1 — Nine-Strain sector/wave regression passed
+Stage A — Nine-Strain runtime foundation
+Stage A — Nine-Strain runtime foundation passed
+Stage A.1 — live Hub integration and boon-system mode
+Stage A.1 — live Hub integration and boon-system mode passed
+Stage B exit gate
+Stage B exit gate passed
+Stage C exit gate
+Stage C exit gate passed
+Stage D exit gate
+Stage D exit passed
+Stage A.1 — canonical weapon family IDs
+Stage A.1 — canonical weapon family IDs passed
+Stage B.2 — Ritual Cadence vertical slice
+Stage B.2 — Ritual Cadence vertical slice passed
+Stage V — Sanctuary graft flow
+Stage V Sanctuary graft flow passed.
+Stage B.4 — Sector 1 Convergences
+Stage B.4 — Sector 1 Convergences passed
+Stage C.3 — Sector 2 Convergences
+Stage C.3 — Sector 2 Convergences passed
+Stage D.3 — Sector 3 Convergences
+Stage D.3 — Sector 3 Convergences passed
+settledRunResultEngine.test.ts — all assertions passed
+Stage D.2 — Soulwake boss and risk
+Stage D.2 — Soulwake boss and risk passed
+Stage D.2 — Soulwake compatibility
+Stage D.2 — Soulwake compatibility passed
+Stage D.3 — Soulwake Hub integration
+Stage D.3 — Soulwake Hub integration passed
+Stage D.2 — Soulwake
+Stage D.2 — Soulwake passed
+Stage C.1 — Stillpoint / Fleeting Stillness
+Stage C.1 — Stillpoint passed
+thrallLifecycleEngine.test.ts — all assertions passed
+Stage V-B — universal graft core
+Stage V-B universal graft core passed.
+Phase 3L — weapon anchor attack + naming suite
+Phase 3L weapon-anchor naming OK — 9 unique anchors, WU-1 display names + GRAVEWEAVE
+weaponBasicEngine.test.ts — all assertions passed
+weaponEnemyMatchupPhase3K.test.ts: OK
+enemies=51 matchups=459 sectorRows=135
+weaponLoadoutRecommendation.test.ts: OK
+intentionally unmapped flex: AEGIS:FINAL_MERCY, HEX_SHOT:BLACKSITE_TRIAGE, HEX_SHOT:CINDERLINE_SATURATION
+weaponPhase3Closeout.test.ts: OK
+--- Prism 10-cast simulation ---
+step=1 hp=100->95 flux=80 sac=5/5 full=true brink=false dmg=14
+step=2 hp=95->90 flux=60 sac=5/5 full=true brink=false dmg=14
+step=3 hp=90->85 flux=40 sac=5/5 full=true brink=false dmg=14
+step=4 hp=85->80 flux=25 sac=5/5 full=true brink=true dmg=17
+step=5 hp=80->75 flux=20 sac=5/5 full=true brink=true dmg=17
+step=6 hp=75->70 flux=10 sac=5/5 full=true brink=true dmg=17
+step=7 hp=4->1 flux=20 sac=3/5 full=false brink=true dmg=15
+step=8 hp=3->1 flux=15 sac=2/5 full=false brink=true dmg=15
+step=9 hp=2->1 flux=5 sac=1/5 full=false brink=true dmg=15
+step=10 hp=1->1 flux=0 sac=0/5 full=false brink=true dmg=15
+Phase 3L — weapon player-facing suite
+Phase 3L OK — summaries=9 enemies=51 matchups=459 riot-legacy-only tutorials+callouts validated
+Stage II-C — weapon tier retirement + canonical ID migration
+weaponTierRetirementPhase2C.test.ts — all assertions passed
+Phase 3M repair — ultimate activation + pose integration
+Phase 3M repair OK — host gate, nine controllers, cancel/commit boundaries, pose calibration
+Phase WU-1 — weapon ultimate foundation suite
+Phase WU-1 foundation OK — renames, Envoy starter, GRAVEWEAVE, ultimate registry
+Phase WU-2 — weapon ultimate rebind suite
+Phase WU-2 rebind OK — Longsword / Carbine / Scythe own rebound ultimates
+Phase WU-3 — shared ultimate host suite
+Phase WU-3 host OK — grades, STANDARD floors, simplified → STANDARD, cancel free
+Phase WU-4 — six new weapon ultimates
+Phase WU-4 OK — six ultimates WIRED, plans, staged scripts, fire gates
+Phase WU-5 — ultimate surfaces + compatibility
+Phase WU-6 — weapon ultimate validation closeout
+Phase WU-6 OK — validation PASS, retired-name audit clean, pipeline wired
+Stage C.2 — Woundweave compatibility
+Stage C.2 — Woundweave compatibility passed
+Stage C.2 — Woundweave
+Stage C.2 — Woundweave passed
+
+=== SUMMARY ===
+Total: 97, Passed: 96, Failed: 1
+
+--- FAILED: src/data/weaponUltimatePhase5.test.ts ---
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+false !== true
+
+    at assert (/Users/josephlombardo/Desktop/veil-incursion/src/data/weaponUltimatePhase5.test.ts:106:8)
+    at Object.<anonymous> (/Users/josephlombardo/Desktop/veil-incursion/src/data/weaponUltimatePhase5.test.ts:115:91)
+    at Module._compile (node:internal/modules/cjs/loader:1854:14)
+    at Object.transformer (/private/var/folders/3_/v36mpy891dnd5pc20565qfsm0000gn/T/cursor-sandbox-cache/723734d4d7ebe6bd907c09e25c7dc39c/npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-C557imBs.cjs:9:3619)
+    at Module.load (node:internal/modules/cjs/loader:1577:32)
+    at Module._load (node:internal/modules/cjs/loader:1379:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at loadCJSModuleWithModuleLoad (node:internal/modules/esm/translators:326:3)
+    at ModuleWrap.<anonymous> (node:internal/modules/esm/translators:231:7)
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+▶ combatActionRailPresentation
+  ✔ treats only the generic AP lock as shared (3.896833ms)
+  ✔ keeps card-specific locks on the card (0.7865ms)
+  ✔ leaves differing AP requirements on cards while AP remains (1.631791ms)
+  ✔ reads the shared modifier value from authored status copy (0.823042ms)
+  ✔ states a shared modifier once at rail level (1.293375ms)
+  ✔ falls back to the zero-AP notice and is otherwise silent (0.591833ms)
+  ✔ pins the committed action so hover cannot replace it during targeting (1.623833ms)
+  ✔ keeps the AP cost in the strip title (1.216583ms)
+✔ combatActionRailPresentation (15.236542ms)
+▶ combatEndTurnPresentation
+  ✔ warns only when spendable AP would be discarded (1.409833ms)
+  ✔ stays neutral at zero AP so End Turn is not permanently amber (0.495584ms)
+  ✔ uses the interactive tone for hover and focus at zero AP (1.009084ms)
+  ✔ never warns while End Turn is unavailable (0.692625ms)
+  ✔ does not warn about a staged action, only canonical resources (1.182875ms)
+✔ combatEndTurnPresentation (34.911417ms)
+▶ combatEnemyNameplatePresentation
+  ✔ treats hover, focus, selection and acting as one disclosure level (1.558125ms)
+  ✔ uses compact HP normally and current/max when disclosed (7.202458ms)
+  ✔ builds the intent line from canonical glyph copy (1.409041ms)
+  ✔ marks imminent intents without relying on animation (14.192333ms)
+  ✔ caps indicators at three with overflow and keeps defenses first (1.260375ms)
+  ✔ never lets statuses take the intent slot (7.199292ms)
+  ✔ substitutes slumped tactical copy in the intent slot (0.933958ms)
+  ✔ publishes one shared silhouette gap in the 12-16px target band (2.368542ms)
+✔ combatEnemyNameplatePresentation (37.011417ms)
+▶ objective bar containment
+  ✔ keeps the objective bar anchor and type scale unchanged (2.109792ms)
+  ✔ still positions itself top-left above the arena (0.555084ms)
+  ✔ does not host command details, notifications, or intel content (0.773625ms)
+  ✔ keeps the event toast in the right dock, clear of the objective bar (4.814417ms)
+✔ objective bar containment (9.376417ms)
+▶ combatSlumpedPresentation
+  ✔ is inert for enemies that are not slumped (0.202625ms)
+  ✔ suppresses next-intent on every surface while slumped (12.123375ms)
+  ✔ derives revival copy from the canonical slump counters (0.123084ms)
+  ✔ gives the battlefield and Enemy Intel identical state copy (6.821ms)
+✔ combatSlumpedPresentation (44.297917ms)
+▶ combatTargetReticlePresentation
+  ✔ uses canonical cyan/mint and forbids purple/green hues (26.871417ms)
+  ✔ hides player reticles during hostile turn or inactive targeting (2.328833ms)
+  ✔ shows only one inspect reticle when no ability is armed (4.332375ms)
+  ✔ uses candidate ticks for non-focused valid targets while armed (2.061792ms)
+  ✔ labels dual allocations without hue changes (8.407667ms)
+  ✔ keeps committed armed picks dim until hover intensifies them (1.634167ms)
+  ✔ reserves complete brackets for the active target and its confirmation (5.188542ms)
+  ✔ keeps passive inspection dimmer than an active lock (1.192292ms)
+  ✔ does not arm reticles for zero-target presentation inputs (11.87375ms)
+✔ combatTargetReticlePresentation (67.171166ms)
+▶ combatTurnOrderWindow
+  ✔ renders short rosters whole without duplicating actors (0.223958ms)
+  ✔ shows the current actor plus the next three (0.060833ms)
+  ✔ wraps past the end of the sequence to keep the window size stable (0.039333ms)
+  ✔ starts at the head when no actor is active (0.032042ms)
+  ✔ ranks current, next and later actors (0.051959ms)
+  ✔ fades later actors but keeps them legible (0.050125ms)
+✔ combatTurnOrderWindow (0.591958ms)
+AssertionError [ERR_ASSERTION]: aegis-longsword miss cue
+    at run (/Users/josephlombardo/Desktop/veil-incursion/src/data/weaponCombatPresentationPhase3M.test.ts:201:12)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processTimers (node:internal/timers:538:9) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+[warden strike] presentation tests passed (Step 2K acceptance)
+ℹ tests 44
+ℹ suites 7
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 353792.74

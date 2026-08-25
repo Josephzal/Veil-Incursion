@@ -16,6 +16,7 @@ import {
   type OverdrawKind,
   type QualifyingHpLossEvent,
   type SoulwakePacketResult,
+  type SoulwakePendingCarry,
   type SoulwakePreviewDelta,
   type SoulwakeRuntimeState,
   type WakeKind,
@@ -66,10 +67,14 @@ export function createDefaultSoulwakeState(): SoulwakeRuntimeState {
     lastBarrierGranted: 0,
     lastApRefund: 0,
     lastCooldownAdvanced: false,
+    lastOpenConduitGain: 0,
+    lastOpenConduitPreserved: 0,
     lastPackets: [],
     lastLog: null,
     hpPaidThisEncounter: 0,
     hpRestoredThisEncounter: 0,
+    freshnessGeneration: 0,
+    pendingCarry: null,
   };
 }
 
@@ -127,12 +132,32 @@ export function hydrateSoulwakeState(raw: unknown): SoulwakeRuntimeState {
     lastBarrierGranted: num(row.lastBarrierGranted),
     lastApRefund: num(row.lastApRefund),
     lastCooldownAdvanced: row.lastCooldownAdvanced === true,
+    lastOpenConduitGain: num(row.lastOpenConduitGain),
+    lastOpenConduitPreserved: num(row.lastOpenConduitPreserved),
     lastPackets: Array.isArray(row.lastPackets)
       ? (row.lastPackets as SoulwakePacketResult[]).filter((item) => item && typeof item === 'object' && typeof item.targetId === 'string')
       : [],
     lastLog: typeof row.lastLog === 'string' ? row.lastLog : null,
     hpPaidThisEncounter: num(row.hpPaidThisEncounter),
     hpRestoredThisEncounter: num(row.hpRestoredThisEncounter),
+    freshnessGeneration: num(row.freshnessGeneration),
+    pendingCarry: hydratePendingCarry(row.pendingCarry),
+  };
+}
+
+function hydratePendingCarry(raw: unknown): SoulwakePendingCarry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (typeof row.sourceId !== 'string' || typeof row.amount !== 'number') return null;
+  const kind = row.sourceWakeKind;
+  return {
+    sourceId: row.sourceId,
+    wakeGenerationId: num(row.wakeGenerationId),
+    freshnessGeneration: num(row.freshnessGeneration),
+    amount: Math.max(0, Math.floor(row.amount)),
+    triggerId: typeof row.triggerId === 'string' ? row.triggerId : '',
+    activateAtPlayerTurn: num(row.activateAtPlayerTurn),
+    sourceWakeKind: kind === 'NORMAL' || kind === 'RESIDUAL' ? kind : 'NONE',
   };
 }
 
@@ -228,10 +253,10 @@ export function activateRecordedWake(
   ownedIds: readonly string[],
 ): SoulwakeRuntimeState {
   if (!ownsSoulwake(ownedIds) || state.recordedWake <= 0) {
-    return { ...state, lastLog: state.recordedWake > 0 ? state.lastLog : state.lastLog };
+    return activatePendingCarry(state, ownedIds);
   }
   const value = clampWake(state.recordedWake, state.playerMaxHp);
-  return {
+  const activated: SoulwakeRuntimeState = {
     ...state,
     recordedWake: 0,
     activeWake: value,
@@ -241,6 +266,114 @@ export function activateRecordedWake(
     expireAtEnemyCycleIndex: scheduleExpiry(state),
     residualCarrySourceGenerationId: null,
     lastLog: `WAKE ${value}`,
+  };
+  return activatePendingCarry(activated, ownedIds);
+}
+
+/**
+ * Shared Residual carry arbitration for Living Breach transitions and Sector 3 Convergences.
+ * Does not stack; keeps the larger floored/capped amount; stable sourceId wins ties.
+ */
+export function requestResidualCarry(
+  state: SoulwakeRuntimeState,
+  request: {
+    sourceId: string;
+    amount: number;
+    triggerId: string;
+    sourceWakeKind: WakeKind;
+  },
+): { state: SoulwakeRuntimeState; accepted: boolean; amount: number } {
+  const floored = Math.floor(request.amount);
+  const amount = clampWake(floored, state.playerMaxHp);
+  if (amount <= 0) return { state, accepted: false, amount: 0 };
+  if (request.sourceWakeKind === 'RESIDUAL' && !state.freshLossSinceResidualCarry) {
+    return { state, accepted: false, amount: 0 };
+  }
+  const activateAt = state.playerTurnIndex + 1;
+  const pending = state.pendingCarry;
+  if (pending && pending.freshnessGeneration === state.freshnessGeneration) {
+    if (pending.amount > amount) return { state, accepted: false, amount: 0 };
+    if (pending.amount === amount && pending.sourceId.localeCompare(request.sourceId) <= 0) {
+      return { state, accepted: false, amount: 0 };
+    }
+  }
+  return {
+    accepted: true,
+    amount,
+    state: {
+      ...state,
+      pendingCarry: {
+        sourceId: request.sourceId,
+        wakeGenerationId: state.generationId,
+        freshnessGeneration: state.freshnessGeneration,
+        amount,
+        triggerId: request.triggerId,
+        activateAtPlayerTurn: activateAt,
+        sourceWakeKind: request.sourceWakeKind,
+      },
+      lastLog: `CARRY ${amount}`,
+    },
+  };
+}
+
+export function activatePendingCarry(
+  state: SoulwakeRuntimeState,
+  ownedIds: readonly string[],
+): SoulwakeRuntimeState {
+  const pending = state.pendingCarry;
+  if (!pending || !ownsSoulwake(ownedIds)) return state;
+  if (pending.activateAtPlayerTurn > state.playerTurnIndex) return state;
+  const amount = clampWake(pending.amount, state.playerMaxHp);
+  if (amount <= 0) return { ...state, pendingCarry: null };
+  const hadRecordedNormal = state.activeWakeKind === 'NORMAL' && state.activeWake > 0;
+  const merged = clampWake(state.activeWake + amount, state.playerMaxHp);
+  const kind: WakeKind = hadRecordedNormal || state.recordedWake > 0 ? 'NORMAL' : 'RESIDUAL';
+  return {
+    ...state,
+    pendingCarry: null,
+    activeWake: merged,
+    activeWakeKind: kind,
+    generationId: state.activeWakeKind === 'NONE' ? state.generationId + 1 : state.generationId,
+    activationEnemyCycleIndex: state.enemyCycleIndex,
+    expireAtEnemyCycleIndex: Math.max(state.expireAtEnemyCycleIndex, scheduleExpiry(state)),
+    residualCarrySourceGenerationId: kind === 'RESIDUAL' ? pending.wakeGenerationId : null,
+    freshLossSinceResidualCarry: kind === 'NORMAL' ? state.freshLossSinceResidualCarry : false,
+    lastLog: kind === 'RESIDUAL' ? `RESIDUAL ${merged}` : `WAKE ${merged}`,
+  };
+}
+
+/** Phantom Pain immediate Residual for the current combat cycle. */
+export function injectImmediateResidualWake(
+  state: SoulwakeRuntimeState,
+  amount: number,
+  sourceId: string,
+): SoulwakeRuntimeState {
+  const add = clampWake(Math.floor(amount), state.playerMaxHp);
+  if (add <= 0) return state;
+  if (state.activeWakeKind === 'NORMAL' && state.activeWake > 0) {
+    return {
+      ...addToActive(state, add, 'NORMAL', true),
+      lastLog: `PHANTOM ${clampWake(state.activeWake + add, state.playerMaxHp)}`,
+    };
+  }
+  const next = addToActive(state, add, 'RESIDUAL', true);
+  return {
+    ...next,
+    freshLossSinceResidualCarry: false,
+    residualCarrySourceGenerationId: state.generationId,
+    lastLog: `PHANTOM ${next.activeWake}`,
+  };
+  void sourceId;
+}
+
+export function clearSoulwakeHubFlags(state: SoulwakeRuntimeState): SoulwakeRuntimeState {
+  return {
+    ...state,
+    lastApRefund: 0,
+    lastCooldownAdvanced: false,
+    lastBarrierGranted: 0,
+    lastOpenConduitGain: 0,
+    lastOpenConduitPreserved: 0,
   };
 }
 
@@ -384,6 +517,8 @@ export function applyQualifyingLoss(
     ...next,
     cycleRecorded: next.cycleRecorded + amount,
     hpPaidThisEncounter: next.hpPaidThisEncounter + paidForTelemetry,
+    freshnessGeneration: next.freshnessGeneration + 1,
+    freshLossSinceResidualCarry: true,
   };
   const livingBreach = owns(ownedIds, SOULWAKE_MANIFESTATION_ID);
   const phase: QualifyingHpLossEvent['phase'] = event.phase
@@ -479,6 +614,7 @@ export function commitOrdinaryOverdraw(
   if (openNerve) {
     next = addToActive(next, paid, 'NORMAL', false);
     next = rememberLoss(next, lossEventId);
+    next = { ...next, freshnessGeneration: next.freshnessGeneration + 1, freshLossSinceResidualCarry: true };
   } else {
     const applied = applyQualifyingLoss(next, ownedIds, {
       lossEventId,
@@ -709,6 +845,7 @@ export function applyLastHeartbeatOverdraw(
   };
   next = addToActive(next, paid, 'NORMAL', true);
   next = rememberLoss(next, `${ctx.rootActionId}:verdict-overdraw`);
+  next = { ...next, freshnessGeneration: next.freshnessGeneration + 1, freshLossSinceResidualCarry: true };
   return next;
 }
 
@@ -931,7 +1068,15 @@ export function processSoulwakeCurrent(args: {
       state = { ...state, openConduitSpendResolvedThisRoot: true };
     }
   }
-  return { state, gained, preserved };
+  return {
+    state: {
+      ...state,
+      lastOpenConduitGain: gained,
+      lastOpenConduitPreserved: preserved,
+    },
+    gained,
+    preserved,
+  };
 }
 
 export function completeSoulwakeEncounter(

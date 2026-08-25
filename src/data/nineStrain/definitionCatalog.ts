@@ -2,11 +2,14 @@ import type { UniversalBoonDefinition } from '../../types/nineStrain';
 import { COUNTERFATE_DEFINITIONS } from './counterfateDefinitions';
 import { RITUAL_CADENCE_DEFINITIONS } from './ritualCadenceDefinitions';
 import { AFTERIMAGE_DEFINITIONS } from './afterimageDefinitions';
-import { SECTOR_1_CONVERGENCE_DEFINITIONS, SECTOR_2_CONVERGENCE_DEFINITIONS } from './convergenceDefinitions';
+import { SECTOR_1_CONVERGENCE_DEFINITIONS, SECTOR_2_CONVERGENCE_DEFINITIONS, SECTOR_3_CONVERGENCE_DEFINITIONS } from './convergenceDefinitions';
+import { SECTOR_4_CONVERGENCE_DEFINITIONS } from './sector4ConvergenceDefinitions';
 import { STILLPOINT_DEFINITIONS } from './stillpointDefinitions';
 import { WOUNDWEAVE_DEFINITIONS } from './woundweaveDefinitions';
 import { FAULTLINE_DEFINITIONS } from './faultlineDefinitions';
 import { SOULWAKE_DEFINITIONS } from './soulwakeDefinitions';
+import { GRAVEMARK_DEFINITIONS } from './gravemarkDefinitions';
+import { SHARDSKIN_DEFINITIONS } from './shardskinDefinitions';
 import { CORE_IMPRINTS } from './strainRegistry';
 
 const LIVE_DEFINITIONS: UniversalBoonDefinition[] = [
@@ -19,10 +22,15 @@ const LIVE_DEFINITIONS: UniversalBoonDefinition[] = [
   ...SECTOR_2_CONVERGENCE_DEFINITIONS,
   ...FAULTLINE_DEFINITIONS,
   ...SOULWAKE_DEFINITIONS,
+  ...SECTOR_3_CONVERGENCE_DEFINITIONS,
+  ...GRAVEMARK_DEFINITIONS,
+  ...SHARDSKIN_DEFINITIONS,
+  ...SECTOR_4_CONVERGENCE_DEFINITIONS,
 ];
 
-export function definitionAcquisitionWave(def: UniversalBoonDefinition): 1 | 2 | 3 {
-  if (def.acquisitionWave === 2 || def.acquisitionWave === 3) return def.acquisitionWave;
+export function definitionAcquisitionWave(def: UniversalBoonDefinition): 1 | 2 | 3 | 4 {
+  if (def.acquisitionWave === 2 || def.acquisitionWave === 3 || def.acquisitionWave === 4) return def.acquisitionWave;
+  if (def.strainId === 'GRAVEMARK' || def.strainId === 'SHARDSKIN') return 4;
   if (def.strainId === 'FAULTLINE' || def.strainId === 'SOULWAKE') return 3;
   if (def.strainId === 'STILLPOINT' || def.strainId === 'WOUNDWEAVE') return 2;
   return 1;
@@ -38,7 +46,8 @@ export function getSector1ProductionDefinitions(): readonly UniversalBoonDefinit
   return LIVE_DEFINITIONS.filter((row) => definitionAcquisitionWave(row) === 1 && !row.testOnly);
 }
 
-export function getProductionOfferDefinitions(maxWave: 1 | 2 | 3 = 1): readonly UniversalBoonDefinition[] {
+/** Production offer pool capped at the run's fixed acquisition wave (NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE for new runs). */
+export function getProductionOfferDefinitions(maxWave: 1 | 2 | 3 | 4 = 1): readonly UniversalBoonDefinition[] {
   return LIVE_DEFINITIONS.filter((row) => !row.testOnly && definitionAcquisitionWave(row) <= maxWave);
 }
 

@@ -1,4 +1,5 @@
 import type { EnemyIntentSeverity } from './enemyIntentMeta';
+import type { CombatGridSlotId } from './combatGrid';
 
 export type CombatDepthBand = 1 | 2 | 3;
 
@@ -37,6 +38,10 @@ export interface HostileIntentSnapshot {
   kineticArmorBrokenThisCombat?: boolean;
   occultWardsBrokenThisCombat?: boolean;
   combatTags?: readonly string[];
+  /** Authoritative live grid slot — same value the squad's gridSlot carries. Gravemark E.1. */
+  gridSlot?: CombatGridSlotId;
+  /** Cannot be relocated by Displacement (e.g. wide/boss units). Gravemark E.1. */
+  immovable?: boolean;
 }
 
 export interface ReversalStoreResult {

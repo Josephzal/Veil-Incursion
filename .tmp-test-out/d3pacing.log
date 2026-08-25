@@ -1,0 +1,321 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn exec The following package was not found and will be installed: tsx@4.23.12
+Stage D.3 — Sector 3 pacing
+wave1 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave1 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 1,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "COUNTERFATE",
+    "RITUAL_CADENCE",
+    "AFTERIMAGE"
+  ],
+  "reachableCv": [
+    "CV_FATED_REFRAIN",
+    "CV_SECOND_OUTCOME",
+    "CV_ECHOED_RITE"
+  ]
+}
+wave2 aegis-longsword accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 aegis-paired-blades accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 aegis-claymore accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-revolver accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-carbine accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 hex-shotgun accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-vambrace accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-scythe accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+wave2 envoy-sanguine-prism accepts mean=10.00 min=10 max=10 engineD1=100.0% convD2=100.0%
+{
+  "wave": 2,
+  "report": {
+    "aegis-longsword": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-paired-blades": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "aegis-claymore": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-revolver": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-carbine": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "hex-shotgun": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-vambrace": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-scythe": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    },
+    "envoy-sanguine-prism": {
+      "firstOmen": 1000,
+      "capFail": 0,
+      "illegal": 0,
+      "twoCores": 1000,
+      "engineD1": 1000,
+      "developedD2": 1000,
+      "acceptSum": 10000,
+      "acceptMin": 10,
+      "acceptMax": 10,
+      "noEliteEngine": 1000,
+      "noEliteDeveloped": 1000
+    }
+  },
+  "reachableStrains": [
+    "STILLPOINT",
+    "COUNTERFATE",
+    "RITUAL_CADENCE",
+    "AFTERIMAGE",
+    "WOUNDWEAVE"
+  ],
+  "reachableCv": [
+    "CV_STAYED_SENTENCE",
+    "CV_MEASURED_SILENCE",
+    "CV_FATED_REFRAIN",
+    "CV_SUSPENDED_ECHO",
+    "CV_GHOST_THREAD",
+    "CV_DRAWN_TENSION",
+    "CV_ENTANGLED_FATE",
+    "CV_TWOFOLD_RITE",
+    "CV_ECHOED_RITE",
+    "CV_SECOND_OUTCOME"
+  ]
+}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: w3 aegis-longsword illegal 18
+
+true !== false
+
+    at runCohort (/Users/josephlombardo/Desktop/veil-incursion/src/data/nineStrainSector3PacingStageD3.test.ts:312:14)
+    at assert (/Users/josephlombardo/Desktop/veil-incursion/src/data/nineStrainSector3PacingStageD3.test.ts:342:15)
+    at Object.<anonymous> (/Users/josephlombardo/Desktop/veil-incursion/src/data/nineStrainSector3PacingStageD3.test.ts:347:49)
+    at Module._compile (node:internal/modules/cjs/loader:1854:14)
+    at Object.transformer (/private/var/folders/3_/v36mpy891dnd5pc20565qfsm0000gn/T/cursor-sandbox-cache/4ff401b59f15a296f68c3634f0f878e1/npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-C557imBs.cjs:9:3619)
+    at Module.load (node:internal/modules/cjs/loader:1577:32)
+    at Module._load (node:internal/modules/cjs/loader:1379:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at loadCJSModuleWithModuleLoad (node:internal/modules/esm/translators:326:3)
+    at ModuleWrap.<anonymous> (node:internal/modules/esm/translators:231:7) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: true,
+  expected: false,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.16.0

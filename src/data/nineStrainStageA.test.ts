@@ -35,7 +35,7 @@ assert.equal(verdict.imprint, undefined);
 indexDefinitions(catalog);
 indexDefinitions(getLiveUniversalBoonDefinitions());
 assert.equal(getSector1ProductionDefinitions().length, 27);
-assert.equal(getLiveUniversalBoonDefinitions().length, 66);
+assert.equal(getLiveUniversalBoonDefinitions().length, 108);
 
 const ids = catalog.map((row) => row.id);
 assert.equal(new Set(ids).size, ids.length);
@@ -241,14 +241,14 @@ const migrated = hydrateNineStrainRuntimeState({
   cores: { ARMAMENT: 'TEST_STRAIN_CORE_ARMAMENT', VERDICT: 'TEST_STRAIN_VERDICT' },
   contactedStrains: ['COUNTERFATE'],
 });
-assert.equal(migrated.schemaVersion, 11);
+assert.equal(migrated.schemaVersion, 15);
 assert.ok(migrated.manifestations.includes('legacy-revelation'));
 assert.equal(migrated.boundVerdict, 'TEST_STRAIN_VERDICT');
 assert.equal(migrated.cores.ARMAMENT, 'TEST_STRAIN_CORE_ARMAMENT');
 assert.equal('VERDICT' in migrated.cores, false);
 
 const incursion = hydrateNineStrainIncursionFields(createDefaultActiveIncursionState());
-assert.equal(incursion.nineStrainRuntime.schemaVersion, 11);
+assert.equal(incursion.nineStrainRuntime.schemaVersion, 15);
 assert.equal(incursion.nineStrainRuntime.boonSystemMode, 'LEGACY_CLASS_CATALOG');
 assert.equal(incursion.leyLineMutations.length, 0);
 

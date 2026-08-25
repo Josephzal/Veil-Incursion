@@ -7,7 +7,7 @@ import type {
 import type { EligibilityOptions } from './ownership';
 import type { PostCombatBoonOffer } from '../../types/classBoon';
 import type { ScannerLabelCertainty } from '../scannerLabelCertaintyCatalog';
-import { CONVERGENCE_IDS, SECTOR_1_STRAIN_IDS, SECTOR_2_STRAIN_IDS, SECTOR_3_STRAIN_IDS } from '../../types/convergence';
+import { CONVERGENCE_IDS, SECTOR_1_STRAIN_IDS, SECTOR_2_STRAIN_IDS, SECTOR_3_STRAIN_IDS, SECTOR_4_STRAIN_IDS } from '../../types/convergence';
 import { STRAIN_DISPLAY_NAMES } from './strainRegistry';
 import { evaluateEligibility, previewAcquire } from './ownership';
 import { createSeededRng } from '../boonOffer/boonOfferSelection';
@@ -17,7 +17,13 @@ import { AFTERIMAGE_CORE_IDS } from '../../types/afterimage';
 
 export const CONTACT_STRAIN_PREFIX = 'CONTACT_STRAIN:';
 
-export function unlockedStrainIds(maxWave: 1 | 2 | 3 | undefined): StrainId[] {
+/** Stage E.3: wave 4 (Gravemark, Shardskin) is now live in production offer composition. */
+function clampToProductionWave(maxWave: 1 | 2 | 3 | 4 | undefined): 1 | 2 | 3 | 4 | undefined {
+  return maxWave;
+}
+
+export function unlockedStrainIds(maxWave: 1 | 2 | 3 | 4 | undefined): StrainId[] {
+  if ((maxWave ?? 1) >= 4) return [...SECTOR_1_STRAIN_IDS, ...SECTOR_2_STRAIN_IDS, ...SECTOR_3_STRAIN_IDS, ...SECTOR_4_STRAIN_IDS];
   if ((maxWave ?? 1) >= 3) return [...SECTOR_1_STRAIN_IDS, ...SECTOR_2_STRAIN_IDS, ...SECTOR_3_STRAIN_IDS];
   if ((maxWave ?? 1) >= 2) return [...SECTOR_1_STRAIN_IDS, ...SECTOR_2_STRAIN_IDS];
   return [...SECTOR_1_STRAIN_IDS];
@@ -30,7 +36,7 @@ export function contactStrainOfferId(strainId: StrainId): string {
 export function parseContactStrainOfferId(id: string): StrainId | null {
   if (!id.startsWith(CONTACT_STRAIN_PREFIX)) return null;
   const rest = id.slice(CONTACT_STRAIN_PREFIX.length);
-  return (unlockedStrainIds(3) as readonly string[]).includes(rest) ? rest as StrainId : null;
+  return (unlockedStrainIds(4) as readonly string[]).includes(rest) ? rest as StrainId : null;
 }
 
 export interface RewardTriggerInput {
@@ -329,7 +335,7 @@ function legalContactStrains(
   args: { boss: boolean; depth: number; weaponFamilyId?: string; firstOffer: boolean },
 ): StrainId[] {
   const atCap = naturalContactCount(state) >= 3;
-  const unlocked = unlockedStrainIds(state.maxAcquisitionWave);
+  const unlocked = unlockedStrainIds(clampToProductionWave(state.maxAcquisitionWave));
   const pool: StrainId[] = atCap
     ? contactedIds(state).filter((id) => unlocked.includes(id))
     : unlocked;
@@ -386,7 +392,7 @@ export function firstOmenStrainIds(
   weaponFamilyId?: string,
   seed = 'omen',
 ): StrainId[] {
-  const unlocked = unlockedStrainIds(state.maxAcquisitionWave);
+  const unlocked = unlockedStrainIds(clampToProductionWave(state.maxAcquisitionWave));
   const legal = unlocked.filter((id) => strainCanComposeThree(state, id, {
     boss: false,
     depth,
@@ -704,7 +710,7 @@ export function previewEliteContactStrain(args: {
   certainty: ScannerLabelCertainty;
   nodeId: string;
   seed: string;
-  maxAcquisitionWave?: 1 | 2 | 3;
+  maxAcquisitionWave?: 1 | 2 | 3 | 4;
 }): string | null {
   if (args.certainty !== 'RELIABLE') return null;
   const pool = unlockedStrainIds(args.maxAcquisitionWave ?? NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE);

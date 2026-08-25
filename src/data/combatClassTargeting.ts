@@ -11,6 +11,7 @@ import {
   resolveWardenInterceptTarget,
   validTargetsForAbility as aegisValidTargets,
   type AbilityTargetMode,
+  type TargetEligibilityOpts,
 } from './combatTargeting';
 import type { EnemyCombatProfile } from '../types/run';
 import { isUnitAlive } from './combatSquadEngine';
@@ -132,7 +133,7 @@ export function canTargetWithClassAbility(
   squad: EnemyCombatProfile[],
   abilityId: string,
   unitId: string,
-  opts?: { doomfallReleaseAvailable?: boolean },
+  opts?: TargetEligibilityOpts,
 ): boolean {
   if (classId === 'AEGIS') {
     return aegisCanTarget(squad, abilityId as AegisAbilityId, unitId, opts);
@@ -180,9 +181,10 @@ export function isUnitHookValidForClass(
   classId: ClassType,
   abilityId: string | null,
   unit: EnemyCombatProfile,
+  isUnitUnmoored?: (unitId: string) => boolean,
 ): boolean {
   if (classId === 'AEGIS') {
-    return aegisIsHookValid(abilityId as AegisAbilityId | null, unit);
+    return aegisIsHookValid(abilityId as AegisAbilityId | null, unit, isUnitUnmoored);
   }
   return false;
 }
@@ -191,7 +193,7 @@ export function validTargetsForClassAbility(
   classId: ClassType,
   squad: EnemyCombatProfile[],
   abilityId: string,
-  opts?: { doomfallReleaseAvailable?: boolean },
+  opts?: TargetEligibilityOpts,
 ): EnemyCombatProfile[] {
   if (classId === 'AEGIS') {
     return aegisValidTargets(squad, abilityId as AegisAbilityId, opts);

@@ -4,11 +4,13 @@ import type {
   OwnershipPreview,
   UniversalBoonDefinition,
 } from '../../types/nineStrain';
+import { CONVERGENCE_IDS } from '../../types/convergence';
 import { MAX_NATURAL_CONTACTED_STRAINS } from './strainRegistry';
 import { cloneNineStrainRuntimeState } from './persistence';
 import { canFireWeaponUltimate } from '../weaponUltimateRegistry';
 import type { WeaponFamilyId } from '../../types/weapon';
 import { definitionAcquisitionWave } from './definitionCatalog';
+import { loadoutCanProduceHostileOrdinaryTrace } from './sector3ConvergenceEngine';
 
 export interface EligibilityOptions {
   allowTestOffers?: boolean;
@@ -19,7 +21,8 @@ export interface EligibilityOptions {
   equippedWeaponFamilyId?: string;
   /** Test/dev only. Production acquisition never sets this. */
   allowSector2Wave?: boolean;
-  maxAcquisitionWave?: 1 | 2 | 3;
+  /** Wave 4 (Gravemark) is direct-grant/fixture only — never a production offer wave. */
+  maxAcquisitionWave?: 1 | 2 | 3 | 4;
 }
 
 function ownedIds(state: NineStrainRuntimeState): string[] {
@@ -111,13 +114,18 @@ function naturalContactCount(state: NineStrainRuntimeState): number {
 function effectiveAcquisitionWave(
   state: NineStrainRuntimeState,
   options: EligibilityOptions,
-): 1 | 2 | 3 {
-  if (options.maxAcquisitionWave === 1 || options.maxAcquisitionWave === 2 || options.maxAcquisitionWave === 3) {
+): 1 | 2 | 3 | 4 {
+  if (
+    options.maxAcquisitionWave === 1
+    || options.maxAcquisitionWave === 2
+    || options.maxAcquisitionWave === 3
+    || options.maxAcquisitionWave === 4
+  ) {
     return options.maxAcquisitionWave;
   }
   if (options.allowSector2Wave) return 2;
   const stored = state.maxAcquisitionWave;
-  if (stored === 1 || stored === 2 || stored === 3) return stored;
+  if (stored === 1 || stored === 2 || stored === 3 || stored === 4) return stored;
   return 1;
 }
 
@@ -202,6 +210,18 @@ export function evaluateEligibility(
     const parents = def.prerequisites.parentCoreIds ?? [];
     if (parents.some((parentId) => !parentProducerLive(state, definitions, parentId))) {
       reasons.push('CONVERGENCE_PARENTS');
+    }
+    if (
+      definitionId === CONVERGENCE_IDS.ECHOED_FAULT
+      && !loadoutCanProduceHostileOrdinaryTrace(ownedIds(state), [...definitions.values()])
+    ) {
+      reasons.push('MISSING_PRODUCER');
+    }
+    if (
+      definitionId === CONVERGENCE_IDS.PARALLAX_ECHO
+      && !loadoutCanProduceHostileOrdinaryTrace(ownedIds(state), [...definitions.values()])
+    ) {
+      reasons.push('MISSING_PRODUCER');
     }
   }
   if (def.role === 'VERDICT') {

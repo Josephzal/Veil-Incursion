@@ -132,10 +132,25 @@ export interface SoulwakeRuntimeState {
   lastBarrierGranted: number;
   lastApRefund: number;
   lastCooldownAdvanced: boolean;
+  lastOpenConduitGain: number;
+  lastOpenConduitPreserved: number;
   lastPackets: readonly SoulwakePacketResult[];
   lastLog: string | null;
   hpPaidThisEncounter: number;
   hpRestoredThisEncounter: number;
+  /** Advances when new qualifying HP loss or Overdraw occurs; Residual carry locks until this changes. */
+  freshnessGeneration: number;
+  pendingCarry: SoulwakePendingCarry | null;
+}
+
+export interface SoulwakePendingCarry {
+  sourceId: string;
+  wakeGenerationId: number;
+  freshnessGeneration: number;
+  amount: number;
+  triggerId: string;
+  activateAtPlayerTurn: number;
+  sourceWakeKind: WakeKind;
 }
 
 export interface SoulwakePreviewDelta {

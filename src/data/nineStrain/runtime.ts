@@ -152,6 +152,7 @@ import {
   reformWoundlinkPair,
   seedEntangledFateEndpoint,
   setWoundweavePhaseSuccessor,
+  woundweavePartnerOf,
   woundweavePresentation as composeWoundweavePresentation,
 } from './woundweaveEngine';
 import {
@@ -175,24 +176,136 @@ import {
   applyQualifyingLoss,
   beginSoulwakeEnemyCycle,
   beginSoulwakePlayerTurn,
+  clearSoulwakeHubFlags,
   commitOrdinaryOverdraw,
   completeSoulwakeEncounter,
   createDefaultSoulwakeState,
   expireSoulwakeAtEnemyCycleEnd,
+  injectImmediateResidualWake,
   ordinaryOverdrawAvailable,
   previewOrdinaryOverdraw,
   previewSoulwakeRoot,
   processSoulwakeCurrent,
   processSoulwakeInstinct,
   processSoulwakeRoot,
+  requestResidualCarry,
   resolveLastHeartbeatPackets,
   setLastHeartbeatSelected,
   snapshotWakePowered,
   soulwakePresentation as composeSoulwakePresentation,
   syncSoulwakeVitals,
 } from './soulwakeEngine';
+import {
+  applyBreakingMeasureFinaleFault,
+  applyBrokenOutcomeOnRelease,
+  applyBrokenOutcomeOnRupture,
+  applyCriticalPressureFault,
+  applyDeferredBreakingMeasureBeat,
+  applyEchoedFaultAfterTrace,
+  applyHeldBreathEndTurnCarry,
+  applyHeldBreathOverdraw,
+  applyLivingFault,
+  applyLivingFaultCarryOnRupture,
+  applyPainForetoldWakeStore,
+  applyPulseRiteFinaleCarry,
+  applyPulseRiteOverdraw,
+  applySplitSeamNativeTransfer,
+  applySplitSeamRupture,
+  applySympatheticWoundCarry,
+  applySympatheticWoundPacket,
+  armEchoedFaultFromRupture,
+  echoedFaultTraceMultiplier,
+  noteBreakingMeasureRupture,
+  notePhantomPainMint,
+  painForetoldHostileWakeMultiplier,
+  resolvePhantomPain,
+  tryCriticalPressureFleetingRestore,
+} from './sector3ConvergenceEngine';
+import type { Sector3ConvergenceRuntimeState, Sector4ConvergenceRuntimeState } from '../../types/convergence';
+import type { FaultAdditionRecord, RuptureResult } from '../../types/faultline';
 import { SOULWAKE_CORE_IDS, SOULWAKE_VERDICT_ID } from '../../types/soulwake';
 import { directlyAffectedTargetIds } from './rootAction';
+import {
+  beginGravemarkCombatCycle,
+  beginGravemarkPlayerTurn,
+  clearEncounterGravemark,
+  consumeGravemarkApRefund as drainGravemarkApRefund,
+  consumeGravemarkPendingMovement as drainGravemarkPendingMovement,
+  createDefaultGravemarkState,
+  falsePositionEligibleForLane,
+  gravemarkPresentation as composeGravemarkPresentation,
+  hasLiveGravemarkIds,
+  applyWorldTurnedSidewaysUltimateDamage,
+  previewGravemarkRoot,
+  processGravemarkCurrent,
+  processGravemarkInstinct,
+  processGravemarkRoot,
+  processWorldTurnedSidewaysPostNative,
+  processWorldTurnedSidewaysPreNative,
+  pruneGravemarkTargets,
+  setGravemarkPhaseSuccessor,
+} from './gravemarkEngine';
+import {
+  applyShardskinCoreGeneration,
+  beginCathedralBreakUltimate,
+  beginShardskinCombatCycle,
+  beginShardskinPlayerTurn,
+  clearEncounterShardskin,
+  consumeEdgeForRoot,
+  createDefaultShardskinState,
+  expireShardskinEdgeAtPlayerTurnEnd,
+  finishCathedralBreakUltimate,
+  hasLiveShardskinIds,
+  previewCathedralBreak,
+  processShardskinCurrent,
+  processShardskinInstinct,
+  resolveShardDefense,
+  setCathedralBreakSelected,
+  shardskinPresentation as composeShardskinPresentation,
+} from './shardskinEngine';
+import { SHARDSKIN_SUPPORT_IDS, SHARDSKIN_VERDICT_ID } from '../../types/shardskin';
+import {
+  applyCrystalLigatureFormationShards,
+  applyFatedFacetAbsorption,
+  applyFateOutOfPlaceReleaseBonus,
+  applyFateOutOfPlaceStore,
+  applyFaultglassEdgeFault,
+  applyFaultglassRuptureShards,
+  applyImpactLatticeDisplacementShards,
+  applyImpactLatticeEdgeClause,
+  applyParallaxEchoTraceMovement,
+  applyPhantomFacetGeneration,
+  applyPrismaticRiteDeferredBeat,
+  applyPrismaticRiteFinaleShards,
+  applySector4Collisions,
+  applySoulglassGeneration,
+  applySoulglassResidualCarry,
+  applyStillglassNativeStillnessShards,
+  applyStoredVectorBonusDisplacement,
+  applyTectonicShiftFault,
+  applyTectonicShiftRuptureBonus,
+  applyTetheredOrbitArmedBonus,
+  applyTetheredOrbitFormationPolarity,
+  applyTraumaVectorForcedDisplacement,
+  applyTraumaVectorResidualCarry,
+  applyTurningRiteAdvance,
+  applyTurningRiteDeferredBeat,
+  applyTurningRiteFinaleBonus,
+  armParallaxEchoFromDisplacement,
+  armPhantomFacetFromEdge,
+  armPrismaticRiteCathedralPending,
+  armPrismaticRiteDeferredBeat,
+  armStillglassPendingFleeting,
+  armTetheredOrbitPartnerOnDisplacement,
+  clearTetheredOrbitArmIfInvalid,
+  consumeParallaxEchoArm,
+  consumePhantomFacetArm,
+  consumeStillglassPendingFleeting,
+  crystalLigatureMirrorAmount,
+  resolvePrismaticRiteCathedralPending,
+  tectonicShiftFaultEligible,
+  tryStoredVectorFleetingRequest,
+} from './sector4ConvergenceEngine';
 
 export interface NineStrainRuntimeOptions {
   definitions: readonly UniversalBoonDefinition[];
@@ -267,6 +380,22 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     state = { ...state, convergence: next };
   }
 
+  function s3(): Sector3ConvergenceRuntimeState {
+    return cv().sector3;
+  }
+
+  function setS3(next: Sector3ConvergenceRuntimeState): void {
+    setCv({ ...cv(), sector3: next });
+  }
+
+  function s4(): Sector4ConvergenceRuntimeState {
+    return cv().sector4;
+  }
+
+  function setS4(next: Sector4ConvergenceRuntimeState): void {
+    setCv({ ...cv(), sector4: next });
+  }
+
   function sp() {
     return state.stillpoint ?? createDefaultStillpointState();
   }
@@ -297,6 +426,30 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
 
   function setSw(next: ReturnType<typeof sw>): void {
     state = { ...state, soulwake: next };
+  }
+
+  function gm() {
+    return state.gravemark ?? createDefaultGravemarkState();
+  }
+
+  function setGm(next: ReturnType<typeof gm>): void {
+    state = { ...state, gravemark: next };
+  }
+
+  function hasLiveGravemark(): boolean {
+    return hasLiveGravemarkIds(ownedDefinitionIds());
+  }
+
+  function ss() {
+    return state.shardskin ?? createDefaultShardskinState();
+  }
+
+  function setSs(next: ReturnType<typeof ss>): void {
+    state = { ...state, shardskin: next };
+  }
+
+  function hasLiveShardskin(): boolean {
+    return hasLiveShardskinIds(ownedDefinitionIds());
   }
 
   function hasLiveSoulwake(): boolean {
@@ -396,6 +549,198 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       objectiveProgress: result.objectiveProgress,
       kills: prepared.kills + result.nativeByTarget.filter((row) => row.killed).length - prepared.nativeByTarget.filter((row) => row.killed).length,
     };
+  }
+
+  function dispatchFaultEffects(
+    additions: readonly FaultAdditionRecord[],
+    ruptures: readonly RuptureResult[],
+    prepared: CanonicalRootActionContext,
+  ): void {
+    for (const addition of additions) {
+      dispatch({
+        type: 'FAULT_APPLIED',
+        sourceId: addition.sourceDefinitionId,
+        lineage: [prepared.rootActionId, addition.sourceDefinitionId],
+        rootActionId: prepared.rootActionId,
+        targetId: addition.targetId,
+        payload: {
+          amount: addition.amountApplied,
+          before: addition.amountBefore,
+          after: addition.amountAfter,
+          origin: addition.origin,
+          classification: 'DERIVATIVE',
+        },
+      }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth) });
+    }
+    for (const rupture of ruptures) {
+      dispatch({
+        type: 'RUPTURE_RESOLVED',
+        sourceId: rupture.sourceDefinitionId,
+        lineage: [prepared.rootActionId, rupture.sourceDefinitionId, 'RUPTURE'],
+        rootActionId: prepared.rootActionId,
+        targetId: rupture.targetId,
+        payload: {
+          route: rupture.route,
+          damage: rupture.damage,
+          fullBreak: rupture.fullBreak,
+          killed: rupture.killed,
+          classification: 'DERIVATIVE',
+        },
+      }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth) });
+    }
+    if (ruptures.length > 0) {
+      state.metrics.faultline_ruptures = (state.metrics.faultline_ruptures ?? 0) + ruptures.length;
+    }
+  }
+
+  function woundlinkPartnerId(unitId: string): string | null {
+    const current = ww();
+    if (!isPrimaryEndpoint(current, unitId)) return null;
+    if (current.selfLink) return unitId;
+    if (current.endpointA === unitId) return current.endpointB;
+    if (current.endpointB === unitId) return current.endpointA;
+    return null;
+  }
+
+  function applySector3PostFaultline(
+    prepared: CanonicalRootActionContext,
+    previewFinale: boolean,
+  ): void {
+    const depth = cf().combatDepth;
+    const focused = sp().focusedRoot;
+
+    if (
+      ownedHasKind('CRITICAL_PRESSURE')
+      && focused?.rootActionId === prepared.rootActionId
+    ) {
+      const applied = applyCriticalPressureFault(fl(), hostileIntents, prepared, depth);
+      setFl(applied.fl);
+      hostileIntents = applied.intents;
+      dispatchFaultEffects(
+        applied.addition ? [applied.addition] : [],
+        applied.rupture ? [applied.rupture] : [],
+        prepared,
+      );
+    }
+
+    if (ownedHasKind('LIVING_FAULT') && prepared.wakePowered) {
+      const applied = applyLivingFault(s3(), fl(), hostileIntents, prepared, depth);
+      setS3(applied.cv);
+      setFl(applied.fl);
+      hostileIntents = applied.intents;
+      dispatchFaultEffects(applied.additions, applied.ruptures, prepared);
+    }
+
+    if (ownedHasKind('BREAKING_MEASURE') && previewFinale) {
+      const applied = applyBreakingMeasureFinaleFault(fl(), hostileIntents, prepared, depth);
+      setFl(applied.fl);
+      hostileIntents = applied.intents;
+      dispatchFaultEffects(applied.additions, applied.ruptures, prepared);
+    }
+
+    if (ownedHasKind('SPLIT_SEAM')) {
+      for (const addition of fl().lastAdditions) {
+        if (addition.origin !== 'CORE') continue;
+        if (!isPrimaryEndpoint(ww(), addition.targetId)) continue;
+        const transferred = applySplitSeamNativeTransfer(
+          s3(),
+          fl(),
+          hostileIntents,
+          ww(),
+          prepared,
+          depth,
+          addition,
+        );
+        setS3(transferred.cv);
+        setFl(transferred.fl);
+        hostileIntents = transferred.intents;
+        dispatchFaultEffects(
+          transferred.transfer ? [transferred.transfer] : [],
+          transferred.rupture ? [transferred.rupture] : [],
+          prepared,
+        );
+        break;
+      }
+    }
+
+    for (const rupture of fl().lastRuptures) {
+      if (rupture.rootActionId !== prepared.rootActionId) continue;
+
+      if (ownedHasKind('BROKEN_OUTCOME') && rupture.sourceDefinitionId !== CONVERGENCE_IDS.BROKEN_OUTCOME) {
+        const broken = applyBrokenOutcomeOnRupture(
+          s3(),
+          cf(),
+          rupture,
+          sw().enemyCycleIndex || sp().enemyCycleIndex,
+        );
+        setS3(broken.cv);
+        setCf(broken.cf);
+      }
+
+      if (ownedHasKind('BREAKING_MEASURE')) {
+        const noted = noteBreakingMeasureRupture(s3(), rc(), previewFinale);
+        setS3(noted.cv);
+        setRc(noted.rc);
+      }
+
+      if (ownedHasKind('ECHOED_FAULT')) {
+        setS3(armEchoedFaultFromRupture(s3(), rupture.targetId, null));
+      }
+
+      if (ownedHasKind('CRITICAL_PRESSURE')) {
+        const restored = tryCriticalPressureFleetingRestore(s3(), sp(), mintFleetingStillness, {
+          rootActionId: prepared.rootActionId,
+          causedRupture: true,
+          chargeSource: focused?.rootActionId === prepared.rootActionId ? focused.chargeSource : null,
+        });
+        setS3(restored.cv);
+        setSp(restored.sp);
+      }
+
+      if (ownedHasKind('SPLIT_SEAM')) {
+        const partnerSnap = woundlinkPartnerId(rupture.targetId);
+        const split = applySplitSeamRupture(
+          s3(),
+          fl(),
+          hostileIntents,
+          ww(),
+          prepared,
+          depth,
+          rupture,
+          partnerSnap,
+        );
+        setS3(split.cv);
+        setFl(split.fl);
+        hostileIntents = split.intents;
+        setWw(split.ww);
+        dispatchFaultEffects(
+          split.transfer ? [split.transfer] : [],
+          split.rupture ? [split.rupture] : [],
+          prepared,
+        );
+      }
+
+      if (ownedHasKind('LIVING_FAULT')) {
+        const carry = applyLivingFaultCarryOnRupture(s3(), sw(), requestResidualCarry);
+        setS3(carry.cv);
+        setSw(carry.sw);
+      }
+
+      if (ownedHasKind('TECTONIC_SHIFT')) {
+        const bonus = applyTectonicShiftRuptureBonus({
+          cv: s4(), gm: gm(), intents: hostileIntents, rupture, depth,
+          collisionCourseOwned: ownedDefinitionIds().includes('GM_SUPPORT_COLLISION_COURSE'),
+        });
+        setS4(bonus.cv);
+        applySector4DisplacementOutcome(bonus, prepared);
+      }
+
+      if (ownedHasKind('FAULTGLASS')) {
+        const granted = applyFaultglassRuptureShards(s4(), ss(), depth);
+        setS4(granted.cv);
+        setSs(granted.ss);
+      }
+    }
   }
 
   function hasLiveWoundweave(): boolean {
@@ -549,6 +894,27 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       heldResonanceOwned: ownedHasKind('MEASURE_HELD_RESONANCE'),
       ammoType: ctx.selectedAmmoType ?? null,
     }));
+    if (ownedHasKind('TURNING_RITE')) {
+      const bonus = applyTurningRiteFinaleBonus({
+        cv: s4(), gm: gm(), intents: hostileIntents, ctx,
+        collisionCourseOwned: ownedDefinitionIds().includes('GM_SUPPORT_COLLISION_COURSE'),
+        depth: cf().combatDepth,
+      });
+      setS4(bonus.cv);
+      applySector4DisplacementOutcome(bonus, ctx);
+      // The Finale's own close reopens the Measure; a deferred Beat from this same root begins it.
+      const deferred = applyTurningRiteDeferredBeat(s4(), rc());
+      setS4(deferred.cv);
+      setRc(deferred.rc);
+    }
+    if (ownedHasKind('PRISMATIC_RITE')) {
+      const shards = applyPrismaticRiteFinaleShards(s4(), ss(), cf().combatDepth, ctx.rootActionId);
+      setS4(shards.cv);
+      setSs(shards.ss);
+      const deferred = applyPrismaticRiteDeferredBeat(s4(), rc());
+      setS4(deferred.cv);
+      setRc(deferred.rc);
+    }
   }
 
   function noteOrdinaryTraceResolved(trace: ScheduledTrace): void {
@@ -569,9 +935,22 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       resolving = { ...trace, powerMultiplier: trace.powerMultiplier * 1.5 };
       setCv({ ...cv(), echoedEmpowerment: null });
     }
-    const echoedMul = resolving.powerMultiplier !== trace.powerMultiplier ? 1.5 : 1;
+    let echoedMul = resolving.powerMultiplier !== trace.powerMultiplier ? 1.5 : 1;
+    if (ownedHasKind('ECHOED_FAULT') && trace.provenance === 'CORE') {
+      const targetIds = resolving.targetAndDamageMap.map((row) => row.originalTargetId);
+      const faultMul = echoedFaultTraceMultiplier(s3(), targetIds, trace.traceId);
+      if (faultMul > 1) {
+        echoedMul *= faultMul;
+        setS3({
+          ...s3(),
+          echoedFaultEmpowerments: s3().echoedFaultEmpowerments.filter(
+            (row) => !targetIds.includes(row.targetId),
+          ),
+        });
+      }
+    }
     const retargeted = retargetPortions(resolving.targetAndDamageMap, hostileIntents, jammed);
-    const power = effectiveTracePower(resolving);
+    const power = Math.floor(effectiveTracePower(resolving) * (echoedMul > 1 && resolving.payloadKind === 'FLAT_OCCULT' ? echoedMul : 1));
     const lineage = delayedLineage([
       trace.traceId,
       trace.originRootActionId ?? 'none',
@@ -721,6 +1100,29 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     if (trace.provenance === 'CORE') {
       applySuspendedEchoRestore(trace, restoredOutcome);
       applyGhostThreadResolution(trace);
+      if (ownedHasKind('ECHOED_FAULT') && hostRoot) {
+        const targetIds = retargeted
+          .map((row) => row.assignedTargetId)
+          .filter((id): id is string => Boolean(id));
+        const echoed = applyEchoedFaultAfterTrace(
+          s3(),
+          fl(),
+          hostileIntents,
+          hostRoot,
+          cf().combatDepth,
+          targetIds,
+          trace.traceId,
+        );
+        setS3(echoed.cv);
+        setFl(echoed.fl);
+        hostileIntents = echoed.intents;
+        dispatchFaultEffects(echoed.additions, echoed.ruptures, hostRoot);
+      }
+      if (ownedHasKind('PHANTOM_PAIN')) {
+        const phantom = resolvePhantomPain(s3(), sw(), trace.traceId, injectImmediateResidualWake);
+        setS3(phantom.cv);
+        setSw(phantom.sw);
+      }
     }
     if (ownedHasKind('ECHOED_RITE') && trace.provenance === 'CORE' && !cv().echoedMeasureUsedThisPlayerTurn) {
       setRc(advanceMeasureWithoutFinale(rc()));
@@ -742,14 +1144,34 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
   }
 
   function mintOrdinaryFromRoot(ctx: CanonicalRootActionContext, provenance: TraceProvenance, multiplier: number): boolean {
+    let composed = multiplier;
+    const targetIds = ctx.nativeByTarget.map((row) => row.targetId);
+    if (ownedHasKind('ECHOED_FAULT') && provenance === 'CORE') {
+      const faultMul = echoedFaultTraceMultiplier(s3(), targetIds, '');
+      if (faultMul > 1) {
+        composed *= faultMul;
+        setS3({
+          ...s3(),
+          echoedFaultEmpowerments: s3().echoedFaultEmpowerments.filter(
+            (row) => !targetIds.includes(row.targetId),
+          ),
+        });
+      }
+    }
+    const applyPhantom = ownedHasKind('PHANTOM_PAIN')
+      && provenance === 'CORE'
+      && Boolean(ctx.wakePowered)
+      && !s3().phantomPainMintUsedThisPlayerTurn;
+    if (applyPhantom) composed *= 1.5;
+    const beforeSeq = ai().nextTraceSequence;
     let created = false;
     if (ownedHasKind('TRACE_PHANTOM_IMPACT') && (ctx.actionSurface === 'WEAPON' || ctx.actionSurface === 'BASIC')) {
-      const result = tryMintPhantom(ai(), ctx, AFTERIMAGE_CORE_IDS.PHANTOM_IMPACT, provenance, multiplier);
+      const result = tryMintPhantom(ai(), ctx, AFTERIMAGE_CORE_IDS.PHANTOM_IMPACT, provenance, composed);
       setAi(result.state);
       created = created || result.created;
     }
     if (ownedHasKind('TRACE_LINGERING_INVOCATION') && (ctx.actionSurface === 'TECHNIQUE' || ctx.actionSurface === 'FLEX')) {
-      const result = tryMintLingering(ai(), ctx, AFTERIMAGE_CORE_IDS.LINGERING_INVOCATION, provenance, multiplier);
+      const result = tryMintLingering(ai(), ctx, AFTERIMAGE_CORE_IDS.LINGERING_INVOCATION, provenance, composed);
       setAi(result.state);
       created = created || result.created;
     }
@@ -763,11 +1185,29 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         delayedRestore: false,
         definitionId: AFTERIMAGE_CORE_IDS.RECURRENT_CHARGE,
         provenance,
-        powerMultiplier: multiplier,
+        powerMultiplier: composed,
         originRootActionId: ctx.rootActionId,
       });
       setAi(result.state);
       created = created || result.created;
+    }
+    if (applyPhantom && created) {
+      const first = ai().pending
+        .filter((row) => (
+          row.provenance === 'CORE'
+          && row.originImprint !== 'VERDICT'
+          && row.originRootActionId === ctx.rootActionId
+          && row.creationSequence >= beforeSeq
+        ))
+        .sort((a, b) => a.creationSequence - b.creationSequence)[0];
+      if (first) {
+        const noted = notePhantomPainMint(s3(), first.traceId, {
+          wakeValueAtCommit: ctx.wakeValueAtCommit ?? sw().activeWake,
+          wakeGenerationId: ctx.wakeGenerationId ?? sw().generationId,
+          sourceRootId: ctx.rootActionId,
+        });
+        setS3(noted.cv);
+      }
     }
     return created;
   }
@@ -823,6 +1263,64 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     }
   }
 
+  /**
+   * Emits normalized POLARITY_CHANGED / POSITION_CHANGED / UNMOORED_CHANGED / DISPLACEMENT_CHANGED
+   * events with stable lineage for every Gravemark record produced by one processing call. Uses
+   * emit() (not dispatch()) so these never re-enter runOwned and cannot feed other Strains —
+   * Gravemark outcomes must not store Reversal, create Traces, advance Measure, etc.
+   */
+  function emitGravemarkRecords(
+    result: { polarityEvents: readonly import('../../types/gravemark').GravemarkPolarityRecord[]; displacementEvents: readonly import('../../types/gravemark').GravemarkDisplacementRecord[] },
+    ctx: CanonicalRootActionContext | null,
+  ): void {
+    for (const record of result.polarityEvents) {
+      emit({
+        type: 'POLARITY_CHANGED',
+        sourceId: record.sourceDefinitionId,
+        lineage: ctx ? [ctx.rootActionId, record.sourceDefinitionId] : [record.sourceDefinitionId],
+        rootActionId: ctx?.rootActionId ?? null,
+        targetId: record.targetId,
+        payload: { previous: record.previous ?? 'NONE', next: record.next, changed: record.changed },
+      });
+    }
+    for (const record of result.displacementEvents) {
+      emit({
+        type: 'DISPLACEMENT_CHANGED',
+        sourceId: record.sourceDefinitionId,
+        lineage: ctx ? [ctx.rootActionId, record.sourceDefinitionId] : [record.sourceDefinitionId],
+        rootActionId: ctx?.rootActionId ?? null,
+        targetId: record.triggerUnitId,
+        payload: {
+          kind: record.kind,
+          bonus: record.bonus,
+          fromSlot: record.fromSlot ?? 'NONE',
+          toSlot: record.toSlot ?? 'NONE',
+          passengerUnitId: record.passengerUnitId ?? 'NONE',
+        },
+      });
+      if (record.fromSlot && record.toSlot && record.fromSlot !== record.toSlot) {
+        emit({
+          type: 'POSITION_CHANGED',
+          sourceId: record.sourceDefinitionId,
+          lineage: ctx ? [ctx.rootActionId, record.sourceDefinitionId] : [record.sourceDefinitionId],
+          rootActionId: ctx?.rootActionId ?? null,
+          targetId: record.triggerUnitId,
+          payload: { fromSlot: record.fromSlot, toSlot: record.toSlot },
+        });
+      }
+      if (record.kind !== 'IMMOVABLE' || record.fizzleReason === null) {
+        emit({
+          type: 'UNMOORED_CHANGED',
+          sourceId: record.sourceDefinitionId,
+          lineage: ctx ? [ctx.rootActionId, record.sourceDefinitionId] : [record.sourceDefinitionId],
+          rootActionId: ctx?.rootActionId ?? null,
+          targetId: record.triggerUnitId,
+          payload: { unmoored: true },
+        });
+      }
+    }
+  }
+
   function emitRelease(release: ReversalReleaseResult, ctx: CanonicalRootActionContext | null): void {
     pendingReleases.push(release);
     if (release.packet <= 0 && release.interruptProgress <= 0) return;
@@ -863,6 +1361,29 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     }
     applyStayedSentenceInstinct(release, ctx);
     applyEntangledFateMirror(release);
+    if (ownedHasKind('BROKEN_OUTCOME') && ctx) {
+      const broken = applyBrokenOutcomeOnRelease(s3(), fl(), hostileIntents, release, ctx, cf().combatDepth);
+      setS3(broken.cv);
+      setFl(broken.fl);
+      hostileIntents = broken.intents;
+      dispatchFaultEffects(
+        broken.addition ? [broken.addition] : [],
+        broken.rupture ? [broken.rupture] : [],
+        ctx,
+      );
+    }
+    if (ownedHasKind('FATE_OUT_OF_PLACE')) {
+      const bonus = applyFateOutOfPlaceReleaseBonus({
+        cv: s4(), gm: gm(), intents: hostileIntents, release,
+        rootActionId: ctx?.rootActionId ?? null,
+        sourceEventId: `${ctx?.rootActionId ?? 'release'}:${CONVERGENCE_IDS.FATE_OUT_OF_PLACE}:${release.targetInstanceId ?? 'none'}`,
+        procDepth: ctx?.procDepth ?? 0,
+        collisionCourseOwned: ownedDefinitionIds().includes('GM_SUPPORT_COLLISION_COURSE'),
+        depth: cf().combatDepth,
+      });
+      setS4(bonus.cv);
+      applySector4DisplacementOutcome(bonus, ctx);
+    }
   }
 
   function applyStayedSentenceInstinct(release: ReversalReleaseResult, ctx: CanonicalRootActionContext | null): void {
@@ -1387,8 +1908,26 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     if (full.type === 'PLAYER_TURN_STARTED') {
       resetWindow('PLAYER_TURN');
       resetWindow('COMBAT_CYCLE');
+      // Shard-to-Edge conversion runs at the very start, before Wake activation, Fatebound
+      // selection, Deferred Exposure, or Trace resolution.
+      setSs(beginShardskinPlayerTurn({ state: ss(), ownedIds: ownedDefinitionIds(), depth: cf().combatDepth }));
+      // Stillglass: Shard->Edge conversion above runs first, then the pending Fleeting (armed by
+      // absorption last enemy cycle) is created here, before Wake activation/Fatebound/Traces.
+      if (ownedHasKind('STILLGLASS')) {
+        const pending = consumeStillglassPendingFleeting(s4());
+        setS4(pending.cv);
+        if (pending.shouldCreate) {
+          const granted = mintFleetingStillness(sp(), CONVERGENCE_IDS.STILLGLASS, {
+            phase: 'PLAYER_TURN_INIT',
+            sourceLineage: [CONVERGENCE_IDS.STILLGLASS],
+          });
+          setSp(granted.state);
+        }
+      }
       setWw(beginWoundweavePlayerTurn(ww()));
       setFl(beginFaultlinePlayerTurn(fl()));
+      // Unmoored must expire before Wake activation, Fatebound selection, Deferred Exposure, or Trace resolution.
+      setGm(beginGravemarkPlayerTurn(gm()));
       setSw(beginSoulwakePlayerTurn(sw()));
       if (hasLiveSoulwake()) {
         const before = sw();
@@ -1427,10 +1966,14 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     if (full.type === 'PLAYER_TURN_ENDED') {
       if (hasLiveAfterimage()) setAi(expireUnusedCrossfade(ai()));
       expireEchoedIfDue();
+      // Edge expires at PLAYER_TURN_ENDED if unused, whether the ending was voluntary or forced.
+      setSs(expireShardskinEdgeAtPlayerTurnEnd(ss()));
     }
     if (full.type === 'ENEMY_CYCLE_STARTED') {
       resetWindow('ENEMY_CYCLE');
       setFl(beginFaultlineCombatCycle(fl()));
+      setGm(beginGravemarkCombatCycle(gm()));
+      setSs(beginShardskinCombatCycle(ss()));
       setSw(beginSoulwakeEnemyCycle(sw()));
       if (hasLiveAfterimage()) setAi(expireUnusedCrossfade(ai()));
       expireEchoedIfDue();
@@ -1464,6 +2007,239 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     }
     runOwned(full, ctx);
     return full;
+  }
+
+  /**
+   * Applies every returned bonus-Displacement outcome's HP collisions and Gravemark record
+   * emission exactly once — the shared tail every Sector 4 helper that calls attemptDisplacement
+   * directly (bypassing processGravemarkRoot) must run through.
+   */
+  function applySector4DisplacementOutcome(
+    outcome: { gm: import('../../types/gravemark').GravemarkRuntimeState; intents: HostileIntentSnapshot[]; displacement: import('../../types/gravemark').GravemarkDisplacementRecord | null; collisions: readonly import('../../types/gravemark').GravemarkCollisionRecord[] },
+    ctx: CanonicalRootActionContext | null,
+    collisionScale = 1,
+  ): void {
+    setGm(outcome.gm);
+    const scaledCollisions = collisionScale === 1
+      ? outcome.collisions
+      : outcome.collisions.map((row) => ({ ...row, amount: Math.floor(row.amount * collisionScale) }));
+    const applied = applySector4Collisions(outcome.intents, scaledCollisions);
+    hostileIntents = applied.intents;
+    if (outcome.displacement) {
+      emitGravemarkRecords({ polarityEvents: [], displacementEvents: [outcome.displacement] }, ctx);
+    }
+    for (const row of scaledCollisions) {
+      if (row.amount <= 0) continue;
+      dispatch({
+        type: 'DERIVATIVE_RESOLVED',
+        sourceId: row.sourceDefinitionId,
+        lineage: ctx ? [ctx.rootActionId, row.sourceDefinitionId] : [row.sourceDefinitionId],
+        rootActionId: ctx?.rootActionId ?? null,
+        targetId: row.targetId,
+        payload: {
+          damage: row.amount,
+          kinetic: row.kinetic,
+          occult: row.occult,
+          classification: 'DERIVATIVE',
+        },
+      }, ctx ? { ...ctx, classification: 'DERIVATIVE', procDepth: Math.max(1, ctx.procDepth + 1) } : null);
+    }
+  }
+
+  /**
+   * Sector 4 observers keyed on completed Gravemark Displacement records for this root: Fate Out
+   * of Place's 8-Reversal store, Tectonic Shift's 2-Fault (first normal Displacement/target/combat
+   * cycle), Impact Lattice's 5-Shard generation (first non-self Displacement/combat cycle),
+   * Parallax Echo's arm (first non-self Displacement/player turn), Turning Rite's Beat advance
+   * (first trigger-owner Displacement/player turn, deferred if this root is also closing a
+   * Finale), and Tethered Orbit's arm-on-displacement for a Woundlink endpoint's partner.
+   */
+  function applySector4GravemarkDisplacementObservers(
+    prepared: CanonicalRootActionContext,
+    displacementEvents: readonly import('../../types/gravemark').GravemarkDisplacementRecord[],
+    rootIsFinale: boolean,
+  ): void {
+    for (const record of displacementEvents) {
+      if (ownedHasKind('FATE_OUT_OF_PLACE')) {
+        const translated = record.kind !== 'IMMOVABLE' || gm().lastBossTranslation?.targetId === record.triggerUnitId && gm().lastBossTranslation?.translated === true;
+        const stored = applyFateOutOfPlaceStore(s4(), cf(), record, translated);
+        setS4(stored.cv);
+        setCf(stored.cf);
+      }
+      if (ownedHasKind('TECTONIC_SHIFT')) {
+        const eligible = tectonicShiftFaultEligible(s4(), record);
+        setS4(eligible.cv);
+        if (eligible.eligible) {
+          const applied = applyTectonicShiftFault(fl(), hostileIntents, prepared, record.triggerUnitId, cf().combatDepth);
+          setFl(applied.fl);
+          hostileIntents = applied.intents;
+          dispatchFaultEffects([applied.addition], applied.rupture ? [applied.rupture] : [], prepared);
+        }
+      }
+      if (ownedHasKind('IMPACT_LATTICE')) {
+        const granted = applyImpactLatticeDisplacementShards(s4(), ss(), cf().combatDepth, record);
+        setS4(granted.cv);
+        setSs(granted.ss);
+      }
+      if (ownedHasKind('PARALLAX_ECHO')) {
+        setS4(armParallaxEchoFromDisplacement(s4(), record));
+      }
+      if (ownedHasKind('TURNING_RITE') && record.fizzleReason == null && record.passengerUnitId !== record.triggerUnitId) {
+        const advanced = applyTurningRiteAdvance(s4(), rc(), record, rootIsFinale);
+        setS4(advanced.cv);
+        setRc(advanced.rc);
+      }
+      if (ownedHasKind('TETHERED_ORBIT') && hasLiveWoundweave()) {
+        const partner = woundweavePartnerOf(ww(), record.triggerUnitId);
+        if (partner && isPrimaryEndpoint(ww(), record.triggerUnitId)) {
+          const armed = armTetheredOrbitPartnerOnDisplacement(s4(), gm(), record, partner);
+          setS4(armed.cv);
+          setGm(armed.gm);
+        }
+      }
+    }
+  }
+
+  /**
+   * Sector 4 Displacement-producing observers that run independent of hasLiveGravemark() — the
+   * Convergence itself grants access to the opposing half's bonus/forced movement even when no
+   * other Gravemark Core is owned. Runs once per NATIVE_DIRECT root, after Gravemark's own root
+   * pass so the normal-cap/Unmoored/Polarity state it reacts to is current.
+   */
+  function applySector4ForcedGravemarkMovements(prepared: CanonicalRootActionContext): void {
+    const depth = cf().combatDepth;
+    const collisionCourseOwned = ownedDefinitionIds().includes('GM_SUPPORT_COLLISION_COURSE');
+    if (ownedHasKind('TRAUMA_VECTOR') && prepared.wakePowered) {
+      const fallback = fallbackHostileForContext(prepared);
+      const outcome = applyTraumaVectorForcedDisplacement({
+        cv: s4(), gm: gm(), intents: hostileIntents, ctx: prepared,
+        fallbackHostileId: fallback, collisionCourseOwned, depth,
+      });
+      setS4(outcome.cv);
+      applySector4DisplacementOutcome(outcome, prepared);
+    }
+    if (ownedHasKind('STORED_VECTOR')) {
+      const focused = sp().focusedRoot;
+      if (focused?.rootActionId === prepared.rootActionId) {
+        const outcome = applyStoredVectorBonusDisplacement({
+          cv: s4(), gm: gm(), intents: hostileIntents, ctx: prepared, collisionCourseOwned, depth,
+        });
+        setS4(outcome.cv);
+        applySector4DisplacementOutcome(outcome, prepared, 1.5);
+      }
+    }
+    if (ownedHasKind('TETHERED_ORBIT')) {
+      setS4(clearTetheredOrbitArmIfInvalid(s4(), hostileIntents));
+      const outcome = applyTetheredOrbitArmedBonus({
+        cv: s4(), gm: gm(), intents: hostileIntents, ctx: prepared, collisionCourseOwned, depth,
+      });
+      setS4(outcome.cv);
+      applySector4DisplacementOutcome(outcome, prepared);
+    }
+  }
+
+  /**
+   * Shared "qualifying root outcome" gate for Stored Vector's Fleeting request and Trauma
+   * Vector/Soulglass's Residual carry request: swap, kill, full KA/OW break, intent counter, or a
+   * successful authored immovable translation this same root. Becoming Unmoored alone (a fizzled
+   * or non-immovable Displacement) does not qualify.
+   */
+  function sector4RootOutcomeQualifies(ctx: CanonicalRootActionContext): boolean {
+    const killed = ctx.nativeByTarget.some((row) => row.killed) || ctx.kills > 0;
+    const fullBreak = ctx.nativeByTarget.some((row) => row.kineticArmorBroken === true || row.occultWardBroken === true);
+    const countered = ctx.intentCountered === true;
+    const swapped = gm().lastSwap?.rootActionId === ctx.rootActionId;
+    const immovableTranslation = (
+      gm().lastDisplacement?.rootActionId === ctx.rootActionId
+      && gm().lastDisplacement?.kind === 'IMMOVABLE'
+      && gm().lastDisplacement?.fizzleReason == null
+    );
+    return killed || fullBreak || countered || swapped || immovableTranslation;
+  }
+
+  function fallbackHostileForContext(ctx: CanonicalRootActionContext): string | null {
+    const primary = ctx.lockedTargetIds[0];
+    if (primary && legalGravemarkHostileLocal(primary)) return primary;
+    const anyAlive = hostileIntents.find((row) => row.alive && !row.phased);
+    return anyAlive?.unitId ?? null;
+  }
+
+  function legalGravemarkHostileLocal(unitId: string): boolean {
+    const row = hostileIntents.find((intent) => intent.unitId === unitId);
+    return Boolean(row && row.alive && !row.phased);
+  }
+
+  function routineImprintForContext(ctx: CanonicalRootActionContext): import('../../types/gravemark').GravemarkPolarityId | null {
+    if (ctx.actionSurface === 'WEAPON' || ctx.actionSurface === 'BASIC') return 'ARMAMENT';
+    if (ctx.actionSurface === 'TECHNIQUE' || ctx.actionSurface === 'FLEX') return 'DISCIPLINE';
+    if (ctx.actionSurface === 'INSTINCT') return 'INSTINCT';
+    return null;
+  }
+
+  /**
+   * Sector 4 observers keyed on positive Edge consumption for a NATIVE_DIRECT root: Prismatic
+   * Rite's deferred Beat arm, Phantom Facet's next-Trace-mint arm, Crystal Ligature's post-packet
+   * mirror to a Woundlink partner, Faultglass's Fault application (before Edge/Scatterglass
+   * packet event dispatch), Soulglass's Residual Wake request, and Impact Lattice's
+   * Polarize-or-bonus-Displacement clause. Called once the primary Edge packet amount is known.
+   */
+  function applySector4EdgeConsumptionObservers(
+    prepared: CanonicalRootActionContext,
+    primaryTargetId: string | null,
+    primaryPacketAmount: number,
+  ): void {
+    if (ownedHasKind('PRISMATIC_RITE')) {
+      setS4(armPrismaticRiteDeferredBeat(s4()));
+    }
+    if (ownedHasKind('PHANTOM_FACET')) {
+      setS4(armPhantomFacetFromEdge(s4(), prepared.rootActionId));
+    }
+    if (ownedHasKind('CRYSTAL_LIGATURE') && primaryTargetId && primaryPacketAmount > 0 && hasLiveWoundweave()) {
+      if (isPrimaryEndpoint(ww(), primaryTargetId)) {
+        setWw({ ...ww(), expiresAtPlayerTurnStart: Math.max(ww().expiresAtPlayerTurnStart, ww().playerTurnIndex + 2) });
+        const partner = ww().selfLink ? primaryTargetId : woundweavePartnerOf(ww(), primaryTargetId);
+        const mirror = crystalLigatureMirrorAmount(primaryPacketAmount, ww().selfLink);
+        if (partner && mirror > 0 && legalGravemarkHostileLocal(partner)) {
+          hostileIntents = hostileIntents.map((row) => (
+            row.unitId === partner ? { ...row, hp: Math.max(0, row.hp - mirror), alive: row.hp - mirror > 0 && row.alive } : row
+          ));
+          dispatch({
+            type: 'DERIVATIVE_RESOLVED',
+            sourceId: CONVERGENCE_IDS.CRYSTAL_LIGATURE,
+            lineage: [prepared.rootActionId, CONVERGENCE_IDS.CRYSTAL_LIGATURE],
+            rootActionId: prepared.rootActionId,
+            targetId: partner,
+            payload: { damage: mirror, occult: mirror, classification: 'DERIVATIVE', channel: 'OCCULT' },
+          }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth + 1) });
+        }
+      }
+    }
+    if (ownedHasKind('FAULTGLASS') && hasLiveFaultline()) {
+      const applied = applyFaultglassEdgeFault(fl(), hostileIntents, prepared, primaryTargetId, cf().combatDepth);
+      setFl(applied.fl);
+      hostileIntents = applied.intents;
+      dispatchFaultEffects(applied.additions, applied.ruptures, prepared);
+    }
+    if (ownedHasKind('SOULGLASS') && hasLiveSoulwake() && prepared.wakePowered) {
+      const carry = applySoulglassResidualCarry(sw(), prepared.wakeValueAtCommit ?? sw().activeWake);
+      setSw(carry.sw);
+    }
+    if (ownedHasKind('IMPACT_LATTICE')) {
+      const outcome = applyImpactLatticeEdgeClause({
+        gm: gm(),
+        intents: hostileIntents,
+        primaryTargetId,
+        routineImprint: routineImprintForContext(prepared),
+        rootActionId: prepared.rootActionId,
+        procDepth: prepared.procDepth,
+        collisionCourseOwned: ownedDefinitionIds().includes('GM_SUPPORT_COLLISION_COURSE'),
+        depth: cf().combatDepth,
+      });
+      applySector4DisplacementOutcome(
+        { gm: outcome.gm, intents: outcome.intents, displacement: outcome.displacement, collisions: outcome.collisions },
+        prepared,
+      );
+    }
   }
 
   function commitRootAction(ctx: CanonicalRootActionContext): NormalizedBoonEvent[] {
@@ -1621,6 +2397,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         depth: cf().combatDepth,
         sourceEventId: prepared.rootActionId,
       }), prepared);
+      applySector3PostFaultline(prepared, Boolean(preview?.finale));
     }
     if (hasLiveSoulwake() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
       prepared = applySoulwakePackets(processSoulwakeRoot({
@@ -1638,6 +2415,15 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
           ownedIds: ownedDefinitionIds(),
           intents: hostileIntents,
         }), prepared, SOULWAKE_VERDICT_ID);
+      }
+      if (ownedHasKind('PAIN_FORETOLD') && prepared.wakePowered) {
+        const stored = applyPainForetoldWakeStore(
+          s3(),
+          cf(),
+          prepared.wakeValueAtCommit ?? sw().activeWake,
+        );
+        setS3(stored.cv);
+        setCf(stored.cf);
       }
     }
     if (hasLiveStillpoint() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
@@ -1728,6 +2514,29 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       }
       emitWoundweavePackets(resolved.packets, prepared);
       applyTwofoldFormation();
+      if (resolved.state.lastTwofoldFormation) {
+        if (ownedHasKind('TETHERED_ORBIT')) {
+          const establishingImprint: import('../../types/gravemark').GravemarkPolarityId =
+            withAffected.actionSurface === 'TECHNIQUE' || withAffected.actionSurface === 'FLEX'
+              ? 'DISCIPLINE'
+              : withAffected.actionSurface === 'INSTINCT'
+                ? 'INSTINCT'
+                : 'ARMAMENT';
+          setGm(applyTetheredOrbitFormationPolarity(
+            gm(),
+            { rootActionId: prepared.rootActionId },
+            resolved.state.endpointA,
+            resolved.state.endpointB,
+            resolved.state.selfLink,
+            establishingImprint,
+          ));
+        }
+        if (ownedHasKind('CRYSTAL_LIGATURE')) {
+          const granted = applyCrystalLigatureFormationShards(s4(), ss(), cf().combatDepth);
+          setS4(granted.cv);
+          setSs(granted.ss);
+        }
+      }
       applyEntangledFateStore(withAffected);
       applyDrawnTensionFleeting(withAffected, beforeIntents, hostileIntents, linkedBefore);
       const occult = resolved.packets.reduce((sum, row) => sum + (row.fizzled ? 0 : row.occultDamage), 0);
@@ -1736,6 +2545,58 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         const row = hostileIntents.find((intent) => intent.unitId === packet.targetId);
         return Boolean(row && !row.alive);
       });
+      const familyKillOrBreak = ownedHasKind('SYMPATHETIC_WOUND') && ([...linkedBefore].some((id) => {
+        const prev = beforeIntents.find((row) => row.unitId === id);
+        const next = hostileIntents.find((row) => row.unitId === id);
+        const native = prepared.nativeByTarget.find((row) => row.targetId === id);
+        const died = Boolean(prev?.alive) && next && !next.alive;
+        const broke = (native?.defenseBreaks ?? 0) > 0;
+        return died || broke;
+      }) || resolved.packets.some((packet) => {
+        const prev = beforeIntents.find((row) => row.unitId === packet.targetId);
+        const next = hostileIntents.find((row) => row.unitId === packet.targetId);
+        return Boolean(prev?.alive) && next && !next.alive;
+      }));
+      if (ownedHasKind('SYMPATHETIC_WOUND') && prepared.wakePowered) {
+        const packet = applySympatheticWoundPacket(
+          s3(),
+          ww(),
+          hostileIntents,
+          withAffected,
+          prepared.wakeValueAtCommit ?? sw().activeWake,
+        );
+        setS3(packet.cv);
+        if (packet.partnerId && packet.occultDamage > 0) {
+          hostileIntents = hostileIntents.map((row) => (
+            row.unitId === packet.partnerId
+              ? {
+                ...row,
+                hp: Math.max(0, row.hp - packet.occultDamage),
+                alive: row.hp - packet.occultDamage > 0 && row.alive,
+              }
+              : row
+          ));
+          dispatch({
+            type: 'DERIVATIVE_RESOLVED',
+            sourceId: CONVERGENCE_IDS.SYMPATHETIC_WOUND,
+            lineage: [prepared.rootActionId, CONVERGENCE_IDS.SYMPATHETIC_WOUND],
+            rootActionId: prepared.rootActionId,
+            targetId: packet.partnerId,
+            payload: {
+              damage: packet.occultDamage,
+              occult: packet.occultDamage,
+              classification: 'DERIVATIVE',
+              channel: 'OCCULT',
+              convergence: CONVERGENCE_IDS.SYMPATHETIC_WOUND,
+            },
+          }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth + 1) });
+        }
+      }
+      if (familyKillOrBreak) {
+        const carry = applySympatheticWoundCarry(s3(), sw(), requestResidualCarry);
+        setS3(carry.cv);
+        setSw(carry.sw);
+      }
       if (hasLiveStillpoint()) {
         const focused = sp().focusedRoot;
         if (focused?.rootActionId === prepared.rootActionId && !sp().returnStrokeUsedThisPlayerTurn
@@ -1745,6 +2606,124 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
           if (refund.refundNow > 0) state.metrics.ap_refund = (state.metrics.ap_refund ?? 0) + refund.refundNow;
           if (refund.queued > 0) state.metrics.ap_refund_queued = (state.metrics.ap_refund_queued ?? 0) + refund.queued;
         }
+      }
+    }
+    if (hasLiveGravemark() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const gmResult = processGravemarkRoot({
+        state: gm(),
+        ctx: prepared,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        sourceEventId: prepared.rootActionId,
+      });
+      setGm(gmResult.state);
+      hostileIntents = gmResult.intents;
+      emitGravemarkRecords(gmResult, prepared);
+      if (gmResult.apRefundGranted > 0) {
+        state.metrics.ap_refund = (state.metrics.ap_refund ?? 0) + gmResult.apRefundGranted;
+      }
+      prepared = { ...prepared, nativeByTarget: gmResult.nativeByTarget };
+      applySector4GravemarkDisplacementObservers(prepared, gmResult.displacementEvents, Boolean(preview?.finale));
+      // Sole exception to "commitment/payment before Gravemark writes": World Turned Sideways'
+      // pre-native pass already ran via beginWorldTurnedSidewaysUltimate before native resolution.
+      // This just replays the stored locked targets for the post-native 20% packet.
+      const wts = processWorldTurnedSidewaysPostNative({
+        state: gm(),
+        intents: hostileIntents,
+        ownedIds: ownedDefinitionIds(),
+        nativeByTarget: prepared.nativeByTarget,
+        damageChannels: prepared.damageChannels,
+        rootActionId: prepared.rootActionId,
+      });
+      setGm(wts.state);
+      hostileIntents = wts.intents;
+      prepared = { ...prepared, nativeByTarget: wts.nativeByTarget };
+      if (wts.state.lastCollision && wts.state.lastCollision.kind === 'WORLD_TURNED_SIDEWAYS') {
+        dispatch({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: wts.state.lastCollision.sourceDefinitionId,
+          lineage: [prepared.rootActionId, wts.state.lastCollision.sourceDefinitionId],
+          rootActionId: prepared.rootActionId,
+          targetId: wts.state.lastCollision.targetId,
+          payload: {
+            damage: wts.state.lastCollision.amount,
+            kinetic: wts.state.lastCollision.kinetic,
+            occult: wts.state.lastCollision.occult,
+            classification: 'DERIVATIVE',
+          },
+        }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth + 1) });
+      }
+    }
+    if (prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      applySector4ForcedGravemarkMovements(prepared);
+    }
+    if (hasLiveShardskin() && prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      // Edge consumption + Scatterglass require the root to have actually dealt native direct
+      // damage (the central law in section 6). Core generation is evaluated separately below —
+      // Ritual Pane explicitly does not require damage, only a valid paid Technique/Flex.
+      if (prepared.totalNativeDirectDamage > 0) {
+        const primaryTargetId = prepared.lockedTargetIds[0] ?? null;
+        const otherAffected = prepared.nativeByTarget
+          .filter((row) => row.targetId !== primaryTargetId && row.nativeDirectDamage > 0)
+          .map((row) => row.targetId);
+        const edgeResult = consumeEdgeForRoot({
+          state: ss(),
+          ownedIds: ownedDefinitionIds(),
+          intents: hostileIntents,
+          primaryTargetId,
+          otherAffectedTargetIds: otherAffected,
+          depth: cf().combatDepth,
+        });
+        setSs({ ...edgeResult.state, lastEdgeConsumption: edgeResult.state.lastEdgeConsumption ? { ...edgeResult.state.lastEdgeConsumption, rootActionId: prepared.rootActionId } : null });
+        hostileIntents = edgeResult.intents;
+        if (edgeResult.consumedEdge > 0) {
+          applySector4EdgeConsumptionObservers(prepared, primaryTargetId, edgeResult.primaryPacket?.amount ?? 0);
+        }
+        if (edgeResult.primaryPacket && edgeResult.primaryPacket.amount > 0) {
+          dispatch({
+            type: 'DERIVATIVE_RESOLVED',
+            sourceId: 'SHARDSKIN_EDGE',
+            lineage: [prepared.rootActionId, 'SHARDSKIN_EDGE'],
+            rootActionId: prepared.rootActionId,
+            targetId: edgeResult.primaryPacket.targetId,
+            payload: {
+              damage: edgeResult.primaryPacket.amount,
+              occult: edgeResult.primaryPacket.amount,
+              classification: 'DERIVATIVE',
+              channel: 'OCCULT',
+            },
+          }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth + 1) });
+        }
+        for (const spread of edgeResult.scatterglassPackets) {
+          setSs({ ...ss(), lastSpread: { rootActionId: prepared.rootActionId, targetId: spread.targetId, amount: spread.amount } });
+          dispatch({
+            type: 'DERIVATIVE_RESOLVED',
+            sourceId: SHARDSKIN_SUPPORT_IDS.SCATTERGLASS,
+            lineage: [prepared.rootActionId, SHARDSKIN_SUPPORT_IDS.SCATTERGLASS],
+            rootActionId: prepared.rootActionId,
+            targetId: spread.targetId,
+            payload: {
+              damage: spread.amount,
+              occult: spread.amount,
+              classification: 'DERIVATIVE',
+              channel: 'OCCULT',
+            },
+          }, { ...prepared, classification: 'DERIVATIVE', procDepth: Math.max(1, prepared.procDepth + 1) });
+        }
+      }
+      const coreResult = applyShardskinCoreGeneration({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        ctx: prepared,
+        depth: cf().combatDepth,
+      });
+      setSs(coreResult.state);
+      if (ownedHasKind('SOULGLASS') && prepared.wakePowered && hasLiveSoulwake()) {
+        const generated = applySoulglassGeneration(s4(), ss(), cf().combatDepth, prepared.wakeValueAtCommit ?? 0);
+        setS4(generated.cv);
+        setSs(generated.ss);
       }
     }
     holdFateboundRelease = Boolean(preview?.finale);
@@ -1772,8 +2751,40 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         setAi(minted.state);
       }
       const ready = dueActionTraces(ai()).filter((row) => row.status === 'READY');
+      const parallaxResolvedTargets: { targetId: string; amount: number }[] = [];
       for (const trace of ready) {
+        const beforeSeq = emitted.length;
         resolveOneTrace(trace, prepared);
+        if (
+          trace.provenance === 'CORE'
+          && (ownedHasKind('PARALLAX_ECHO') || ownedHasKind('PHANTOM_FACET'))
+        ) {
+          for (const evt of emitted.slice(beforeSeq)) {
+            if (evt.type === 'DERIVATIVE_RESOLVED' && evt.sourceId === trace.traceId) {
+              const dmg = typeof evt.payload.damage === 'number' ? evt.payload.damage : 0;
+              if (evt.targetId && dmg > 0) parallaxResolvedTargets.push({ targetId: evt.targetId, amount: dmg });
+            }
+          }
+          if (ownedHasKind('PHANTOM_FACET')) {
+            const power = Math.floor(effectiveTracePower(trace));
+            const generated = applyPhantomFacetGeneration(s4(), ss(), cf().combatDepth, power);
+            setS4(generated.cv);
+            setSs(generated.ss);
+          }
+        }
+      }
+      if (ownedHasKind('PARALLAX_ECHO') && parallaxResolvedTargets.length > 0) {
+        const movement = applyParallaxEchoTraceMovement({
+          cv: s4(), gm: gm(), intents: hostileIntents,
+          resolvedTargets: parallaxResolvedTargets,
+          rootActionId: prepared.rootActionId,
+          sourceEventId: `${prepared.rootActionId}:${CONVERGENCE_IDS.PARALLAX_ECHO}`,
+          procDepth: prepared.procDepth,
+          collisionCourseOwned: ownedDefinitionIds().includes('GM_SUPPORT_COLLISION_COURSE'),
+          depth: cf().combatDepth,
+        });
+        setS4(movement.cv);
+        applySector4DisplacementOutcome(movement, prepared);
       }
       if (crossfadeOrigin) {
         mintCrossfadeFromRoot(prepared, crossfadeOrigin);
@@ -1806,9 +2817,41 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         kills: prepared.kills + (descendantKill ? 1 : 0),
         intentCountered: !delayedRelease && (prepared.intentCountered === true || release?.countered === true),
       }, preview.surface);
+      {
+        const deferred = applyDeferredBreakingMeasureBeat(s3(), rc());
+        setS3(deferred.cv);
+        setRc(deferred.rc);
+      }
+      if (ownedHasKind('PULSE_RITE') && hasLiveSoulwake()) {
+        const carry = applyPulseRiteFinaleCarry(s3(), sw(), requestResidualCarry);
+        setS3(carry.cv);
+        setSw(carry.sw);
+      }
       applyMeasuredSilenceRetain(prepared);
       applyTwofoldFinaleArm(prepared);
       armEchoedRite(prepared.rootActionId);
+    }
+    // Prismatic Rite: a root that armed a deferred Beat via Edge consumption but did not itself
+    // close a Finale advances it here, once the root fully resolves. If the root DID close a
+    // Finale, completePendingFinale() already consumed it against the post-Finale Measure state.
+    if (ownedHasKind('PRISMATIC_RITE') && s4().prismaticRiteDeferredBeat) {
+      const deferred = applyPrismaticRiteDeferredBeat(s4(), rc());
+      setS4(deferred.cv);
+      setRc(deferred.rc);
+    }
+    if (prepared.committed && prepared.classification === 'NATIVE_DIRECT') {
+      const qualifies = sector4RootOutcomeQualifies(prepared);
+      if (ownedHasKind('STORED_VECTOR') && hasLiveStillpoint()) {
+        const focused = sp().focusedRoot;
+        if (focused?.rootActionId === prepared.rootActionId) {
+          const requested = tryStoredVectorFleetingRequest(sp(), { rootActionId: prepared.rootActionId, qualifies });
+          setSp(requested.sp);
+        }
+      }
+      if (ownedHasKind('TRAUMA_VECTOR') && prepared.wakePowered && hasLiveSoulwake()) {
+        const carry = applyTraumaVectorResidualCarry(sw(), qualifies ? (prepared.wakeValueAtCommit ?? 0) : 0);
+        setSw(carry.sw);
+      }
     }
     holdFateboundRelease = false;
     return [...emitted];
@@ -1951,6 +2994,32 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         state.metrics.soulwake_barrier = (state.metrics.soulwake_barrier ?? 0) + reflex.barrier;
       }
     }
+    if (hasLiveGravemark()) {
+      const gmResult = processGravemarkInstinct({
+        state: gm(),
+        ctx: instinctCtx,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        grade,
+        associatedHostileUnitId: input.associatedHostileUnitId,
+        sourceEventId: rootActionId,
+      });
+      setGm(gmResult.state);
+      hostileIntents = gmResult.intents;
+      emitGravemarkRecords(gmResult, instinctCtx);
+      instinctCtx = { ...instinctCtx, nativeByTarget: gmResult.nativeByTarget };
+    }
+    if (hasLiveShardskin()) {
+      const facet = processShardskinInstinct({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        grade,
+        depth: cf().combatDepth,
+      });
+      setSs(facet.state);
+    }
     if (hasLiveWoundweave() && ownedHasKind('WOUNDWEAVE_REFLEXIVE_AGONY')) {
       const pulse = emitReflexiveAgony(ww(), ownedDefinitionIds(), hostileIntents, grade, rootActionId);
       setWw(pulse.state);
@@ -2088,6 +3157,31 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         associatedHostileUnitId: input.associatedHostileUnitId,
         sourceEventId: lastRootContext.rootActionId,
       }), lastRootContext);
+    }
+    if (hasLiveGravemark()) {
+      const gmResult = processGravemarkCurrent({
+        state: gm(),
+        ctx: lastRootContext,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        signal: resolved.signal,
+        associatedHostileUnitId: input.associatedHostileUnitId,
+        sourceEventId: lastRootContext?.rootActionId ?? `current:${input.classId}:${eventOrder}`,
+      });
+      setGm(gmResult.state);
+      hostileIntents = gmResult.intents;
+      emitGravemarkRecords(gmResult, lastRootContext);
+    }
+    if (hasLiveShardskin() && !input.ultimateOwnedRefill && !input.delayedRestore && !input.preserved) {
+      const pressure = processShardskinCurrent({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        signal: resolved.signal,
+        depth: cf().combatDepth,
+      });
+      setSs(pressure.state);
     }
     if (hasLiveSoulwake() && lastRootContext) {
       const conduit = processSoulwakeCurrent({
@@ -2230,7 +3324,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     return TURN_START_PHASES.slice();
   }
 
-  function     preview(definitionId: string, extra: { premiumVerdictSource?: boolean; allowVerdictReplace?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string; allowSector2Wave?: boolean; maxAcquisitionWave?: 1 | 2 | 3 } = {}): OwnershipPreview {
+  function     preview(definitionId: string, extra: { premiumVerdictSource?: boolean; allowVerdictReplace?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string; allowSector2Wave?: boolean; maxAcquisitionWave?: 1 | 2 | 3 | 4 } = {}): OwnershipPreview {
     return previewAcquire(state, definitions, definitionId, {
       allowTestOffers: options.allowTestOffers,
       allowSector2Wave: extra.allowSector2Wave ?? options.allowSector2Wave,
@@ -2239,7 +3333,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
     });
   }
 
-  function commit(definitionId: string, extra: { premiumVerdictSource?: boolean; allowVerdictReplace?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string; allowSector2Wave?: boolean; maxAcquisitionWave?: 1 | 2 | 3 } = {}): OwnershipPreview {
+  function commit(definitionId: string, extra: { premiumVerdictSource?: boolean; allowVerdictReplace?: boolean; exceptionalSourceId?: string; combatDepth?: number; equippedWeaponFamilyId?: string; allowSector2Wave?: boolean; maxAcquisitionWave?: 1 | 2 | 3 | 4 } = {}): OwnershipPreview {
     const result = applyAcquire(state, definitions, definitionId, {
       allowTestOffers: options.allowTestOffers,
       allowSector2Wave: extra.allowSector2Wave ?? options.allowSector2Wave,
@@ -2293,6 +3387,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       setCf(synced.cf);
       hostileIntents = synced.snapshots;
       setFl(pruneFaultlineTargets(fl(), hostileIntents));
+      setGm(pruneGravemarkTargets(gm(), hostileIntents));
       const liveCounterfate = ownedDefinitionIds().some((id) => {
         const def = definitions.get(id);
         return def?.strainId === 'COUNTERFATE' && !def.testOnly;
@@ -2366,7 +3461,9 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       setCv(createDefaultConvergenceState());
       setSp(clearEncounterStillpoint());
       setWw(clearEncounterWoundweave());
+      setGm(clearEncounterGravemark());
       setFl(clearEncounterFaultline());
+      setSs(clearEncounterShardskin());
     },
     endPlayerTurn(input: { reason?: PlayerTurnEndReason; usableAp?: number; apDisabledByEnemy?: boolean; apRemovedByEnemy?: boolean } = {}) {
       const reason = input.reason ?? 'VOLUNTARY';
@@ -2393,10 +3490,22 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
           });
           applyStayedSentenceNativeGain();
           applyMeasuredSilenceAdvance();
+          if (ownedHasKind('STILLGLASS')) {
+            const granted = applyStillglassNativeStillnessShards(ss(), cf().combatDepth);
+            setSs(granted.ss);
+          }
         }
         if (ended.barrier > 0) {
           state.metrics.sheltered_pause_barrier = ended.barrier;
         }
+      }
+      if (ownedHasKind('HELD_BREATH') && hasLiveSoulwake()) {
+        const carry = applyHeldBreathEndTurnCarry(s3(), sw(), requestResidualCarry, {
+          reason,
+          usableAp: usable,
+        });
+        setS3(carry.cv);
+        setSw(carry.sw);
       }
       dispatch({
         type: 'PLAYER_TURN_ENDED',
@@ -2516,6 +3625,278 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         lastHeartbeatSelected: sw().lastHeartbeatSelected,
       };
     },
+    gravemarkPresentation() {
+      return composeGravemarkPresentation(gm());
+    },
+    /** Consume-once: the Hub must apply every returned effect to the live grid exactly once, then this queue is empty until the next Displacement. */
+    consumeGravemarkPendingMovement() {
+      const result = drainGravemarkPendingMovement(gm());
+      setGm(result.state);
+      return result.effects;
+    },
+    /** Consume-once: returns the pending Folded Space AP refund (0 if none) and clears it. */
+    consumeGravemarkApRefund() {
+      const result = drainGravemarkApRefund(gm());
+      setGm(result.state);
+      return result.refund;
+    },
+    falsePositionEligible(unitId: string, requestedLane: 'FRONTLINE' | 'BACKLINE', actualLane: 'FRONTLINE' | 'BACKLINE') {
+      return falsePositionEligibleForLane(gm(), ownedDefinitionIds(), unitId, requestedLane, actualLane);
+    },
+    /**
+     * World Turned Sideways, pre-native pass. Call once per ultimate commitment, before the
+     * ultimate's own native damage is computed, with the locked target set. Forces one normal
+     * (capped) Displacement per legal target and queues the movement for the Hub to apply via
+     * consumeGravemarkPendingMovement. The post-native 20% packet auto-fires from commitRootAction
+     * for this same rootActionId once native damage is known — no separate post-native call needed.
+     */
+    beginWorldTurnedSidewaysUltimate(rootActionId: string, lockedTargetIds: readonly string[]) {
+      const result = processWorldTurnedSidewaysPreNative({
+        state: gm(),
+        intents: hostileIntents,
+        ownedIds: ownedDefinitionIds(),
+        lockedTargetIds,
+        rootActionId,
+        sourceEventId: rootActionId,
+        depth: cf().combatDepth,
+      });
+      setGm(result.state);
+      hostileIntents = result.intents;
+      emitGravemarkRecords({ polarityEvents: [], displacementEvents: result.displacementEvents }, lastRootContext);
+      return {
+        movedTargetIds: result.movedTargetIds,
+        pendingMovementQueued: gm().pendingMovementEffects.length > 0,
+      };
+    },
+    /**
+     * World Turned Sideways, post-native pass for ultimate paths that never build a
+     * CanonicalRootActionContext (the Hub applies ultimate damage directly, not via
+     * recordNativeHit/commitRootAction). Caller supplies actual native direct damage received
+     * per locked target for this exact rootActionId (e.g. a live-squad HP diff around the
+     * ultimate's own resolution). One-shot: call exactly once per ultimate commit.
+     */
+    applyWorldTurnedSidewaysUltimateDamage(
+      rootActionId: string,
+      hits: readonly { targetId: string; damage: number }[],
+      damageChannels: readonly string[],
+    ) {
+      const result = applyWorldTurnedSidewaysUltimateDamage({
+        state: gm(),
+        intents: hostileIntents,
+        ownedIds: ownedDefinitionIds(),
+        hits,
+        damageChannels,
+        rootActionId,
+      });
+      setGm(result.state);
+      hostileIntents = result.intents;
+      // No CanonicalRootActionContext exists for these ultimate paths (no recordNativeHit/
+      // commitRootAction ever ran) — dispatch with ctx=null so other Strains, which all key
+      // their capped observers off a real ctx, cannot misattribute this against a stale root.
+      for (const packet of result.packets) {
+        dispatch({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: packet.sourceDefinitionId,
+          lineage: [rootActionId, packet.sourceDefinitionId],
+          rootActionId,
+          targetId: packet.targetId,
+          payload: {
+            damage: packet.amount,
+            kinetic: packet.kinetic,
+            occult: packet.occult,
+            classification: 'DERIVATIVE',
+          },
+        }, null);
+      }
+      return { killedIds: result.killedIds };
+    },
+    shardskinPresentation() {
+      return composeShardskinPresentation(ss(), cf().combatDepth);
+    },
+    /**
+     * Central Shard-prevention law. Call once, with a stable eventId, after ordinary mitigation,
+     * Barrier, Parry, and Rift Ward have already reduced the incoming amount, and before any HP
+     * mutation. Idempotent on eventId — a duplicate call (rerender, retry) replays the stored
+     * result instead of spending Shards twice. Returns the residual damage Soulwake should record.
+     */
+    recordShardDefense(eventId: string, incomingAfterMitigation: number, attackerUnitId?: string | null) {
+      const result = resolveShardDefense({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        eventId,
+        incomingAfterMitigation,
+      });
+      setSs(result.state);
+      // Required incoming order: Barrier/Instinct -> Shards absorb -> Fated Facet stores
+      // Reversal/threshold -> HP/Soulwake -> intent release. Only a fresh event (not a replay)
+      // may store Reversal or arm Stillglass's Fleeting.
+      if (result.freshEvent && result.shardsSpent > 0) {
+        if (ownedHasKind('FATED_FACET')) {
+          const applied = applyFatedFacetAbsorption({
+            cv: s4(),
+            cf: cf(),
+            ss: ss(),
+            attackerUnitId,
+            shardsAbsorbed: result.shardsSpent,
+            depth: cf().combatDepth,
+          });
+          setS4(applied.cv);
+          setCf(applied.cf);
+          setSs(applied.ss);
+        }
+        if (ownedHasKind('STILLGLASS')) {
+          setS4(armStillglassPendingFleeting(s4()));
+        }
+      }
+      return { shardsSpent: result.shardsSpent, hpDamage: result.hpDamage };
+    },
+    /**
+     * Edge consumption for ultimate paths that never build a CanonicalRootActionContext (the Hub
+     * applies ultimate damage directly, not via recordNativeHit/commitRootAction). Call once per
+     * ultimate commit, after native damage is known, only when Cathedral Break was not selected.
+     */
+    consumeEdgeForUltimate(
+      rootActionId: string,
+      primaryTargetId: string | null,
+      otherAffectedTargetIds: readonly string[],
+    ) {
+      if (!hasLiveShardskin() || ss().currentEdge <= 0) return { consumedEdge: 0, killedIds: [] };
+      const result = consumeEdgeForRoot({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        primaryTargetId,
+        otherAffectedTargetIds,
+        depth: cf().combatDepth,
+      });
+      setSs({ ...result.state, lastEdgeConsumption: result.state.lastEdgeConsumption ? { ...result.state.lastEdgeConsumption, rootActionId } : null });
+      hostileIntents = result.intents;
+      if (result.primaryPacket && result.primaryPacket.amount > 0) {
+        dispatch({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: 'SHARDSKIN_EDGE',
+          lineage: [rootActionId, 'SHARDSKIN_EDGE'],
+          rootActionId,
+          targetId: result.primaryPacket.targetId,
+          payload: { damage: result.primaryPacket.amount, occult: result.primaryPacket.amount, classification: 'DERIVATIVE', channel: 'OCCULT' },
+        }, null);
+      }
+      for (const spread of result.scatterglassPackets) {
+        dispatch({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: SHARDSKIN_SUPPORT_IDS.SCATTERGLASS,
+          lineage: [rootActionId, SHARDSKIN_SUPPORT_IDS.SCATTERGLASS],
+          rootActionId,
+          targetId: spread.targetId,
+          payload: { damage: spread.amount, occult: spread.amount, classification: 'DERIVATIVE', channel: 'OCCULT' },
+        }, null);
+      }
+      // No CanonicalRootActionContext exists here, so the frozen-native-target-map clauses
+      // (Faultglass/Impact Lattice/Soulglass) are out of scope for this ctx-less ultimate path —
+      // only the primary-packet-shaped observers apply.
+      if (result.consumedEdge > 0) {
+        if (ownedHasKind('PRISMATIC_RITE')) setS4(armPrismaticRiteDeferredBeat(s4()));
+        if (ownedHasKind('PHANTOM_FACET')) setS4(armPhantomFacetFromEdge(s4(), rootActionId));
+        if (
+          ownedHasKind('CRYSTAL_LIGATURE') && primaryTargetId
+          && result.primaryPacket && result.primaryPacket.amount > 0 && hasLiveWoundweave()
+          && isPrimaryEndpoint(ww(), primaryTargetId)
+        ) {
+          setWw({ ...ww(), expiresAtPlayerTurnStart: Math.max(ww().expiresAtPlayerTurnStart, ww().playerTurnIndex + 2) });
+          const partner = ww().selfLink ? primaryTargetId : woundweavePartnerOf(ww(), primaryTargetId);
+          const mirror = crystalLigatureMirrorAmount(result.primaryPacket.amount, ww().selfLink);
+          if (partner && mirror > 0 && legalGravemarkHostileLocal(partner)) {
+            hostileIntents = hostileIntents.map((row) => (
+              row.unitId === partner ? { ...row, hp: Math.max(0, row.hp - mirror), alive: row.hp - mirror > 0 && row.alive } : row
+            ));
+            dispatch({
+              type: 'DERIVATIVE_RESOLVED',
+              sourceId: CONVERGENCE_IDS.CRYSTAL_LIGATURE,
+              lineage: [rootActionId, CONVERGENCE_IDS.CRYSTAL_LIGATURE],
+              rootActionId,
+              targetId: partner,
+              payload: { damage: mirror, occult: mirror, classification: 'DERIVATIVE', channel: 'OCCULT' },
+            }, null);
+          }
+        }
+        if (ownedHasKind('PRISMATIC_RITE')) {
+          const deferred = applyPrismaticRiteDeferredBeat(s4(), rc());
+          setS4(deferred.cv);
+          setRc(deferred.rc);
+        }
+      }
+      return { consumedEdge: result.consumedEdge, killedIds: result.killedIds };
+    },
+    setCathedralBreakSelected(selected: boolean) {
+      setSs(setCathedralBreakSelected(ss(), selected));
+    },
+    previewCathedralBreak(lockedTargetIds: readonly string[]) {
+      return previewCathedralBreak({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        lockedTargetIds,
+        depth: cf().combatDepth,
+      });
+    },
+    /**
+     * Cathedral Break, pre-native pass. Call once per ultimate commitment when the Verdict toggle
+     * is selected, before the ultimate's own native damage is computed. Snapshots and consumes all
+     * current Shards + Edge, processes Endless Facet's Edge-only reform once, and stores the locked
+     * target set for the post-native budget split. Idempotent per rootActionId.
+     */
+    beginCathedralBreakUltimate(rootActionId: string, lockedTargetIds: readonly string[]) {
+      const result = beginCathedralBreakUltimate({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        rootActionId,
+        lockedTargetIds,
+        selected: ss().cathedralBreakSelected,
+        depth: cf().combatDepth,
+      });
+      setSs(result.state);
+      if (result.consumedEdge > 0 && ownedHasKind('PRISMATIC_RITE')) {
+        setS4(armPrismaticRiteCathedralPending(s4(), rootActionId));
+      }
+      return {
+        active: result.active,
+        consumedShards: result.consumedShards,
+        consumedEdge: result.consumedEdge,
+      };
+    },
+    /**
+     * Cathedral Break, post-native pass. Divides the Occult budget once across the distinct locked
+     * native target set and grants the flat post-resolution Shard gain. Caller (Hub) must apply
+     * every returned packet to the live squad exactly once. One-shot per rootActionId.
+     */
+    finishCathedralBreakUltimate(rootActionId: string) {
+      const result = finishCathedralBreakUltimate({
+        state: ss(),
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        rootActionId,
+        depth: cf().combatDepth,
+      });
+      setSs(result.state);
+      hostileIntents = result.intents;
+      if (ownedHasKind('PRISMATIC_RITE') && s4().prismaticRiteCathedralPendingRootId === rootActionId) {
+        const resolved = resolvePrismaticRiteCathedralPending(s4(), rootActionId);
+        const deferred = applyPrismaticRiteDeferredBeat(resolved, rc());
+        setS4(deferred.cv);
+        setRc(deferred.rc);
+      }
+      for (const packet of result.packets) {
+        if (packet.fizzled || packet.amount <= 0) continue;
+        dispatch({
+          type: 'DERIVATIVE_RESOLVED',
+          sourceId: SHARDSKIN_VERDICT_ID,
+          lineage: [rootActionId, SHARDSKIN_VERDICT_ID],
+          rootActionId,
+          targetId: packet.targetId,
+          payload: { damage: packet.amount, occult: packet.amount, classification: 'DERIVATIVE', channel: 'OCCULT' },
+        }, null);
+      }
+      return { budget: result.budget, packets: result.packets, killedIds: result.killedIds, gained: result.gained };
+    },
     previewFaultline(ctx: CanonicalRootActionContext) {
       const snapshot = cloneNineStrainRuntimeState(state);
       const intents = hostileIntents.slice();
@@ -2541,6 +3922,22 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         depth: cf().combatDepth,
       });
     },
+    /**
+     * Preview-only: runs the same pure Gravemark root processor used by commitRootAction but
+     * never persists the result — live gm() state and hostileIntents are left untouched.
+     */
+    previewGravemark(ctx: CanonicalRootActionContext) {
+      if (!hasLiveGravemark()) return { deltas: [], apRefund: 0, killedIds: [] };
+      return previewGravemarkRoot({
+        state: gm(),
+        ctx,
+        ownedIds: ownedDefinitionIds(),
+        intents: hostileIntents,
+        jammed,
+        depth: cf().combatDepth,
+        sourceEventId: ctx.rootActionId,
+      });
+    },
     previewOverdraw() {
       return previewOrdinaryOverdraw(sw(), ownedDefinitionIds());
     },
@@ -2556,6 +3953,16 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
           targetId: null,
           payload: { paid: result.paid, requested: result.state.lastOverdrawRequested },
         });
+        if (ownedHasKind('PULSE_RITE')) {
+          const pulse = applyPulseRiteOverdraw(s3(), rc());
+          setS3(pulse.cv);
+          setRc(pulse.rc);
+        }
+        if (ownedHasKind('HELD_BREATH')) {
+          const held = applyHeldBreathOverdraw(s3(), sp(), mintFleetingStillness);
+          setS3(held.cv);
+          setSp(held.sp);
+        }
       }
       return result;
     },
@@ -2566,7 +3973,23 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       setSw(syncSoulwakeVitals(sw(), vitals));
     },
     recordHpLoss(event: Parameters<typeof applyQualifyingLoss>[2]) {
-      const result = applyQualifyingLoss(sw(), ownedDefinitionIds(), event);
+      let nextEvent = event;
+      if (
+        ownedHasKind('PAIN_FORETOLD')
+        && event.provenance === 'HOSTILE'
+        && event.rootActionId
+      ) {
+        const fatebound = Boolean(cf().fateboundUnitId);
+        const scaled = painForetoldHostileWakeMultiplier(s3(), event.rootActionId, fatebound);
+        setS3(scaled.cv);
+        if (scaled.replace && scaled.factor === 1.5) {
+          nextEvent = {
+            ...event,
+            actualHpRemoved: Math.floor(event.actualHpRemoved * 1.5),
+          };
+        }
+      }
+      const result = applyQualifyingLoss(sw(), ownedDefinitionIds(), nextEvent);
       setSw(result.state);
       dispatch({
         type: event.provenance === 'HOSTILE' ? 'HP_LOSS_HOSTILE' : 'HP_LOSS_VOLUNTARY',
@@ -2575,7 +3998,7 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
         rootActionId: event.rootActionId,
         targetId: null,
         payload: {
-          paid: event.actualHpRemoved,
+          paid: nextEvent.actualHpRemoved,
           provenance: event.provenance,
           classified: result.classified,
         },
@@ -2592,12 +4015,25 @@ export function createNineStrainRuntime(options: NineStrainRuntimeOptions) {
       }
       return result;
     },
+    consumeSoulwakeHubEffects() {
+      const flags = {
+        lastApRefund: sw().lastApRefund,
+        lastCooldownAdvanced: sw().lastCooldownAdvanced,
+        lastBarrierGranted: sw().lastBarrierGranted,
+        playerHp: sw().playerHp,
+        openConduitGain: sw().lastOpenConduitGain,
+        openConduitPreserved: sw().lastOpenConduitPreserved,
+      };
+      setSw(clearSoulwakeHubFlags(sw()));
+      return flags;
+    },
     noteHostileApDisruption() {
       setSp(noteHostileApDisruption(sp()));
     },
     setWoundweavePhaseSuccessor(fromUnitId: string, toUnitId: string) {
       setWw(setWoundweavePhaseSuccessor(ww(), fromUnitId, toUnitId));
       setFl(setFaultlinePhaseSuccessor(fl(), fromUnitId, toUnitId));
+      setGm(setGravemarkPhaseSuccessor(gm(), fromUnitId, toUnitId));
     },
     grantFleetingStillness(sourceDefinitionId: string | null = 'TEST_FLEETING') {
       return tryGrantFleeting(sourceDefinitionId ?? 'TEST_FLEETING');

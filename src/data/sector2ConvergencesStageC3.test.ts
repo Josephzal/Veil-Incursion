@@ -17,9 +17,9 @@ import { CANONICAL_WEAPON_FAMILY_IDS } from './weaponFamilyIdNormalize';
 console.log('Stage C.3 — Sector 2 Convergences');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getProductionOfferDefinitions(2).length, 50);
-assert.equal(NINE_STRAIN_SCHEMA_VERSION, 11);
+assert.equal(NINE_STRAIN_SCHEMA_VERSION, 15);
 assert.equal(SECTOR_2_CONVERGENCE_IDS.length, 7);
 for (const id of SECTOR_2_CONVERGENCE_IDS) {
   const def = live.find((row) => row.id === id);
@@ -258,7 +258,7 @@ function twoHostiles(runtime: ReturnType<typeof rt>, hp = 80) {
   runtime.endPlayerTurn({ reason: 'VOLUNTARY', usableAp: 1 });
   const snap = runtime.serialize();
   const resumed = hydrateNineStrainRuntimeState(snap);
-  assert.equal(resumed.schemaVersion, 11);
+  assert.equal(resumed.schemaVersion, 15);
   assert.equal(resumed.stillpoint.nativeStillness, snap.stillpoint.nativeStillness);
   assert.equal(resumed.woundweave.linkGeneration, snap.woundweave.linkGeneration);
 }

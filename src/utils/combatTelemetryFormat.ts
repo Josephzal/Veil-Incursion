@@ -297,6 +297,10 @@ export interface CombatGridUnitSnapshot {
   fateboundObscured?: boolean;
   woundlinkMark?: 'PRIMARY' | 'SECONDARY' | 'SELF' | null;
   faultPips?: number;
+  /** Gravemark E.1 — current Polarity badge, null when this hostile has none. */
+  gravemarkPolarity?: import('../types/gravemark').GravemarkPolarityId | null;
+  /** Gravemark E.1 — Unmoored badge (also gates False Position eligibility). */
+  gravemarkUnmoored?: boolean;
   /**
    * Presentation-only dual-allocation badge (1 = source, 2 = destination).
    * Does not alter eligibility or dispatch.

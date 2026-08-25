@@ -30,11 +30,14 @@ import { directlyAffectedTargetIds, isDirectlyAffectedNative } from './nineStrai
 console.log('Stage C.2 — Woundweave');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getSector1ProductionDefinitions().length, 27);
-assert.equal(live.filter((row) => row.strainId === 'WOUNDWEAVE').length, 8);
-assert.equal(NINE_STRAIN_SCHEMA_VERSION, 11);
-assert.equal(live.filter((row) => row.role === 'CONVERGENCE' && row.strainId === 'WOUNDWEAVE').length, 0);
+assert.equal(live.filter((row) => row.strainId === 'WOUNDWEAVE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(NINE_STRAIN_SCHEMA_VERSION, 15);
+// Stage E.3 adds Tethered Orbit (Woundweave x Gravemark) and Crystal Ligature (Woundweave x
+// Shardskin), both with primary strainId WOUNDWEAVE, alongside the two pre-existing Woundweave-
+// primary Convergences from Stage C/D.
+assert.equal(live.filter((row) => row.role === 'CONVERGENCE' && row.strainId === 'WOUNDWEAVE').length, 4);
 
 function rt() {
   const runtime = createNineStrainRuntime({ definitions: live, allowSector2Wave: true });
@@ -387,7 +390,7 @@ function strike(runtime: ReturnType<typeof rt>, family: typeof CANONICAL_WEAPON_
     boonSystemMode: 'NINE_STRAIN',
     stillpoint: { nativeStillness: 2, hostileApDisruptionThisPlayerTurn: true },
   });
-  assert.equal(schema7.schemaVersion, 11);
+  assert.equal(schema7.schemaVersion, 15);
   assert.equal(schema7.stillpoint.nativeStillness, 2);
   assert.equal(schema7.stillpoint.hostileApDisruptionThisPlayerTurn, true);
   assert.equal(schema7.woundweave.endpointA, null);

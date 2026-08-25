@@ -1,0 +1,111 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+src/components/atmosphere/ParticleOverlay.tsx(147,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ActiveReloadOverlay.tsx(208,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/AnimatedEnemySprite.tsx(426,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ApparitionViewport.native.tsx(239,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ApparitionViewport.native.tsx(244,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ApparitionViewport.web.tsx(205,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CataclysmSigilOverlay.native.tsx(281,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CataclysmSigilOverlay.web.tsx(253,49): error TS2339: Property 'pointerId' does not exist on type 'NativeTouchEvent'.
+src/components/combat/CataclysmSigilOverlay.web.tsx(265,55): error TS2339: Property 'pointerId' does not exist on type 'NativeTouchEvent'.
+src/components/combat/CataclysmSigilOverlay.web.tsx(306,10): error TS2769: No overload matches this call.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type '(evt: GestureResponderEvent) => void' is not assignable to type '(event: PointerEvent) => void'.
+      Types of parameters 'evt' and 'event' are incompatible.
+        Type 'PointerEvent' is not assignable to type 'GestureResponderEvent'.
+          Type 'NativePointerEvent' is missing the following properties from type 'NativeTouchEvent': changedTouches, identifier, locationX, locationY, and 3 more.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type '(evt: GestureResponderEvent) => void' is not assignable to type '(event: PointerEvent) => void'.
+      Types of parameters 'evt' and 'event' are incompatible.
+        Type 'PointerEvent' is not assignable to type 'GestureResponderEvent'.
+          Type 'NativePointerEvent' is missing the following properties from type 'NativeTouchEvent': changedTouches, identifier, locationX, locationY, and 3 more.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type '(evt?: GestureResponderEvent) => void' is not assignable to type '(event: PointerEvent) => void'.
+      Types of parameters 'evt' and 'event' are incompatible.
+        Type 'PointerEvent' is not assignable to type 'NativeSyntheticEvent<NativeTouchEvent>'.
+          Type 'NativePointerEvent' is missing the following properties from type 'NativeTouchEvent': changedTouches, identifier, locationX, locationY, and 3 more.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type '(evt?: GestureResponderEvent) => void' is not assignable to type '(event: PointerEvent) => void'.
+      Types of parameters 'evt' and 'event' are incompatible.
+        Type 'PointerEvent' is not assignable to type 'NativeSyntheticEvent<NativeTouchEvent>'.
+          Type 'NativePointerEvent' is missing the following properties from type 'NativeTouchEvent': changedTouches, identifier, locationX, locationY, and 3 more.
+src/components/combat/CataclysmSigilOverlay.web.tsx(315,32): error TS2345: Argument of type 'PointerEvent' is not assignable to parameter of type 'NativeSyntheticEvent<NativeTouchEvent>'.
+  Type 'NativePointerEvent' is missing the following properties from type 'NativeTouchEvent': changedTouches, identifier, locationX, locationY, and 3 more.
+src/components/combat/CataclysmSigilOverlay.web.tsx(385,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CataclysmSigilOverlay.web.tsx(432,3): error TS2322: Type 'StyleProp<ViewStyle>' is not assignable to type 'ViewStyle | TextStyle | ImageStyle'.
+  Type 'undefined' is not assignable to type 'ViewStyle | TextStyle | ImageStyle'.
+src/components/combat/CataclysmSigilOverlay.web.tsx(432,15): error TS2352: Conversion of type '{ width: number; height: number; borderWidth: number; borderColor: "rgba(74, 222, 128, 0.45)"; backgroundColor: "rgba(15, 23, 42, 0.72)"; cursor: "crosshair"; touchAction: string; }' to type 'StyleProp<ViewStyle>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ width: number; height: number; borderWidth: number; borderColor: "rgba(74, 222, 128, 0.45)"; backgroundColor: "rgba(15, 23, 42, 0.72)"; cursor: "crosshair"; touchAction: string; }' is not comparable to type 'undefined'.
+src/components/combat/CatalyticConsoleOverlay.tsx(223,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatArenaBackground.tsx(135,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatArenaBackground.tsx(146,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatDeckStrikeOverlay.tsx(51,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEnemyDissolveEffect.tsx(204,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEnemyEvadeEffect.tsx(217,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEnemyEvadeEffect.tsx(223,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEnemyHitEffect.tsx(114,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEntryTransition.tsx(121,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEntryTransition.tsx(129,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEviscerateCinematic.tsx(39,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatEviscerateCinematic.tsx(44,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatFloatingFeedback.tsx(110,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatParryScreenOverlay.tsx(77,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatParryScreenOverlay.tsx(82,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatSilhouetteShatterEffect.tsx(255,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/CombatSilhouetteShatterEffect.tsx(260,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/EnemyDisintegration.tsx(182,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/EnvoyWardOverlay.tsx(100,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParryMatrixOverlay.native.tsx(178,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParryMatrixOverlay.native.tsx(185,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParryMatrixOverlay.native.tsx(195,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParryMatrixOverlay.web.tsx(185,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParryMatrixOverlay.web.tsx(192,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParryMatrixOverlay.web.tsx(207,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ParrySuccessBurstOverlay.tsx(30,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/StatusEffectTray.tsx(127,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/VectorSliceOverlay.native.tsx(185,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/VectorSliceOverlay.web.tsx(181,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/WeaponUltimateHostChrome.tsx(96,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/WeaponUltimateStagedSkillOverlay.tsx(200,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/combat/ZeroProtocolGridOverlay.tsx(77,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/DecryptionPanel.tsx(51,13): error TS2322: Type '"LOADOUT"' is not assignable to type 'CraftingRecipeKind'.
+src/components/harvest/HarvestExtractorPanel.tsx(256,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/harvest/ResidueParticle.tsx(233,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/harvest/VeilResidueCanister.tsx(18,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/harvest/VeilVacuumBar.tsx(91,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/layout/RunEventChoiceCard.tsx(631,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/layout/RunEventChoiceCard.tsx(646,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/layout/RunEventChoiceCard.tsx(656,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/map/ScanlineOverlay.tsx(19,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/map/TacticalGridBackdrop.tsx(27,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/overworld/DimensionalTearOverlay.tsx(72,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/overworld/ProximityScanlineOverlay.tsx(82,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/runField/SpectralSelectAura.tsx(149,13): error TS2314: Generic type 'AnimatedAddition<OutputT>' requires 1 type argument(s).
+src/components/runField/SpectralSelectAura.tsx(355,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/SectorOverworldMap.tsx(1076,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/TacticalCombatHub.tsx(14469,24): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/veilFront/VeilFrontMap.tsx(468,25): error TS2322: Type '{ key: string; d: string; fill: string; stroke: string; onPress: () => void; accessibilityRole: string; accessibilityLabel: string; accessibilityState: { selected: boolean; }; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<Path> & Readonly<PathProps>'.
+  Property 'accessibilityRole' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<Path> & Readonly<PathProps>'. Did you mean 'accessibilityLabel'?
+src/components/VignetteFlashOverlay.tsx(29,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/VignetteFlashOverlay.tsx(74,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/VignetteFlashOverlay.tsx(83,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/VignetteFlashOverlay.tsx(89,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/context/CombatArenaOverlayContext.tsx(50,29): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/context/CombatMinigameOverlayContext.tsx(86,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/data/enemies.ts(60,9): error TS2739: Type '{ STRIKE: string; STRIP_STAMINA: string; SIPHON_ABYSSAL: string; EVADE: string; CHARGE: string; WORLD_ENDER: string; FORTIFY: string; OVERDRIVE_DISCHARGE: string; PAVEMENT_CRUSHER_CHARGE: string; ... 23 more ...; FIELD_REPAIR: string; }' is missing the following properties from type 'Record<EnemyIntent, string>': HEX_MARK, BINDING_WARD
+src/data/nineStrainStandardCatalogStageE3.test.ts(113,25): error TS2345: Argument of type 'string' is not assignable to parameter of type 'StrainId | undefined'.
+src/data/nineStrainStandardCatalogStageE3.test.ts(114,25): error TS2345: Argument of type 'string' is not assignable to parameter of type 'StrainId | undefined'.
+src/data/reticleHoverGlow.ts(45,7): error TS2367: This comparison appears to be unintentional because the types '2' and '0' have no overlap.
+src/data/sector4ConvergenceCorrectionsStageE3.test.ts(244,19): error TS2322: Type 'CounterfateRuntimeState' is not assignable to type '{ fateboundUnitId: string; fateboundInstanceId: string; rawReversal: number; combatDepth: CombatDepthBand; concealed: boolean; depthCap: number; chosenFateUsedThisTurn: boolean; ... 9 more ...; intentGenerationByUnit: Record<string, IntentGenerationRecord>; }'.
+  Types of property 'fateboundUnitId' are incompatible.
+    Type 'string | null' is not assignable to type 'string'.
+      Type 'null' is not assignable to type 'string'.
+src/screens/WelcomeScreen.tsx(190,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/screens/WelcomeScreen.tsx(362,19): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/utils/adaptiveStyles.ts(48,7): error TS2353: Object literal may only specify known properties, and 'textShadow' does not exist in type 'TextStyle'.
+src/utils/combatPresentationAudio.ts(11,3): error TS2724: '"./combatPresentationAudioSamples"' has no exported member named 'AEGIS_MISS_SAMPLE'. Did you mean 'AEGIS_RUIN_SAMPLE'?
+src/utils/hiddenScrollbarStyle.ts(6,5): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(specifics: ({ ios?: ViewStyle | undefined; android?: ViewStyle | undefined; windows?: ViewStyle | undefined; macos?: ViewStyle | undefined; web?: ViewStyle | undefined; native?: ViewStyle | undefined; } & { ...; }) | { ...; }): ViewStyle', gave the following error.
+    Object literal may only specify known properties, and 'scrollbarWidth' does not exist in type 'ViewStyle'.
+  Overload 2 of 2, '(specifics: { ios?: ViewStyle | undefined; android?: ViewStyle | undefined; windows?: ViewStyle | undefined; macos?: ViewStyle | undefined; web?: ViewStyle | undefined; native?: ViewStyle | undefined; }): ViewStyle | undefined', gave the following error.
+    Object literal may only specify known properties, and 'scrollbarWidth' does not exist in type 'ViewStyle'.

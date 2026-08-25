@@ -80,6 +80,23 @@ export interface NineStrainCombatBridge {
   confirmDeferredExposure: NineStrainRuntime['confirmDeferredExposure'];
   completeCombat: NineStrainRuntime['completeCombat'];
   noteIntentEnded: NineStrainRuntime['noteIntentEnded'];
+  consumeSoulwakeHubEffects: NineStrainRuntime['consumeSoulwakeHubEffects'];
+  gravemarkPresentation: NineStrainRuntime['gravemarkPresentation'];
+  consumeGravemarkPendingMovement: NineStrainRuntime['consumeGravemarkPendingMovement'];
+  consumeGravemarkApRefund: NineStrainRuntime['consumeGravemarkApRefund'];
+  falsePositionEligible: NineStrainRuntime['falsePositionEligible'];
+  beginWorldTurnedSidewaysUltimate: NineStrainRuntime['beginWorldTurnedSidewaysUltimate'];
+  applyWorldTurnedSidewaysUltimateDamage: NineStrainRuntime['applyWorldTurnedSidewaysUltimateDamage'];
+  previewGravemark: NineStrainRuntime['previewGravemark'];
+  shardskinPresentation: NineStrainRuntime['shardskinPresentation'];
+  recordShardDefense: NineStrainRuntime['recordShardDefense'];
+  consumeEdgeForUltimate: NineStrainRuntime['consumeEdgeForUltimate'];
+  setCathedralBreakSelected: NineStrainRuntime['setCathedralBreakSelected'];
+  previewCathedralBreak: NineStrainRuntime['previewCathedralBreak'];
+  beginCathedralBreakUltimate: NineStrainRuntime['beginCathedralBreakUltimate'];
+  finishCathedralBreakUltimate: NineStrainRuntime['finishCathedralBreakUltimate'];
+  /** The rootActionId of the currently-open (not yet finished) root attempt, if any. */
+  currentAttemptRootActionId(): string | null;
 }
 
 let rootSeq = 0;
@@ -245,5 +262,27 @@ export function createNineStrainCombatBridge(args: {
     confirmDeferredExposure: (traceId: string | null) => runtime.confirmDeferredExposure(traceId),
     completeCombat: (outcome?: 'VICTORY' | 'ESCAPE' | 'FAILURE') => runtime.completeCombat(outcome),
     noteIntentEnded: (unitId: string) => runtime.noteIntentEnded(unitId),
+    consumeSoulwakeHubEffects: () => runtime.consumeSoulwakeHubEffects(),
+    gravemarkPresentation: () => runtime.gravemarkPresentation(),
+    consumeGravemarkPendingMovement: () => runtime.consumeGravemarkPendingMovement(),
+    consumeGravemarkApRefund: () => runtime.consumeGravemarkApRefund(),
+    falsePositionEligible: (unitId, requestedLane, actualLane) => runtime.falsePositionEligible(unitId, requestedLane, actualLane),
+    beginWorldTurnedSidewaysUltimate: (rootActionId, lockedTargetIds) => runtime.beginWorldTurnedSidewaysUltimate(rootActionId, lockedTargetIds),
+    applyWorldTurnedSidewaysUltimateDamage: (rootActionId, hits, damageChannels) => (
+      runtime.applyWorldTurnedSidewaysUltimateDamage(rootActionId, hits, damageChannels)
+    ),
+    previewGravemark: (ctx) => runtime.previewGravemark(ctx),
+    shardskinPresentation: () => runtime.shardskinPresentation(),
+    recordShardDefense: (eventId, incomingAfterMitigation, attackerUnitId) => (
+      runtime.recordShardDefense(eventId, incomingAfterMitigation, attackerUnitId)
+    ),
+    consumeEdgeForUltimate: (rootActionId, primaryTargetId, otherAffectedTargetIds) => (
+      runtime.consumeEdgeForUltimate(rootActionId, primaryTargetId, otherAffectedTargetIds)
+    ),
+    setCathedralBreakSelected: (selected) => runtime.setCathedralBreakSelected(selected),
+    previewCathedralBreak: (lockedTargetIds) => runtime.previewCathedralBreak(lockedTargetIds),
+    beginCathedralBreakUltimate: (rootActionId, lockedTargetIds) => runtime.beginCathedralBreakUltimate(rootActionId, lockedTargetIds),
+    finishCathedralBreakUltimate: (rootActionId) => runtime.finishCathedralBreakUltimate(rootActionId),
+    currentAttemptRootActionId: () => attempt?.rootActionId ?? null,
   };
 }

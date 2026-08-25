@@ -29,13 +29,13 @@ import type { TargetNativeResult } from '../types/nineStrain';
 console.log('Stage D.1 — Faultline');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getProductionOfferDefinitions(1).length, 27);
 assert.equal(getProductionOfferDefinitions(2).length, 50);
-assert.equal(live.filter((row) => row.strainId === 'FAULTLINE').length, 8);
-assert.equal(live.filter((row) => row.strainId === 'SOULWAKE').length, 8);
-assert.equal(live.filter((row) => row.role === 'CONVERGENCE').length, 10);
-assert.equal(NINE_STRAIN_SCHEMA_VERSION, 11);
+assert.equal(live.filter((row) => row.strainId === 'FAULTLINE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'SOULWAKE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.role === 'CONVERGENCE').length, 36);
+assert.equal(NINE_STRAIN_SCHEMA_VERSION, 15);
 assert.equal(appliedFractureAmount(0), 1);
 assert.equal(appliedFractureAmount(1), 1);
 assert.equal(appliedFractureAmount(2), 2);
@@ -393,7 +393,7 @@ function strike(
   const hydrated = hydrateNineStrainRuntimeState(JSON.parse(JSON.stringify(runtime.getState())));
   const again = hydrateNineStrainRuntimeState(JSON.parse(JSON.stringify(hydrated)));
   assert.deepEqual(hydrated.faultline.faultByUnitId, again.faultline.faultByUnitId);
-  assert.equal(hydrated.maxAcquisitionWave, 2);
+  assert.equal(hydrated.maxAcquisitionWave, 4);
 }
 
 {

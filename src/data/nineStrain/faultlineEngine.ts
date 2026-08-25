@@ -462,7 +462,7 @@ function resolveRupture(args: {
   return { state: afterClear, intents, rupture };
 }
 
-function addFault(args: {
+export function addFault(args: {
   state: FaultlineRuntimeState;
   intents: HostileIntentSnapshot[];
   ctx: CanonicalRootActionContext;

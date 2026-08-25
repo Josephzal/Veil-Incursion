@@ -538,7 +538,7 @@ for (const familyId of CANONICAL_WEAPON_FAMILY_IDS) {
   const fresh = hydrateNineStrainIncursionFields(createDefaultActiveIncursionState());
   assert.equal(fresh.nineStrainRuntime.boonSystemMode, 'LEGACY_CLASS_CATALOG');
   const migrated = hydrateNineStrainRuntimeState({ schemaVersion: 2, cores: { ARMAMENT: null } });
-  assert.equal(migrated.schemaVersion, 11);
+  assert.equal(migrated.schemaVersion, 15);
   assert.equal(migrated.counterfate.rawReversal, 0);
 }
 

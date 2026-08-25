@@ -25,10 +25,10 @@ import type { IncursionNode } from '../types/game';
 console.log('Stage C.1 — Stillpoint / Fleeting Stillness');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getSector1ProductionDefinitions().length, 27);
 assert.equal(live.filter((row) => row.strainId === 'STILLPOINT' && row.role !== 'CONVERGENCE').length, 8);
-assert.equal(NINE_STRAIN_SCHEMA_VERSION, 11);
+assert.equal(NINE_STRAIN_SCHEMA_VERSION, 15);
 
 function rt() {
   const runtime = createNineStrainRuntime({ definitions: live, allowSector2Wave: true });
@@ -528,7 +528,7 @@ assert.equal(FAMILIES.length, 9);
     cores: { ARMAMENT: COUNTERFATE_CORE_IDS.SEVERED_OUTCOME, DISCIPLINE: null, INSTINCT: null, CURRENT: null },
   });
   assert.equal(legacy.stillpoint.nativeStillness, 0);
-  assert.equal(legacy.schemaVersion, 11);
+  assert.equal(legacy.schemaVersion, 15);
 }
 
 {

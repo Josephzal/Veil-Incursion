@@ -797,6 +797,8 @@ import StillpointHudStrip from './combat/StillpointHudStrip';
 import WoundweaveHudStrip from './combat/WoundweaveHudStrip';
 import FaultlineHudStrip from './combat/FaultlineHudStrip';
 import SoulwakeHudStrip from './combat/SoulwakeHudStrip';
+import GravemarkHudStrip from './combat/GravemarkHudStrip';
+import ShardskinHudStrip from './combat/ShardskinHudStrip';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from './combat/ParrySuccessBurstOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
@@ -872,6 +874,8 @@ import {
 import { useRun } from '../context/RunContext';
 import { createNineStrainCombatBridge } from '../data/nineStrain/combatBridge';
 import { hostileSnapshotInput } from '../data/nineStrain/hostileField';
+import { applySoulwakeHubEffects } from '../data/nineStrain/soulwakeHubConsumer';
+import { applyGravemarkMovementToSquad } from '../data/nineStrain/gravemarkHubConsumer';
 import { normalizeWeaponFamilyId } from '../data/weaponFamilyIdNormalize';
 import { tryNormalizeRunItemId } from '../data/runItemIdAliases';
 import { hasSupplyInstance } from '../data/cargoSupplyEngine';
@@ -1337,6 +1341,8 @@ export default function TacticalCombatHub({
   const [riftWardReadyUi, setRiftWardReadyUi] = useState(false);
 
   const operativeHpRef = useRef(initialOperativeHp);
+  /** Monotonic per-encounter counter for stable Shard-prevention damage-event IDs. */
+  const shardDefenseEventSeqRef = useRef(0);
   const balanceEncounterRef = useRef({
     playerTurns: 0,
     damageTaken: 0,
@@ -1742,6 +1748,9 @@ export default function TacticalCombatHub({
         maxHp: unit.maxHp,
         severity: jammed ? 'MODERATE' : getIntentSeverity(unit.intent),
         protectedPhase: unit.isBoss === true,
+        // Gravemark E.1: bosses are grid-anchored — Displacement becomes an in-place authored
+        // translation (Unmoored + cap consumed) rather than a physical slot move/swap.
+        immovable: unit.isBoss === true,
         designation: unit.designation,
       })),
       jammed,
@@ -1862,8 +1871,22 @@ export default function TacticalCombatHub({
     activeWeaponFamilyId,
     aegisLoadout,
   ]);
+  /**
+   * Gravemark E.1 — False Position eligibility predicate for Grave Bind. Requested lane is
+   * always BACKLINE here (the only hook-gated ability); actual lane comes from the unit's
+   * authoritative gridSlot, so real-lane cover/damage/order are untouched.
+   */
+  const gravemarkIsUnitUnmoored = (unitId: string): boolean => {
+    const bridge = nineStrainBridgeRef.current;
+    if (typeof bridge.falsePositionEligible !== 'function') return false;
+    const unit = getUnitById(squadRef.current, unitId);
+    const actualLane: 'FRONTLINE' | 'BACKLINE' = unit?.gridSlot?.startsWith('BL') ? 'BACKLINE' : 'FRONTLINE';
+    if (actualLane === 'BACKLINE') return false;
+    return bridge.falsePositionEligible(unitId, 'BACKLINE', actualLane);
+  };
   const aegisTargetOpts = () => ({
     doomfallReleaseAvailable: aegisWeaponCombatRef.current.doomfallReleaseAvailable,
+    isUnitUnmoored: gravemarkIsUnitUnmoored,
   });
   const clearAegisDualTargets = () => {
     dualTargetIdsRef.current = [null, null];
@@ -2597,7 +2620,8 @@ export default function TacticalCombatHub({
           isApex: u.isApex,
           rosterId: u.rosterId,
         });
-        const hookValid = staged != null && isUnitHookValidForClass(operativeClass, staged, u);
+        const hookValid = staged != null
+          && isUnitHookValidForClass(operativeClass, staged, u, gravemarkIsUnitUnmoored);
         const alive = isUnitAlive(u);
         if (alive) {
           // Keep living / fractured hostiles mounted — never publish a stuck dissolve hide.
@@ -2729,6 +2753,11 @@ export default function TacticalCombatHub({
           fateboundObscured: nineStrainBridgeRef.current.presentation().concealed,
           woundlinkMark: nineStrainBridgeRef.current.woundweavePresentation().badgeFor(unitId),
           faultPips: nineStrainBridgeRef.current.faultlinePresentation().pipsFor(unitId),
+          gravemarkPolarity: unitId
+            ? (nineStrainBridgeRef.current.gravemarkPresentation().polarityByUnitId[unitId] ?? null)
+            : null,
+          gravemarkUnmoored: unitId != null
+            && nineStrainBridgeRef.current.gravemarkPresentation().unmooredUnitIds.includes(unitId),
           isAoeAffected: targetMode === 'ALL' && targetable,
           abyssalVerdictTargetable: abyssalEligible === true,
           abyssalVerdictDimmed: abyssalTargeting && !abyssalEligible,
@@ -4252,6 +4281,7 @@ export default function TacticalCombatHub({
         riftPreventedDamage: raw,
         riftWouldReachHp: raw,
       });
+      applyPendingSoulwakeHubEffects();
       return;
     }
     if (mutationEncounterRef.current.juggernautShieldHits > 0 && raw > 0) {
@@ -4558,6 +4588,18 @@ export default function TacticalCombatHub({
         log(`[SOUL-TETHER] >> ${mirror} True pain mirrored to tether.`);
       }
     }
+    // Shardskin: one Shard prevents one damage, decremented before HP mutation. Resolved once,
+    // synchronously, outside the setOperativeHp updater (which React StrictMode may invoke
+    // twice) — the stable eventId also lets the engine's own ledger reject any accidental replay.
+    if (dmg > 0) {
+      shardDefenseEventSeqRef.current += 1;
+      const shardEventId = `shard:${balanceEncounterRef.current.playerTurns}:${shardDefenseEventSeqRef.current}`;
+      const shardResult = nineStrainBridgeRef.current.recordShardDefense(shardEventId, dmg, options?.attacker?.unitId ?? null);
+      if (shardResult.shardsSpent > 0) {
+        log(`[SHARDSKIN] >> ${shardResult.shardsSpent} Shard${shardResult.shardsSpent === 1 ? '' : 's'} prevented ${shardResult.shardsSpent} damage.`);
+      }
+      dmg = shardResult.hpDamage;
+    }
     setOperativeHp((p) => {
       let incoming = dmg;
       if (
@@ -4580,7 +4622,20 @@ export default function TacticalCombatHub({
       }
       const n = Math.max(p - incoming, 0);
       const taken = Math.max(0, p - n);
-      if (taken > 0) balanceEncounterRef.current.damageTaken += taken;
+      if (taken > 0) {
+        balanceEncounterRef.current.damageTaken += taken;
+        nineStrainBridgeRef.current.recordHpLoss({
+          lossEventId: `hostile-shard:${balanceEncounterRef.current.playerTurns}:${shardDefenseEventSeqRef.current}:${p}:${n}`,
+          rootActionId: null,
+          actualHpRemoved: taken,
+          currentHpBefore: p,
+          currentHpAfter: n,
+          maxHpBefore: combatMaxSoulAnchorRef.current,
+          maxHpAfter: combatMaxSoulAnchorRef.current,
+          provenance: 'HOSTILE',
+          overdrawKind: 'NONE',
+        });
+      }
       operativeHpRef.current = n;
       if (n <= 0 && options?.attacker?.designation) {
         onLethalEnemyStrike?.(options.attacker.designation);
@@ -8546,6 +8601,7 @@ export default function TacticalCombatHub({
     const defaultTarget = nextDefaultTarget(initialSquad);
     if (defaultTarget) selectTarget(defaultTarget);
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
+    shardDefenseEventSeqRef.current = 0;
     balanceEncounterRef.current = {
       playerTurns: 0,
       damageTaken: 0,
@@ -10232,23 +10288,225 @@ export default function TacticalCombatHub({
       if (stillpoint.lastBarrier > 0) {
         sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + stillpoint.lastBarrier;
       }
-      const soulwake = nineStrainBridgeRef.current.serialize().soulwake;
-      if (soulwake.lastApRefund > 0 && isPlayerTurn) {
-        playerApRef.current += soulwake.lastApRefund;
-        setPlayerActionPoints(playerApRef.current);
-      }
-      if (soulwake.lastBarrierGranted > 0) {
-        sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + soulwake.lastBarrierGranted;
-      }
-      if (soulwake.playerHp < operativeHpRef.current) {
-        operativeHpRef.current = soulwake.playerHp;
-        setOperativeHp(soulwake.playerHp);
-      }
-      if (soulwake.lastLog) log(`>> ${soulwake.lastLog}`);
+      applyPendingSoulwakeHubEffects({
+        committedAbilityId: abilityId as AegisAbilityId,
+        duringPlayerTurn: isPlayerTurn,
+      });
+      applyPendingGravemarkHubEffects();
       setCounterfateHudNonce((value) => value + 1);
     }
   };
   executeOperativeAbilityRef.current = executeOperativeAbility;
+
+  /**
+   * Gravemark E.1 — consume-once Hub bridge for live grid movement and the Folded Space AP
+   * refund. Mirrors applyPendingSoulwakeHubEffects: the bridge queue is drained exactly once
+   * per ability commit (consumeGravemarkPendingMovement/consumeGravemarkApRefund both clear
+   * their source on read), so save/resume or rerender cannot replay a queued effect.
+   */
+  const applyPendingGravemarkHubEffects = () => {
+    const bridge = nineStrainBridgeRef.current;
+    if (typeof bridge.consumeGravemarkPendingMovement === 'function') {
+      const effects = bridge.consumeGravemarkPendingMovement();
+      if (effects.length > 0) {
+        const { squad: movedSquad, applied } = applyGravemarkMovementToSquad(squadRef.current, effects);
+        if (applied.length > 0) {
+          syncSquad(movedSquad);
+          for (const effect of applied) {
+            log(`>> GRAVEMARK DISPLACEMENT // ${effect.kind} ${effect.fromSlot} -> ${effect.toSlot}`);
+          }
+        }
+      }
+    }
+    if (typeof bridge.consumeGravemarkApRefund === 'function') {
+      const refund = bridge.consumeGravemarkApRefund();
+      if (refund > 0) {
+        if (isPlayerTurn) {
+          playerApRef.current += refund;
+          setPlayerActionPoints(playerApRef.current);
+        } else {
+          combatBuffRef.current.bonusApNextTurn += refund;
+        }
+        log(`>> FOLDED SPACE // AP REFUND +${refund}`);
+      }
+    }
+  };
+
+  /**
+   * Gravemark E.1 — World Turned Sideways, pre-native half. Call once per ultimate commitment
+   * (after target validation, before any damage is dealt) with the locked target set the
+   * ultimate's own targeting path resolved. No-ops safely if the Verdict isn't owned. Applies
+   * any forced pre-native swap to the live grid immediately, then snapshots HP for the matching
+   * finishWorldTurnedSidewaysUltimate() call.
+   */
+  const beginWorldTurnedSidewaysUltimate = (
+    lockedTargetIds: readonly string[],
+  ): { rootId: string; hpBefore: Map<string, number> } => {
+    const rootId = `wts:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    nineStrainBridgeRef.current.beginWorldTurnedSidewaysUltimate(rootId, lockedTargetIds);
+    applyPendingGravemarkHubEffects();
+    const hpBefore = new Map(
+      squadRef.current.filter((u) => u.unitId).map((u) => [u.unitId as string, u.currentHp]),
+    );
+    return { rootId, hpBefore };
+  };
+
+  /**
+   * Gravemark E.1 — World Turned Sideways, post-native half. Diffs live squad HP against the
+   * begin() snapshot to find each locked target's actual received damage from this exact
+   * ultimate (post-mitigation), then applies the 20% derivative packet to Gravemark's shadow
+   * tracking (consistent with Faultline/Woundweave precedent — Nine-Strain collision packets do
+   * not re-mutate the live HP bar a second time; the ultimate's own hurtEnemy calls already did
+   * the real damage). One-shot: call exactly once, after the ultimate's damage has resolved.
+   */
+  const finishWorldTurnedSidewaysUltimate = (
+    wts: { rootId: string; hpBefore: Map<string, number> },
+    damageChannels: readonly string[],
+  ) => {
+    const hits = squadRef.current
+      .filter((u) => u.unitId && wts.hpBefore.has(u.unitId as string))
+      .map((u) => ({
+        targetId: u.unitId as string,
+        damage: Math.max(0, (wts.hpBefore.get(u.unitId as string) ?? 0) - u.currentHp),
+      }))
+      .filter((h) => h.damage > 0);
+    if (hits.length === 0) return;
+    nineStrainBridgeRef.current.applyWorldTurnedSidewaysUltimateDamage(wts.rootId, hits, damageChannels);
+  };
+
+  /**
+   * Shardskin — pre-native pass, shared by all nine real production ultimate commit sites.
+   * Mirrors beginWorldTurnedSidewaysUltimate's HP-snapshot pattern. If Cathedral Break is
+   * selected (boundVerdict === SS_VERDICT_CATHEDRAL_BREAK), this snapshots and consumes all
+   * current Shards + Edge up front; otherwise it is a safe no-op observer (ordinary Edge
+   * consumption, if any, resolves in finishShardskinUltimate once native damage is known).
+   */
+  const beginShardskinUltimate = (
+    lockedTargetIds: readonly string[],
+  ): { rootId: string; hpBefore: Map<string, number>; lockedTargetIds: readonly string[]; cathedralActive: boolean } => {
+    const rootId = `ss:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const begin = nineStrainBridgeRef.current.beginCathedralBreakUltimate(rootId, lockedTargetIds);
+    const hpBefore = new Map(
+      squadRef.current.filter((u) => u.unitId).map((u) => [u.unitId as string, u.currentHp]),
+    );
+    return { rootId, hpBefore, lockedTargetIds, cathedralActive: begin.active };
+  };
+
+  /**
+   * Shardskin — post-native pass. Diffs live squad HP against the begin() snapshot to find each
+   * locked target's actual received native damage from this exact ultimate. If Cathedral Break
+   * was armed, divides its Occult budget across the locked target set and applies every packet
+   * to the live squad exactly once via hurtEnemy. Otherwise, if the ultimate actually dealt
+   * native direct damage and Edge is available, consumes it through the ordinary central law
+   * (Edge + Scatterglass resolve against the engine's internal hostile tracking, consistent with
+   * every other Nine-Strain derivative packet). One-shot: call exactly once per ultimate commit.
+   */
+  const finishShardskinUltimate = (
+    ss: { rootId: string; hpBefore: Map<string, number>; lockedTargetIds: readonly string[]; cathedralActive: boolean },
+  ) => {
+    if (ss.cathedralActive) {
+      const result = nineStrainBridgeRef.current.finishCathedralBreakUltimate(ss.rootId);
+      for (const packet of result.packets) {
+        if (packet.fizzled || packet.amount <= 0) continue;
+        hurtEnemy(packet.amount, '[CATHEDRAL BREAK]', 'STRIKE', {
+          channel: 'OCCULT',
+          targetId: packet.targetId,
+          rollCrit: false,
+          indirectDamage: true,
+        });
+      }
+      if (result.budget > 0) {
+        log(`>> CATHEDRAL BREAK // ${result.budget} OCCULT across ${result.packets.filter((p) => !p.fizzled).length} target(s).`);
+      }
+      if (result.gained > 0) {
+        log(`>> CATHEDRAL BREAK // +${result.gained} Shards.`);
+      }
+      publishSquadUi(squadRef.current);
+      return;
+    }
+    const hits = squadRef.current
+      .filter((u) => u.unitId && ss.hpBefore.has(u.unitId as string))
+      .map((u) => ({
+        targetId: u.unitId as string,
+        damage: Math.max(0, (ss.hpBefore.get(u.unitId as string) ?? 0) - u.currentHp),
+      }))
+      .filter((h) => h.damage > 0);
+    if (hits.length === 0) return;
+    const primaryTargetId = ss.lockedTargetIds[0] ?? hits[0].targetId;
+    const otherAffected = hits.map((h) => h.targetId).filter((id) => id !== primaryTargetId);
+    nineStrainBridgeRef.current.consumeEdgeForUltimate(ss.rootId, primaryTargetId, otherAffected);
+  };
+
+  const applyPendingSoulwakeHubEffects = (opts: {
+    committedAbilityId?: AegisAbilityId | string | null;
+    duringPlayerTurn?: boolean;
+  } = {}) => {
+    const bridge = nineStrainBridgeRef.current;
+    const flags = typeof bridge.consumeSoulwakeHubEffects === 'function'
+      ? bridge.consumeSoulwakeHubEffects()
+      : (() => {
+        const sw = bridge.serialize().soulwake;
+        return {
+          lastApRefund: sw.lastApRefund,
+          lastCooldownAdvanced: sw.lastCooldownAdvanced,
+          lastBarrierGranted: sw.lastBarrierGranted,
+          playerHp: sw.playerHp,
+          openConduitGain: sw.lastOpenConduitGain ?? 0,
+          openConduitPreserved: sw.lastOpenConduitPreserved ?? 0,
+        };
+      })();
+    const abilityId = opts.committedAbilityId as AegisAbilityId | undefined;
+    const cooldownBefore = abilityId ? (graftCooldownsRef.current[abilityId] ?? null) : null;
+    const result = applySoulwakeHubEffects({
+      playerAp: playerApRef.current,
+      playerHp: operativeHpRef.current,
+      playerShield: sessionExtrasRef.current.playerShield ?? 0,
+      abyssalReserve: abyssalRef.current,
+      veilFlux: veilFluxRef.current,
+      ammo: currentAmmoRef.current,
+      maxAmmo,
+      committedAbilityCooldown: cooldownBefore,
+      classId: operativeClass,
+    }, flags);
+    if (result.applied.apRefund > 0) {
+      if (opts.duringPlayerTurn !== false && isPlayerTurn) {
+        playerApRef.current = result.live.playerAp;
+        setPlayerActionPoints(playerApRef.current);
+      } else {
+        combatBuffRef.current.bonusApNextTurn += result.applied.apRefund;
+      }
+    }
+    if (result.applied.cooldownAdvanced && abilityId && result.live.committedAbilityCooldown != null) {
+      graftCooldownsRef.current[abilityId] = result.live.committedAbilityCooldown;
+    }
+    if (result.applied.barrier > 0) {
+      sessionExtrasRef.current.playerShield = result.live.playerShield;
+    }
+    if (result.applied.hpSynced) {
+      operativeHpRef.current = result.live.playerHp;
+      setOperativeHp(result.live.playerHp);
+    }
+    if (operativeClass === 'AEGIS' && (result.applied.currentGain > 0 || result.applied.currentPreserved > 0)) {
+      abyssalRef.current = result.live.abyssalReserve;
+      setAbyssalReserve(result.live.abyssalReserve);
+    }
+    if (operativeClass === 'ENVOY' && (result.applied.currentGain > 0 || result.applied.currentPreserved > 0)) {
+      const delta = result.live.veilFlux - veilFluxRef.current;
+      if (delta !== 0) {
+        dispatchEnvoy({
+          type: 'ENVOY_APPLY_FLUX_DELTA',
+          delta,
+          masochisticChannel: envoyBoonModsRef.current.masochisticChannel,
+        });
+      }
+    }
+    if (operativeClass === 'HEX_SHOT' && (result.applied.currentGain > 0 || result.applied.currentPreserved > 0)) {
+      setMagazineAmmo(result.live.ammo);
+    }
+    const swLog = bridge.serialize().soulwake.lastLog;
+    if (swLog) log(`>> ${swLog}`);
+    return result;
+  };
 
   const executeAbility = (abilityId: AegisAbilityId) => {
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand() || !enemyRef.current) return;
@@ -11073,6 +11331,24 @@ export default function TacticalCombatHub({
     // Pose on ultimate commit — not only when first damage lands (multi-hit / 0-damage edge cases).
     triggerPlayerAttackPose(primary);
 
+    // Gravemark E.1 — World Turned Sideways pre-native pass. FUNERAL_KNOT/CRIMSON_REFRACTION
+    // hit the whole living field; the other four WU4 ultimates are single-target on `primary`.
+    // An empty locked set (no target / no living hostiles) is a safe no-op inside beginWorldTurnedSidewaysUltimate.
+    const wtsIsAoeUltimate = ultimateId === 'FUNERAL_KNOT' || ultimateId === 'CRIMSON_REFRACTION';
+    const wtsLockedTargetIds: string[] = wtsIsAoeUltimate
+      ? aliveUnits(squadRef.current).map((u) => u.unitId).filter((id): id is string => Boolean(id))
+      : (primary?.unitId ? [primary.unitId] : []);
+    const wtsDamageChannelsByUltimate: Record<string, readonly string[]> = {
+      REND_THE_VEIL: [],
+      GRAVEFALL: ['KINETIC'],
+      SIXTH_SEAL: ['KINETIC'],
+      LAST_KNOCK: ['KINETIC'],
+      FUNERAL_KNOT: ['OCCULT'],
+      CRIMSON_REFRACTION: ['OCCULT'],
+    };
+    const wts = wtsLockedTargetIds.length > 0 ? beginWorldTurnedSidewaysUltimate(wtsLockedTargetIds) : null;
+    const ss = wtsLockedTargetIds.length > 0 ? beginShardskinUltimate(wtsLockedTargetIds) : null;
+    try {
     if (ultimateId === 'REND_THE_VEIL') {
       if (!primary?.unitId) {
         log(`${tag} >> No target — channel collapses.`);
@@ -11347,6 +11623,10 @@ export default function TacticalCombatHub({
       if (operativeHpRef.current <= 0) return;
       passToEnemy(false);
     }
+    } finally {
+      if (wts) finishWorldTurnedSidewaysUltimate(wts, wtsDamageChannelsByUltimate[ultimateId] ?? []);
+      if (ss) finishShardskinUltimate(ss);
+    }
   };
 
   const pickZeroProtocolTarget = (): EnemyCombatProfile | null => {
@@ -11372,6 +11652,8 @@ export default function TacticalCombatHub({
     const performance = gradeToZeroProtocolPerformance(resolved.grade);
     const hexState = hexShotStateRef.current;
     const primary = pickZeroProtocolTarget();
+    const wts = primary?.unitId ? beginWorldTurnedSidewaysUltimate([primary.unitId]) : null;
+    const ss = primary?.unitId ? beginShardskinUltimate([primary.unitId]) : null;
     if (primary && primary.unitId) {
       const targetId = primary.unitId;
       const hasWard = (primary.occultWards ?? 0) > 0;
@@ -11422,6 +11704,8 @@ export default function TacticalCombatHub({
       squad: squadRef.current,
     });
     log(`>> [ZERO PROTOCOL] >> ${resolved.grade} grade — firing solution complete. Protocol discharged.`);
+    if (wts) finishWorldTurnedSidewaysUltimate(wts, ['TRUE']);
+    if (ss) finishShardskinUltimate(ss);
   };
 
   const handleCataclysmResolve = (nodesCompleted: number, forceStandard = false) => {
@@ -11441,6 +11725,9 @@ export default function TacticalCombatHub({
     const damage = computeCataclysmSigilDamage(rotTotal, traceMultiplier);
     const hurtFn = buildEnvoyHurtEnemy();
     const alive = aliveUnits(squadRef.current);
+    const wtsLocked = alive.map((u) => u.unitId).filter((id): id is string => Boolean(id));
+    const wts = wtsLocked.length > 0 ? beginWorldTurnedSidewaysUltimate(wtsLocked) : null;
+    const ss = wtsLocked.length > 0 ? beginShardskinUltimate(wtsLocked) : null;
     triggerPlayerAttackPose(alive[0] ?? null);
     for (const unit of alive) {
       if (!unit.unitId) continue;
@@ -11489,6 +11776,8 @@ export default function TacticalCombatHub({
       );
     }
     publishSquadUi(squadRef.current);
+    if (wts) finishWorldTurnedSidewaysUltimate(wts, ['OCCULT']);
+    if (ss) finishShardskinUltimate(ss);
     if (allUnitsDefeated(squadRef.current)) {
       scheduleCombatVictoryResolution();
       return;
@@ -11730,6 +12019,7 @@ export default function TacticalCombatHub({
       ammoCycleCompleted: true,
       perfectReload: quality === 'PERFECT',
     });
+    applyPendingSoulwakeHubEffects();
     // W.4 — Deadbolt opportunity arms only after completed Phase-Shift Reload restores rounds.
     {
       const roundsRestored = Math.max(0, maxAmmo - ammoBeforeReload);
@@ -11941,6 +12231,7 @@ export default function TacticalCombatHub({
           perfectParry: true,
           parryAttempted: true,
         });
+        applyPendingSoulwakeHubEffects();
         playCombatPresentationCue('sfx.aegis.parry');
         emitJuice('FRACTURE_APPLIED', { text: 'Fracture from Perfect Parry' });
         if (counter.cancelTelegraph) {
@@ -12353,6 +12644,12 @@ export default function TacticalCombatHub({
     setAbyssalCollapsingUnitId(unitId);
     publishSquadUiRef.current(squadRef.current);
 
+    // Gravemark E.1 — World Turned Sideways pre-native pass. commitAbyssalVerdictDamage calls
+    // hurtEnemy synchronously in both the cinematic and non-cinematic branches (only the log/FX
+    // presentation defers), so the full pre/post-native pair is safe to wire around finish().
+    const wts = beginWorldTurnedSidewaysUltimate([unitId]);
+    const ss = beginShardskinUltimate([unitId]);
+
     const finish = () => {
       setAbyssalVerdictPrimed(false);
       abyssalVerdictPrimedRef.current = false;
@@ -12376,6 +12673,8 @@ export default function TacticalCombatHub({
         gradeLabel: committed.grade,
         targetHint: unit,
       });
+      finishWorldTurnedSidewaysUltimate(wts, ['TRUE']);
+      finishShardskinUltimate(ss);
       abyssalCommitLockRef.current = false;
     };
 
@@ -13887,10 +14186,21 @@ export default function TacticalCombatHub({
                 operativeHpRef.current = next;
                 return next;
               });
+              applyPendingSoulwakeHubEffects({ duringPlayerTurn: true });
               log(`>> OVERDRAW // ${result.paid} HP`);
               setCounterfateHudNonce((value) => value + 1);
             }
           }}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <GravemarkHudStrip
+          presentation={nineStrainBridgeRef.current.gravemarkPresentation()}
+        />
+      ) : null}
+      {showCommandDeck ? (
+        <ShardskinHudStrip
+          presentation={nineStrainBridgeRef.current.shardskinPresentation()}
         />
       ) : null}
       {showCommandDeck ? commandDeck : null}
@@ -14007,6 +14317,20 @@ export default function TacticalCombatHub({
               costHp: Math.max(1, Math.floor((combatMaxSoulAnchorRef.current || 100) * 0.1)),
               onToggle: (selected) => {
                 nineStrainBridgeRef.current.setLastHeartbeatOverdraw(selected);
+                setCounterfateHudNonce((value) => value + 1);
+              },
+            }
+            : null
+        }
+        cathedralBreak={
+          nineStrainBridgeRef.current.serialize().boundVerdict === 'SS_VERDICT_CATHEDRAL_BREAK'
+            ? {
+              selected: nineStrainBridgeRef.current.shardskinPresentation().cathedralBreakSelected,
+              previewBudget: nineStrainBridgeRef.current.previewCathedralBreak(
+                selectedTargetIdRef.current ? [selectedTargetIdRef.current] : [],
+              ).budget,
+              onToggle: (selected) => {
+                nineStrainBridgeRef.current.setCathedralBreakSelected(selected);
                 setCounterfateHudNonce((value) => value + 1);
               },
             }

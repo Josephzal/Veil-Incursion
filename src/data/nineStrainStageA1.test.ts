@@ -16,7 +16,7 @@ import { createDefaultNineStrainRuntimeState } from './nineStrain/persistence';
 console.log('Stage A.1 — live Hub integration and boon-system mode');
 
 assert.equal(getSector1ProductionDefinitions().length, 27);
-assert.equal(getLiveUniversalBoonDefinitions().length, 66);
+assert.equal(getLiveUniversalBoonDefinitions().length, 108);
 
 const liveBridge = createNineStrainCombatBridge();
 const beforeMetrics = { ...liveBridge.serialize().metrics };

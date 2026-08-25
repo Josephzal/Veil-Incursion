@@ -15,7 +15,7 @@ import type { TargetNativeResult } from '../types/nineStrain';
 console.log('Stage C.2 — Woundweave compatibility');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getSector1ProductionDefinitions().length, 27);
 
 function rt() {

@@ -119,10 +119,17 @@ function runCohort(wave: 1 | 2) {
   }
 
   function simulate(seed: number, family: string, includeElite: boolean) {
-    let state = activateNineStrainAcquisition(
+    // Stage D.3 bumped NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE (2 -> 3), so
+    // createLiveNineStrainRuntimeState() now defaults to wave 3. This suite simulates a
+    // wave-2-only run, so pin maxAcquisitionWave explicitly rather than relying on that
+    // "brand-new live deployment" default, which would otherwise leak Sector 3 (wave 3)
+    // strains into a wave-2 offer pool that `defs` (built from getProductionOfferDefinitions(2))
+    // doesn't contain.
+    let state: NineStrainRuntimeState = activateNineStrainAcquisition(
       wave === 2 ? createLiveNineStrainRuntimeState() : createDefaultNineStrainRuntimeState(),
       {},
     );
+    if (wave === 2) state = { ...state, maxAcquisitionWave: 2 };
     let firstOmenByNode2 = false;
     let maxStrains = 0;
     let illegalOffer = false;

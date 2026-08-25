@@ -99,11 +99,22 @@ export function isUnitColumnBlocked(
   return isColumnBlocked(squad, slot);
 }
 
+export interface TargetEligibilityOpts {
+  doomfallReleaseAvailable?: boolean;
+  /**
+   * Gravemark False Position (Stage E.1): while Unmoored, a hostile counts as both frontline
+   * and backline for target-eligibility gates only (e.g. the Grave Bind hook). Real lane still
+   * governs cover, damage modifiers, committed patterns, position order, and intent — this
+   * predicate must never be consulted outside eligibility checks.
+   */
+  isUnitUnmoored?: (unitId: string) => boolean;
+}
+
 export function canTargetWithAbility(
   squad: EnemyCombatProfile[],
   abilityId: AegisAbilityId | string,
   unitId: string,
-  opts?: { doomfallReleaseAvailable?: boolean },
+  opts?: TargetEligibilityOpts,
 ): boolean {
   const unit = squad.find((u) => u.unitId === unitId);
   if (!unit || !isUnitAlive(unit)) return false;
@@ -119,7 +130,8 @@ export function canTargetWithAbility(
   }
 
   if (isHookAbility(abilityId as AegisAbilityId)) {
-    return unit.gridSlot?.startsWith('BL') === true;
+    if (unit.gridSlot?.startsWith('BL') === true) return true;
+    return opts?.isUnitUnmoored?.(unitId) === true;
   }
 
   if (isOccultAbility(abilityId as AegisAbilityId)) return true;
@@ -148,16 +160,18 @@ export function isUnitBlockedForAbility(
 export function isUnitHookValid(
   abilityId: AegisAbilityId | null,
   unit: EnemyCombatProfile,
+  isUnitUnmoored?: (unitId: string) => boolean,
 ): boolean {
   if (!abilityId || !isHookAbility(abilityId)) return false;
   if (!isUnitAlive(unit)) return false;
-  return unit.gridSlot?.startsWith('BL') === true;
+  if (unit.gridSlot?.startsWith('BL') === true) return true;
+  return unit.unitId ? isUnitUnmoored?.(unit.unitId) === true : false;
 }
 
 export function validTargetsForAbility(
   squad: EnemyCombatProfile[],
   abilityId: AegisAbilityId | string,
-  opts?: { doomfallReleaseAvailable?: boolean },
+  opts?: TargetEligibilityOpts,
 ): EnemyCombatProfile[] {
   const mode = abilityTargetMode(abilityId, opts);
   if (mode === 'ALL') return aliveUnits(squad);

@@ -410,6 +410,11 @@ function partnerOf(state: WoundweaveRuntimeState, unitId: string): string | null
   return null;
 }
 
+/** Public alias of the primary-pair partner lookup, for Sector 4 Convergences (Tethered Orbit, Crystal Ligature). */
+export function woundweavePartnerOf(state: WoundweaveRuntimeState, unitId: string): string | null {
+  return partnerOf(state, unitId);
+}
+
 function isWeaponRoot(ctx: CanonicalRootActionContext): boolean {
   if (ctx.sourceKind === 'INSTINCT' || ctx.sourceKind === 'ULTIMATE') return false;
   const surface = ctx.actionSurface;

@@ -126,12 +126,18 @@ function liveState() {
   assert.equal(elitePreviewRevealed('DEGRADED'), false);
   assert.equal(elitePreviewRevealed('STRANGE'), false);
   const label = previewEliteContactStrain({ certainty: 'RELIABLE', nodeId: 'e1', seed: 's' });
+  // previewEliteContactStrain defaults to NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE (now 4 post
+  // Stage E.3 cutover), so the pool spans all nine Strains including Gravemark/Shardskin.
   assert.ok(
     label === 'Counterfate'
     || label === 'Ritual Cadence'
     || label === 'Afterimage'
     || label === 'Stillpoint'
-    || label === 'Woundweave',
+    || label === 'Woundweave'
+    || label === 'Faultline'
+    || label === 'Soulwake'
+    || label === 'Gravemark'
+    || label === 'Shardskin',
   );
   assert.equal(previewEliteContactStrain({ certainty: 'DEGRADED', nodeId: 'e1', seed: 's' }), null);
 }

@@ -12,6 +12,8 @@ import { createDefaultStillpointState, hydrateStillpointState } from './stillpoi
 import { createDefaultWoundweaveState, hydrateWoundweaveState } from './woundweaveEngine';
 import { createDefaultFaultlineState, hydrateFaultlineState } from './faultlineEngine';
 import { createDefaultSoulwakeState, hydrateSoulwakeState } from './soulwakeEngine';
+import { createDefaultGravemarkState, hydrateGravemarkState } from './gravemarkEngine';
+import { createDefaultShardskinState, hydrateShardskinState } from './shardskinEngine';
 import { createDefaultAcquisitionState, hydrateAcquisitionState } from './acquisitionState';
 import { NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE } from './contentConfiguration';
 
@@ -60,6 +62,8 @@ export function createDefaultNineStrainRuntimeState(): NineStrainRuntimeState {
     woundweave: createDefaultWoundweaveState(),
     faultline: createDefaultFaultlineState(),
     soulwake: createDefaultSoulwakeState(),
+    gravemark: createDefaultGravemarkState(),
+    shardskin: createDefaultShardskinState(),
     acquisition: createDefaultAcquisitionState(),
     maxAcquisitionWave: 1,
   };
@@ -75,11 +79,12 @@ export function createLiveNineStrainRuntimeState(): NineStrainRuntimeState {
   };
 }
 
-function resolveMaxAcquisitionWave(row: Record<string, unknown>): 1 | 2 | 3 {
+function resolveMaxAcquisitionWave(row: Record<string, unknown>): 1 | 2 | 3 | 4 {
   const storedSchema = typeof row.schemaVersion === 'number' ? row.schemaVersion : 0;
   const raw = row.maxAcquisitionWave;
   if (storedSchema < 9) return 1;
-  if (raw === 2 || raw === 3 || raw === 1) return raw;
+  // Wave 4 is direct-grant/fixture only — never upgraded on hydrate, only carried if already stored.
+  if (raw === 2 || raw === 3 || raw === 4 || raw === 1) return raw;
   return 1;
 }
 
@@ -235,6 +240,8 @@ export function hydrateNineStrainRuntimeState(raw: unknown): NineStrainRuntimeSt
     woundweave: hydrateWoundweaveState(row.woundweave),
     faultline: hydrateFaultlineState(row.faultline),
     soulwake: hydrateSoulwakeState(row.soulwake),
+    gravemark: hydrateGravemarkState(row.gravemark),
+    shardskin: hydrateShardskinState(row.shardskin),
     acquisition: hydrateAcquisitionState(row.acquisition),
     maxAcquisitionWave: resolveMaxAcquisitionWave(row),
   };

@@ -29,14 +29,14 @@ import type { TargetNativeResult } from '../types/nineStrain';
 console.log('Stage D.2 — Soulwake');
 
 const live = getLiveUniversalBoonDefinitions();
-assert.equal(live.length, 66);
+assert.equal(live.length, 108);
 assert.equal(getProductionOfferDefinitions(1).length, 27);
 assert.equal(getProductionOfferDefinitions(2).length, 50);
-assert.equal(live.filter((row) => row.strainId === 'FAULTLINE').length, 8);
-assert.equal(live.filter((row) => row.strainId === 'SOULWAKE').length, 8);
-assert.equal(live.filter((row) => row.role === 'CONVERGENCE').length, 10);
-assert.equal(NINE_STRAIN_SCHEMA_VERSION, 11);
-assert.equal(NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE, 2);
+assert.equal(live.filter((row) => row.strainId === 'FAULTLINE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'SOULWAKE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(live.filter((row) => row.role === 'CONVERGENCE').length, 36);
+assert.equal(NINE_STRAIN_SCHEMA_VERSION, 15);
+assert.equal(NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE, 4);
 assert.equal(cap(100), 20);
 assert.equal(req(100, 0.05), 5);
 assert.equal(req(10, 0.05), 1);
@@ -455,7 +455,7 @@ function grant(runtime: ReturnType<typeof rt>, id: string, extra: { premium?: bo
     maxAcquisitionWave: 2,
     faultline: { faultByUnitId: { 'enemy-a': 2 } },
   });
-  assert.equal(schema10.schemaVersion, 11);
+  assert.equal(schema10.schemaVersion, 15);
   assert.equal(schema10.maxAcquisitionWave, 2);
   assert.equal(schema10.faultline.faultByUnitId['enemy-a'], 2);
   assert.equal(schema10.soulwake.activeWake, 0);

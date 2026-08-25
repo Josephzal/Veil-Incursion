@@ -176,7 +176,49 @@ export type EffectPrimitiveKind =
   | 'SOULWAKE_OPEN_NERVE'
   | 'SOULWAKE_PAIN_DIVIDEND'
   | 'SOULWAKE_LIVING_BREACH'
-  | 'SOULWAKE_LAST_HEARTBEAT';
+  | 'SOULWAKE_LAST_HEARTBEAT'
+  | 'BROKEN_OUTCOME'
+  | 'BREAKING_MEASURE'
+  | 'ECHOED_FAULT'
+  | 'CRITICAL_PRESSURE'
+  | 'SPLIT_SEAM'
+  | 'PAIN_FORETOLD'
+  | 'PULSE_RITE'
+  | 'PHANTOM_PAIN'
+  | 'HELD_BREATH'
+  | 'SYMPATHETIC_WOUND'
+  | 'LIVING_FAULT'
+  | 'GRAVEMARK_IMPACT_VECTOR'
+  | 'GRAVEMARK_FOLDED_SPACE'
+  | 'GRAVEMARK_REVERSAL_FIELD'
+  | 'GRAVEMARK_MASS_TRANSFER'
+  | 'GRAVEMARK_COLLISION_COURSE'
+  | 'GRAVEMARK_FALSE_POSITION'
+  | 'GRAVEMARK_EVENT_HORIZON'
+  | 'GRAVEMARK_WORLD_TURNED_SIDEWAYS'
+  | 'SHARDSKIN_CRYSTAL_EDGE'
+  | 'SHARDSKIN_RITUAL_PANE'
+  | 'SHARDSKIN_PERFECT_FACET'
+  | 'SHARDSKIN_PRESSURE_CRYSTAL'
+  | 'SHARDSKIN_TEMPERED_REMNANT'
+  | 'SHARDSKIN_SCATTERGLASS'
+  | 'SHARDSKIN_ENDLESS_FACET'
+  | 'SHARDSKIN_CATHEDRAL_BREAK'
+  | 'FATE_OUT_OF_PLACE'
+  | 'TURNING_RITE'
+  | 'PARALLAX_ECHO'
+  | 'STORED_VECTOR'
+  | 'TETHERED_ORBIT'
+  | 'TECTONIC_SHIFT'
+  | 'TRAUMA_VECTOR'
+  | 'FATED_FACET'
+  | 'PRISMATIC_RITE'
+  | 'PHANTOM_FACET'
+  | 'STILLGLASS'
+  | 'CRYSTAL_LIGATURE'
+  | 'FAULTGLASS'
+  | 'SOULGLASS'
+  | 'IMPACT_LATTICE';
 
 export interface EffectPrimitive {
   kind: EffectPrimitiveKind;
@@ -218,8 +260,8 @@ export interface UniversalBoonDefinition {
   persistenceSchema: string;
   refinementHooks: readonly string[];
   playerFacingSummary: string;
-  /** Production acquisition wave. Sector 1 remains 1; Stillpoint is 2. */
-  acquisitionWave?: 1 | 2 | 3;
+  /** Production acquisition wave. Sector 1 remains 1; Stillpoint is 2. Gravemark is 4. */
+  acquisitionWave?: 1 | 2 | 3 | 4;
   /** Test-only definitions never enter live offers. */
   testOnly?: boolean;
 }
@@ -290,9 +332,11 @@ export interface NineStrainRuntimeState {
   woundweave: import('./woundweave').WoundweaveRuntimeState;
   faultline: import('./faultline').FaultlineRuntimeState;
   soulwake: import('./soulwake').SoulwakeRuntimeState;
+  gravemark: import('./gravemark').GravemarkRuntimeState;
+  shardskin: import('./shardskin').ShardskinRuntimeState;
   acquisition: import('./convergence').NineStrainAcquisitionState;
-  /** Fixed for the incursion. Schema 8 and earlier hydrate as 1. */
-  maxAcquisitionWave: 1 | 2 | 3;
+  /** Fixed for the incursion. Schema 8 and earlier hydrate as 1. Wave 4 is direct-grant/test only. */
+  maxAcquisitionWave: 1 | 2 | 3 | 4;
 }
 
 export interface TargetNativeResult {

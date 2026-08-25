@@ -32,8 +32,8 @@ console.log('Stage C.3 — Sector 2 acquisition');
 assert.equal(getSector1ProductionDefinitions().length, 27);
 assert.equal(getProductionOfferDefinitions(1).length, 27);
 assert.equal(getProductionOfferDefinitions(2).length, 50);
-assert.equal(getLiveUniversalBoonDefinitions().length, 66);
-assert.equal(NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE, 2);
+assert.equal(getLiveUniversalBoonDefinitions().length, 108);
+assert.equal(NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE, 4);
 
 {
   const schema8 = hydrateNineStrainRuntimeState({
@@ -65,8 +65,8 @@ assert.equal(NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE, 2);
 
 {
   const liveRun = createLiveNineStrainRuntimeState();
-  assert.equal(liveRun.maxAcquisitionWave, 2);
-  assert.equal(unlockedStrainIds(liveRun.maxAcquisitionWave).length, 5);
+  assert.equal(liveRun.maxAcquisitionWave, 4);
+  assert.equal(unlockedStrainIds(liveRun.maxAcquisitionWave).length, 9);
   const omen = firstOmenStrainIds(liveRun, 1, 'aegis-longsword', 'seed-a');
   assert.equal(omen.length, 3);
   assert.equal(new Set(omen).size, 3);
@@ -77,6 +77,13 @@ assert.equal(NINE_STRAIN_CONTENT_MAX_ACQUISITION_WAVE, 2);
   for (const id of [...SECTOR_1_STRAIN_IDS, ...SECTOR_2_STRAIN_IDS]) {
     assert.ok(seen.has(id), `reachable ${id}`);
   }
+}
+
+{
+  const wave2Run = { ...createLiveNineStrainRuntimeState(), maxAcquisitionWave: 2 as const };
+  assert.equal(wave2Run.maxAcquisitionWave, 2);
+  assert.equal(unlockedStrainIds(wave2Run.maxAcquisitionWave).length, 5);
+  assert.equal(getProductionOfferDefinitions(2).length, 50);
 }
 
 {

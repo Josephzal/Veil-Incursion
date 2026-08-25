@@ -1,4 +1,5 @@
 import type { HostileIntentSnapshot } from '../../types/counterfate';
+import { isCombatGridSlotId } from '../../types/combatGrid';
 import { positionRankForSlot } from './intentIdentity';
 
 export function hostileSnapshotInput(args: {
@@ -22,6 +23,8 @@ export function hostileSnapshotInput(args: {
   kineticArmorBrokenThisCombat?: boolean;
   occultWardsBrokenThisCombat?: boolean;
   combatTags?: readonly string[];
+  /** Gravemark E.1 — passed through unchanged from the authoritative live squad grid. */
+  immovable?: boolean;
 }): Omit<HostileIntentSnapshot, 'intentInstanceId'> {
   return {
     unitId: args.unitId,
@@ -30,6 +33,7 @@ export function hostileSnapshotInput(args: {
     countdown: args.countdown ?? 1,
     hostileTurnOrder: args.hostileTurnOrder,
     positionRank: positionRankForSlot(args.slot),
+    gridSlot: isCombatGridSlotId(args.slot) ? args.slot : undefined,
     concealed: args.concealed === true,
     hp: args.hp ?? 40,
     maxHp: args.maxHp ?? 40,
@@ -44,5 +48,6 @@ export function hostileSnapshotInput(args: {
     kineticArmorBrokenThisCombat: args.kineticArmorBrokenThisCombat,
     occultWardsBrokenThisCombat: args.occultWardsBrokenThisCombat,
     combatTags: args.combatTags,
+    immovable: args.immovable,
   };
 }

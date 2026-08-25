@@ -22,7 +22,7 @@ assert.equal(live.filter((row) => row.role === 'CONVERGENCE').length, 3);
 assert.ok(live.some((row) => row.id === CONVERGENCE_IDS.FATED_REFRAIN));
 assert.ok(live.some((row) => row.id === CONVERGENCE_IDS.SECOND_OUTCOME));
 assert.ok(live.some((row) => row.id === CONVERGENCE_IDS.ECHOED_RITE));
-assert.equal(getLiveUniversalBoonDefinitions().length, 66);
+assert.equal(getLiveUniversalBoonDefinitions().length, 108);
 
 function strainRuntime() {
   const rt = createNineStrainRuntime({ definitions: live });
@@ -341,7 +341,7 @@ function bind(rt: ReturnType<typeof strainRuntime>, hp = 30, extra: Parameters<t
     ritualCadence: { measure: 'BEAT_I' },
     counterfate: { rawReversal: 4 },
   });
-  assert.equal(migrated.schemaVersion, 11);
+  assert.equal(migrated.schemaVersion, 15);
   assert.equal(migrated.stillpoint.nativeStillness, 0);
   assert.equal(migrated.afterimage.pending[0].basePayload, 7);
   assert.equal(migrated.ritualCadence.measure, 'BEAT_I');

@@ -12,7 +12,7 @@ console.log('Stage C.1 — Sector wave gate');
 
 const registered = getLiveUniversalBoonDefinitions();
 const sector1 = getSector1ProductionDefinitions();
-assert.equal(registered.length, 66);
+assert.equal(registered.length, 108);
 assert.equal(sector1.length, 27);
 assert.equal(getProductionOfferDefinitions(1).length, 27);
 assert.equal(getProductionOfferDefinitions(2).length, 50);
@@ -21,8 +21,8 @@ assert.equal(registered.filter((row) => row.strainId === 'STILLPOINT' && row.rol
 assert.equal(registered.filter((row) => row.strainId === 'STILLPOINT' && row.role === 'MANIFESTATION').length, 1);
 assert.equal(registered.filter((row) => row.strainId === 'STILLPOINT' && row.role === 'VERDICT').length, 1);
 assert.ok(sector1.every((row) => row.strainId !== 'STILLPOINT' && row.strainId !== 'WOUNDWEAVE'));
-assert.equal(registered.filter((row) => row.strainId === 'WOUNDWEAVE').length, 8);
-assert.equal(registered.filter((row) => row.role === 'CONVERGENCE').length, 10);
+assert.equal(registered.filter((row) => row.strainId === 'WOUNDWEAVE' && row.role !== 'CONVERGENCE').length, 8);
+assert.equal(registered.filter((row) => row.role === 'CONVERGENCE').length, 36);
 
 {
   const state = activateNineStrainAcquisition(createDefaultNineStrainRuntimeState(), {});

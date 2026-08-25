@@ -28,7 +28,7 @@ console.log('Stage B.3 — Afterimage vertical slice');
 
 const live = getSector1ProductionDefinitions();
 assert.equal(live.length, 27);
-assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE').length, 8);
+assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE' && row.role !== 'CONVERGENCE').length, 8);
 assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE' && row.role === 'CORE').length, 4);
 assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE' && row.role === 'SUPPORT').length, 2);
 assert.equal(live.filter((row) => row.strainId === 'AFTERIMAGE' && row.role === 'MANIFESTATION').length, 1);
@@ -397,7 +397,7 @@ for (const familyId of CANONICAL_WEAPON_FAMILY_IDS) {
   const fresh = hydrateNineStrainIncursionFields(createDefaultActiveIncursionState());
   assert.equal(fresh.nineStrainRuntime.boonSystemMode, 'LEGACY_CLASS_CATALOG');
   const migrated = hydrateNineStrainRuntimeState({ schemaVersion: 4, ritualCadence: { measure: 'BEAT_I' } });
-  assert.equal(migrated.schemaVersion, 11);
+  assert.equal(migrated.schemaVersion, 15);
   assert.equal(migrated.ritualCadence.measure, 'BEAT_I');
   assert.equal(migrated.afterimage.pending.length, 0);
 }

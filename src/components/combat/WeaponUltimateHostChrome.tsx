@@ -15,6 +15,12 @@ interface WeaponUltimateHostChromeProps {
     costHp: number;
     onToggle: (selected: boolean) => void;
   } | null;
+  cathedralBreak?: {
+    selected: boolean;
+    /** Preview-only budget at current Shards + Edge — informational, not authoritative. */
+    previewBudget: number;
+    onToggle: (selected: boolean) => void;
+  } | null;
   children: React.ReactNode;
 }
 
@@ -29,6 +35,7 @@ export default function WeaponUltimateHostChrome({
   gradeHint = null,
   simplified = false,
   lastHeartbeat = null,
+  cathedralBreak = null,
   children,
 }: WeaponUltimateHostChromeProps): React.JSX.Element {
   return (
@@ -62,6 +69,19 @@ export default function WeaponUltimateHostChrome({
                 {lastHeartbeat.selected
                   ? `[ LAST HEARTBEAT — ${lastHeartbeat.costHp} HP ]`
                   : `[ LAST HEARTBEAT — OFF ]`}
+              </Text>
+            </HapticPressable>
+          ) : null}
+          {cathedralBreak ? (
+            <HapticPressable
+              style={styles.cancelBtn}
+              onPress={() => cathedralBreak.onToggle(!cathedralBreak.selected)}
+              accessibilityLabel="Cathedral Break optional Shard/Edge consumption"
+            >
+              <Text style={styles.cancelLabel}>
+                {cathedralBreak.selected
+                  ? `[ CATHEDRAL BREAK — ${cathedralBreak.previewBudget} OCCULT ]`
+                  : `[ CATHEDRAL BREAK — OFF ]`}
               </Text>
             </HapticPressable>
           ) : null}

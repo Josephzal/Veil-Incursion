@@ -209,6 +209,11 @@ export default function CombatEnemyUnit({
           {`FAULT ${'•'.repeat(Math.min(3, unit.faultPips))}`}
         </Text>
       ) : null}
+      {unit.gravemarkPolarity || unit.gravemarkUnmoored ? (
+        <Text style={styles.gravemarkMark} numberOfLines={1}>
+          {[unit.gravemarkPolarity, unit.gravemarkUnmoored ? 'UNMOORED' : null].filter(Boolean).join(' · ')}
+        </Text>
+      ) : null}
 
       <EnemyEntity
         showVitals={isArena}
@@ -546,6 +551,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     color: '#fdba74',
+  },
+  gravemarkMark: {
+    position: 'absolute',
+    top: 44,
+    left: 0,
+    zIndex: 21,
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: '#c4b5fd',
   },
   imageShell: {
     width: '100%',
